@@ -2,6 +2,68 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 2 — terrain, ores, economy + build-1 playtest fixes (2026-08-19)
+
+### Playtest fixes (from first build-1 session)
+- **See-through gaps near adjacent sphere carves — fixed.** Root cause:
+  triangle winding was chosen by dotting against the SDF gradient at the edge
+  crossing; on the crease where two carves meet the gradient degenerates and
+  triangles randomly flipped (backface-culled = hole). Winding is now
+  canonical from the edge's solid/air sign configuration — deterministic,
+  gradient-free — and the terrain material renders double-sided as a second
+  line of defense. New regression test: every interior mesh edge shared by 2
+  triangles must be traversed in opposite directions.
+- **Ghost preview now floats at a fixed distance** (3.2m + 0.55×size) when
+  snap is off. Grid mode still raymarches onto the surface and snaps.
+- **Mine/build speed redefined** as time-to-break/build ONE shape (Minecraft
+  block feel): 1.1 / 0.8 / 0.55 / 0.32 s by tier, with a progress bar above
+  the hotbar. Drill keeps cycling while held; dispenser is strictly one
+  placement per click (hold to charge, release cancels, no auto-repeat).
+  Diamond = whole shape instantly on click; diamond drill held repeats at
+  most 4/s, diamond dispenser never auto-repeats.
+
+### Build 2 features
+- **Seeded terrain**: value-noise fbm heightfield with biome blending
+  (plains / hills / ridged mountains via a low-frequency biome field, plus
+  desert patches), heights clamped to [-6, +30], world meshes y -16..+48.
+  Grass tops (below h=12), sand in deserts, bare rock on mountains.
+- **Caves**: intersection band of two 3D noises ("spaghetti"), faded out
+  within 5m of the surface so the ground isn't pitted. Cave eval is skipped
+  entirely for points clearly above ground (sign-exact shortcut).
+- **Ore veins**: deterministic per 4m lattice cell from the seed — hash
+  picks type, center, radius (flattened ellipsoids). Depth bands: iron
+  -3..-11, ruby -6..-14, obsidian -9..-15.5, diamond -12.5..-15.8.
+- **Mining yields by volume removed**: the drill samples what its shape
+  intersects (pre-edit solid, per material) at 1 unit = 0.125 m³ (one 0.5m
+  voxel). Bedrock yields nothing. Placing consumes the loaded material by
+  the same accounting (air volume filled); placement is refused if short.
+- **Crafting (Q)**: tier progression — 24 ore per drill, 18 per dispenser
+  of the matching ore (iron/ruby/obsidian/diamond). New worlds start with
+  stone drill + stone dispenser only.
+- **Meshing perf**: per-edge hermite cache (each crossing's bisection +
+  gradient computed once, shared by the 4 adjacent cells and quad emission);
+  chunk-local heightfield grid with bilinear interpolation (exact at shared
+  sample columns → seams stay watertight, verified by test); tetrahedral
+  4-eval gradients; 5 bisection iterations (Newton projection along the
+  cell's average crossing normal tightens the vertex afterwards).
+  ~2ms/chunk pristine, ~7-14ms under heavy local edit load, amortized
+  6ms/frame nearest-first.
+- Fog now ends exactly at the streamed-terrain radius (world edge is never
+  visible); default render distance bumped to 4.
+
+### Compatibility
+- Build-1 worlds load (edits, inventory, position preserved) but the flat
+  terrain regenerates as build-2 terrain from their seed — the ground will
+  move under old edits. Players inside terrain are auto-lifted on load.
+
+### Known issues / deferred
+- No lighting attenuation underground — caves are as bright as the surface
+  (light/AO pass is a future-build item).
+- Worker meshing still the next perf lever if continuous mining lags on
+  mid-range hardware.
+- materialAt scans the whole culled edit list per query; fine now, spatial
+  index later.
+
 ## Build 1 — first playable (2026-08-19)
 Everything in `strata.html`. Three.js 0.164.1 via import map; the game code
 dynamic-imports it inside try/catch and shows a fatal-error overlay with a

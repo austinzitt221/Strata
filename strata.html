@@ -46,6 +46,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#chargebar{position:absolute; left:50%; bottom:74px; transform:translateX(-50%); width:180px; height:10px; background:rgba(10,9,16,0.7); border:2px solid var(--ui-border); display:none;}
+#chargefill{height:100%; width:0%; background:var(--accent);}
 #toolinfo{position:absolute; left:14px; bottom:14px; background:rgba(10,9,16,0.6); border:2px solid rgba(74,68,88,0.6); padding:8px 12px; font-size:13px; line-height:1.5; letter-spacing:1px;}
 #toolinfo .t1{color:#fff; font-size:14px;}
 #toolinfo .t2{color:var(--ui-hi);}
@@ -68,6 +70,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #draggy{position:fixed; width:52px; height:52px; pointer-events:none; z-index:99; image-rendering:pixelated; display:none;}
 #draggy img{width:100%;height:100%;image-rendering:pixelated;}
 
+/* ---------- crafting ---------- */
+.craftrow{display:flex; align-items:center; gap:10px; border:2px solid var(--ui-border); background:var(--ui-bg2); padding:6px 10px; margin:6px 0;}
+.craftrow img{width:36px; height:36px; image-rendering:pixelated;}
+.craftrow .cname{flex:1;}
+.craftrow .ccost{font-size:12px; color:var(--ui-hi);}
+.craftrow .ccost.ok{color:#7dff9b;}
+
 /* ---------- toast ---------- */
 #toast{position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:rgba(10,9,16,0.85); border:2px solid var(--ui-border); padding:6px 14px; letter-spacing:1px; z-index:60; transition:opacity .3s; opacity:0; pointer-events:none;}
 
@@ -82,6 +91,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <div id="hud" class="hidden">
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
+  <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
 </div>
 
@@ -148,9 +158,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 </div>
 
 <div id="craftscreen" class="screen hidden dim">
-  <div class="panel" style="min-width:420px;">
+  <div class="panel" style="min-width:480px;">
     <h2>CRAFTING</h2>
-    <div class="sub">recipes arrive in build 2 — everything is pre-loaded for now</div>
+    <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
+    <div id="craftlist"></div>
     <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
   </div>
 </div>
@@ -203,12 +214,12 @@ const N = 16;                 // cells per chunk edge
 const CHUNK_M = N * VOX;      // chunk edge in meters (8)
 const SURFACE_Y = 0.01;       // base rock plane (off-grid to avoid exact-zero samples)
 const BEDROCK_Y = -15.99;     // everything below is permanently solid
-const CY_MIN = -4, CY_MAX = 3; // vertical chunk range: y in [-16, +16) meters
+const CY_MIN = -2, CY_MAX = 5; // vertical chunk range: y in [-16, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6 };
-const NMAT = 6;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8 };
+const NMAT = 8;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -218,11 +229,187 @@ const STEPS = [0.375, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
 function tierMin(t){ return t >= 4 ? 0 : 4 - t; }
 function tierMax(t){ return t >= 4 ? STEPS.length - 1 : 8 + t; }
 const SIZE_MIN = STEPS[0], SIZE_MAX = STEPS[STEPS.length - 1];
-// action cooldown ms per tier (mining & placing); diamond dispenser is instant
-const TIER_COOLDOWN = [500, 380, 280, 190, 110];
+// seconds to break/build one shape (like Minecraft block mine time);
+// diamond (tier 4) is instant: the whole shape goes in one click
+const TIER_TIME = [1.1, 0.8, 0.55, 0.32, 0];
 
 // grid snap presets, keys 1..0 while holding F
 const GRID_SIZES = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
+
+// ---- seeded noise ----
+function hashInt(a){
+  a |= 0;
+  a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+  a = Math.imul(a ^ (a >>> 16), 0x45d9f3b);
+  return (a ^ (a >>> 16)) >>> 0;
+}
+function hashLat(a){
+  a = Math.imul(a ^ (a >>> 15), 0x2c1b3c6d);
+  return ((a ^ (a >>> 12)) >>> 0);
+}
+function latt2(seed, x, z){
+  return hashLat(seed ^ Math.imul(x, 0x9E3779B1) ^ Math.imul(z, 0x85EBCA77)) / 4294967296;
+}
+function latt3(seed, x, y, z){
+  return hashLat(seed ^ Math.imul(x, 0x9E3779B1) ^ Math.imul(y, 0xC2B2AE3D) ^ Math.imul(z, 0x85EBCA77)) / 4294967296;
+}
+function sm(t){ return t * t * (3 - 2 * t); }
+function sstep(a, b, t){ const u = Math.min(1, Math.max(0, (t - a) / (b - a))); return u * u * (3 - 2 * u); }
+function noise2(seed, x, z){
+  const x0 = Math.floor(x), z0 = Math.floor(z);
+  const fx = sm(x - x0), fz = sm(z - z0);
+  const a = latt2(seed, x0, z0),     b = latt2(seed, x0 + 1, z0);
+  const c = latt2(seed, x0, z0 + 1), d = latt2(seed, x0 + 1, z0 + 1);
+  return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
+}
+function noise3(seed, x, y, z){
+  const x0 = Math.floor(x), y0 = Math.floor(y), z0 = Math.floor(z);
+  const fx = sm(x - x0), fy = sm(y - y0), fz = sm(z - z0);
+  const n000 = latt3(seed, x0, y0, z0),         n100 = latt3(seed, x0 + 1, y0, z0);
+  const n010 = latt3(seed, x0, y0 + 1, z0),     n110 = latt3(seed, x0 + 1, y0 + 1, z0);
+  const n001 = latt3(seed, x0, y0, z0 + 1),     n101 = latt3(seed, x0 + 1, y0, z0 + 1);
+  const n011 = latt3(seed, x0, y0 + 1, z0 + 1), n111 = latt3(seed, x0 + 1, y0 + 1, z0 + 1);
+  const nx00 = n000 + (n100 - n000) * fx, nx10 = n010 + (n110 - n010) * fx;
+  const nx01 = n001 + (n101 - n001) * fx, nx11 = n011 + (n111 - n011) * fx;
+  const nxy0 = nx00 + (nx10 - nx00) * fy, nxy1 = nx01 + (nx11 - nx01) * fy;
+  return nxy0 + (nxy1 - nxy0) * fz;
+}
+function fbm2(seed, x, z, oct){
+  let v = 0, amp = 0.5, f = 1, tot = 0;
+  for (let i = 0; i < oct; i++){
+    v += noise2(seed + i * 1013, x * f, z * f) * amp;
+    tot += amp; amp *= 0.5; f *= 2;
+  }
+  return v / tot;
+}
+
+// ---- world generation ----
+// gen interface: { height(x,z), heightRange(x0,z0,x1,z1), sdf(x,y,z),
+//   mat(x,y,z), makeLocal(x0,z0,x1,z1), caves }
+// Everything derives deterministically from the seed; the same interface with
+// a flat plane (FLAT_GEN) is the default so build-1 behavior and tests hold.
+const CAVE_T = 0.615;
+const ORE_TYPES = [
+  { mat: MAT.IRON,     yMin: -11,   yMax: -3,    p: 0.50, rMin: 0.8, rMax: 1.4 },
+  { mat: MAT.RUBY,     yMin: -14,   yMax: -6,    p: 0.36, rMin: 0.7, rMax: 1.2 },
+  { mat: MAT.OBSIDIAN, yMin: -15.5, yMax: -9,    p: 0.30, rMin: 0.7, rMax: 1.2 },
+  { mat: MAT.DIAMOND,  yMin: -15.8, yMax: -12.5, p: 0.22, rMin: 0.6, rMax: 1.0 },
+];
+const VEIN_CELL = 4;
+function makeGen(seed){
+  seed = seed >>> 0;
+  const sH = hashInt(seed ^ 0x68e31da4), sR = hashInt(seed ^ 0xb5297a4d);
+  const sB = hashInt(seed ^ 0x1b56c4e9), sD = hashInt(seed ^ 0x7feb352d);
+  const sA = hashInt(seed ^ 0x846ca68b), sC = hashInt(seed ^ 0x9e3779b9);
+  const sV = hashInt(seed ^ 0x2545f491);
+
+  function biome(x, z){ return fbm2(sB, x * 0.0045, z * 0.0045, 2); }
+  function height(x, z){
+    const b = biome(x, z);
+    const base = fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5;
+    const hillW = sstep(0.32, 0.52, b);
+    const mtnW = sstep(0.56, 0.78, b);
+    const amp = 2.5 + 7 * hillW + 5 * mtnW;
+    let h = base * 2 * amp;
+    if (mtnW > 0){
+      const r = 1 - Math.abs(2 * fbm2(sR, x * 0.011, z * 0.011, 3) - 1);
+      h += mtnW * r * r * 24;
+    }
+    return Math.max(-6, Math.min(30, h));
+  }
+  function isDesert(x, z){
+    return fbm2(sD, x * 0.004 + 37.7, z * 0.004, 2) > 0.62 && biome(x, z) < 0.45;
+  }
+  // spaghetti caves: intersection band of two 3D noises, faded out near the
+  // surface so the ground isn't pitted (fade keeps the field continuous)
+  function caveVal(x, y, z, h){
+    const nA = noise3(sA, x * 0.045, y * 0.06, z * 0.045);
+    const nB = noise3(sC, x * 0.045 + 53.1, y * 0.06, z * 0.045 + 11.7);
+    let v = Math.min(nA, nB);
+    const depth = h - y;
+    if (depth < 5) v -= (5 - depth) * 0.09;
+    return v;
+  }
+  function sdfFromH(h, x, y, z){
+    const d = (y - h) * 0.65;
+    if (d > 0.05) return d;    // above ground: caves only ever remove material
+    const c = (CAVE_T - caveVal(x, y, z, h)) * 4;
+    return Math.max(d, -c);
+  }
+  function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
+  function oreAt(x, y, z){
+    if (y > -2 || y < BEDROCK_Y) return 0;
+    const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const gx = cx + dx, gy = cy + dy, gz = cz + dz;
+      const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
+      const t = ORE_TYPES[hashInt(h0 ^ 0x51ab3f27) & 3];
+      if (h0 / 4294967296 > t.p) continue;
+      const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
+      if (oy < t.yMin || oy > t.yMax) continue;
+      const ox = gx * VEIN_CELL + (hashInt(h0 ^ 1) / 4294967296) * VEIN_CELL;
+      const oz = gz * VEIN_CELL + (hashInt(h0 ^ 3) / 4294967296) * VEIN_CELL;
+      const r = t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin);
+      const ddx = x - ox, ddy = (y - oy) * 1.4, ddz = z - oz; // flattened veins
+      if (ddx*ddx + ddy*ddy + ddz*ddz < r * r) return t.mat;
+    }
+    return 0;
+  }
+  function mat(x, y, z){
+    const ore = oreAt(x, y, z);
+    if (ore) return ore;
+    const h = height(x, z);
+    if (y > h - 0.9){
+      if (isDesert(x, z)) return MAT.SAND;
+      if (h < 12) return MAT.GRASS;   // bare rock on high mountains
+      return MAT.ROCK;
+    }
+    return MAT.ROCK;
+  }
+  function heightRange(x0, z0, x1, z1){
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++){
+      const h = height(x0 + (x1 - x0) * i / 4, z0 + (z1 - z0) * j / 4);
+      if (h < mn) mn = h;
+      if (h > mx) mx = h;
+    }
+    return [mn - 4, mx + 4];
+  }
+  // chunk-local gen: heights precomputed on the sample grid and bilinearly
+  // interpolated. Grid values are exact at sample columns and both neighbor
+  // chunks interpolate from the same shared columns, so seams stay watertight.
+  function makeLocal(x0, z0, x1, z1){
+    x0 -= 2 * VOX; z0 -= 2 * VOX; x1 += 2 * VOX; z1 += 2 * VOX; // hermite margin
+    const nx = Math.round((x1 - x0) / VOX) + 1, nz = Math.round((z1 - z0) / VOX) + 1;
+    const grid = new Float32Array(nx * nz);
+    for (let j = 0; j < nz; j++)
+      for (let i = 0; i < nx; i++)
+        grid[i + j * nx] = height(x0 + i * VOX, z0 + j * VOX);
+    function lh(x, z){
+      let fx = (x - x0) / VOX, fz = (z - z0) / VOX;
+      fx = Math.min(Math.max(fx, 0), nx - 1.001);
+      fz = Math.min(Math.max(fz, 0), nz - 1.001);
+      const i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j;
+      const a = grid[i + j * nx], b = grid[i + 1 + j * nx];
+      const c = grid[i + (j + 1) * nx], d = grid[i + 1 + (j + 1) * nx];
+      return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
+    }
+    return {
+      height: lh, heightRange, mat, caves: true,
+      sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z),
+      makeLocal,
+    };
+  }
+  return { height, heightRange, sdf, mat, makeLocal, caves: true, seed };
+}
+const FLAT_GEN = {
+  height: () => SURFACE_Y,
+  heightRange: () => [SURFACE_Y, SURFACE_Y],
+  sdf: (x, y, z) => y - SURFACE_Y,
+  mat: () => MAT.ROCK,
+  makeLocal(){ return this; },
+  caves: false, seed: 0,
+};
 
 // ---- SDF ----
 // convention: d < 0 solid, d > 0 air.
@@ -265,8 +452,8 @@ function cullEdits(edits, box, pad){
 }
 
 // the world SDF. `edits` must be in creation order (culling preserves order).
-function evalSDF(px, py, pz, edits){
-  let d = py - SURFACE_Y;
+function evalSDF(px, py, pz, edits, gen){
+  let d = (gen || FLAT_GEN).sdf(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
     const s = shapeSDF(px, py, pz, e);
@@ -280,9 +467,9 @@ function evalSDF(px, py, pz, edits){
 // material of a solid point: bedrock zone wins, else last union containing
 // the point, else base rock. (Solid points whose last containing edit is a
 // subtract cannot exist, so subtracts are irrelevant here.)
-function materialAt(px, py, pz, edits){
+function materialAt(px, py, pz, edits, gen){
   if (py < BEDROCK_Y) return MAT.BEDROCK;
-  let m = MAT.ROCK;
+  let m = (gen || FLAT_GEN).mat(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
     if (e.op === 1 && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
@@ -290,11 +477,16 @@ function materialAt(px, py, pz, edits){
   return m;
 }
 
-function gradSDF(px, py, pz, edits, h){
+function gradSDF(px, py, pz, edits, h, gen){
   h = h || 0.08;
-  const gx = evalSDF(px + h, py, pz, edits) - evalSDF(px - h, py, pz, edits);
-  const gy = evalSDF(px, py + h, pz, edits) - evalSDF(px, py - h, pz, edits);
-  const gz = evalSDF(px, py, pz + h, edits) - evalSDF(px, py, pz - h, edits);
+  // tetrahedral difference: 4 evals instead of 6
+  const d0 = evalSDF(px + h, py + h, pz + h, edits, gen);
+  const d1 = evalSDF(px + h, py - h, pz - h, edits, gen);
+  const d2 = evalSDF(px - h, py + h, pz - h, edits, gen);
+  const d3 = evalSDF(px - h, py - h, pz + h, edits, gen);
+  const gx = d0 + d1 - d2 - d3;
+  const gy = d0 - d1 + d2 - d3;
+  const gz = d0 - d1 - d2 + d3;
   const len = Math.sqrt(gx*gx + gy*gy + gz*gz) || 1;
   return [gx/len, gy/len, gz/len];
 }
@@ -315,27 +507,36 @@ function snapVec(x, y, z, cell){ return [snapVal(x, cell), snapVal(y, cell), sna
 // subtract-then-union of the same shape must restore solid, not leave a d=0 membrane
 const SOLID = d => d <= 0;
 
-function meshChunk(cx, cy, cz, allEdits){
+function meshChunk(cx, cy, cz, allEdits, gen){
+  gen = gen || FLAT_GEN;
   const gx0 = cx * N, gy0 = cy * N, gz0 = cz * N; // global sample base
   const wx0 = gx0 * VOX, wy0 = gy0 * VOX, wz0 = gz0 * VOX;
   const box = [wx0 - VOX, wy0 - VOX, wz0 - VOX,
                wx0 + CHUNK_M + VOX, wy0 + CHUNK_M + VOX, wz0 + CHUNK_M + VOX];
   const edits = cullEdits(allEdits, box, VOX);
-  // quick reject: nothing to mesh if no edits touch us and the base surface
-  // plane doesn't pass through (bedrock only ever surfaces inside carves)
-  if (edits.length === 0 && !(box[1] <= SURFACE_Y && SURFACE_Y <= box[4])) return null;
+  // quick reject on untouched chunks: pure air above the terrain, and (when
+  // the gen has no caves) pure solid below it
+  if (edits.length === 0){
+    const hr = gen.heightRange(box[0], box[2], box[3], box[5]);
+    if (box[1] > hr[1] + 0.5) return null;
+    if (!gen.caves && box[4] < hr[0] - 0.5) return null;
+  }
+  // chunk-local gen: exact at sample columns, bilinear between (seam-safe)
+  const lgen = gen.makeLocal(box[0], box[2], box[3], box[5]);
 
   const S = N + 2;                       // samples -1..N per axis
   const field = new Float32Array(S * S * S);
   const FI = (x, y, z) => (x + 1) + (y + 1) * S + (z + 1) * S * S;
-  // base plane, then edits applied in order over their own AABB sample range
-  // only. Outside its AABB an edit can never flip a sample's sign (subtract
-  // needs s<0, union needs s<=0), so signs — all DC cares about — are exact.
-  for (let y = -1; y <= N; y++){
-    const base = (gy0 + y) * VOX - SURFACE_Y;
-    for (let z = -1; z <= N; z++){
+  // base terrain, then edits applied in order over their own AABB sample
+  // range only. Outside its AABB an edit can never flip a sample's sign
+  // (subtract needs s<0, union needs s<=0), so signs — all DC cares about —
+  // are exact.
+  for (let z = -1; z <= N; z++){
+    const wz = (gz0 + z) * VOX;
+    for (let y = -1; y <= N; y++){
+      const wy = (gy0 + y) * VOX;
       const row = FI(-1, y, z);
-      for (let x = 0; x < S; x++) field[row + x] = base;
+      for (let x = 0; x < S; x++) field[row + x] = lgen.sdf((gx0 + x - 1) * VOX, wy, wz);
     }
   }
   for (let i = 0; i < edits.length; i++){
@@ -376,9 +577,9 @@ function meshChunk(cx, cy, cz, allEdits){
   // bisection refine of a crossing along a segment in world space
   function refine(x0, y0, z0, x1, y1, z1, d0, d1, le){
     let t0 = 0, t1 = 1;
-    for (let i = 0; i < 8; i++){
+    for (let i = 0; i < 5; i++){
       const tm = (t0 + t1) * 0.5;
-      const dm = evalSDF(x0 + (x1-x0)*tm, y0 + (y1-y0)*tm, z0 + (z1-z0)*tm, le);
+      const dm = evalSDF(x0 + (x1-x0)*tm, y0 + (y1-y0)*tm, z0 + (z1-z0)*tm, le, lgen);
       if (SOLID(dm) === SOLID(d0)) { t0 = tm; } else { t1 = tm; }
     }
     return (t0 + t1) * 0.5;
@@ -392,43 +593,63 @@ function meshChunk(cx, cy, cz, allEdits){
   // cell corner offsets & the 12 edges as corner index pairs
   const CO = [[0,0,0],[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[0,1,1],[1,1,1]];
   const CE = [[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
+  const AXD = [[1,0,0],[0,1,0],[0,0,1]];
+  // each cell edge as (axis, offset of the edge's base sample within the cell)
+  const CE_AX = CE.map(([a, b]) => {
+    const d = [CO[b][0]-CO[a][0], CO[b][1]-CO[a][1], CO[b][2]-CO[a][2]];
+    return { axis: d[0] ? 0 : d[1] ? 1 : 2, o: CO[a] };
+  });
+
+  // lazy per-edge hermite cache: every crossing's bisection + gradient runs
+  // once, shared by the 4 adjacent cells and the quad-emission pass
+  const EMAP = new Map();
+  function hermite(axis, x, y, z){
+    const key = ((axis * S + (z + 1)) * S + (y + 1)) * S + (x + 1);
+    let h = EMAP.get(key);
+    if (h !== undefined) return h;
+    const A = AXD[axis];
+    const d0 = field[FI(x, y, z)];
+    const d1 = field[FI(x + A[0], y + A[1], z + A[2])];
+    if (SOLID(d0) === SOLID(d1)){ EMAP.set(key, null); return null; }
+    const ax = (gx0 + x) * VOX, ay = (gy0 + y) * VOX, az = (gz0 + z) * VOX;
+    const bx = ax + A[0] * VOX, by = ay + A[1] * VOX, bz = az + A[2] * VOX;
+    const le = localEdits(Math.min(ax, bx), Math.min(ay, by), Math.min(az, bz),
+                          Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz));
+    const t = refine(ax, ay, az, bx, by, bz, d0, d1, le);
+    const px = ax + (bx - ax) * t, py = ay + (by - ay) * t, pz = az + (bz - az) * t;
+    const g = gradSDF(px, py, pz, le, VOX * 0.2, lgen);
+    h = { px, py, pz, nx: g[0], ny: g[1], nz: g[2] };
+    EMAP.set(key, h);
+    return h;
+  }
 
   function cellVertex(x, y, z){
-    // corner distances
+    // corner solidity
     let mask = 0;
-    const cd = new Float32Array(8);
     for (let i = 0; i < 8; i++){
-      const d = field[FI(x + CO[i][0], y + CO[i][1], z + CO[i][2])];
-      cd[i] = d;
-      if (SOLID(d)) mask |= (1 << i);
+      if (SOLID(field[FI(x + CO[i][0], y + CO[i][1], z + CO[i][2])])) mask |= (1 << i);
     }
     if (mask === 0 || mask === 255) return false;
-    const lx0 = (gx0 + x) * VOX, ly0 = (gy0 + y) * VOX, lz0 = (gz0 + z) * VOX;
-    const le = localEdits(lx0, ly0, lz0, lx0 + VOX, ly0 + VOX, lz0 + VOX);
-    // gather hermite data on crossing edges
-    let mx = 0, my = 0, mz = 0, cnt = 0;
-    // QEF accumulators: ATA (symmetric), ATb, with positions relative to mass point later
-    const pts = [], nms = [];
+    // gather hermite data on crossing edges (cached, shared between cells)
+    let mx = 0, my = 0, mz = 0, snx = 0, sny = 0, snz = 0, cnt = 0;
+    const hs = [];
     for (let k = 0; k < 12; k++){
-      const a = CE[k][0], b = CE[k][1];
-      if (SOLID(cd[a]) === SOLID(cd[b])) continue;
-      const ax = (gx0 + x + CO[a][0]) * VOX, ay = (gy0 + y + CO[a][1]) * VOX, az = (gz0 + z + CO[a][2]) * VOX;
-      const bx = (gx0 + x + CO[b][0]) * VOX, by = (gy0 + y + CO[b][1]) * VOX, bz = (gz0 + z + CO[b][2]) * VOX;
-      let t = edgeT(cd[a], cd[b]);
-      if (!(t >= 0 && t <= 1)) t = 0.5;
-      t = refine(ax, ay, az, bx, by, bz, cd[a], cd[b], le);
-      const px = ax + (bx - ax) * t, py = ay + (by - ay) * t, pz = az + (bz - az) * t;
-      const g = gradSDF(px, py, pz, le, VOX * 0.2);
-      pts.push(px, py, pz); nms.push(g[0], g[1], g[2]);
-      mx += px; my += py; mz += pz; cnt++;
+      const ea = CE_AX[k];
+      const h = hermite(ea.axis, x + ea.o[0], y + ea.o[1], z + ea.o[2]);
+      if (!h) continue;
+      hs.push(h);
+      mx += h.px; my += h.py; mz += h.pz;
+      snx += h.nx; sny += h.ny; snz += h.nz;
+      cnt++;
     }
     if (cnt === 0) return false;
     mx /= cnt; my /= cnt; mz /= cnt;
     // solve (ATA + eI) v = ATb   (b relative to mass point -> v relative too)
     let a00=0,a01=0,a02=0,a11=0,a12=0,a22=0, b0=0,b1=0,b2=0;
     for (let i = 0; i < cnt; i++){
-      const nx = nms[i*3], ny = nms[i*3+1], nz = nms[i*3+2];
-      const dx = pts[i*3] - mx, dy = pts[i*3+1] - my, dz = pts[i*3+2] - mz;
+      const h = hs[i];
+      const nx = h.nx, ny = h.ny, nz = h.nz;
+      const dx = h.px - mx, dy = h.py - my, dz = h.pz - mz;
       const d = nx*dx + ny*dy + nz*dz;
       a00 += nx*nx; a01 += nx*ny; a02 += nx*nz;
       a11 += ny*ny; a12 += ny*nz; a22 += nz*nz;
@@ -450,13 +671,18 @@ function meshChunk(cx, cy, cz, allEdits){
       vy = my + i01*b0 + i11*b1 + i12*b2;
       vz = mz + i02*b0 + i12*b1 + i22*b2;
     }
-    // Newton projection onto the zero set: tightens curved surfaces (spheres)
-    // without disturbing sharp features (d is already ~0 at QEF corners)
-    for (let it = 0; it < 2; it++){
-      const dv = evalSDF(vx, vy, vz, le);
-      if (Math.abs(dv) < 1e-5) break;
-      const gp = gradSDF(vx, vy, vz, le, VOX * 0.2);
-      vx -= gp[0] * dv; vy -= gp[1] * dv; vz -= gp[2] * dv;
+    // Newton projection onto the zero set along the average crossing normal:
+    // tightens curved surfaces (spheres) without disturbing sharp features
+    const nl = Math.hypot(snx, sny, snz);
+    if (nl > 1e-6){
+      snx /= nl; sny /= nl; snz /= nl;
+      const lx0c = (gx0 + x) * VOX, ly0c = (gy0 + y) * VOX, lz0c = (gz0 + z) * VOX;
+      const le = localEdits(lx0c, ly0c, lz0c, lx0c + VOX, ly0c + VOX, lz0c + VOX);
+      for (let it = 0; it < 2; it++){
+        const dv = evalSDF(vx, vy, vz, le, lgen);
+        if (Math.abs(dv) < 1e-5) break;
+        vx -= snx * dv; vy -= sny * dv; vz -= snz * dv;
+      }
     }
     // clamp into the cell (tiny margin) — QEF can shoot outside on noisy data
     const cx0 = (gx0 + x) * VOX, cy0 = (gy0 + y) * VOX, cz0 = (gz0 + z) * VOX;
@@ -476,8 +702,6 @@ function meshChunk(cx, cy, cz, allEdits){
 
   // emit quads for owned sign-change edges
   const pos = [], nrm = [], mat = [];
-  // axis: 0=x,1=y,2=z ; edge from sample s to s+axis ; adjacent 4 cells offset
-  // patterns (perpendicular axes u,v): cells at s - du*i - dv*j for i,j in {0,1}
   const AX = [
     { d:[1,0,0], u:[0,1,0], v:[0,0,1] },
     { d:[0,1,0], u:[0,0,1], v:[1,0,0] },
@@ -504,22 +728,24 @@ function meshChunk(cx, cy, cz, allEdits){
             CI(x - A.v[0],          y - A.v[1],          z - A.v[2]),
           ];
           if (!(hasVert[c[0]] && hasVert[c[1]] && hasVert[c[2]] && hasVert[c[3]])) continue;
-          // crossing point + exact normal for shading & winding
+          const h = hermite(axis, x, y, z);
+          if (!h) continue;
+          const g = [h.nx, h.ny, h.nz];
+          // material from the solid endpoint sample
           const ax0 = (gx0 + x) * VOX, ay0 = (gy0 + y) * VOX, az0 = (gz0 + z) * VOX;
           const bx0 = ax0 + A.d[0]*VOX, by0 = ay0 + A.d[1]*VOX, bz0 = az0 + A.d[2]*VOX;
           const le = localEdits(Math.min(ax0,bx0), Math.min(ay0,by0), Math.min(az0,bz0),
                                 Math.max(ax0,bx0), Math.max(ay0,by0), Math.max(az0,bz0));
-          const t = refine(ax0, ay0, az0, bx0, by0, bz0, d0, d1, le);
-          const px = ax0 + (bx0-ax0)*t, py = ay0 + (by0-ay0)*t, pz = az0 + (bz0-az0)*t;
-          const g = gradSDF(px, py, pz, le, VOX * 0.2);
-          // material from the solid endpoint sample
           const mSample = SOLID(d0)
-            ? materialAt(ax0, ay0, az0, le)
-            : materialAt(bx0, by0, bz0, le);
-          // quad c0,c1,c2,c3 (ring around edge); orient each triangle so its
-          // geometric normal agrees with the SDF gradient (solid -> air), and
-          // drop degenerate slivers
+            ? materialAt(ax0, ay0, az0, le, gen)
+            : materialAt(bx0, by0, bz0, le, gen);
+          // quad c0,c1,c2,c3 (ring around edge). Winding is canonical from the
+          // sign configuration: the ring order faces -axis, so flip when the
+          // near sample is solid (outward normal is +axis). Never derived from
+          // the gradient — it degenerates on creases between adjacent carves
+          // and used to flip triangles there (see-through holes).
           const i0 = c[0]*3, i1 = c[1]*3, i2 = c[2]*3, i3 = c[3]*3;
+          const flip = SOLID(d0);
           for (const tri of [[i0, i1, i2], [i0, i2, i3]]){
             const [a0, a1, a2] = tri;
             const e1x = verts[a1]-verts[a0], e1y = verts[a1+1]-verts[a0+1], e1z = verts[a1+2]-verts[a0+2];
@@ -527,7 +753,7 @@ function meshChunk(cx, cy, cz, allEdits){
             const cxn = e1y*e2z - e1z*e2y, cyn = e1z*e2x - e1x*e2z, czn = e1x*e2y - e1y*e2x;
             const area2 = cxn*cxn + cyn*cyn + czn*czn;
             if (area2 < 1e-14) continue;
-            if ((cxn*g[0] + cyn*g[1] + czn*g[2]) < 0) pushTri(a0, a2, a1);
+            if (flip) pushTri(a0, a2, a1);
             else pushTri(a0, a1, a2);
             for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); }
           }
@@ -595,6 +821,92 @@ function clampToolSize(item){
   }
 }
 
+// ---- resource economy ----
+// 1 inventory unit = one 0.5m voxel of volume (0.125 m^3)
+const UNIT_VOL = 0.125;
+// sample a shape's interior; cb(x,y,z,cellVol) for each sample point
+function sampleShape(e, cb){
+  const box = editAABB(e);
+  const step = Math.min(0.5, Math.max(0.15, e.size / 12));
+  const v = step * step * step;
+  for (let x = box[0] + step / 2; x < box[3]; x += step)
+    for (let y = box[1] + step / 2; y < box[4]; y += step)
+      for (let z = box[2] + step / 2; z < box[5]; z += step)
+        if (shapeSDF(x, y, z, e) < 0) cb(x, y, z, v);
+}
+// what a subtract edit removes, in units per material (bedrock yields nothing)
+function mineYield(edits, e, gen){
+  const box = editAABB(e);
+  const le = cullEdits(edits, box, 0.1);
+  const vols = {};
+  sampleShape(e, (x, y, z, v) => {
+    if (y < BEDROCK_Y) return;
+    if (evalSDF(x, y, z, le, gen) <= 0){
+      const m = materialAt(x, y, z, le, gen);
+      vols[m] = (vols[m] || 0) + v;
+    }
+  });
+  const out = {};
+  for (const m in vols){
+    const u = Math.round(vols[m] / UNIT_VOL);
+    if (u > 0) out[m] = u;
+  }
+  return out;
+}
+// units of material a union edit needs (volume of air it fills)
+function placeCost(edits, e, gen){
+  const box = editAABB(e);
+  const le = cullEdits(edits, box, 0.1);
+  let vol = 0;
+  sampleShape(e, (x, y, z, v) => {
+    if (evalSDF(x, y, z, le, gen) > 0) vol += v;
+  });
+  const u = Math.round(vol / UNIT_VOL);
+  return u > 0 ? u : (vol > 0 ? 1 : 0);
+}
+function countMat(slots, mat){
+  let n = 0;
+  for (const s of slots) if (s && s.kind === 'mat' && s.mat === mat) n += s.count;
+  return n;
+}
+function addMat(slots, mat, n){
+  for (const s of slots) if (s && s.kind === 'mat' && s.mat === mat){ s.count += n; return true; }
+  for (let i = 0; i < slots.length; i++)
+    if (!slots[i]){ slots[i] = makeStack(mat, n); return true; }
+  return false;
+}
+function consumeMat(slots, mat, n){
+  if (countMat(slots, mat) < n) return false;
+  for (let i = 0; i < slots.length && n > 0; i++){
+    const s = slots[i];
+    if (s && s.kind === 'mat' && s.mat === mat){
+      const take = Math.min(s.count, n);
+      s.count -= take; n -= take;
+      if (s.count === 0) slots[i] = null;
+    }
+  }
+  return true;
+}
+
+// ---- crafting ----
+// tier progression: craft tier-N tools from the matching ore
+const RECIPES = [];
+{
+  const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
+  for (let t = 1; t <= 4; t++){
+    RECIPES.push({ kind: 'drill', tier: t, mat: ore[t], cost: 24 });
+    RECIPES.push({ kind: 'disp',  tier: t, mat: ore[t], cost: 18 });
+  }
+}
+function craft(slots, r){
+  let empty = -1;
+  for (let i = 0; i < slots.length; i++) if (!slots[i]){ empty = i; break; }
+  if (empty < 0) return 'full';
+  if (!consumeMat(slots, r.mat, r.cost)) return 'poor';
+  slots[empty] = r.kind === 'drill' ? makeDrill(r.tier) : makeDispenser(r.tier);
+  return 'ok';
+}
+
 // ---- save round-trip ----
 function serializeEdits(edits){
   const a = new Array(edits.length);
@@ -633,11 +945,13 @@ function hashSeed(str){
 return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
-  SIZE_MIN, SIZE_MAX, TIER_COOLDOWN, GRID_SIZES,
+  SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, shapeSDF, makeEdit, editAABB, aabbOverlap, cullEdits,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   makeDrill, makeDispenser, makeStack, invMove, resizeTool, clampToolSize,
   defaultItemSize, serializeEdits, deserializeEdits, mulberry32, hashSeed,
+  noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
+  mineYield, placeCost, countMat, addMat, consumeMat, RECIPES, craft,
 };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
@@ -721,6 +1035,20 @@ function makeTileDrawers(){
         ctx.fillStyle = '#eafcff'; ctx.fillRect(x, y, 1, 1); ctx.fillRect(x+1, y, 1, 1); ctx.fillRect(x, y+1, 1, 1);
       }
     },
+    [CORE.MAT.GRASS](ctx, rng){
+      speckle(ctx, rng, '#58a83c', '#46862f', '#6cc44e', 0.3, 0.22);
+      for (let i = 0; i < 4; i++){
+        const x = (rng()*15)|0, y = (rng()*14)|0;
+        ctx.fillStyle = '#7fdc5a'; ctx.fillRect(x, y, 1, 2);
+      }
+    },
+    [CORE.MAT.SAND](ctx, rng){
+      speckle(ctx, rng, '#d8c485', '#c4ae6e', '#e8d79f', 0.3, 0.2);
+      for (let i = 0; i < 3; i++){
+        const x = (rng()*15)|0, y = (rng()*15)|0;
+        ctx.fillStyle = '#b39a58'; ctx.fillRect(x, y, 1, 1);
+      }
+    },
   };
 }
 function buildAtlas(seed){
@@ -799,10 +1127,11 @@ void main(){
 const CK = (cx, cy, cz) => cx + ',' + cy + ',' + cz;
 
 class Terrain {
-  constructor(scene, material, edits){
+  constructor(scene, material, edits, gen){
     this.scene = scene;
     this.material = material;
     this.edits = edits;              // live reference to world edit list
+    this.gen = gen;
     this.chunks = new Map();         // key -> {mesh|null}
     this.dirty = new Map();          // key -> [cx,cy,cz], pending remesh
     this.center = [0, 0];            // chunk coords of player (x,z)
@@ -875,7 +1204,7 @@ class Terrain {
   remesh(key, cx, cy, cz){
     const ch = this.chunks.get(key);
     if (!ch) return;
-    const data = CORE.meshChunk(cx, cy, cz, this.edits);
+    const data = CORE.meshChunk(cx, cy, cz, this.edits, this.gen);
     if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); ch.mesh = null; }
     if (!data) return;
     const g = new THREE.BufferGeometry();
@@ -898,7 +1227,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 3 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4 };
 function loadOpts(){
   try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
   catch { return Object.assign({}, DEFAULT_OPTS); }
@@ -937,6 +1266,8 @@ const game = {
   slots: [], hotSel: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
   lastAction: 0,
+  act: { t: 0, charging: false }, mouseEdge: false, actProgress: 0,
+  gen: null,
   ui: 'none',                          // none | inv | craft | pause | options
   // ghost
   ghost: null, ghostWire: null, ghostShape: 0,  // 0 sphere, 1 cube (per-item below overrides)
@@ -961,7 +1292,7 @@ function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.heigh
 function nearEdits(box){
   return CORE.cullEdits(game.edits, box, 0.6);
 }
-function sdfWorld(x, y, z, edits){ return CORE.evalSDF(x, y, z, edits); }
+function sdfWorld(x, y, z, edits){ return CORE.evalSDF(x, y, z, edits, game.gen); }
 
 // ---------- scene setup ----------
 function initRenderer(){
@@ -991,7 +1322,7 @@ function buildScene(){
   game.camera = cam;
 
   game.atlas = buildAtlas(game.seed);
-  const fogFar = (game.opts.rd + 0.2) * CORE.CHUNK_M * 2;
+  const fogFar = (game.opts.rd + 1) * CORE.CHUNK_M;
   const mat = new THREE.ShaderMaterial({
     vertexShader: TERRAIN_VERT,
     fragmentShader: TERRAIN_FRAG,
@@ -1005,9 +1336,10 @@ function buildScene(){
       uFogNear: { value: fogFar * 0.55 },
       uFogFar: { value: fogFar },
     },
+    side: THREE.DoubleSide,
   });
   game.terrainMat = mat;
-  game.terrain = new Terrain(scene, mat, game.edits);
+  game.terrain = new Terrain(scene, mat, game.edits, game.gen);
   game.terrain.radius = game.opts.rd + 1;
 
   // ghost preview: translucent fill + wireframe, one per shape
@@ -1035,7 +1367,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485];
 function buildViewmodel(cam){
   const vm = new THREE.Group();
   const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
@@ -1127,7 +1459,7 @@ function bindInput(){
   document.addEventListener('mousedown', e => {
     if (!game.running || game.ui !== 'none') return;
     if (!isLocked()){ requestLock(); return; }
-    if (e.button === 0) game.mouseL = true;
+    if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
     if (e.button === 2){
       const it = selectedItem();
       if (it && (it.kind === 'drill' || it.kind === 'disp')){
@@ -1205,7 +1537,7 @@ function collidePlayer(edits){
       const cy = game.pos.y + centers[ci];
       const d = sdfWorld(game.pos.x, cy, game.pos.z, edits);
       if (d < r){
-        const g = CORE.gradSDF(game.pos.x, cy, game.pos.z, edits, 0.1);
+        const g = CORE.gradSDF(game.pos.x, cy, game.pos.z, edits, 0.1, game.gen);
         const push = r - d;
         game.pos.x += g[0] * push;
         game.pos.y += g[1] * push;
@@ -1283,12 +1615,17 @@ function selectedItem(){ return game.slots[game.hotSel] || null; }
 
 function itemShape(it){ return it.shape === 1 ? 1 : 0; }
 
-// raymarch the SDF to find where the ghost should sit
+// ghost position: fixed distance in front of the player normally; in grid
+// mode, raymarch onto the surface and snap to the grid
 function ghostPlacement(it){
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
   const reach = PLAYER.reach;
+  if (!game.snapOn){
+    const tt = Math.min(reach, 3.2 + it.size * 0.55);
+    return { x: o.x + dir.x*tt, y: o.y + dir.y*tt, z: o.z + dir.z*tt };
+  }
   const segBox = [
     Math.min(o.x, o.x + dir.x*reach) - 1, Math.min(o.y, o.y + dir.y*reach) - 1, Math.min(o.z, o.z + dir.z*reach) - 1,
     Math.max(o.x, o.x + dir.x*reach) + 1, Math.max(o.y, o.y + dir.y*reach) + 1, Math.max(o.z, o.z + dir.z*reach) + 1,
@@ -1298,7 +1635,7 @@ function ghostPlacement(it){
   for (let i = 0; i < 96 && t < reach; i++){
     const d = sdfWorld(o.x + dir.x*t, o.y + dir.y*t, o.z + dir.z*t, edits);
     if (d < 0.02){ hit = t; break; }
-    t += Math.max(0.045, d * 0.85);
+    t += Math.max(0.045, d * 0.5);
   }
   const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + it.size * 0.6);
   let cx = o.x + dir.x*tt, cy = o.y + dir.y*tt, cz = o.z + dir.z*tt;
@@ -1347,21 +1684,70 @@ function applyEdit(e){
   markSave();
 }
 
-function tryAction(now){
+function doMine(it, p, shape){
+  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, it.size, 0);
+  const got = CORE.mineYield(game.edits, e, game.gen);
+  applyEdit(e);
+  const parts = [];
+  for (const m in got){
+    if (CORE.addMat(game.slots, +m, got[m])) parts.push('+' + got[m] + ' ' + CORE.MAT_NAME[m]);
+    else parts.push('inventory full — lost ' + got[m] + ' ' + CORE.MAT_NAME[m]);
+  }
+  if (parts.length) toast(parts.join('  ·  '));
+  refreshHotbar();
+}
+function doPlace(it, p, shape){
+  const e = CORE.makeEdit(1, shape, p.x, p.y, p.z, it.size, it.loaded);
+  const cost = CORE.placeCost(game.edits, e, game.gen);
+  if (cost === 0) return;
+  if (!CORE.consumeMat(game.slots, it.loaded, cost)){
+    toast('need ' + cost + ' ' + CORE.MAT_NAME[it.loaded] + ' — have ' + CORE.countMat(game.slots, it.loaded));
+    return;
+  }
+  applyEdit(e);
+  refreshHotbar();
+}
+
+// Hold LMB to break one shape over the tier's mine time (drill keeps cycling
+// while held). Dispenser builds one shape per click — hold to charge, release
+// cancels, and it never auto-repeats. Diamond tier is instant.
+function tryAction(dt, now){
   const it = selectedItem();
-  if (!game.mouseL || !it || game.ui !== 'none' || !isLocked() || !game.ghostPos) return;
-  if (it.kind !== 'drill' && it.kind !== 'disp') return;
+  const edge = game.mouseEdge; game.mouseEdge = false;
+  game.actProgress = 0;
+  const usable = it && (it.kind === 'drill' || it.kind === 'disp') &&
+                 game.ui === 'none' && isLocked() && game.ghostPos;
+  if (!usable){ game.act.t = 0; game.act.charging = false; return; }
   const isDisp = it.kind === 'disp';
-  if (isDisp && !it.loaded){ if (now - game.lastAction > 600){ game.lastAction = now; toast('dispenser empty — load a material (E)'); } return; }
-  const cool = (isDisp && it.tier >= 4) ? 40 : CORE.TIER_COOLDOWN[it.tier];
-  if (now - game.lastAction < cool) return;
-  game.lastAction = now;
-  const p = game.ghostPos;
-  const shape = itemShape(it);
-  if (isDisp){
-    applyEdit(CORE.makeEdit(1, shape, p.x, p.y, p.z, it.size, it.loaded));
-  } else {
-    applyEdit(CORE.makeEdit(0, shape, p.x, p.y, p.z, it.size, 0));
+  const dur = CORE.TIER_TIME[it.tier];
+  const p = game.ghostPos, shape = itemShape(it);
+
+  if (!isDisp){
+    if (!game.mouseL){ game.act.t = 0; return; }
+    if (dur === 0){
+      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(it, p, shape); }
+      return;
+    }
+    game.act.t += dt;
+    game.actProgress = Math.min(1, game.act.t / dur);
+    if (game.act.t >= dur){ game.act.t = 0; doMine(it, p, shape); }
+    return;
+  }
+
+  if (!it.loaded){ if (edge) toast('dispenser empty — load a material (E)'); return; }
+  if (dur === 0){
+    if (edge) doPlace(it, p, shape);
+    return;
+  }
+  if (edge){ game.act.charging = true; game.act.t = 0; }
+  if (!game.mouseL){ game.act.charging = false; game.act.t = 0; return; }
+  if (game.act.charging){
+    game.act.t += dt;
+    game.actProgress = Math.min(1, game.act.t / dur);
+    if (game.act.t >= dur){
+      game.act.charging = false; game.act.t = 0;
+      doPlace(it, p, shape);
+    }
   }
 }
 
@@ -1497,6 +1883,15 @@ function bindInvDnD(){
 }
 
 // ---------- HUD ----------
+function updateChargeBar(){
+  const bar = $('chargebar');
+  if (game.actProgress > 0){
+    bar.style.display = 'block';
+    $('chargefill').style.width = (game.actProgress * 100).toFixed(1) + '%';
+  } else {
+    bar.style.display = 'none';
+  }
+}
 let toastT = 0;
 function toast(msg){
   const t = $('toast');
@@ -1526,7 +1921,30 @@ function openInventory(){
   game.ui = 'inv'; buildInvUI(); show('invscreen'); document.exitPointerLock();
 }
 function openCraft(){
-  game.ui = 'craft'; show('craftscreen'); document.exitPointerLock();
+  game.ui = 'craft'; buildCraftUI(); show('craftscreen'); document.exitPointerLock();
+}
+function buildCraftUI(){
+  const list = $('craftlist'); list.innerHTML = '';
+  for (const r of CORE.RECIPES){
+    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier) : CORE.makeDispenser(r.tier);
+    const have = CORE.countMat(game.slots, r.mat);
+    const row = document.createElement('div'); row.className = 'craftrow';
+    const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
+    const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = itemLabel(item); row.appendChild(nm);
+    const cost = document.createElement('div');
+    cost.className = 'ccost' + (have >= r.cost ? ' ok' : '');
+    cost.textContent = r.cost + ' ' + CORE.MAT_NAME[r.mat] + ' (have ' + have + ')';
+    row.appendChild(cost);
+    const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
+    btn.addEventListener('click', () => {
+      const res = CORE.craft(game.slots, r);
+      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); buildCraftUI(); refreshHotbar(); markSave(); }
+      else if (res === 'poor') toast('not enough ' + CORE.MAT_NAME[r.mat]);
+      else toast('inventory full');
+    });
+    row.appendChild(btn);
+    list.appendChild(row);
+  }
 }
 function closeOverlay(){
   hide('invscreen'); hide('craftscreen');
@@ -1567,7 +1985,7 @@ function applyOptions(){
   }
   if (game.terrain){
     game.terrain.radius = game.opts.rd + 1;
-    const fogFar = (game.opts.rd + 0.2) * CORE.CHUNK_M * 2;
+    const fogFar = (game.opts.rd + 1) * CORE.CHUNK_M;
     game.terrainMat.uniforms.uFogNear.value = fogFar * 0.55;
     game.terrainMat.uniforms.uFogFar.value = fogFar;
     game.forceStream = true;
@@ -1628,11 +2046,10 @@ function freshWorldData(name, seedStr){
   };
 }
 function defaultSlots(){
+  // build 2: start with stone tools; higher tiers are crafted from mined ore
   const s = new Array(40).fill(null);
-  for (let t = 0; t < 5; t++) s[t] = CORE.makeDrill(t);
-  for (let t = 0; t < 5; t++) s[5 + t] = CORE.makeDispenser(t);
-  const mats = [CORE.MAT.ROCK, CORE.MAT.IRON, CORE.MAT.RUBY, CORE.MAT.OBSIDIAN, CORE.MAT.DIAMOND];
-  for (let i = 0; i < mats.length; i++) s[10 + i] = CORE.makeStack(mats[i], 9999);
+  s[0] = CORE.makeDrill(0);
+  s[1] = CORE.makeDispenser(0);
   return s;
 }
 
@@ -1664,7 +2081,13 @@ function startWorld(id){
   game.snapOn = !!data.snapOn;
   game.gridIdx = Math.min(9, Math.max(0, data.gridIdx | 0));
   const p = data.player || {};
-  game.pos.set(p.x || 0, p.y == null ? 2.5 : p.y, p.z || 0);
+  game.gen = CORE.makeGen(game.seed);
+  const spawnY = game.gen.height(0, 0) + 1.5;
+  game.pos.set(p.x || 0, p.y == null ? spawnY : p.y, p.z || 0);
+  // terrain gen changed under an old save? lift the player out of the ground
+  for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
+    game.pos.y += 0.5;
+  }
   game.yaw = p.yaw || 0; game.pitch = p.pitch || 0;
   game.fly = !!p.fly;
   game.vel.set(0, 0, 0);
@@ -1708,9 +2131,10 @@ function frame(now){
   if (game.ui === 'none'){
     updatePlayer(dt);
     updateGhost();
-    tryAction(now);
+    tryAction(dt, now);
   }
   updateViewmodel(dt);
+  updateChargeBar();
 
   // stream chunks when crossing chunk borders (or forced)
   const cc = game.terrain.chunkOfWorld(game.pos.x, game.pos.z);
