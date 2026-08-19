@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 2.1 — cave overhaul + build/tool UX rework (2026-08-19)
+Playtest-driven patch before build 3.
+
+### Caves (why none were findable)
+Build 2's near-surface fade suppressed caves within 5m of the ground with no
+exceptions — every cave system was sealed; there were literally zero
+entrances. Reworked:
+- **Entrance zones**: a 2D noise mask disables the surface fade in patches,
+  so tunnels climb out and visibly breach the ground (verified: dozens of
+  breach columns per 480m² in every test seed; smoke test screenshots one).
+- **Unique shapes**: tunnel threshold varies with a low-frequency 3D noise
+  (regional wide/tight systems) and widens with depth; a second blobby
+  "cavern" field adds large rooms, bigger and more common deeper. ~9% of
+  underground volume is air (5-7% shallow, 11-12% deep).
+- **Bedrock moved to y=-64** (was -16): stone layer is 4× deeper, meshed
+  world now y -64..+48. Ore bands respread: iron -4..-30, ruby -16..-45,
+  obsidian -30..-58, diamond -46..-63.5. Chunk streaming prioritizes by 3D
+  distance and the mesh budget doubles while a big backlog exists.
+
+### Building / tools
+- **Grid snap is now a tiling lattice.** The shape's FACES snap to a
+  lattice whose spacing is the shape size (or the grid cell when that's
+  larger). Adjacent snapped placements always connect flush — full-size,
+  face-to-face, nothing eaten inside the previous shape. Grid viz draws
+  the actual lattice anchored on the ghost's bottom face.
+- **Shape + size are shared tool state** (the player's, not the item's).
+  Swap drill↔dispenser↔any tier and the sphere/cube and size carry over;
+  non-diamond tiers clamp to their nearest unlocked step at use time
+  without losing the shared value.
+- **Dispenser slot**: one special inventory slot only a dispenser fits.
+  No more loading — holding any material stack in the hotbar auto-equips
+  the slotted dispenser loaded with that material (swap hotbar slot =
+  swap loaded material). Crafted dispensers go to inventory; drag into
+  the slot to upgrade. New worlds start stone drill in hotbar + stone
+  dispenser already slotted.
+- **Consumption verified end-to-end in the browser harness**: a 2m cube
+  costs 64 units, a 4m cube 512 (exactly 8×), and placement is refused
+  when the held stack is short. (The build-2 "didn't consume" report:
+  consumption existed but gave no feedback and counts sat in unopened
+  inventory; there's now a "-N material" toast and live hotbar counts.)
+- **V/B moves the ghost** closer/farther (1m..reach) in free-place mode;
+  distance shown in the HUD and saved.
+
+### Player
+- **No more sliding down inclines.** Penetration from gravity was resolved
+  along the slope normal every frame (horizontal component = downhill
+  drift). When standing still on walkable ground (normal.y > 0.6) the
+  pushout is now resolved straight up and horizontal velocity is zeroed;
+  moving/jumping keeps the normal-based resolve. Verified: 0.000m drift
+  over 2.5s on a 0.65-gradient slope.
+
+### Save format v3
+Adds shared tool state + dispenser slot. Older saves migrate: first
+dispenser found in the inventory moves into the dispenser slot.
+
 ## Build 2 — terrain, ores, economy + build-1 playtest fixes (2026-08-19)
 
 ### Playtest fixes (from first build-1 session)
