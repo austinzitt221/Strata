@@ -248,9 +248,9 @@ const BEDROCK_Y = -63.99;     // everything below is permanently solid
 const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, STICK:11 };
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11 };
 const NMAT = 11;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','sticks'];
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -262,7 +262,7 @@ function tierMax(t){ return t >= 4 ? STEPS.length - 1 : 8 + t; }
 const SIZE_MIN = STEPS[0], SIZE_MAX = STEPS[STEPS.length - 1];
 // seconds to break/build one shape (like Minecraft block mine time);
 // diamond (tier 4) is instant: the whole shape goes in one click
-const TIER_TIME = [1.1, 0.8, 0.55, 0.32, 0];
+const TIER_TIME = [0.85, 0.62, 0.42, 0.25, 0];
 
 // grid snap presets, keys 1..0 while holding F
 const GRID_SIZES = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
@@ -580,6 +580,54 @@ function materialAt(px, py, pz, edits, gen){
   return m;
 }
 
+// exact surface normal (world-field gradient direction) of an edit at a
+// point on its boundary. axis = the DC edge axis that found the crossing,
+// used to break ties at cube corners/edges (the pierced face must have a
+// component along the edge that crossed it).
+function editNormal(e, px, py, pz, axis){
+  let nx = 0, ny = 0, nz = 0;
+  if (e.shape === 0){
+    const dx = px - e.x, dy = py - e.y, dz = pz - e.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    nx = dx / L; ny = dy / L; nz = dz / L;
+  } else if (e.shape === 2){
+    const d2 = Math.hypot(px - e.x, pz - e.z) - e.size * 0.5;
+    const dy = Math.abs(py - e.y) - e.size * 0.5;
+    if (dy > d2 - 1e-9 && (axis === 1 || dy >= d2)){
+      ny = py > e.y ? 1 : -1;
+    } else {
+      const L = Math.hypot(px - e.x, pz - e.z) || 1;
+      nx = (px - e.x) / L; nz = (pz - e.z) / L;
+    }
+  } else {
+    // cube: local frame, pick the dominant |q| axis; on ties (edges and
+    // corners) prefer the DC edge axis so each edge contributes its own face
+    let dx = px - e.x, dz = pz - e.z;
+    if (e.rot){
+      const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
+      const rx = dx * c - dz * s;
+      dz = dx * s + dz * c; dx = rx;
+    }
+    const q = [Math.abs(dx), Math.abs(py - e.y), Math.abs(dz)];
+    let best = 0;
+    // rotated local axis index corresponding to the world edge axis
+    const axisLocal = e.rot && axis !== 1 ? -1 : axis;
+    for (let i = 1; i < 3; i++) if (q[i] > q[best] + 1e-6) best = i;
+    if (axisLocal >= 0 && q[axisLocal] > q[best] - 1e-6) best = axisLocal;
+    if (best === 0){ nx = dx > 0 ? 1 : -1; }
+    else if (best === 1){ ny = py > e.y ? 1 : -1; }
+    else { nz = dz > 0 ? 1 : -1; }
+    if (e.rot && best !== 1){
+      const c = Math.cos(e.rot), s = Math.sin(e.rot);
+      const wx = nx * c - nz * s;
+      nz = nx * s + nz * c; nx = wx;
+    }
+  }
+  // subtract: the world field is max(d, -s), so its gradient is -grad(s)
+  if (e.op === 0){ nx = -nx; ny = -ny; nz = -nz; }
+  return [nx, ny, nz];
+}
+
 function gradSDF(px, py, pz, edits, h, gen){
   h = h || 0.08;
   // tetrahedral difference: 4 evals instead of 6
@@ -684,7 +732,10 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   const C = N + 1;
   const CI = (x, y, z) => (x + 1) + (y + 1) * C + (z + 1) * C * C;
   const verts = new Float32Array(C * C * C * 3);
+  const verts2 = new Float32Array(C * C * C * 3);  // second vertex for two-sheet cells
   const hasVert = new Uint8Array(C * C * C);
+  const has2 = new Uint8Array(C * C * C);
+  const sheetBits = new Uint16Array(C * C * C);  // bit k: cell edge k is on sheet B
 
   const edgeT = (d0, d1) => d0 / (d0 - d1); // linear guess, refined by bisection
 
@@ -731,37 +782,34 @@ function meshChunk(cx, cy, cz, allEdits, gen){
                           Math.max(ax, bx), Math.max(ay, by), Math.max(az, bz));
     const t = refine(ax, ay, az, bx, by, bz, d0, d1, le);
     const px = ax + (bx - ax) * t, py = ay + (by - ay) * t, pz = az + (bz - az) * t;
-    const g = gradSDF(px, py, pz, le, VOX * 0.2, lgen);
+    // Analytic normal when the crossing sits on an edit primitive's surface —
+    // numeric gradients sampled near a snapped cube's corners blend several
+    // faces into a diagonal and the poisoned QEF shoves vertices outside the
+    // cube (the "triangle shard" bug). Exact face/radial normals make cube
+    // corners exact plane intersections. Terrain keeps the numeric gradient.
+    let g = null, bestS = 0.035;
+    for (let ei = 0; ei < le.length; ei++){
+      if (le[ei].op === 2) continue;
+      const s = Math.abs(shapeSDF(px, py, pz, le[ei]));
+      if (s < bestS){ bestS = s; g = editNormal(le[ei], px, py, pz, axis); }
+    }
+    if (!g) g = gradSDF(px, py, pz, le, VOX * 0.2, lgen);
     h = { px, py, pz, nx: g[0], ny: g[1], nz: g[2] };
     EMAP.set(key, h);
     return h;
   }
 
-  function cellVertex(x, y, z){
-    // corner solidity
-    let mask = 0;
-    for (let i = 0; i < 8; i++){
-      if (SOLID(field[FI(x + CO[i][0], y + CO[i][1], z + CO[i][2])])) mask |= (1 << i);
-    }
-    if (mask === 0 || mask === 255) return false;
-    // gather hermite data on crossing edges (cached, shared between cells)
-    let mx = 0, my = 0, mz = 0, snx = 0, sny = 0, snz = 0, cnt = 0;
-    const hs = [];
-    for (let k = 0; k < 12; k++){
-      const ea = CE_AX[k];
-      const h = hermite(ea.axis, x + ea.o[0], y + ea.o[1], z + ea.o[2]);
-      if (!h) continue;
-      hs.push(h);
+  // QEF + Newton + clamp for one set of crossings
+  function solveSheet(list, cx0, cy0, cz0, le){
+    const cnt = list.length;
+    let mx = 0, my = 0, mz = 0, snx = 0, sny = 0, snz = 0;
+    for (const h of list){
       mx += h.px; my += h.py; mz += h.pz;
       snx += h.nx; sny += h.ny; snz += h.nz;
-      cnt++;
     }
-    if (cnt === 0) return false;
     mx /= cnt; my /= cnt; mz /= cnt;
-    // solve (ATA + eI) v = ATb   (b relative to mass point -> v relative too)
     let a00=0,a01=0,a02=0,a11=0,a12=0,a22=0, b0=0,b1=0,b2=0;
-    for (let i = 0; i < cnt; i++){
-      const h = hs[i];
+    for (const h of list){
       const nx = h.nx, ny = h.ny, nz = h.nz;
       const dx = h.px - mx, dy = h.py - my, dz = h.pz - mz;
       const d = nx*dx + ny*dy + nz*dz;
@@ -785,27 +833,81 @@ function meshChunk(cx, cy, cz, allEdits, gen){
       vy = my + i01*b0 + i11*b1 + i12*b2;
       vz = mz + i02*b0 + i12*b1 + i22*b2;
     }
-    // Newton projection onto the zero set along the average crossing normal:
-    // tightens curved surfaces (spheres) without disturbing sharp features
+    // Newton projection onto the zero set along the sheet's average normal:
+    // tightens curved surfaces. Crease cells (disagreeing normals) skip it —
+    // the averaged direction is diagonal there and QEF already nails creases.
     const nl = Math.hypot(snx, sny, snz);
-    if (nl > 1e-6){
+    if (nl > cnt * 0.9 && nl > 1e-6){
       snx /= nl; sny /= nl; snz /= nl;
-      const lx0c = (gx0 + x) * VOX, ly0c = (gy0 + y) * VOX, lz0c = (gz0 + z) * VOX;
-      const le = localEdits(lx0c, ly0c, lz0c, lx0c + VOX, ly0c + VOX, lz0c + VOX);
+      const cap = VOX * 0.45;
       for (let it = 0; it < 2; it++){
-        const dv = evalSDF(vx, vy, vz, le, lgen);
+        let dv = evalSDF(vx, vy, vz, le, lgen);
         if (Math.abs(dv) < 1e-5) break;
+        dv = Math.max(-cap, Math.min(cap, dv));
         vx -= snx * dv; vy -= sny * dv; vz -= snz * dv;
       }
     }
     // clamp into the cell (tiny margin) — QEF can shoot outside on noisy data
-    const cx0 = (gx0 + x) * VOX, cy0 = (gy0 + y) * VOX, cz0 = (gz0 + z) * VOX;
     const m = VOX * 0.001;
     vx = Math.min(Math.max(vx, cx0 + m), cx0 + VOX - m);
     vy = Math.min(Math.max(vy, cy0 + m), cy0 + VOX - m);
     vz = Math.min(Math.max(vz, cz0 + m), cz0 + VOX - m);
+    return [vx, vy, vz];
+  }
+
+  function cellVertex(x, y, z){
+    // corner solidity
+    let mask = 0;
+    for (let i = 0; i < 8; i++){
+      if (SOLID(field[FI(x + CO[i][0], y + CO[i][1], z + CO[i][2])])) mask |= (1 << i);
+    }
+    if (mask === 0 || mask === 255) return false;
+    // gather hermite data on crossing edges (cached, shared between cells)
+    const hs = [], slots = [];
+    for (let k = 0; k < 12; k++){
+      const ea = CE_AX[k];
+      const h = hermite(ea.axis, x + ea.o[0], y + ea.o[1], z + ea.o[2]);
+      if (h){ hs.push(h); slots.push(k); }
+    }
+    if (hs.length === 0) return false;
+    const cx0 = (gx0 + x) * VOX, cy0 = (gy0 + y) * VOX, cz0 = (gz0 + z) * VOX;
+    const le = localEdits(cx0, cy0, cz0, cx0 + VOX, cy0 + VOX, cz0 + VOX);
     const ci = CI(x, y, z) * 3;
-    verts[ci] = vx; verts[ci+1] = vy; verts[ci+2] = vz;
+
+    // Two opposing sheets in one cell (a placed cube's underside hovering
+    // just above the ground) cannot share a vertex: QEF parks it midway and
+    // quads spike between the surfaces. A concave crease also opposes but
+    // its crossings meet at the crease line, so require real separation
+    // ALONG the normal before splitting. Split cells solve one vertex per
+    // sheet and quads pick the one matching their crossing's normal.
+    const r0 = hs[0];
+    let nOpp = 0, maxSep = 0;
+    for (let i = 1; i < hs.length; i++){
+      if (hs[i].nx * r0.nx + hs[i].ny * r0.ny + hs[i].nz * r0.nz < -0.25){
+        nOpp++;
+        const sep = Math.abs((hs[i].px - r0.px) * r0.nx + (hs[i].py - r0.py) * r0.ny + (hs[i].pz - r0.pz) * r0.nz);
+        if (sep > maxSep) maxSep = sep;
+      }
+    }
+    if (nOpp > 0 && maxSep > VOX * 0.6){
+      const inA = hs.map((hh, i) => i === 0 || hh.nx * r0.nx + hh.ny * r0.ny + hh.nz * r0.nz >= -0.25);
+      const groupA = hs.filter((hh, i) => inA[i]);
+      const groupB = hs.filter((hh, i) => !inA[i]);
+      const A = solveSheet(groupA, cx0, cy0, cz0, le);
+      const B = solveSheet(groupB, cx0, cy0, cz0, le);
+      verts[ci] = A[0]; verts[ci+1] = A[1]; verts[ci+2] = A[2];
+      verts2[ci] = B[0]; verts2[ci+1] = B[1]; verts2[ci+2] = B[2];
+      has2[CI(x, y, z)] = 1;
+      // remember, per cell edge, which sheet owns its crossing — quad
+      // emission reads this instead of guessing from normals, so the rim
+      // where the sheets merge stitches consistently (no slit holes)
+      let bits = 0;
+      for (let i = 0; i < hs.length; i++) if (!inA[i]) bits |= (1 << slots[i]);
+      sheetBits[CI(x, y, z)] = bits;
+    } else {
+      const A = solveSheet(hs, cx0, cy0, cz0, le);
+      verts[ci] = A[0]; verts[ci+1] = A[1]; verts[ci+2] = A[2];
+    }
     return true;
   }
 
@@ -828,11 +930,23 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     { d:[0,1,0], u:[0,0,1], v:[1,0,0] },
     { d:[0,0,1], u:[1,0,0], v:[0,1,0] },
   ];
-  function pushTri(i0, i1, i2){
-    pos.push(verts[i0], verts[i0+1], verts[i0+2],
-             verts[i1], verts[i1+1], verts[i1+2],
-             verts[i2], verts[i2+1], verts[i2+2]);
-  }
+  // for the 4 cells around an axis edge, which of the cell's 12 edge slots is
+  // that edge: cell qi sits at s - u*iA - v*iB, so inside it the edge is at
+  // offset u*iA + v*iB
+  const slotFor = (axis, ox, oy, oz) => {
+    for (let k = 0; k < 12; k++){
+      const ea = CE_AX[k];
+      if (ea.axis === axis && ea.o[0] === ox && ea.o[1] === oy && ea.o[2] === oz) return k;
+    }
+    return -1;
+  };
+  const QUAD_SLOTS = AX.map((A2, axis) => [
+    slotFor(axis, A2.u[0] + A2.v[0], A2.u[1] + A2.v[1], A2.u[2] + A2.v[2]),
+    slotFor(axis, A2.u[0], A2.u[1], A2.u[2]),
+    slotFor(axis, 0, 0, 0),
+    slotFor(axis, A2.v[0], A2.v[1], A2.v[2]),
+  ]);
+
   for (let axis = 0; axis < 3; axis++){
     const A = AX[axis];
     for (let z = 0; z < N; z++){
@@ -852,31 +966,40 @@ function meshChunk(cx, cy, cz, allEdits, gen){
           const h = hermite(axis, x, y, z);
           if (!h) continue;
           const g = [h.nx, h.ny, h.nz];
-          // material from the solid endpoint sample
+          // each cell contributes the vertex of the sheet that OWNS this edge
+          // in that cell's own bookkeeping (two-sheet cells carry a second
+          // vertex; the recorded assignment keeps rims consistent)
+          const V = new Float64Array(12);
+          const qslots = QUAD_SLOTS[axis];
+          for (let qi = 0; qi < 4; qi++){
+            const ciq = c[qi], b = ciq * 3;
+            const useB = has2[ciq] && ((sheetBits[ciq] >> qslots[qi]) & 1);
+            const arr = useB ? verts2 : verts;
+            V[qi*3] = arr[b]; V[qi*3+1] = arr[b+1]; V[qi*3+2] = arr[b+2];
+          }
+          // material sampled just INSIDE the surface at the crossing itself —
+          // sampling at grid corners let ground quads beside a snapped cube
+          // pick up the cube's material (dark flecks at the base, read as
+          // "shards" in playtest) because those corners sit exactly on the
+          // cube's face plane
           const ax0 = (gx0 + x) * VOX, ay0 = (gy0 + y) * VOX, az0 = (gz0 + z) * VOX;
           const bx0 = ax0 + A.d[0]*VOX, by0 = ay0 + A.d[1]*VOX, bz0 = az0 + A.d[2]*VOX;
           const le = localEdits(Math.min(ax0,bx0), Math.min(ay0,by0), Math.min(az0,bz0),
                                 Math.max(ax0,bx0), Math.max(ay0,by0), Math.max(az0,bz0));
-          const mSample = SOLID(d0)
-            ? materialAt(ax0, ay0, az0, le, gen)
-            : materialAt(bx0, by0, bz0, le, gen);
+          const mEps = 0.06;
+          const mSample = materialAt(h.px - h.nx * mEps, h.py - h.ny * mEps, h.pz - h.nz * mEps, le, gen);
           // quad c0,c1,c2,c3 (ring around edge). Winding is canonical from the
           // sign configuration: the ring order faces -axis, so flip when the
           // near sample is solid (outward normal is +axis). Never derived from
           // the gradient — it degenerates on creases between adjacent carves
           // and used to flip triangles there (see-through holes).
-          const i0 = c[0]*3, i1 = c[1]*3, i2 = c[2]*3, i3 = c[3]*3;
           const flip = SOLID(d0);
-          for (const tri of [[i0, i1, i2], [i0, i2, i3]]){
-            const [a0, a1, a2] = tri;
-            const e1x = verts[a1]-verts[a0], e1y = verts[a1+1]-verts[a0+1], e1z = verts[a1+2]-verts[a0+2];
-            const e2x = verts[a2]-verts[a0], e2y = verts[a2+1]-verts[a0+1], e2z = verts[a2+2]-verts[a0+2];
-            const cxn = e1y*e2z - e1z*e2y, cyn = e1z*e2x - e1x*e2z, czn = e1x*e2y - e1y*e2x;
-            const area2 = cxn*cxn + cyn*cyn + czn*czn;
-            if (area2 < 1e-14) continue;
-            if (flip) pushTri(a0, a2, a1);
-            else pushTri(a0, a1, a2);
-            const sv = skyAt(h.px, h.py, h.pz);
+          const sv = skyAt(h.px, h.py, h.pz);
+          // degenerate (zero-area) triangles are kept: they cost nothing to
+          // draw and dropping them un-pairs their neighbors' edges
+          for (const tri of (flip ? [[0, 2, 1], [0, 3, 2]] : [[0, 1, 2], [0, 2, 3]])){
+            const a0 = tri[0]*3, a1 = tri[1]*3, a2 = tri[2]*3;
+            pos.push(V[a0], V[a0+1], V[a0+2], V[a1], V[a1+1], V[a1+2], V[a2], V[a2+1], V[a2+2]);
             for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
           }
         }
@@ -904,7 +1027,8 @@ function makeSword(tier){ return { kind:'sword', tier }; }
 function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'table'];
+function makeSticks(count){ return { kind:'stick', count }; }
+const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick'];
 function stackableWith(A, B){
   if (!A || !B || A.kind !== B.kind) return false;
   if (A.kind === 'mat') return A.mat === B.mat;
@@ -1032,6 +1156,23 @@ function addMat(slots, mat, n){
     if (!slots[i]){ slots[i] = makeStack(mat, n); return true; }
   return false;
 }
+function countItem(slots, kind){
+  let n = 0;
+  for (const s of slots) if (s && s.kind === kind) n += s.count;
+  return n;
+}
+function consumeItem(slots, kind, n){
+  if (countItem(slots, kind) < n) return false;
+  for (let i = 0; i < slots.length && n > 0; i++){
+    const s = slots[i];
+    if (s && s.kind === kind){
+      const take = Math.min(s.count, n);
+      s.count -= take; n -= take;
+      if (s.count === 0) slots[i] = null;
+    }
+  }
+  return true;
+}
 function consumeMat(slots, mat, n){
   if (countMat(slots, mat) < n) return false;
   for (let i = 0; i < slots.length && n > 0; i++){
@@ -1051,29 +1192,36 @@ const RECIPES = [];
 {
   const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
   // basic
-  RECIPES.push({ kind: 'matout', matOut: MAT.STICK, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
-  RECIPES.push({ kind: 'torch', yields: 6, costs: [{ mat: MAT.STICK, n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+  RECIPES.push({ kind: 'matout', matOut: MAT.PLANKS, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
+  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
+  RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
   // station
   const matFor = t => t === 0 ? MAT.ROCK : ore[t];
   for (let t = 0; t <= 4; t++){
     RECIPES.push({ kind: 'sword', tier: t, station: true,
-      costs: [{ mat: MAT.STICK, n: 2 }, { mat: matFor(t), n: 12 }] });
+      costs: [{ item: 'stick', n: 2 }, { mat: matFor(t), n: 12 }] });
   }
   for (let t = 1; t <= 4; t++){
     RECIPES.push({ kind: 'drill', tier: t, station: true, costs: [{ mat: ore[t], n: 24 }] });
     RECIPES.push({ kind: 'disp',  tier: t, station: true, costs: [{ mat: ore[t], n: 18 }] });
   }
   RECIPES.push({ kind: 'gun', station: true, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
-  RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ mat: MAT.STICK, n: 6 }] });
+  RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
 }
 function canCraft(slots, r){
-  return r.costs.every(c => countMat(slots, c.mat) >= c.n);
+  return r.costs.every(c => (c.item ? countItem(slots, c.item) : countMat(slots, c.mat)) >= c.n);
+}
+function payCosts(slots, r){
+  for (const c of r.costs){
+    if (c.item) consumeItem(slots, c.item, c.n);
+    else consumeMat(slots, c.mat, c.n);
+  }
 }
 function craft(slots, r){
   if (!canCraft(slots, r)) return 'poor';
   if (r.kind === 'matout'){
-    for (const c of r.costs) consumeMat(slots, c.mat, c.n);
+    payCosts(slots, r);
     if (!addMat(slots, r.matOut, r.yields)) return 'full';
     return 'ok';
   }
@@ -1086,7 +1234,7 @@ function craft(slots, r){
     for (let i = 0; i < slots.length; i++) if (!slots[i]){ target = i; break; }
     if (target < 0) return 'full';
   }
-  for (const c of r.costs) consumeMat(slots, c.mat, c.n);
+  payCosts(slots, r);
   if (STACKABLE_KINDS.includes(r.kind)){
     if (slots[target] && slots[target].kind === r.kind) slots[target].count += r.yields;
     else slots[target] = { kind: r.kind, count: r.yields };
@@ -1143,7 +1291,7 @@ return {
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
-  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft, canCraft,
+  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   makeGun, makeTorches, makeSword, makeDoors, makeTables, stackableWith, TREE_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
@@ -1252,10 +1400,15 @@ function makeTileDrawers(){
         ctx.fillStyle = '#4e3517'; ctx.fillRect(x, y, 2, 1);
       }
     },
-    [CORE.MAT.STICK](ctx, rng){
+    [CORE.MAT.PLANKS](ctx, rng){
       speckle(ctx, rng, '#b08d55', '#997641', '#c6a36b', 0.3, 0.2);
       ctx.fillStyle = '#7a5c2e';
-      for (let i = 0; i < 16; i += 4) ctx.fillRect(i, 0, 1, 16);
+      for (const y of [0, 4, 8, 12]) ctx.fillRect(0, y, 16, 1);      // board seams
+      ctx.fillStyle = '#8a6a38';
+      ctx.fillRect(5, 1, 1, 3); ctx.fillRect(11, 5, 1, 3);           // staggered joints
+      ctx.fillRect(3, 9, 1, 3); ctx.fillRect(9, 13, 1, 3);
+      ctx.fillStyle = '#5f4720';
+      ctx.fillRect(6, 2, 1, 1); ctx.fillRect(12, 6, 1, 1); ctx.fillRect(4, 10, 1, 1);
     },
     [CORE.MAT.GLOWSHROOM](ctx, rng){
       speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
@@ -1512,7 +1665,7 @@ const game = {
   // tools/ui state
   slots: [], hotSel: 0,
   dispSlot: null,                     // the one special dispenser slot
-  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 },  // shared across all tools
+  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
   // survival state
   mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
@@ -1577,7 +1730,12 @@ function sdfWorld(x, y, z, edits){
   if (treeSys.visible && treeSys.visible.size) d = Math.min(d, treeSys.trunkNear(x, y, z));
   return d;
 }
-// gradient of the combined field (terrain + props)
+// gradient of the combined field (terrain + props). Returns
+// [nx, ny, nz, mag] — unit direction plus |grad f| clamped to [0.25, 1].
+// The combined field is NOT a true SDF (heightfield scaled 0.65, carve
+// noise flattens it further), so raw d under-states the real gap by 2-3x
+// near cave walls; d / mag is a first-order true-distance estimate. mag is
+// capped at 1 so the estimate never shrinks below the raw field value.
 function gradWorld(x, y, z, edits){
   const h = 0.1;
   const d0 = sdfWorld(x + h, y + h, z + h, edits);
@@ -1585,13 +1743,17 @@ function gradWorld(x, y, z, edits){
   const d2 = sdfWorld(x - h, y + h, z - h, edits);
   const d3 = sdfWorld(x - h, y - h, z + h, edits);
   const gx = d0 + d1 - d2 - d3, gy = d0 - d1 + d2 - d3, gz = d0 - d1 - d2 + d3;
-  const len = Math.sqrt(gx*gx + gy*gy + gz*gz) || 1;
-  return [gx/len, gy/len, gz/len];
+  const len = Math.sqrt(gx*gx + gy*gy + gz*gz) || 1e-6;
+  const mag = Math.min(1, Math.max(0.25, len / (4 * h)));
+  return [gx/len, gy/len, gz/len, mag];
 }
 function capsuleFree(x, y, z, edits){
   const r = PLAYER.radius, h = playerHeight();
   for (const c of [r + 0.02, h * 0.5, h - r - 0.02]){
-    if (sdfWorld(x, y + c, z, edits) < r - 0.02) return false;
+    const d = sdfWorld(x, y + c, z, edits);
+    if (d >= r - 0.02) continue;                 // mag <= 1 -> true dist >= d
+    const g = gradWorld(x, y + c, z, edits);
+    if (d / g[3] < r - 0.02) return false;
   }
   return true;
 }
@@ -1683,6 +1845,79 @@ function buildScene(){
 
 // material accent colors for the dispenser's loaded-material orb
 const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55];
+// realistic articulated right hand, curled into a grip. The grip bar runs
+// along local +x, in front of the palm at roughly (x, 0.05, -0.045); props
+// rotate/position the hand so that bar lies on their handle.
+const SKIN = 0xd9a679, SKIN_D = 0xbe8c5c, SLEEVE = 0x46525e;
+function buildHand(){
+  const skin = new THREE.MeshBasicMaterial({ color: SKIN });
+  const skinD = new THREE.MeshBasicMaterial({ color: SKIN_D });
+  const hand = new THREE.Group();
+  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.088, 0.092, 0.032), skin);
+  hand.add(palm);
+  const heel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.026, 0.034), skinD);
+  heel.position.y = -0.054; hand.add(heel);
+  const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.078, 0.07, 0.05),
+    new THREE.MeshBasicMaterial({ color: SLEEVE }));
+  cuff.position.set(0, -0.105, 0.012); cuff.rotation.x = 0.22; hand.add(cuff);
+  // four fingers, three tapering segments each, curled around the bar
+  for (let f = 0; f < 4; f++){
+    const fx = -0.033 + f * 0.022;
+    const taper = f === 0 ? 0.92 : f === 3 ? 0.78 : 1;   // index/pinky narrower
+    let seg = new THREE.Group();
+    seg.position.set(fx, 0.046, 0);
+    seg.rotation.x = -1.15;
+    hand.add(seg);
+    const lens = [0.034, 0.028, 0.021];
+    for (let k = 0; k < 3; k++){
+      const L = lens[k] * (f === 3 ? 0.82 : 1);
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(0.019 * taper, L, 0.018 * taper - k * 0.001),
+        k === 2 ? skinD : skin);
+      m.position.y = L / 2;
+      seg.add(m);
+      const next = new THREE.Group();
+      next.position.y = L;
+      next.rotation.x = -0.82;
+      seg.add(next);
+      seg = next;
+    }
+  }
+  // opposing thumb, two segments wrapping across the bar (thumb side = +x:
+  // right hand seen from the back has the thumb on the right)
+  let tp = new THREE.Group();
+  tp.position.set(0.048, 0.008, -0.006);
+  tp.rotation.set(-0.9, -0.55, -0.95);
+  hand.add(tp);
+  for (const L of [0.036, 0.028]){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.023, L, 0.021), skin);
+    m.position.y = L / 2; tp.add(m);
+    const nx = new THREE.Group(); nx.position.y = L; nx.rotation.x = -0.62;
+    tp.add(nx); tp = nx;
+  }
+  return hand;
+}
+// hand oriented to grip a VERTICAL handle at local origin (bar mapped to +y)
+function gripHandVertical(){
+  // pivot spins the fist around the handle so the finger curl stays on the
+  // camera side instead of hiding behind the hand
+  const p = new THREE.Group();
+  const h = buildHand();
+  h.rotation.z = Math.PI / 2;   // fingers wrap left across the handle, thumb on top
+  h.position.set(0.05, 0, 0.045);
+  p.add(h);
+  p.rotation.y = 0.6;           // show the knuckle row, not just the flat back
+  return p;
+}
+const vmMatCache = new Map();
+function vmMatMaterial(mat){
+  if (!vmMatCache.has(mat)){
+    const t = new THREE.CanvasTexture(tileCanvas(mat, game.seed || 1));
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    vmMatCache.set(mat, new THREE.MeshBasicMaterial({ map: t }));
+  }
+  return vmMatCache.get(mat);
+}
 function buildViewmodel(cam){
   const vm = new THREE.Group();
   const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
@@ -1717,6 +1952,9 @@ function buildViewmodel(cam){
   gAccent.position.set(0, 0.07, -0.02); gun.add(gAccent);
   const gGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.07), grip);
   gGrip.position.set(0, -0.11, 0.1); gun.add(gGrip);
+  const gHand = gripHandVertical();
+  gHand.position.set(0.05, -0.13, 0.145); gHand.rotation.x = -0.15;
+  gun.add(gHand);
 
   const sword = new THREE.Group();
   const sGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.05), grip);
@@ -1725,6 +1963,7 @@ function buildViewmodel(cam){
   sGuard.position.y = 0.09; sword.add(sGuard);
   const sBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.03), tierMat.clone());
   sBlade.position.y = 0.36; sword.add(sBlade);
+  sword.add(gripHandVertical());
   sword.rotation.z = 0.5; sword.rotation.x = 0.3;
 
   const torch = new THREE.Group();
@@ -1732,38 +1971,110 @@ function buildViewmodel(cam){
   torch.add(tStick);
   const tTip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
   tTip.position.y = 0.21; torch.add(tTip);
+  const tHand = gripHandVertical();
+  tHand.position.y = -0.07; torch.add(tHand);
   torch.rotation.z = 0.3;
 
+  // plain stick, held diagonally in the fist
+  const stick = new THREE.Group();
+  const stWood = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.4, 0.045),
+    new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+  stick.add(stWood);
+  const stKnot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.055),
+    new THREE.MeshBasicMaterial({ color: 0x5f421f }));
+  stKnot.position.y = 0.09; stick.add(stKnot);
+  stick.add(gripHandVertical());
+  stick.rotation.z = 0.35; stick.rotation.x = 0.1;
+
+  // door held from its bottom edge — a skinny wooden panel
+  const door = new THREE.Group();
+  const dPanel = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.4, 0.035),
+    new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+  dPanel.position.y = 0.24; door.add(dPanel);
+  const dTrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.04),
+    new THREE.MeshBasicMaterial({ color: 0x6b4a26 }));
+  dTrim.position.y = 0.24; door.add(dTrim);
+  const dKnob = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.045),
+    new THREE.MeshBasicMaterial({ color: 0xd8c485 }));
+  dKnob.position.set(0.09, 0.2, 0); door.add(dKnob);
+  const dGripBar = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 0.045), grip);
+  dGripBar.position.y = -0.02; door.add(dGripBar);
+  const dHand = gripHandVertical();
+  dHand.position.y = -0.03; door.add(dHand);
+  door.rotation.z = 0.12; door.rotation.y = -0.2;
+
+  // crafting table carried by one leg
+  const table = new THREE.Group();
+  const tbTop = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.035, 0.3),
+    new THREE.MeshBasicMaterial({ color: 0x9c7344 }));
+  tbTop.position.y = 0.22; table.add(tbTop);
+  const legM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
+  for (const [lx, lz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]]){
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.2, 0.045), legM);
+    leg.position.set(lx, 0.11, lz); table.add(leg);
+  }
+  const tbTool = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.04),
+    new THREE.MeshBasicMaterial({ color: 0x59c8d8 }));
+  tbTool.position.set(0.05, 0.245, -0.04); table.add(tbTool);
+  const tbHand = gripHandVertical();
+  tbHand.position.set(-0.11, 0.02, -0.11); table.add(tbHand);
+  table.rotation.z = 0.18; table.rotation.x = 0.15; table.rotation.y = 0.4;
+  table.position.y = -0.1;
+
+  // loose material stack: a textured chunk resting in the hand
+  const matCube = new THREE.Group();
+  const mcMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), orbMat.clone());
+  mcMesh.rotation.y = 0.5; mcMesh.position.y = 0.075; matCube.add(mcMesh);
+  const mcHand = gripHandVertical();
+  matCube.add(mcHand);
+  matCube.rotation.z = 0.15;
+
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
+  vm.add(stick); vm.add(door); vm.add(table); vm.add(matCube);
   vm.scale.setScalar(0.5);
   vm.rotation.y = -0.22;               // angle inward so the barrel end reads
-  vm.position.set(0.33, -0.27, -0.62);
+  vm.position.set(0.32, -0.22, -0.58);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, sBlade, bit, ring, orb, bob: 0 };
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, matCube,
+              mcMesh, tTip, sBlade, bit, ring, orb, bob: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
+  const it = selectedItem();
   const tool = activeTool();
-  v.drill.visible = !!tool && tool.kind === 'drill';
-  v.disp.visible = !!tool && tool.kind === 'disp';
-  v.gun.visible = !!tool && tool.kind === 'gun';
-  v.torch.visible = !!tool && (tool.kind === 'torch' || tool.kind === 'door' || tool.kind === 'table');
-  v.sword.visible = !!tool && tool.kind === 'sword';
-  if (!tool) return;
-  if (tool.kind === 'sword'){
+  const kind = tool ? tool.kind : (it ? it.kind : null);
+  v.drill.visible = kind === 'drill';
+  v.disp.visible = kind === 'disp';
+  v.gun.visible = kind === 'gun';
+  v.torch.visible = kind === 'torch';
+  v.sword.visible = kind === 'sword';
+  v.stick.visible = kind === 'stick';
+  v.door.visible = kind === 'door';
+  v.table.visible = kind === 'table';
+  v.matCube.visible = kind === 'mat';
+  // walk bob
+  const speed = Math.hypot(game.vel.x, game.vel.z);
+  v.bob += dt * Math.min(speed, 10) * 1.6;
+  v.root.position.y = -0.22 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
+  if (!kind) return;
+  if (kind === 'mat'){
+    v.mcMesh.material = vmMatMaterial(it.mat);
+    return;
+  }
+  if (kind === 'sword'){
     v.sBlade.material.color.set(TIER_COL[tool.tier]);
     const sw = Math.max(0, 1 - (performance.now() - (game.swingT || 0)) / 260);
     v.sword.rotation.z = 0.5 - sw * 1.6;
     v.sword.rotation.x = 0.3 + sw * 0.5;
     return;
   }
-  if (tool.kind === 'torch' || tool.kind === 'door' || tool.kind === 'table'){
-    v.torch.children[1].material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
+  if (kind === 'torch'){
+    v.tTip.material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
     return;
   }
-  if (tool.kind === 'gun') return;
+  if (kind !== 'drill' && kind !== 'disp') return;
   const tc = new THREE.Color(TIER_COL[tool.tier]);
-  if (tool.kind === 'drill'){
+  if (kind === 'drill'){
     v.bit.material.color.copy(tc);
     if (game.mouseL && isLocked() && game.ui === 'none') v.bit.rotation.z += dt * 22;
   } else {
@@ -1774,10 +2085,6 @@ function updateViewmodel(dt){
     const fill = Math.min(1, Math.max(0.45, 0.45 + tool.count / 1200));
     v.orb.scale.setScalar(fill * (1 + Math.sin(performance.now() * 0.004) * 0.07));
   }
-  // walk bob
-  const speed = Math.hypot(game.vel.x, game.vel.z);
-  v.bob += dt * Math.min(speed, 10) * 1.6;
-  v.root.position.y = -0.27 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
 }
 
 function buildGridViz(cell){
@@ -1984,6 +2291,10 @@ function updateDayNight(dt){
   u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
   game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
   u.uFogCol.value.copy(game.skyNow);
+  if (treeSys.mats){
+    const b = 0.3 + 0.7 * dayF;                    // trees darken with the sky
+    for (const k in treeSys.mats) treeSys.mats[k].color.setScalar(b);
+  }
 }
 
 // ---------- torches ----------
@@ -2040,22 +2351,74 @@ const torchSys = {
 };
 // ---------- trees ----------
 const treeSys = {
-  group: null, visible: new Map(), lastCell: null,
+  group: null, visible: new Map(), lastCell: null, mats: null,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); this.visible.clear(); this.lastCell = null; },
+  ensureMats(){
+    if (this.mats) return this.mats;
+    const tex = (draw, rx, ry) => {
+      const cv = document.createElement('canvas'); cv.width = 16; cv.height = 16;
+      draw(cv.getContext('2d'));
+      const t = new THREE.CanvasTexture(cv);
+      t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry);
+      return t;
+    };
+    const bark = tex(c => {
+      c.fillStyle = '#6b4a26'; c.fillRect(0, 0, 16, 16);
+      c.fillStyle = '#59391c';
+      for (const x of [1, 5, 9, 13]) c.fillRect(x, 0, 1, 16);
+      c.fillStyle = '#7d5a30';
+      for (const x of [3, 7, 11, 15]) c.fillRect(x, 0, 1, 16);
+      c.fillStyle = '#4a2e14';
+      c.fillRect(2, 4, 2, 2); c.fillRect(10, 10, 2, 3); c.fillRect(6, 13, 2, 2);
+    }, 2, 3);
+    const leafDraw = (base, dark, mid, lite) => c => {
+      c.fillStyle = base; c.fillRect(0, 0, 16, 16);
+      const rng = CORE.mulberry32(7);
+      for (let i = 0; i < 46; i++){
+        c.fillStyle = [dark, mid, lite][(rng() * 3) | 0];
+        c.fillRect((rng() * 16) | 0, (rng() * 16) | 0, 1 + ((rng() * 2) | 0), 1);
+      }
+      c.fillStyle = dark;
+      for (let i = 0; i < 6; i++) c.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 2, 2);
+    };
+    const leaf  = tex(leafDraw('#3e7d2e', '#2c5220', '#356b27', '#5ea847'), 3, 2);
+    const leaf2 = tex(leafDraw('#4a8f36', '#33622a', '#3e7d2e', '#6cb352'), 3, 2);
+    this.mats = {
+      bark:  new THREE.MeshBasicMaterial({ map: bark }),
+      leaf:  new THREE.MeshBasicMaterial({ map: leaf }),
+      leaf2: new THREE.MeshBasicMaterial({ map: leaf2 }),
+    };
+    return this.mats;
+  },
   mesh(t){
+    // round "true 3d" tree: tapered trunk + a cluster of leaf-ball blobs,
+    // deterministic per tree so it never changes between visits
     const g = new THREE.Group();
-    const trunkM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
-    const leafM = new THREE.MeshBasicMaterial({ color: 0x3e7d2e });
-    const leafM2 = new THREE.MeshBasicMaterial({ color: 0x4e9639 });
-    const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), trunkM);
-    trunk.position.y = 1.3;
-    const c1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3, 2.4), leafM);
-    c1.position.y = 3.0;
-    const c2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.6), leafM2);
-    c2.position.y = 4.0;
-    g.add(trunk); g.add(c1); g.add(c2);
+    const M = this.ensureMats();
+    const rng = CORE.mulberry32(CORE.hashSeed(t.key) ^ 0x51ed);
+    const H = 4.4 + rng() * 1.4;                     // trunk height (pre-scale)
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, H + 0.6, 7), M.bark);
+    trunk.position.y = (H + 0.6) / 2 - 0.3;
+    g.add(trunk);
+    const cy = H + 0.7;
+    const R0 = 1.8 + rng() * 0.6;
+    const blob = (r, x, y, z, m) => {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), m);
+      b.position.set(x, y, z); b.scale.y = 0.82;
+      b.rotation.y = rng() * Math.PI;
+      g.add(b);
+    };
+    blob(R0, 0, cy, 0, M.leaf);
+    const n = 3 + ((rng() * 3) | 0);
+    for (let i = 0; i < n; i++){
+      const a = rng() * Math.PI * 2, rr = R0 * (0.5 + rng() * 0.35);
+      blob(R0 * (0.5 + rng() * 0.3), Math.cos(a) * rr, cy + (rng() - 0.35) * R0 * 0.9,
+           Math.sin(a) * rr, rng() < 0.5 ? M.leaf : M.leaf2);
+    }
     g.scale.setScalar(t.s);
     g.position.set(t.x, t.y - 0.15, t.z);
+    g.userData.trunkH = H;                           // pre-scale, for physics/rays
     return g;
   },
   refresh(){
@@ -2089,12 +2452,12 @@ const treeSys = {
     game.removedTreeSet.add(k);
     this.group.remove(v.m);
     this.visible.delete(k);
-    const wood = Math.round(4 + 2 * v.t.s);
+    const wood = Math.round(6 + 4 * v.t.s);
     if (grant){
       CORE.addMat(game.slots, CORE.MAT.WOOD, wood);
       toast('+' + wood + ' wood');
     }
-    Particles.burst(v.t.x, v.t.y + 1.5, v.t.z, 1, [0x6b4a26, 0x3e7d2e], 30, 2.4);
+    Particles.burst(v.t.x, v.t.y + 2.6, v.t.z, 1.6, [0x6b4a26, 0x3e7d2e], 36, 2.6);
     AudioSys.sfx('break', 0.8);
     refreshHotbar(); refreshToolHUD();
     markSave();
@@ -2107,12 +2470,13 @@ const treeSys = {
     let best = null, bestT = maxDist;
     for (const [k, v] of this.visible){
       const t = v.t;
-      const cy = t.y + 1.3 * t.s;
+      const hh = (v.m.userData.trunkH || 2.6) * 0.5 * t.s;
+      const cy = t.y + hh;
       const vx = t.x - o.x, vy = cy - o.y, vz = t.z - o.z;
       const tt = vx * dir.x + vy * dir.y + vz * dir.z;
       if (tt < 0 || tt > bestT) continue;
       const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
-      if (Math.abs(py) < 1.5 * t.s + 0.4 && Math.hypot(px, pz) < 0.45 * t.s + 0.25){
+      if (Math.abs(py) < hh + 0.4 && Math.hypot(px, pz) < 0.45 * t.s + 0.25){
         best = k; bestT = tt;
       }
     }
@@ -2125,8 +2489,9 @@ const treeSys = {
       const t = v.t;
       const dh = Math.hypot(x - t.x, z - t.z);
       if (dh > 3) continue;
-      const d2 = dh - 0.3 * t.s;
-      const dy = Math.abs(y - (t.y + 1.3 * t.s)) - 1.3 * t.s;
+      const hh = (v.m.userData.trunkH || 2.6) * 0.5 * t.s;
+      const d2 = dh - 0.33 * t.s;
+      const dy = Math.abs(y - (t.y + hh)) - hh;
       const pd = Math.hypot(Math.max(d2, 0), Math.max(dy, 0)) + Math.min(Math.max(d2, dy), 0);
       if (pd < d) d = pd;
     }
@@ -2142,11 +2507,12 @@ const doorSys = {
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     for (const d of game.doors){
+      const w = d.w || 1.2, h = d.h || 2.2;
       const g = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.12), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
-      panel.position.set(0.6, 1.1, 0);         // hinge at the group origin
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+      panel.position.set(w * 0.5, h * 0.5, 0); // hinge at the group origin
       const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), new THREE.MeshBasicMaterial({ color: 0xd8c485 }));
-      handle.position.set(1.02, 1.05, 0);
+      handle.position.set(w * 0.85, h * 0.48, 0);
       g.add(panel); g.add(handle);
       g.position.set(d.x, d.y, d.z);
       g.rotation.y = d.yaw + (d.open ? Math.PI / 2 : 0);
@@ -2154,17 +2520,17 @@ const doorSys = {
     }
     rebuildSolidProps();
   },
-  place(x, y, z){
-    // hinge offset half a door to the side so the panel is centered on aim
-    const yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2);
-    const hx = x - Math.cos(yaw) * 0.6, hz = z + Math.sin(yaw) * 0.6;
-    game.doors.push({ x: hx, y, z: hz, yaw, open: false });
+  // place from the ghost: gd = {x, y, z (base center), yaw, w, h}
+  placeAt(gd){
+    game.doors.push({ x: gd.x - Math.cos(gd.yaw) * gd.w * 0.5, y: gd.y,
+                      z: gd.z + Math.sin(gd.yaw) * gd.w * 0.5,
+                      yaw: gd.yaw, open: false, w: gd.w, h: gd.h });
     this.rebuild(); markSave();
   },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.doors.length;
     for (const d of game.doors){
-      if (Math.hypot(d.x - x, d.y + 1.1 - y, d.z - z) > r) keep.push(d);
+      if (Math.hypot(d.x - x, d.y + (d.h || 2.2) * 0.5 - y, d.z - z) > r) keep.push(d);
     }
     game.doors = keep;
     const n = n0 - keep.length;
@@ -2177,13 +2543,14 @@ const doorSys = {
     const o = game.camera.position;
     let best = null, bestT = maxDist;
     for (const d of game.doors){
-      const cx = d.x + Math.cos(d.yaw + (d.open ? Math.PI/2 : 0)) * 0.6;
-      const cz = d.z - Math.sin(d.yaw + (d.open ? Math.PI/2 : 0)) * 0.6;
-      const vx = cx - o.x, vy = d.y + 1.1 - o.y, vz = cz - o.z;
+      const w = d.w || 1.2, h = d.h || 2.2;
+      const cx = d.x + Math.cos(d.yaw + (d.open ? Math.PI/2 : 0)) * w * 0.5;
+      const cz = d.z - Math.sin(d.yaw + (d.open ? Math.PI/2 : 0)) * w * 0.5;
+      const vx = cx - o.x, vy = d.y + h * 0.5 - o.y, vz = cz - o.z;
       const t = vx * dir.x + vy * dir.y + vz * dir.z;
       if (t < 0 || t > bestT) continue;
       const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
-      if (Math.abs(py) < 1.3 && Math.hypot(px, pz) < 0.8){ best = d; bestT = t; }
+      if (Math.abs(py) < h * 0.6 && Math.hypot(px, pz) < w * 0.5 + 0.2){ best = d; bestT = t; }
     }
     return best;
   },
@@ -2213,6 +2580,20 @@ const tableSys = {
     rebuildSolidProps();
   },
   add(x, y, z){ game.tables.push([x, y, z]); this.rebuild(); markSave(); },
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const t of game.tables){
+      const vx = t[0] - o.x, vy = t[1] + 0.5 - o.y, vz = t[2] - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.abs(py) < 0.75 && Math.hypot(px, pz) < 0.85){ best = t; bestT = tt; }
+    }
+    return best;
+  },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.tables.length;
     for (const t of game.tables){
@@ -2234,10 +2615,10 @@ function rebuildSolidProps(){
   const props = [];
   for (const d of game.doors){
     if (d.open) continue;
-    const yaw = d.yaw;
+    const yaw = d.yaw, w = d.w || 1.2, h = d.h || 2.2;
     props.push({ t: 'box', yaw,
-      x: d.x + Math.cos(yaw) * 0.6, y: d.y + 1.1, z: d.z - Math.sin(yaw) * 0.6,
-      hx: 0.6, hy: 1.1, hz: 0.09 });
+      x: d.x + Math.cos(yaw) * w * 0.5, y: d.y + h * 0.5, z: d.z - Math.sin(yaw) * w * 0.5,
+      hx: w * 0.5, hy: h * 0.5, hz: 0.09 });
   }
   for (const t of game.tables){
     props.push({ t: 'box', yaw: 0, x: t[0], y: t[1] + 0.45, z: t[2], hx: 0.55, hy: 0.46, hz: 0.55 });
@@ -2273,6 +2654,13 @@ function entMesh(type){
     box(0.22, 0.12, 0.1, 0x8a6f33, 0, -0.08, -0.2, head);    // snout
     box(0.08, 0.2, 0.06, 0xc8a24b, -0.16, 0.26, 0.02, head); // ears
     box(0.08, 0.2, 0.06, 0xc8a24b, 0.16, 0.26, 0.02, head);
+    for (const sx of [-0.11, 0.11]){                          // eyes + glint
+      box(0.075, 0.075, 0.03, 0x241b12, sx, 0.06, -0.165, head);
+      box(0.028, 0.028, 0.032, 0xf5efdf, sx + 0.02, 0.08, -0.166, head);
+    }
+    box(0.03, 0.025, 0.02, 0x4a3517, -0.05, -0.06, -0.252, head); // nostrils
+    box(0.03, 0.025, 0.02, 0x4a3517, 0.05, -0.06, -0.252, head);
+    box(0.15, 0.028, 0.02, 0x5c421c, 0, -0.145, -0.24, head);     // mouth line
     box(0.1, 0.1, 0.3, 0xb08d3f, 0, 0.7, 0.6);               // tail
     for (const [sx, sz] of [[-0.24,-0.32],[0.24,-0.32],[-0.24,0.36],[0.24,0.36]]){
       const leg = box(0.16, 0.42, 0.16, 0x8a6f33, sx, 0.21, sz);
@@ -2287,7 +2675,11 @@ function entMesh(type){
       const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.05), eyeM);
       eye.position.set(sx, 0.02, -0.18);
       head.add(eye);
+      box(0.1, 0.03, 0.04, 0x120e1c, sx * 1.1, 0.075, -0.175, head); // angry brows
     }
+    box(0.2, 0.07, 0.03, 0x0c0812, 0, -0.09, -0.175, head);          // open maw
+    for (const tx of [-0.06, 0, 0.06])                               // teeth
+      box(0.03, 0.035, 0.032, 0xcfc8b8, tx, -0.067, -0.176, head);
     for (const sx of [-0.2, 0.2]){                            // spikes
       box(0.08, 0.22, 0.08, 0x3a2c52, sx, 1.4, 0.12);
     }
@@ -2415,7 +2807,9 @@ function updateEntities(dt, now){
       const dd = sdfWorld(e.x, cy, e.z, le);
       if (dd < def.r){
         const g = gradWorld(e.x, cy, e.z, le);
-        const push = Math.min(def.r - dd, 0.4);
+        const ddTrue = dd / g[3];
+        if (ddTrue >= def.r) continue;
+        const push = Math.min(def.r - ddTrue, 0.4);
         e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
         if (g[1] > 0.5){ grounded = true; if (e.vy < 0) e.vy = 0; }
       }
@@ -2479,6 +2873,18 @@ function bindInput(){
     if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
     if (e.button === 1){ e.preventDefault(); pickMaterial(); }
     if (e.button === 2){
+      // a crafting table in reach overrides the held item's right click
+      if (tableSys.onRay(3.5)){ openCraft(); AudioSys.sfx('toggle'); return; }
+      const tool = activeTool();
+      if (tool && tool.kind === 'door'){
+        // choose which side of the grid square the door aligns to
+        game.tool.doorSide = (game.tool.doorSide + 1) % 4;
+        toast(game.snapOn ? 'door on ' + ['north', 'east', 'south', 'west'][game.tool.doorSide] + ' side'
+                          : 'door rotated');
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
+        return;
+      }
       const door = doorSys.onRay(3.5);
       if (door){
         door.open = !door.open;
@@ -2487,7 +2893,7 @@ function bindInput(){
         markSave();
         return;
       }
-      if (activeTool()){
+      if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
         game.tool.shape = (game.tool.shape + 1) % 3;
         toast(CORE.SHAPE_NAME[game.tool.shape]);
         AudioSys.sfx('toggle');
@@ -2502,7 +2908,10 @@ function bindInput(){
     const tool = activeTool();
     if (!tool) return;
     const dir = e.deltaY < 0 ? 1 : -1;
-    if (game.keys['KeyG'] && game.tool.shape === 1 && !game.snapOn){
+    if (tool.kind === 'door'){
+      game.tool.doorSize = Math.min(2.4, Math.max(0.7, (game.tool.doorSize || 1.2) + dir * 0.1));
+      toast('door ' + game.tool.doorSize.toFixed(1) + 'm × ' + (game.tool.doorSize * 1.85).toFixed(1) + 'm');
+    } else if (game.keys['KeyG'] && game.tool.shape === 1 && !game.snapOn){
       // hold G + scroll: rotate the cube in 15° steps (free-place only)
       game.tool.rot = (game.tool.rot + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
       toast('rotate ' + Math.round(game.tool.rot * 180 / Math.PI) + '°');
@@ -2586,7 +2995,9 @@ function collidePlayer(edits, still){
       const d = sdfWorld(game.pos.x, cy, game.pos.z, edits);
       if (d < r){
         const g = gradWorld(game.pos.x, cy, game.pos.z, edits);
-        const push = Math.min(r - d, 0.5);
+        const dTrue = d / g[3];
+        if (dTrue >= r) continue;
+        const push = Math.min(r - dTrue, 0.5);
         if (still && g[1] > 0.6){
           // standing on walkable ground with no input: resolve the
           // penetration straight up so the slope's normal can't drag the
@@ -2607,9 +3018,12 @@ function collidePlayer(edits, still){
   }
   if (still && game.grounded){ game.vel.x = 0; game.vel.z = 0; }
   // extra ground probe (for jump when standing exactly on surface)
-  if (!game.grounded && !game.fly){
+  if (!game.grounded && !game.fly && game.vel.y <= 0.01){
     const d = sdfWorld(game.pos.x, game.pos.y + r, game.pos.z, edits);
-    if (d < r + 0.06 && game.vel.y <= 0.01) game.grounded = true;
+    if (d < r + 0.06){
+      const g = gradWorld(game.pos.x, game.pos.y + r, game.pos.z, edits);
+      if (d / g[3] < r + 0.06) game.grounded = true;
+    }
   }
 }
 
@@ -2770,6 +3184,40 @@ function updateGhost(){
     game.ghostSet[k].wire.visible = false;
   }
   if (game.gridViz) game.gridViz.visible = false;
+  // held door: skinny door-shaped ghost with grid + side alignment
+  if (tool && tool.kind === 'door' && game.ui === 'none' && isLocked()){
+    game.ghostDoor = null;
+    const hit = surfaceHit();
+    if (hit){
+      const w = game.tool.doorSize || 1.2, hgt = w * 1.85;
+      let bx, by = hit[1], bz, yaw;
+      if (game.snapOn){
+        const cell = CORE.GRID_SIZES[game.gridIdx];
+        const sqx = Math.floor(hit[0] / cell), sqz = Math.floor(hit[2] / cell);
+        const cx = (sqx + 0.5) * cell, cz = (sqz + 0.5) * cell;
+        const side = game.tool.doorSide;                   // 0..3 = -z +x +z -x edge
+        bx = cx + (side === 1 ? cell * 0.5 : side === 3 ? -cell * 0.5 : 0);
+        bz = cz + (side === 0 ? -cell * 0.5 : side === 2 ? cell * 0.5 : 0);
+        yaw = (side === 0 || side === 2) ? 0 : Math.PI / 2;
+        if (!game.gridViz || game.gridVizCell !== cell) buildGridViz(cell);
+        game.gridViz.visible = true;
+        game.gridViz.position.set(sqx * cell, by + 0.02, sqz * cell);
+      } else {
+        bx = hit[0]; bz = hit[2];
+        yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2) + game.tool.doorSide * (Math.PI / 2);
+      }
+      game.ghostDoor = { x: bx, y: by, z: bz, yaw, w, h: hgt };
+      const gs = game.ghostSet[1];
+      gs.fill.material.color.set(0x8bff9e);
+      gs.fill.visible = true; gs.wire.visible = true;
+      gs.fill.position.set(bx, by + hgt * 0.5, bz); gs.wire.position.set(bx, by + hgt * 0.5, bz);
+      gs.fill.scale.set(w, hgt, 0.13); gs.wire.scale.set(w, hgt, 0.13);
+      gs.fill.rotation.y = yaw; gs.wire.rotation.y = yaw;
+      gs.fill.material.opacity = 0.22;
+    }
+    game.ghostPos = null;
+    return;
+  }
   if (!usable){ game.ghostPos = null; return; }
 
   const eff = CORE.effSize(game.tool.size, tool.tier);
@@ -2935,15 +3383,27 @@ function tryAction(dt, now){
     return;
   }
   // placeables
-  if (tool.kind === 'door' || tool.kind === 'table'){
+  if (tool.kind === 'door'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const gd = game.ghostDoor;
+      if (!gd){ toast('no ground in reach'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      doorSys.placeAt(gd);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  if (tool.kind === 'table'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       const hit = surfaceHit();
       if (!hit){ toast('no ground in reach'); return; }
       tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
-      if (tool.kind === 'door') doorSys.place(hit[0], hit[1], hit[2]);
-      else tableSys.add(hit[0], hit[1], hit[2]);
+      tableSys.add(hit[0], hit[1], hit[2]);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -3107,7 +3567,7 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
-    : ['gun', 'torch', 'door', 'table'].includes(it.kind) ? it.kind : it.kind + it.tier;
+    : ['gun', 'torch', 'door', 'table', 'stick'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -3123,6 +3583,14 @@ function itemIconURL(it){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
+  } else if (it.kind === 'stick'){
+    // diagonal wooden stick with a knot
+    c.fillStyle = '#8a6237';
+    for (let i = 0; i < 10; i++) c.fillRect(3 + i, 12 - i, 2, 2);
+    c.fillStyle = '#a37c47';
+    for (let i = 0; i < 10; i++) c.fillRect(3 + i, 12 - i, 2, 1);
+    c.fillStyle = '#5f421f'; c.fillRect(7, 8, 2, 2);
+    c.fillStyle = '#6b4a26'; c.fillRect(12, 2, 2, 2);
   } else if (it.kind === 'door'){
     c.fillStyle = '#8a6237'; c.fillRect(4, 2, 8, 12);
     c.fillStyle = '#6b4a26'; c.fillRect(4, 2, 8, 1); c.fillRect(4, 7, 8, 1);
@@ -3167,6 +3635,7 @@ function itemLabel(it){
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
   if (it.kind === 'gun') return 'blaster';
   if (it.kind === 'torch') return 'torches';
+  if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -3294,7 +3763,7 @@ function refreshToolHUD(){
   let html = '';
   if (!it){
     html = '<span class="t2">empty hand</span>';
-  } else if (tool){
+  } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
     const name = tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
@@ -3317,11 +3786,19 @@ function refreshToolHUD(){
   } else if (it.kind === 'sword'){
     html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
   } else if (it.kind === 'door'){
-    html = '<div class="t1">door ×' + it.count + '</div><div class="t2">click ground to place · right click a door to open/close</div>';
+    const dw = game.tool.doorSize || 1.2;
+    html = '<div class="t1">door ×' + it.count + '</div>' +
+           '<div class="t2">' + dw.toFixed(1) + 'm × ' + (dw * 1.85).toFixed(1) + 'm (scroll)</div>' +
+           '<div class="t2">right click: ' + (game.snapOn ? 'grid side — ' + ['north', 'east', 'south', 'west'][game.tool.doorSide || 0] : 'rotate') + '</div>' +
+           (game.snapOn
+             ? '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>'
+             : '<div class="t2">snap: off (F)</div>');
   } else if (it.kind === 'table'){
     html = '<div class="t1">crafting table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q for full crafting</div>';
   } else if (it.kind === 'torch'){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
+  } else if (it.kind === 'stick'){
+    html = '<div class="t1">sticks ×' + it.count + '</div><div class="t2">crafting material — torches, doors, swords (Q)</div>';
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
            '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
@@ -3464,7 +3941,9 @@ function buildCraftUI(){
     row.appendChild(nm);
     const cost = document.createElement('div');
     cost.className = 'ccost' + (CORE.canCraft(game.slots, r) ? ' ok' : '');
-    cost.textContent = r.costs.map(c => c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(game.slots, c.mat) + ')').join(' + ');
+    cost.textContent = r.costs.map(c => c.item
+      ? c.n + ' ' + c.item + (c.n > 1 ? 's' : '') + ' (' + CORE.countItem(game.slots, c.item) + ')'
+      : c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(game.slots, c.mat) + ')').join(' + ');
     row.appendChild(cost);
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
@@ -3658,7 +4137,7 @@ function startWorld(id){
   game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
-  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 }, data.tool || {});
+  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
   game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
   game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
@@ -3829,7 +4308,8 @@ requestAnimationFrame(frame);
 // debug handles (also used by the headless smoke test)
 window.__game = game;
 window.__CORE = CORE;
-window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD,
+window.__THREE = THREE;
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildHand, gripHandVertical,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
 </script>
