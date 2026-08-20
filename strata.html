@@ -732,10 +732,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   const C = N + 1;
   const CI = (x, y, z) => (x + 1) + (y + 1) * C + (z + 1) * C * C;
   const verts = new Float32Array(C * C * C * 3);
-  const verts2 = new Float32Array(C * C * C * 3);  // second vertex for two-sheet cells
   const hasVert = new Uint8Array(C * C * C);
-  const has2 = new Uint8Array(C * C * C);
-  const sheetBits = new Uint16Array(C * C * C);  // bit k: cell edge k is on sheet B
 
   const edgeT = (d0, d1) => d0 / (d0 - d1); // linear guess, refined by bisection
 
@@ -890,20 +887,19 @@ function meshChunk(cx, cy, cz, allEdits, gen){
       }
     }
     if (nOpp > 0 && maxSep > VOX * 0.6){
+      // Two vertices per cell needs full manifold-DC face bookkeeping to
+      // stay watertight — the per-cell-edge rim stitching tried first left
+      // slit holes, worst at small brush sizes (playtest: "see under the
+      // map"). Solve ONE vertex on the DOMINANT sheet instead: it lies on
+      // a real surface (no mid-gap QEF spike) and the topology stays
+      // standard one-vertex DC (holes impossible). The minority sheet's
+      // quads pinch to it, visually welding the sub-voxel gap shut.
       const inA = hs.map((hh, i) => i === 0 || hh.nx * r0.nx + hh.ny * r0.ny + hh.nz * r0.nz >= -0.25);
       const groupA = hs.filter((hh, i) => inA[i]);
       const groupB = hs.filter((hh, i) => !inA[i]);
-      const A = solveSheet(groupA, cx0, cy0, cz0, le);
-      const B = solveSheet(groupB, cx0, cy0, cz0, le);
+      const dom = groupA.length >= groupB.length ? groupA : groupB;
+      const A = solveSheet(dom, cx0, cy0, cz0, le);
       verts[ci] = A[0]; verts[ci+1] = A[1]; verts[ci+2] = A[2];
-      verts2[ci] = B[0]; verts2[ci+1] = B[1]; verts2[ci+2] = B[2];
-      has2[CI(x, y, z)] = 1;
-      // remember, per cell edge, which sheet owns its crossing — quad
-      // emission reads this instead of guessing from normals, so the rim
-      // where the sheets merge stitches consistently (no slit holes)
-      let bits = 0;
-      for (let i = 0; i < hs.length; i++) if (!inA[i]) bits |= (1 << slots[i]);
-      sheetBits[CI(x, y, z)] = bits;
     } else {
       const A = solveSheet(hs, cx0, cy0, cz0, le);
       verts[ci] = A[0]; verts[ci+1] = A[1]; verts[ci+2] = A[2];
@@ -930,22 +926,6 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     { d:[0,1,0], u:[0,0,1], v:[1,0,0] },
     { d:[0,0,1], u:[1,0,0], v:[0,1,0] },
   ];
-  // for the 4 cells around an axis edge, which of the cell's 12 edge slots is
-  // that edge: cell qi sits at s - u*iA - v*iB, so inside it the edge is at
-  // offset u*iA + v*iB
-  const slotFor = (axis, ox, oy, oz) => {
-    for (let k = 0; k < 12; k++){
-      const ea = CE_AX[k];
-      if (ea.axis === axis && ea.o[0] === ox && ea.o[1] === oy && ea.o[2] === oz) return k;
-    }
-    return -1;
-  };
-  const QUAD_SLOTS = AX.map((A2, axis) => [
-    slotFor(axis, A2.u[0] + A2.v[0], A2.u[1] + A2.v[1], A2.u[2] + A2.v[2]),
-    slotFor(axis, A2.u[0], A2.u[1], A2.u[2]),
-    slotFor(axis, 0, 0, 0),
-    slotFor(axis, A2.v[0], A2.v[1], A2.v[2]),
-  ]);
 
   for (let axis = 0; axis < 3; axis++){
     const A = AX[axis];
@@ -966,16 +946,10 @@ function meshChunk(cx, cy, cz, allEdits, gen){
           const h = hermite(axis, x, y, z);
           if (!h) continue;
           const g = [h.nx, h.ny, h.nz];
-          // each cell contributes the vertex of the sheet that OWNS this edge
-          // in that cell's own bookkeeping (two-sheet cells carry a second
-          // vertex; the recorded assignment keeps rims consistent)
           const V = new Float64Array(12);
-          const qslots = QUAD_SLOTS[axis];
           for (let qi = 0; qi < 4; qi++){
-            const ciq = c[qi], b = ciq * 3;
-            const useB = has2[ciq] && ((sheetBits[ciq] >> qslots[qi]) & 1);
-            const arr = useB ? verts2 : verts;
-            V[qi*3] = arr[b]; V[qi*3+1] = arr[b+1]; V[qi*3+2] = arr[b+2];
+            const b = c[qi] * 3;
+            V[qi*3] = verts[b]; V[qi*3+1] = verts[b+1]; V[qi*3+2] = verts[b+2];
           }
           // material sampled just INSIDE the surface at the crossing itself —
           // sampling at grid corners let ground quads beside a snapped cube
@@ -1831,6 +1805,7 @@ function buildScene(){
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
   Particles.init(scene);
+  Embers.init(scene);
   torchSys.init(scene);
   treeSys.init(scene);
   doorSys.init(scene);
@@ -1845,70 +1820,142 @@ function buildScene(){
 
 // material accent colors for the dispenser's loaded-material orb
 const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55];
-// realistic articulated right hand, curled into a grip. The grip bar runs
-// along local +x, in front of the palm at roughly (x, 0.05, -0.045); props
-// rotate/position the hand so that bar lies on their handle.
-const SKIN = 0xd9a679, SKIN_D = 0xbe8c5c, SLEEVE = 0x46525e;
-function buildHand(){
-  const skin = new THREE.MeshBasicMaterial({ color: SKIN });
-  const skinD = new THREE.MeshBasicMaterial({ color: SKIN_D });
-  const hand = new THREE.Group();
-  const palm = new THREE.Mesh(new THREE.BoxGeometry(0.088, 0.092, 0.032), skin);
-  hand.add(palm);
-  const heel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.026, 0.034), skinD);
-  heel.position.y = -0.054; hand.add(heel);
-  const cuff = new THREE.Mesh(new THREE.BoxGeometry(0.078, 0.07, 0.05),
-    new THREE.MeshBasicMaterial({ color: SLEEVE }));
-  cuff.position.set(0, -0.105, 0.012); cuff.rotation.x = 0.22; hand.add(cuff);
-  // four fingers, three tapering segments each, curled around the bar
-  for (let f = 0; f < 4; f++){
-    const fx = -0.033 + f * 0.022;
-    const taper = f === 0 ? 0.92 : f === 3 ? 0.78 : 1;   // index/pinky narrower
-    let seg = new THREE.Group();
-    seg.position.set(fx, 0.046, 0);
-    seg.rotation.x = -1.15;
-    hand.add(seg);
-    const lens = [0.034, 0.028, 0.021];
-    for (let k = 0; k < 3; k++){
-      const L = lens[k] * (f === 3 ? 0.82 : 1);
-      const m = new THREE.Mesh(
-        new THREE.BoxGeometry(0.019 * taper, L, 0.018 * taper - k * 0.001),
-        k === 2 ? skinD : skin);
-      m.position.y = L / 2;
-      seg.add(m);
-      const next = new THREE.Group();
-      next.position.y = L;
-      next.rotation.x = -0.82;
-      seg.add(next);
-      seg = next;
-    }
+// ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
+const PixTex = {
+  cache: new Map(),
+  make(key, draw, w, h){
+    if (this.cache.has(key)) return this.cache.get(key);
+    const W = w || 16, H = h || 16;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    draw(cv.getContext('2d'), W, H, CORE.mulberry32(CORE.hashSeed(key)));
+    const t = new THREE.CanvasTexture(cv);
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    this.cache.set(key, t);
+    return t;
+  },
+};
+function pxSpeckle(c, rng, base, dark, lite, n, w, h){
+  const W = w || 16, H = h || 16;
+  c.fillStyle = base; c.fillRect(0, 0, W, H);
+  for (let i = 0; i < n; i++){
+    c.fillStyle = rng() < 0.5 ? dark : lite;
+    c.fillRect((rng() * W) | 0, (rng() * H) | 0, 1, 1);
   }
-  // opposing thumb, two segments wrapping across the bar (thumb side = +x:
-  // right hand seen from the back has the thumb on the right)
-  let tp = new THREE.Group();
-  tp.position.set(0.048, 0.008, -0.006);
-  tp.rotation.set(-0.9, -0.55, -0.95);
-  hand.add(tp);
-  for (const L of [0.036, 0.028]){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(0.023, L, 0.021), skin);
-    m.position.y = L / 2; tp.add(m);
-    const nx = new THREE.Group(); nx.position.y = L; nx.rotation.x = -0.62;
-    tp.add(nx); tp = nx;
-  }
-  return hand;
 }
-// hand oriented to grip a VERTICAL handle at local origin (bar mapped to +y)
-function gripHandVertical(){
-  // pivot spins the fist around the handle so the finger curl stays on the
-  // camera side instead of hiding behind the hand
-  const p = new THREE.Group();
-  const h = buildHand();
-  h.rotation.z = Math.PI / 2;   // fingers wrap left across the handle, thumb on top
-  h.position.set(0.05, 0, 0.045);
-  p.add(h);
-  p.rotation.y = 0.6;           // show the knuckle row, not just the flat back
-  return p;
+function pixMat(tex, tint, rx, ry){
+  const t = tex.clone();
+  t.needsUpdate = true;
+  if (rx || ry) t.repeat.set(rx || 1, ry || 1);
+  return new THREE.MeshBasicMaterial({ map: t, color: tint == null ? 0xffffff : tint });
 }
+const PROP_TEX = {
+  get skin(){ return PixTex.make('skin', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#ecd2b7', '#dfbd9c', '#f6e2cc', 26);
+    c.fillStyle = '#d8b491'; c.fillRect(0, 0, 16, 1);           // wrist crease
+  }); },
+  get sleeve(){ return PixTex.make('sleeve', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#3d6fa8', '#335f92', '#4a80bd', 30);
+    c.fillStyle = '#2c527e'; c.fillRect(0, 14, 16, 2);          // cuff band
+    c.fillStyle = '#4a80bd'; c.fillRect(0, 13, 16, 1);
+  }); },
+  get steel(){ return PixTex.make('steel', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#3a3f4c', '#30343f', '#464c5c', 34);
+    c.fillStyle = '#272b34';                                    // panel seams
+    c.fillRect(0, 5, 16, 1); c.fillRect(0, 11, 16, 1); c.fillRect(8, 0, 1, 16);
+    c.fillStyle = '#5a6274';                                    // rivets
+    for (const [x, y] of [[2,2],[13,2],[2,8],[13,8],[5,13],[10,13]]) c.fillRect(x, y, 1, 1);
+  }); },
+  get steelLight(){ return PixTex.make('steelLight', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#7a8194', '#6a7183', '#8b93a8', 30);
+    c.fillStyle = '#575e70'; c.fillRect(0, 8, 16, 1); c.fillRect(4, 0, 1, 16); c.fillRect(11, 0, 1, 16);
+  }); },
+  get grip(){ return PixTex.make('grip', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#23262e', '#1b1d24', '#2d3039', 20);
+    c.fillStyle = '#383c48';
+    for (let i = -16; i < 16; i += 4)                            // diagonal tape wrap
+      for (let k = 0; k < 16; k++) c.fillRect(((i + k) % 16 + 16) % 16, k, 1, 1);
+  }); },
+  get vent(){ return PixTex.make('vent', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#2b2e37', '#23252d', '#333743', 12);
+    c.fillStyle = '#12141a';
+    for (const y of [2, 6, 10, 14]) c.fillRect(1, y, 14, 2);     // slits
+    c.fillStyle = '#454a58';
+    for (const y of [1, 5, 9, 13]) c.fillRect(1, y, 14, 1);
+  }); },
+  get bit(){ return PixTex.make('bit', (c, w, h, rng) => {
+    // grayscale spiral flutes — tinted per tier via material color
+    pxSpeckle(c, rng, '#d8d8de', '#c2c2ca', '#ececf2', 20);
+    c.fillStyle = '#8d8d99';
+    for (let i = -16; i < 32; i += 5)
+      for (let k = 0; k < 16; k++){
+        const x = ((i + (k * 2)) % 16 + 16) % 16;
+        c.fillRect(x, k, 2, 1);
+      }
+  }); },
+  get energy(){ return PixTex.make('energy', (c, w, h, rng) => {
+    // grayscale glow cells — tinted per tier
+    pxSpeckle(c, rng, '#e8e8e8', '#c8c8c8', '#ffffff', 20);
+    c.fillStyle = '#9a9a9a';
+    for (const x of [3, 7, 11, 15]) c.fillRect(x, 0, 1, 16);
+  }); },
+  get bark(){ return PixTex.make('bark', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#6b4a26', '#573a1c', '#7d5a30', 26);
+    c.fillStyle = '#4a2e14';
+    c.fillRect(3, 0, 1, 16); c.fillRect(9, 0, 1, 16); c.fillRect(13, 0, 1, 16);
+  }); },
+  get ember(){ return PixTex.make('ember', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#ff9c33', '#e87718', '#ffb347', 30);
+    c.fillStyle = '#ffe08a';
+    for (let i = 0; i < 7; i++) c.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 2, 1);
+    c.fillStyle = '#c85a10';
+    for (let i = 0; i < 5; i++) c.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 1, 1);
+  }); },
+  get planksV(){ return PixTex.make('planksV', (c, w, h, rng) => {
+    // vertical door planks with grooves + panel lines
+    pxSpeckle(c, rng, '#8a6237', '#74512c', '#9c7344', 26);
+    c.fillStyle = '#5f421f';
+    for (const x of [0, 5, 10, 15]) c.fillRect(x, 0, 1, 16);
+    c.fillStyle = '#6b4a26'; c.fillRect(0, 4, 16, 1); c.fillRect(0, 11, 16, 1);
+    c.fillStyle = '#4e3517'; c.fillRect(7, 6, 2, 1); c.fillRect(3, 13, 2, 1);
+  }); },
+  get tableTop(){ return PixTex.make('tableTop', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#9c7344', '#86603a', '#ab8050', 24);
+    c.fillStyle = '#6b4a26';                                     // plank seams + border
+    c.fillRect(0, 0, 16, 1); c.fillRect(0, 15, 16, 1); c.fillRect(0, 0, 1, 16); c.fillRect(15, 0, 1, 16);
+    c.fillRect(0, 8, 16, 1);
+    c.fillStyle = '#59c8d8'; c.fillRect(10, 2, 4, 2); c.fillRect(11, 4, 1, 2);   // saw blade
+    c.fillStyle = '#3c3a44'; c.fillRect(2, 11, 5, 1); c.fillRect(6, 10, 2, 3);   // hammer
+    c.fillStyle = '#8d8d99'; c.fillRect(2, 3, 1, 4); c.fillRect(3, 4, 3, 1);     // nails
+  }); },
+  get woodEnd(){ return PixTex.make('woodEnd', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#a37c47', '#8a6237', '#b48a52', 18);
+    c.fillStyle = '#74512c';
+    c.strokeStyle = '#74512c';
+    c.fillRect(4, 4, 8, 1); c.fillRect(4, 11, 8, 1); c.fillRect(4, 4, 1, 8); c.fillRect(11, 4, 1, 8);
+    c.fillRect(7, 7, 2, 2);                                      // ring core
+  }); },
+};
+
+// ---- first-person arm: Minecraft proportions, blue sleeve + skin hand ----
+// axis: -z is forward (toward the world), the fist ends at z ~ -0.30
+function buildArm(){
+  const arm = new THREE.Group();
+  const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.175, 0.46), pixMat(PROP_TEX.sleeve, null, 1, 2));
+  sleeve.position.z = 0.17;                       // upper arm, slightly fatter (jacket layer)
+  const hand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.26), pixMat(PROP_TEX.skin));
+  hand.position.z = -0.17;
+  arm.add(sleeve); arm.add(hand);
+  return arm;
+}
+// arm posed like Minecraft's: from the bottom-right corner, angled inward/up,
+// fist landing at roughly (0.05, -0.12, -0.06) in group space
+function poseArm(arm){
+  arm.rotation.set(0.7, -0.18, 0.05);
+  arm.position.set(0.07, -0.3, 0.14);
+  return arm;
+}
+
 const vmMatCache = new Map();
 function vmMatMaterial(mat){
   if (!vmMatCache.has(mat)){
@@ -1920,123 +1967,219 @@ function vmMatMaterial(mat){
 }
 function buildViewmodel(cam){
   const vm = new THREE.Group();
-  const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
-  const grip = new THREE.MeshBasicMaterial({ color: 0x5a4632 });
-  const tierMat = new THREE.MeshBasicMaterial({ color: 0x8a8a92 });
-  const orbMat = new THREE.MeshBasicMaterial({ color: 0x222028 });
+  const gripM = pixMat(PROP_TEX.grip);
+  const steelM = pixMat(PROP_TEX.steel);
+  const steelLM = pixMat(PROP_TEX.steelLight);
+  const ventM = pixMat(PROP_TEX.vent);
+  const barkM = pixMat(PROP_TEX.bark, null, 1, 2);
 
+  // --- DRILL: big industrial driver — motor block, vents, energy core,
+  // tiered spiral bit on a spinning head ---
   const drill = new THREE.Group();
-  drill.add(new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.11, 0.3), dark));
-  const dGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), grip);
-  dGrip.position.set(0, -0.11, 0.08); drill.add(dGrip);
-  const bit = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.22, 6), tierMat);
-  bit.rotation.x = -Math.PI / 2; bit.position.set(0, 0, -0.26);
-  drill.add(bit);
-
-  const disp = new THREE.Group();
-  disp.add(new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.26), dark));
-  const pGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), grip);
-  pGrip.position.set(0, -0.12, 0.06); disp.add(pGrip);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.018, 6, 12), tierMat.clone());
-  ring.position.set(0, 0, -0.15); disp.add(ring);
-  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), orbMat);
-  orb.position.set(0, 0, -0.26); disp.add(orb);
-
-  const gun = new THREE.Group();
-  gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.3), dark));
-  const gBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), tierMat.clone());
-  gBarrel.material.color.set(0x8a8a92);
-  gBarrel.position.set(0, 0.02, -0.2); gun.add(gBarrel);
-  const gAccent = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.02, 0.1), tierMat.clone());
-  gAccent.material.color.set(0xd84a63);
-  gAccent.position.set(0, 0.07, -0.02); gun.add(gAccent);
-  const gGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.07), grip);
-  gGrip.position.set(0, -0.11, 0.1); gun.add(gGrip);
-  const gHand = gripHandVertical();
-  gHand.position.set(0.05, -0.13, 0.145); gHand.rotation.x = -0.15;
-  gun.add(gHand);
-
-  const sword = new THREE.Group();
-  const sGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.05), grip);
-  sword.add(sGrip);
-  const sGuard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.05), dark);
-  sGuard.position.y = 0.09; sword.add(sGuard);
-  const sBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.03), tierMat.clone());
-  sBlade.position.y = 0.36; sword.add(sBlade);
-  sword.add(gripHandVertical());
-  sword.rotation.z = 0.5; sword.rotation.x = 0.3;
-
-  const torch = new THREE.Group();
-  const tStick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), grip);
-  torch.add(tStick);
-  const tTip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
-  tTip.position.y = 0.21; torch.add(tTip);
-  const tHand = gripHandVertical();
-  tHand.position.y = -0.07; torch.add(tHand);
-  torch.rotation.z = 0.3;
-
-  // plain stick, held diagonally in the fist
-  const stick = new THREE.Group();
-  const stWood = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.4, 0.045),
-    new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
-  stick.add(stWood);
-  const stKnot = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.055),
-    new THREE.MeshBasicMaterial({ color: 0x5f421f }));
-  stKnot.position.y = 0.09; stick.add(stKnot);
-  stick.add(gripHandVertical());
-  stick.rotation.z = 0.35; stick.rotation.x = 0.1;
-
-  // door held from its bottom edge — a skinny wooden panel
-  const door = new THREE.Group();
-  const dPanel = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.4, 0.035),
-    new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
-  dPanel.position.y = 0.24; door.add(dPanel);
-  const dTrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.03, 0.04),
-    new THREE.MeshBasicMaterial({ color: 0x6b4a26 }));
-  dTrim.position.y = 0.24; door.add(dTrim);
-  const dKnob = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.03, 0.045),
-    new THREE.MeshBasicMaterial({ color: 0xd8c485 }));
-  dKnob.position.set(0.09, 0.2, 0); door.add(dKnob);
-  const dGripBar = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 0.045), grip);
-  dGripBar.position.y = -0.02; door.add(dGripBar);
-  const dHand = gripHandVertical();
-  dHand.position.y = -0.03; door.add(dHand);
-  door.rotation.z = 0.12; door.rotation.y = -0.2;
-
-  // crafting table carried by one leg
-  const table = new THREE.Group();
-  const tbTop = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.035, 0.3),
-    new THREE.MeshBasicMaterial({ color: 0x9c7344 }));
-  tbTop.position.y = 0.22; table.add(tbTop);
-  const legM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
-  for (const [lx, lz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]]){
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.2, 0.045), legM);
-    leg.position.set(lx, 0.11, lz); table.add(leg);
+  {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.27, 0.52), steelM);
+    body.position.set(0, 0, -0.06);
+    drill.add(body);
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 0.4), steelLM);
+    spine.position.set(0, 0.18, -0.04);
+    drill.add(spine);
+    for (const sx of [-1, 1]){                                   // side vents
+      const v = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.18, 0.3), ventM);
+      v.position.set(sx * 0.16, 0.01, 0.02);
+      drill.add(v);
+    }
+    const exhaust = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.06), ventM);
+    exhaust.position.set(0, 0.02, 0.24);
+    drill.add(exhaust);
+    const coreMat = pixMat(PROP_TEX.energy, 0x8a8a92);
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.07, 0.24), coreMat);
+    core.position.set(0, -0.09, -0.16);
+    drill.add(core);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.135, 0.14, 8), steelLM);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.set(0, 0, -0.4);
+    drill.add(collar);
+    const bitSpin = new THREE.Group();                           // spins while mining
+    bitSpin.position.set(0, 0, -0.47);
+    const bitMat = pixMat(PROP_TEX.bit, 0x8a8a92, 2, 2);
+    const bit = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.46, 8), bitMat);
+    bit.rotation.x = -Math.PI / 2;
+    bit.position.z = -0.23;
+    bitSpin.add(bit);
+    const bitRing = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.05, 8), bitMat);
+    bitRing.rotation.x = Math.PI / 2;
+    bitSpin.add(bitRing);
+    drill.add(bitSpin);
+    const rearGrip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.2, 0.11), gripM);
+    rearGrip.position.set(0, -0.21, 0.16);
+    drill.add(rearGrip);
+    const frontGrip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.16, 0.1), gripM);
+    frontGrip.position.set(0, -0.2, -0.22);
+    drill.add(frontGrip);
+    const armD = poseArm(buildArm());
+    armD.position.set(0.05, -0.3, 0.3); armD.rotation.set(0.5, -0.1, 0);
+    drill.add(armD);
+    drill.position.set(0, 0.04, -0.1);
+    drill.userData = { coreMat, bitMat, bitSpin };
   }
-  const tbTool = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 0.04),
-    new THREE.MeshBasicMaterial({ color: 0x59c8d8 }));
-  tbTool.position.set(0.05, 0.245, -0.04); table.add(tbTool);
-  const tbHand = gripHandVertical();
-  tbHand.position.set(-0.11, 0.02, -0.11); table.add(tbHand);
-  table.rotation.z = 0.18; table.rotation.x = 0.15; table.rotation.y = 0.4;
-  table.position.y = -0.1;
 
-  // loose material stack: a textured chunk resting in the hand
-  const matCube = new THREE.Group();
-  const mcMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), orbMat.clone());
-  mcMesh.rotation.y = 0.5; mcMesh.position.y = 0.075; matCube.add(mcMesh);
-  const mcHand = gripHandVertical();
-  matCube.add(mcHand);
-  matCube.rotation.z = 0.15;
+  // --- DISPENSER: reverse-drill emitter — armored body, claw prongs
+  // cradling the loaded-material orb ---
+  const disp = new THREE.Group();
+  {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.28, 0.46), steelM);
+    body.position.set(0, 0, 0.02);
+    disp.add(body);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.3), steelLM);
+    crown.position.set(0, 0.18, 0.04);
+    disp.add(crown);
+    for (const sx of [-1, 1]){
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.2, 0.26), ventM);
+      plate.position.set(sx * 0.16, 0, 0.08);
+      disp.add(plate);
+    }
+    const coreMat = pixMat(PROP_TEX.energy, 0x8a8a92);
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.07, 0.2), coreMat);
+    core.position.set(0, -0.1, 0.06);
+    disp.add(core);
+    const ringMat = pixMat(PROP_TEX.energy, 0x8a8a92);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.028, 6, 12), ringMat);
+    ring.position.set(0, 0, -0.22);
+    disp.add(ring);
+    for (let i = 0; i < 3; i++){                                 // claw prongs
+      const a = i / 3 * Math.PI * 2 + Math.PI / 6;
+      const prong = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.045, 0.22), steelLM);
+      prong.position.set(Math.cos(a) * 0.13, Math.sin(a) * 0.13, -0.33);
+      prong.rotation.z = a;
+      disp.add(prong);
+    }
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0x222028 }));
+    orb.position.set(0, 0, -0.38);
+    disp.add(orb);
+    const rearGrip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.2, 0.11), gripM);
+    rearGrip.position.set(0, -0.21, 0.2);
+    disp.add(rearGrip);
+    const armP = poseArm(buildArm());
+    armP.position.set(0.05, -0.3, 0.34); armP.rotation.set(0.5, -0.1, 0);
+    disp.add(armP);
+    disp.position.set(0, 0.04, -0.08);
+    disp.userData = { coreMat, ringMat, orb };
+  }
+
+  // --- blaster (kept compact, textured + arm) ---
+  const gun = new THREE.Group();
+  {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.13, 0.32), steelM);
+    gun.add(body);
+    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 0.18), steelLM);
+    barrel.position.set(0, 0.02, -0.22); gun.add(barrel);
+    const acc = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.1), pixMat(PROP_TEX.energy, 0xd84a63));
+    acc.position.set(0, 0.075, -0.02); gun.add(acc);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.15, 0.08), gripM);
+    grip.position.set(0, -0.12, 0.1); gun.add(grip);
+    const armG = poseArm(buildArm());
+    armG.position.set(0.0, -0.26, 0.28); armG.rotation.set(0.42, -0.08, 0);
+    gun.add(armG);
+  }
+
+  // held items sit AT the fist (siblings of the arm, so they stay upright
+  // instead of inheriting its tilt) and overlap the hand box — no floating
+  const held = (build) => {
+    const g = new THREE.Group();
+    const arm = poseArm(buildArm());
+    g.add(arm);
+    const it = build();
+    it.position.set(0.045, -0.1, -0.08);
+    g.add(it);
+    g.userData.item = it;
+    return g;
+  };
+
+  const torch = held(() => {
+    const t = new THREE.Group();
+    const stick = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 0.08), barkM);
+    stick.position.y = 0.08;
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.13, 0.12), pixMat(PROP_TEX.ember));
+    tip.position.y = 0.3;
+    t.add(stick); t.add(tip);
+    t.userData = { tip };
+    t.rotation.x = 0.12; t.rotation.z = -0.08;
+    return t;
+  });
+
+  const stick = held(() => {
+    const t = new THREE.Group();
+    const wood = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.05), barkM);
+    wood.position.y = 0.08;
+    const knot = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.05, 0.06), pixMat(PROP_TEX.woodEnd));
+    knot.position.y = 0.2;
+    t.add(wood); t.add(knot);
+    t.rotation.x = 0.18; t.rotation.z = 0.22;
+    return t;
+  });
+
+  const sword = held(() => {
+    const t = new THREE.Group();
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.16, 0.05), gripM);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.03, 0.05), steelLM);
+    guard.position.y = 0.1;
+    const bladeMat = pixMat(PROP_TEX.energy, 0x8a8a92);
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.52, 0.028), bladeMat);
+    blade.position.y = 0.38;
+    t.add(grip); t.add(guard); t.add(blade);
+    t.userData = { bladeMat };
+    t.rotation.x = 0.22; t.rotation.z = -0.12;
+    return t;
+  });
+
+  const door = held(() => {
+    const t = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.42, 0.035), pixMat(PROP_TEX.planksV));
+    panel.position.y = 0.3;
+    const knob = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.03, 0.05), pixMat(PROP_TEX.woodEnd, 0xd8c485));
+    knob.position.set(0.1, 0.26, 0);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.05), barkM);
+    grip.position.y = 0.02;
+    t.add(panel); t.add(knob); t.add(grip);
+    t.rotation.x = 0.2; t.rotation.y = -0.25;
+    return t;
+  });
+
+  const table = held(() => {
+    const t = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.035, 0.3), pixMat(PROP_TEX.tableTop));
+    top.position.y = 0.24;
+    t.add(top);
+    for (const [lx, lz] of [[-0.11, -0.11], [0.11, -0.11], [-0.11, 0.11], [0.11, 0.11]]){
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.22, 0.045), barkM);
+      leg.position.set(lx, 0.12, lz);
+      t.add(leg);
+    }
+    t.position.y = 0.06;
+    t.rotation.x = 0.3; t.rotation.y = 0.5;
+    return t;
+  });
+
+  const matCube = held(() => {
+    const t = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15),
+      new THREE.MeshBasicMaterial({ color: 0x222028 }));
+    m.rotation.y = 0.5;
+    m.position.y = 0.12;
+    t.add(m);
+    t.userData = { mesh: m };
+    return t;
+  });
 
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(matCube);
   vm.scale.setScalar(0.5);
-  vm.rotation.y = -0.22;               // angle inward so the barrel end reads
-  vm.position.set(0.32, -0.22, -0.58);
+  vm.rotation.y = 0.42;                // tips angle inward so the business end reads
+  vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
   game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, matCube,
-              mcMesh, tTip, sBlade, bit, ring, orb, bob: 0 };
+              bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
@@ -2055,35 +2198,46 @@ function updateViewmodel(dt){
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
   v.bob += dt * Math.min(speed, 10) * 1.6;
-  v.root.position.y = -0.22 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
+  v.root.position.y = -0.26 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
   if (!kind) return;
   if (kind === 'mat'){
-    v.mcMesh.material = vmMatMaterial(it.mat);
+    v.matCube.userData.item.userData.mesh.material = vmMatMaterial(it.mat);
     return;
   }
   if (kind === 'sword'){
-    v.sBlade.material.color.set(TIER_COL[tool.tier]);
+    v.sword.userData.item.userData.bladeMat.color.set(TIER_COL[tool.tier]);
     const sw = Math.max(0, 1 - (performance.now() - (game.swingT || 0)) / 260);
-    v.sword.rotation.z = 0.5 - sw * 1.6;
-    v.sword.rotation.x = 0.3 + sw * 0.5;
+    v.sword.rotation.z = -sw * 1.3;
+    v.sword.rotation.x = sw * 0.5;
     return;
   }
   if (kind === 'torch'){
-    v.tTip.material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
+    // steady flame (no flicker) + embers drifting off the held tip
+    v.emberT += dt;
+    if (v.emberT > 0.16){
+      v.emberT = 0;
+      const p = new THREE.Vector3();
+      v.torch.userData.item.userData.tip.getWorldPosition(p);
+      Embers.burst(p.x, p.y + 0.05, p.z, 0.03, [0xffb347, 0xffdd66, 0xff8830], 1, 0.35);
+    }
     return;
   }
-  if (kind !== 'drill' && kind !== 'disp') return;
+  if (!tool || (kind !== 'drill' && kind !== 'disp')) return;
   const tc = new THREE.Color(TIER_COL[tool.tier]);
   if (kind === 'drill'){
-    v.bit.material.color.copy(tc);
-    if (game.mouseL && isLocked() && game.ui === 'none') v.bit.rotation.z += dt * 22;
+    const ud = v.drill.userData;
+    ud.bitMat.color.copy(tc);
+    ud.coreMat.color.copy(tc);
+    if (game.mouseL && isLocked() && game.ui === 'none') ud.bitSpin.rotation.z -= dt * 20;
   } else {
-    v.ring.material.color.copy(tc);
+    const ud = v.disp.userData;
+    ud.coreMat.color.copy(tc);
+    ud.ringMat.color.copy(tc);
     const flash = performance.now() - game.orbFlash < 320;
-    v.orb.material.color.set(flash ? 0xff3b3b : MAT_COLOR[tool.mat]);
+    ud.orb.material.color.set(flash ? 0xff3b3b : MAT_COLOR[tool.mat]);
     // the orb is the ammo gauge: it shrinks as the held stack runs down
     const fill = Math.min(1, Math.max(0.45, 0.45 + tool.count / 1200));
-    v.orb.scale.setScalar(fill * (1 + Math.sin(performance.now() * 0.004) * 0.07));
+    ud.orb.scale.setScalar(fill);
   }
 }
 
@@ -2216,8 +2370,9 @@ const AudioSys = {
 };
 
 // ---------- particles (single pooled Points cloud) ----------
-const Particles = {
-  MAX: 800, cursor: 0, points: null, colAttr: null, posAttr: null,
+function makeParticleSys(MAX, size){
+  return {
+  MAX, size, cursor: 0, points: null, colAttr: null, posAttr: null,
   vel: null, life: null,
   init(scene){
     const pos = new Float32Array(this.MAX * 3).fill(1e6);
@@ -2230,7 +2385,7 @@ const Particles = {
     this.colAttr = new THREE.BufferAttribute(new Float32Array(this.MAX * 3), 3);
     this.colAttr.setUsage(THREE.DynamicDrawUsage);
     g.setAttribute('color', this.colAttr);
-    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.14, vertexColors: true }));
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: this.size, vertexColors: true }));
     this.points.frustumCulled = false;
     scene.add(this.points);
   },
@@ -2270,7 +2425,10 @@ const Particles = {
     }
     if (any) this.posAttr.needsUpdate = true;
   },
-};
+  };
+}
+const Particles = makeParticleSys(800, 0.14);
+const Embers = makeParticleSys(240, 0.055);   // small sparks for torches
 
 // ---------- day/night ----------
 const DAY_CYCLE = 600;                       // seconds per full day
@@ -2307,12 +2465,15 @@ const torchSys = {
       const c = this.group.children.pop();
       this.group.remove(c);
     }
+    if (!this.mats){
+      this.mats = { bark: pixMat(PROP_TEX.bark, null, 1, 2), ember: pixMat(PROP_TEX.ember) };
+    }
     for (const t of game.torches){
       const g = new THREE.Group();
-      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), new THREE.MeshBasicMaterial({ color: 0x5a4632 }));
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), this.mats.bark);
       stick.position.y = 0.21;
-      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
-      tip.position.y = 0.46;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.14), this.mats.ember);
+      tip.position.y = 0.47;
       g.add(stick); g.add(tip);
       g.position.set(t[0], t[1], t[2]);
       this.group.add(g);
@@ -2330,7 +2491,7 @@ const torchSys = {
     if (n){ this.rebuild(); markSave(); }
     return n;
   },
-  // feed the nearest 16 torches to the shader, with flicker
+  // feed the nearest 16 torches to the shader (steady — no flicker)
   updateUniforms(now){
     const u = game.terrainMat.uniforms;
     const near = [];
@@ -2343,8 +2504,7 @@ const torchSys = {
     const n = Math.min(16, near.length);
     for (let i = 0; i < n; i++){
       const t = near[i][2];
-      const flick = 9.5 + Math.sin(now * 0.011 + near[i][1] * 2.7) * 0.8;
-      u.uTorch.value[i].set(t[0], t[1] + 0.45, t[2], flick);
+      u.uTorch.value[i].set(t[0], t[1] + 0.45, t[2], 9.8);
     }
     u.uTorchN.value = n;
   },
@@ -2509,9 +2669,13 @@ const doorSys = {
     for (const d of game.doors){
       const w = d.w || 1.2, h = d.h || 2.2;
       const g = new THREE.Group();
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+      if (!this.mats){
+        this.mats = { panel: pixMat(PROP_TEX.planksV, null, 1, 2),
+                      handle: pixMat(PROP_TEX.woodEnd, 0xd8c485) };
+      }
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), this.mats.panel);
       panel.position.set(w * 0.5, h * 0.5, 0); // hinge at the group origin
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), new THREE.MeshBasicMaterial({ color: 0xd8c485 }));
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), this.mats.handle);
       handle.position.set(w * 0.85, h * 0.48, 0);
       g.add(panel); g.add(handle);
       g.position.set(d.x, d.y, d.z);
@@ -2561,17 +2725,22 @@ const tableSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
+    if (!this.mats){
+      this.mats = { top: pixMat(PROP_TEX.tableTop), side: pixMat(PROP_TEX.planksV),
+                    leg: pixMat(PROP_TEX.bark, null, 1, 2), tool: pixMat(PROP_TEX.energy, 0x59c8d8) };
+    }
     for (const t of game.tables){
       const g = new THREE.Group();
-      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1), new THREE.MeshBasicMaterial({ color: 0x9c7344 }));
+      // top: tableTop texture up, plank sides
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1),
+        [this.mats.side, this.mats.side, this.mats.top, this.mats.side, this.mats.side, this.mats.side]);
       top.position.y = 0.85;
-      const legM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
       for (const [sx, sz] of [[-0.45,-0.45],[0.45,-0.45],[-0.45,0.45],[0.45,0.45]]){
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), legM);
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), this.mats.leg);
         leg.position.set(sx, 0.42, sz);
         g.add(leg);
       }
-      const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), new THREE.MeshBasicMaterial({ color: 0x59c8d8 }));
+      const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), this.mats.tool);
       tools.position.set(0.2, 0.98, -0.15);
       g.add(top); g.add(tools);
       g.position.set(t[0], t[1], t[2]);
@@ -4223,7 +4392,23 @@ function frame(now){
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   updateSurvival(dt);
+  // embers off nearby placed torches
+  game.emberT = (game.emberT || 0) + dt;
+  if (game.emberT > 0.14){
+    game.emberT = 0;
+    let emitted = 0;
+    for (const t of game.torches){
+      if (emitted >= 8) break;
+      const d = Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z);
+      if (d > 28) continue;
+      if (Math.random() < 0.55){
+        Embers.burst(t[0], t[1] + 0.5, t[2], 0.05, [0xffb347, 0xffdd66, 0xff8830], 1, 0.4);
+        emitted++;
+      }
+    }
+  }
   Particles.update(dt);
+  Embers.update(dt);
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
     $('foodfill').style.width = game.food.toFixed(0) + '%';
@@ -4309,7 +4494,7 @@ requestAnimationFrame(frame);
 window.__game = game;
 window.__CORE = CORE;
 window.__THREE = THREE;
-window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildHand, gripHandVertical,
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
 </script>
