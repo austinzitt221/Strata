@@ -2,6 +2,62 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.2 — food, coal & the stove (2026-08-20)
+
+### Meat & food
+- Every passive animal drops **Meat**: grazers 2, sheep 1 (plus wool).
+- H eats it: raw meat +20 food, **Cooked Meat +45** (cook it in a stove).
+  Glowshroom stays edible (8 -> +30) and is now the lightbulb ingredient.
+
+### The stove (furnace)
+- Crafted from 12 rock + 4 wood at a table. Textured prop: stone-brick
+  body, steel top, chimney, and a mouth that glows with embers while
+  burning.
+- Right click opens the furnace menu: INPUT / FUEL -> OUTPUT slots on
+  top, your full storage + hotbar below, all drag-and-drop. Output slot
+  only gives; input only takes smeltables; fuel only takes coal (8
+  smelts) or wood (2).
+- Smelting takes 2s per item and keeps running while the menu is closed
+  (and across save/load — stove contents and burn state persist).
+
+### Coal + the ore -> ingot economy
+- **Coal** is a new cave ore, more common than glowshroom. Torches now
+  cost 2 sticks + 2 coal (glowshroom freed up for bulbs).
+- Mining iron/ruby now yields **iron ore / ruby ore** items; smelt them
+  into **iron ingot / ruby ingot** bars. Diamond mines directly as a cut
+  gem item; obsidian is unchanged (mines and builds as material).
+- All ingot-tier recipes updated: drills/dispensers/swords t1-t2 cost
+  ingots, t4 costs diamond gems, blaster and beacon cost ingots.
+- Undo of a mine refunds the ore items correctly.
+
+### Textures
+- In-world ore tiles are now stone with embedded chunks of the ore
+  (minecraft style) for iron, ruby, coal and diamond. Obsidian untouched.
+- New item icons: rectangular stacked ingot bars (iron/ruby), a faceted
+  diamond gem, raw/cooked steaks, coal lumps, ore chunks, a lightbulb,
+  and the stove.
+- Held items without a bespoke prop now show their pixel icon seated in
+  the fist (meat, ores, ingots, gems, coal, bulbs, stoves).
+
+### Lightbulbs
+2 glowshroom-heavy craft (4 shroom + 1 iron ingot -> 2 bulbs). Placeable
+like torches; real bulb shape (screw base, neck, glass globe, filament);
+**twice the torch light radius** (19.6m vs 9.8m). Mining pops them back.
+
+### Lurkers burn at dawn
+Night hunters caught on the surface in daylight ignite — flame
+particles, 5 hp per 0.4s — and are gone in a few seconds, so they never
+linger into the day. Underground lurkers are safe in the dark.
+
+### Verification
+201 headless tests (coal commoner than glowshroom, ore->item mapping,
+smelt table, fuel values, ingot recipe costs, bulb/stove recipes).
+Browser: mined iron lands as 12 ore items (no mat stack), stove smelts
+3 ore -> 2 ingots in 4.7s with burn state ticking, furnace menu opens
+with live status, bulb light registers at 19.6m beside a 9.8m torch,
+eating 40->60->100 food, lurker at 30hp burns to 5hp in 4s (dies ~5s).
+Full smoke green, zero console errors.
+
 ## Build 5.1 — water scoping, beds & sheep, real sky (2026-08-20)
 
 ### Water is lakes now, not a blanket table
