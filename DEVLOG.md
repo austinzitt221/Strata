@@ -2,6 +2,79 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 4.1 — playtest fixes + wood age (2026-08-20)
+
+### Bug 1: grass specks in placed material — FIXED
+materialAt used `shapeSDF < 0` (strictly inside) while the mesher counts
+boundary samples as solid (`<= 0`). Grid-snapped faces land exactly on
+sample points, so a placed cube's own faces weren't claimed by its union
+and fell through to the terrain generator — which calls anything above
+ground level "grass". Now `<= 0`; regression test asserts a snapped
+obsidian cube meshes with zero stray-material vertices (900/900 pure).
+
+### Bug 2: collision — three separate causes, all fixed
+1. **Invisible floor over every cave entrance.** The above-ground fast
+   path returned the heightfield distance "(y-h)*0.65" — which claims
+   solid ground d below you even where that ground is carved away. Fall
+   into a mouth: gravity pulls you a hair below the phantom surface, the
+   heightfield gradient shoves you back up. Torches raymarch to d<0.02 so
+   they threaded straight through it, exactly as reported. The field now
+   keeps taking max() with the carve above ground near entrance zones, so
+   air over a hole honestly reports the rim as nearest solid. Regression
+   test + browser harness: walked into 4/4 wide cave mouths on foot.
+2. **Cave field magnitude compression.** The carve scale reported ~1/13th
+   of true wall distance (measured), so a 2m tunnel read as 0.3m and the
+   0.35m-radius capsule "collided" with the entire tunnel volume.
+   Recalibrated against measured true distances (tunnel x22, room x34 —
+   the zero set, i.e. all visible geometry, is unchanged). Entrance
+   throats also flare open near the skin now (they tapered to sub-player
+   width right at the surface). 81% of cave air has capsule clearance.
+3. **Stuck on ankle-high ledges / unjumpable lips.** No step-up existed;
+   any lip ate all horizontal velocity. Added step-up assist: when
+   grounded (or rising in a jump) and horizontal progress is blocked, try
+   the same motion up to 0.55m higher. It refuses to fire when there's a
+   clear descent ahead, so it can't hoist you out of cave mouths.
+
+### The wood age
+- **Trees** dot grassy terrain (deterministic per seed, none in deserts
+  or high mountains). Hold LMB with a drill to chop (faster per tier);
+  ~5-6 wood each. Carving away the ground under a tree fells it too.
+  Trunks are solid.
+- **Materials**: wood (10) and sticks (11) — both real materials, so the
+  dispenser can build with them. 1 wood -> 4 sticks (basic craft).
+- **Crafting table**: 8 wood, basic craft, placeable prop. Q anywhere =
+  basic recipes only (sticks, torches, table). Standing within 4m of a
+  table unlocks the full catalog (drills, dispensers, swords, blaster,
+  doors). Mining near one pops it back into inventory.
+- **Torch recipe reworked**: 2 sticks + 2 glowshroom (was rock).
+- **Swords** (station, 5 tiers): 2 sticks + 12 of rock/iron/ruby/
+  obsidian/diamond. 10+4/tier damage, 380ms swing with viewmodel
+  animation. The sword is now THE melee weapon — the drill no longer
+  damages creatures (it chops and mines).
+- **Doors** (station): 6 sticks each. Click ground to place (snaps
+  upright, faces you in 90° steps); right-click any door to open/close.
+  Closed doors are solid to the player AND to lurkers — light plus a
+  door makes a real shelter. Mining nearby pops them back.
+- Creative kit includes sword/doors/tables/wood/sticks.
+
+### Creature detail pass
+Grazer: body, furred back, head with snout and ears, tail, four animated
+legs. Lurker: hunched torso, shoulder ridge, spiked back, glowing eyes,
+long clawed arms and legs, all swinging with movement speed.
+
+### Save v5
+doors, tables, felled trees persist. Physics props (doors/tables/trunks)
+join the collision field via a combined-gradient query; meshing is
+untouched by props.
+
+### Validation
+154 headless tests; browser harness walks into 4/4 cave mouths on foot,
+mounts a 0.5m ledge mid-stride, verifies door open/shut collision, the
+full wood->sticks->table->sword->door chain with station gating, placed-
+material purity, and the whole build-4 survival loop. Meshing ~3.3ms/chunk
+pristine (was 1.9; the honest above-ground field costs one 2D noise on
+skin samples — worth it).
+
 ## Build 4 — Survival layer (2026-08-20)
 
 ### Modes
