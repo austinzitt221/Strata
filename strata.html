@@ -248,9 +248,9 @@ const BEDROCK_Y = -63.99;     // everything below is permanently solid
 const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9 };
-const NMAT = 9;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, STICK:11 };
+const NMAT = 11;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','sticks'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -360,28 +360,44 @@ function makeGen(seed){
   // noise mask), where tunnels are allowed to climb out and breach the
   // ground, so cave systems are actually discoverable from above.
   // Returns a value < 0 inside carved space; the fade keeps it continuous.
+  function entranceMask(x, z){
+    return sstep(0.57, 0.70, noise2(sE, x * 0.016, z * 0.016));
+  }
   function caveCarve(x, y, z, h){
     const depth = h - y;
-    let fade = 0;
+    let fade = 0, mouth = 0;
     if (depth < 6){
-      const ent = sstep(0.57, 0.70, noise2(sE, x * 0.016, z * 0.016));
+      const ent = entranceMask(x, z);
       fade = (6 - depth) * 0.09 * (1 - ent);
+      // flare entrance throats open near the skin: without this, breaches
+      // taper to sub-player width right where you'd climb in
+      mouth = Math.max(ent, 0.45) * Math.max(0, 1 - depth / 5) * 0.09;
     }
     const nA = noise3(sA, x * 0.045, y * 0.055, z * 0.045);
     const nB = noise3(sC, x * 0.045 + 53.1, y * 0.055, z * 0.045 + 11.7);
     const width = noise3(sW, x * 0.012, y * 0.012, z * 0.012);
-    const tunnelT = 0.72 - width * 0.08 - Math.min(depth, 55) * 0.0008;
+    const tunnelT = 0.72 - width * 0.08 - Math.min(depth, 55) * 0.0008 - mouth;
     const tunnel = (tunnelT + fade) - Math.min(nA, nB);
     const nR = noise3(sM, x * 0.02, y * 0.026, z * 0.02);
     const roomT = 0.865 - Math.min(depth, 55) * 0.0016;
     const room = (roomT + fade * 0.8) - nR;
-    return Math.min(tunnel, room);
+    // scales calibrated against measured true wall distances so the field
+    // reports honest meters — the capsule collider depends on it (with the
+    // old 4x scale a 2m tunnel read as ~0.3m and no cave was enterable)
+    return Math.min(tunnel * 22, room * 34);
   }
   function sdfFromH(h, x, y, z){
     const d = (y - h) * 0.65;
-    if (d > 0.05) return d;    // above ground: caves only ever remove material
-    const c = caveCarve(x, y, z, h) * 4;
-    return Math.max(d, -c);
+    if (d > 2.5) return d;
+    if (d > 0.05){
+      // Above the heightfield the naive answer is "surface d below you" —
+      // but over a cave mouth that surface is carved away, and returning d
+      // builds an invisible floor the collider bounces on. Near entrance
+      // zones, keep taking max with the carve so the air over a hole knows
+      // the nearest solid is the rim, not the missing ground.
+      if (entranceMask(x, z) < 0.15) return d;
+    }
+    return Math.max(d, -caveCarve(x, y, z, h));
   }
   function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
   function oreAt(x, y, z){
@@ -447,9 +463,26 @@ function makeGen(seed){
       makeLocal,
     };
   }
-  return { height, heightRange, sdf, mat, makeLocal, caves: true, seed };
+  // trees: one candidate per 11m lattice cell, on gentle grassy ground
+  const sT = hashInt(seed ^ 0x71f68b1c);
+  function treeAt(cx, cz){
+    const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    if (h0 / 4294967296 > 0.32) return null;
+    const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
+    const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
+    if (biome(x, z) > 0.55 || isDesert(x, z)) return null;
+    const h = height(x, z);
+    if (h < -1 || h > 12) return null;
+    const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
+    if (slope > 2.2) return null;
+    const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
+    return { x, z, y: h, s, key: cx + ',' + cz };
+  }
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, caves: true, seed };
 }
+const TREE_CELL = 11;
 const FLAT_GEN = {
+  treeAt: () => null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
   sdf: (x, y, z) => y - SURFACE_Y,
@@ -539,7 +572,10 @@ function materialAt(px, py, pz, edits, gen){
   let m = (gen || FLAT_GEN).mat(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
+    // <= 0: boundary samples count as solid (SOLID = d <= 0), so a snapped
+    // placement must claim its own faces or they'd fall through to the
+    // generator's material (grass specks in placed obsidian)
+    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) <= 0) m = e.mat || MAT.ROCK;
   }
   return m;
 }
@@ -864,18 +900,23 @@ function makeDrill(tier){ return { kind:'drill', tier }; }
 function makeDispenser(tier){ return { kind:'disp', tier }; }
 function makeStack(matId, count){ return { kind:'mat', mat: matId, count }; }
 function makeGun(){ return { kind:'gun' }; }
+function makeSword(tier){ return { kind:'sword', tier }; }
 function makeTorches(count){ return { kind:'torch', count }; }
+function makeDoors(count){ return { kind:'door', count }; }
+function makeTables(count){ return { kind:'table', count }; }
+const STACKABLE_KINDS = ['torch', 'door', 'table'];
+function stackableWith(A, B){
+  if (!A || !B || A.kind !== B.kind) return false;
+  if (A.kind === 'mat') return A.mat === B.mat;
+  return STACKABLE_KINDS.includes(A.kind);
+}
 
 // move/drop slot a onto slot b. mutates slots. returns action string.
 function invMove(slots, a, b){
   if (a === b) return 'none';
   const A = slots[a], B = slots[b];
   if (!A) return 'none';
-  if (B && A.kind === 'mat' && B.kind === 'mat' && A.mat === B.mat){
-    B.count += A.count; slots[a] = null;
-    return 'merged';
-  }
-  if (B && A.kind === 'torch' && B.kind === 'torch'){
+  if (B && stackableWith(A, B)){
     B.count += A.count; slots[a] = null;
     return 'merged';
   }
@@ -960,7 +1001,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -1005,38 +1046,54 @@ function consumeMat(slots, mat, n){
 }
 
 // ---- crafting ----
-// tier progression from matching ore, plus survival gear
+// basic recipes work anywhere (Q); station recipes need a crafting table
 const RECIPES = [];
 {
   const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
-  for (let t = 1; t <= 4; t++){
-    RECIPES.push({ kind: 'drill', tier: t, costs: [{ mat: ore[t], n: 24 }] });
-    RECIPES.push({ kind: 'disp',  tier: t, costs: [{ mat: ore[t], n: 18 }] });
+  // basic
+  RECIPES.push({ kind: 'matout', matOut: MAT.STICK, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
+  RECIPES.push({ kind: 'torch', yields: 6, costs: [{ mat: MAT.STICK, n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+  RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
+  // station
+  const matFor = t => t === 0 ? MAT.ROCK : ore[t];
+  for (let t = 0; t <= 4; t++){
+    RECIPES.push({ kind: 'sword', tier: t, station: true,
+      costs: [{ mat: MAT.STICK, n: 2 }, { mat: matFor(t), n: 12 }] });
   }
-  RECIPES.push({ kind: 'gun',   tier: 0, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
-  RECIPES.push({ kind: 'torch', tier: 0, yields: 6, costs: [{ mat: MAT.ROCK, n: 6 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+  for (let t = 1; t <= 4; t++){
+    RECIPES.push({ kind: 'drill', tier: t, station: true, costs: [{ mat: ore[t], n: 24 }] });
+    RECIPES.push({ kind: 'disp',  tier: t, station: true, costs: [{ mat: ore[t], n: 18 }] });
+  }
+  RECIPES.push({ kind: 'gun', station: true, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
+  RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ mat: MAT.STICK, n: 6 }] });
 }
 function canCraft(slots, r){
   return r.costs.every(c => countMat(slots, c.mat) >= c.n);
 }
 function craft(slots, r){
   if (!canCraft(slots, r)) return 'poor';
+  if (r.kind === 'matout'){
+    for (const c of r.costs) consumeMat(slots, c.mat, c.n);
+    if (!addMat(slots, r.matOut, r.yields)) return 'full';
+    return 'ok';
+  }
   let target = -1;
-  if (r.kind === 'torch'){
+  if (STACKABLE_KINDS.includes(r.kind)){
     for (let i = 0; i < slots.length; i++)
-      if (slots[i] && slots[i].kind === 'torch'){ target = i; break; }
+      if (slots[i] && slots[i].kind === r.kind){ target = i; break; }
   }
   if (target < 0){
     for (let i = 0; i < slots.length; i++) if (!slots[i]){ target = i; break; }
     if (target < 0) return 'full';
   }
   for (const c of r.costs) consumeMat(slots, c.mat, c.n);
-  if (r.kind === 'torch'){
-    if (slots[target] && slots[target].kind === 'torch') slots[target].count += r.yields;
-    else slots[target] = makeTorches(r.yields);
+  if (STACKABLE_KINDS.includes(r.kind)){
+    if (slots[target] && slots[target].kind === r.kind) slots[target].count += r.yields;
+    else slots[target] = { kind: r.kind, count: r.yields };
   } else {
     slots[target] = r.kind === 'drill' ? makeDrill(r.tier)
                   : r.kind === 'disp' ? makeDispenser(r.tier)
+                  : r.kind === 'sword' ? makeSword(r.tier)
                   : makeGun();
   }
   return 'ok';
@@ -1087,7 +1144,7 @@ return {
   snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft, canCraft,
-  makeGun, makeTorches,
+  makeGun, makeTorches, makeSword, makeDoors, makeTables, stackableWith, TREE_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -1185,6 +1242,20 @@ function makeTileDrawers(){
         const x = (rng()*15)|0, y = (rng()*15)|0;
         ctx.fillStyle = '#b39a58'; ctx.fillRect(x, y, 1, 1);
       }
+    },
+    [CORE.MAT.WOOD](ctx, rng){
+      speckle(ctx, rng, '#8a6237', '#74512c', '#9c7344', 0.3, 0.2);
+      ctx.fillStyle = '#5f421f';
+      for (const y of [3, 8, 13]) ctx.fillRect(0, y, 16, 1);
+      for (let i = 0; i < 3; i++){
+        const x = (rng()*14)|0, y = (rng()*14)|0;
+        ctx.fillStyle = '#4e3517'; ctx.fillRect(x, y, 2, 1);
+      }
+    },
+    [CORE.MAT.STICK](ctx, rng){
+      speckle(ctx, rng, '#b08d55', '#997641', '#c6a36b', 0.3, 0.2);
+      ctx.fillStyle = '#7a5c2e';
+      for (let i = 0; i < 16; i += 4) ctx.fillRect(i, 0, 1, 16);
     },
     [CORE.MAT.GLOWSHROOM](ctx, rng){
       speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
@@ -1446,6 +1517,7 @@ const game = {
   // survival state
   mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
   torches: [], entities: [], deathCache: null,
+  doors: [], tables: [], removedTrees: [], solidProps: [],
   lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
   lastAction: 0,
@@ -1475,7 +1547,54 @@ function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.heigh
 function nearEdits(box){
   return CORE.cullEdits(game.edits, box, 0.6);
 }
-function sdfWorld(x, y, z, edits){ return CORE.evalSDF(x, y, z, edits, game.gen); }
+// solid props: closed doors + crafting tables (boxes), tree trunks (cylinders)
+function propSDF(x, y, z){
+  let d = 1e9;
+  for (const p of game.solidProps){
+    let pd;
+    if (p.t === 'box'){
+      let dx = x - p.x, dz = z - p.z;
+      if (p.yaw){
+        const c = Math.cos(-p.yaw), s = Math.sin(-p.yaw);
+        const rx = dx * c - dz * s;
+        dz = dx * s + dz * c; dx = rx;
+      }
+      const qx = Math.abs(dx) - p.hx, qy = Math.abs(y - p.y) - p.hy, qz = Math.abs(dz) - p.hz;
+      const ox = Math.max(qx, 0), oy = Math.max(qy, 0), oz = Math.max(qz, 0);
+      pd = Math.hypot(ox, oy, oz) + Math.min(Math.max(qx, Math.max(qy, qz)), 0);
+    } else {
+      const d2 = Math.hypot(x - p.x, z - p.z) - p.r;
+      const dy = Math.abs(y - (p.y + p.h * 0.5)) - p.h * 0.5;
+      pd = Math.hypot(Math.max(d2, 0), Math.max(dy, 0)) + Math.min(Math.max(d2, dy), 0);
+    }
+    if (pd < d) d = pd;
+  }
+  return d;
+}
+function sdfWorld(x, y, z, edits){
+  let d = CORE.evalSDF(x, y, z, edits, game.gen);
+  if (game.solidProps.length) d = Math.min(d, propSDF(x, y, z));
+  if (treeSys.visible && treeSys.visible.size) d = Math.min(d, treeSys.trunkNear(x, y, z));
+  return d;
+}
+// gradient of the combined field (terrain + props)
+function gradWorld(x, y, z, edits){
+  const h = 0.1;
+  const d0 = sdfWorld(x + h, y + h, z + h, edits);
+  const d1 = sdfWorld(x + h, y - h, z - h, edits);
+  const d2 = sdfWorld(x - h, y + h, z - h, edits);
+  const d3 = sdfWorld(x - h, y - h, z + h, edits);
+  const gx = d0 + d1 - d2 - d3, gy = d0 - d1 + d2 - d3, gz = d0 - d1 - d2 + d3;
+  const len = Math.sqrt(gx*gx + gy*gy + gz*gz) || 1;
+  return [gx/len, gy/len, gz/len];
+}
+function capsuleFree(x, y, z, edits){
+  const r = PLAYER.radius, h = playerHeight();
+  for (const c of [r + 0.02, h * 0.5, h - r - 0.02]){
+    if (sdfWorld(x, y + c, z, edits) < r - 0.02) return false;
+  }
+  return true;
+}
 
 // ---------- scene setup ----------
 function initRenderer(){
@@ -1551,6 +1670,9 @@ function buildScene(){
   }
   Particles.init(scene);
   torchSys.init(scene);
+  treeSys.init(scene);
+  doorSys.init(scene);
+  tableSys.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -1560,7 +1682,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55];
 function buildViewmodel(cam){
   const vm = new THREE.Group();
   const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
@@ -1596,6 +1718,15 @@ function buildViewmodel(cam){
   const gGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.07), grip);
   gGrip.position.set(0, -0.11, 0.1); gun.add(gGrip);
 
+  const sword = new THREE.Group();
+  const sGrip = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.14, 0.05), grip);
+  sword.add(sGrip);
+  const sGuard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.03, 0.05), dark);
+  sGuard.position.y = 0.09; sword.add(sGuard);
+  const sBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.03), tierMat.clone());
+  sBlade.position.y = 0.36; sword.add(sBlade);
+  sword.rotation.z = 0.5; sword.rotation.x = 0.3;
+
   const torch = new THREE.Group();
   const tStick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), grip);
   torch.add(tStick);
@@ -1603,12 +1734,12 @@ function buildViewmodel(cam){
   tTip.position.y = 0.21; torch.add(tTip);
   torch.rotation.z = 0.3;
 
-  vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch);
+  vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.scale.setScalar(0.5);
   vm.rotation.y = -0.22;               // angle inward so the barrel end reads
   vm.position.set(0.33, -0.27, -0.62);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, bit, ring, orb, bob: 0 };
+  game.vm = { root: vm, drill, disp, gun, torch, sword, sBlade, bit, ring, orb, bob: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
@@ -1616,9 +1747,17 @@ function updateViewmodel(dt){
   v.drill.visible = !!tool && tool.kind === 'drill';
   v.disp.visible = !!tool && tool.kind === 'disp';
   v.gun.visible = !!tool && tool.kind === 'gun';
-  v.torch.visible = !!tool && tool.kind === 'torch';
+  v.torch.visible = !!tool && (tool.kind === 'torch' || tool.kind === 'door' || tool.kind === 'table');
+  v.sword.visible = !!tool && tool.kind === 'sword';
   if (!tool) return;
-  if (tool.kind === 'torch'){
+  if (tool.kind === 'sword'){
+    v.sBlade.material.color.set(TIER_COL[tool.tier]);
+    const sw = Math.max(0, 1 - (performance.now() - (game.swingT || 0)) / 260);
+    v.sword.rotation.z = 0.5 - sw * 1.6;
+    v.sword.rotation.x = 0.3 + sw * 0.5;
+    return;
+  }
+  if (tool.kind === 'torch' || tool.kind === 'door' || tool.kind === 'table'){
     v.torch.children[1].material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
     return;
   }
@@ -1899,11 +2038,219 @@ const torchSys = {
     u.uTorchN.value = n;
   },
 };
-function addTorchesToInv(n){
-  for (const s of game.slots) if (s && s.kind === 'torch'){ s.count += n; return true; }
-  for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = CORE.makeTorches(n); return true; }
+// ---------- trees ----------
+const treeSys = {
+  group: null, visible: new Map(), lastCell: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); this.visible.clear(); this.lastCell = null; },
+  mesh(t){
+    const g = new THREE.Group();
+    const trunkM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
+    const leafM = new THREE.MeshBasicMaterial({ color: 0x3e7d2e });
+    const leafM2 = new THREE.MeshBasicMaterial({ color: 0x4e9639 });
+    const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.55), trunkM);
+    trunk.position.y = 1.3;
+    const c1 = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.3, 2.4), leafM);
+    c1.position.y = 3.0;
+    const c2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.6), leafM2);
+    c2.position.y = 4.0;
+    g.add(trunk); g.add(c1); g.add(c2);
+    g.scale.setScalar(t.s);
+    g.position.set(t.x, t.y - 0.15, t.z);
+    return g;
+  },
+  refresh(){
+    if (!this.group) return;
+    const cc = [Math.floor(game.pos.x / CORE.TREE_CELL), Math.floor(game.pos.z / CORE.TREE_CELL)];
+    const key = cc[0] + ',' + cc[1];
+    if (key === this.lastCell) return;
+    this.lastCell = key;
+    const R = Math.ceil(((game.opts.rd + 1) * CORE.CHUNK_M) / CORE.TREE_CELL) + 1;
+    const want = new Set();
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++){
+      const cx = cc[0] + dx, cz = cc[1] + dz;
+      const k = cx + ',' + cz;
+      if (game.removedTreeSet.has(k)) continue;
+      const t = game.gen.treeAt(cx, cz);
+      if (!t) continue;
+      want.add(k);
+      if (!this.visible.has(k)){
+        const m = this.mesh(t);
+        this.group.add(m);
+        this.visible.set(k, { t, m });
+      }
+    }
+    for (const [k, v] of this.visible){
+      if (!want.has(k)){ this.group.remove(v.m); this.visible.delete(k); }
+    }
+  },
+  fell(k, grant){
+    const v = this.visible.get(k);
+    if (!v) return;
+    game.removedTreeSet.add(k);
+    this.group.remove(v.m);
+    this.visible.delete(k);
+    const wood = Math.round(4 + 2 * v.t.s);
+    if (grant){
+      CORE.addMat(game.slots, CORE.MAT.WOOD, wood);
+      toast('+' + wood + ' wood');
+    }
+    Particles.burst(v.t.x, v.t.y + 1.5, v.t.z, 1, [0x6b4a26, 0x3e7d2e], 30, 2.4);
+    AudioSys.sfx('break', 0.8);
+    refreshHotbar(); refreshToolHUD();
+    markSave();
+  },
+  // ray vs trunk cylinders; returns visible-tree key
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const [k, v] of this.visible){
+      const t = v.t;
+      const cy = t.y + 1.3 * t.s;
+      const vx = t.x - o.x, vy = cy - o.y, vz = t.z - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.abs(py) < 1.5 * t.s + 0.4 && Math.hypot(px, pz) < 0.45 * t.s + 0.25){
+        best = k; bestT = tt;
+      }
+    }
+    return best;
+  },
+  trunkNear(x, y, z){
+    // trunk collision for the physics field
+    let d = 1e9;
+    for (const [, v] of this.visible){
+      const t = v.t;
+      const dh = Math.hypot(x - t.x, z - t.z);
+      if (dh > 3) continue;
+      const d2 = dh - 0.3 * t.s;
+      const dy = Math.abs(y - (t.y + 1.3 * t.s)) - 1.3 * t.s;
+      const pd = Math.hypot(Math.max(d2, 0), Math.max(dy, 0)) + Math.min(Math.max(d2, dy), 0);
+      if (pd < d) d = pd;
+    }
+    return d;
+  },
+};
+
+// ---------- doors & crafting tables ----------
+const doorSys = {
+  group: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const d of game.doors){
+      const g = new THREE.Group();
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.12), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+      panel.position.set(0.6, 1.1, 0);         // hinge at the group origin
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), new THREE.MeshBasicMaterial({ color: 0xd8c485 }));
+      handle.position.set(1.02, 1.05, 0);
+      g.add(panel); g.add(handle);
+      g.position.set(d.x, d.y, d.z);
+      g.rotation.y = d.yaw + (d.open ? Math.PI / 2 : 0);
+      this.group.add(g);
+    }
+    rebuildSolidProps();
+  },
+  place(x, y, z){
+    // hinge offset half a door to the side so the panel is centered on aim
+    const yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2);
+    const hx = x - Math.cos(yaw) * 0.6, hz = z + Math.sin(yaw) * 0.6;
+    game.doors.push({ x: hx, y, z: hz, yaw, open: false });
+    this.rebuild(); markSave();
+  },
+  removeNear(x, y, z, r){
+    const keep = [], n0 = game.doors.length;
+    for (const d of game.doors){
+      if (Math.hypot(d.x - x, d.y + 1.1 - y, d.z - z) > r) keep.push(d);
+    }
+    game.doors = keep;
+    const n = n0 - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const d of game.doors){
+      const cx = d.x + Math.cos(d.yaw + (d.open ? Math.PI/2 : 0)) * 0.6;
+      const cz = d.z - Math.sin(d.yaw + (d.open ? Math.PI/2 : 0)) * 0.6;
+      const vx = cx - o.x, vy = d.y + 1.1 - o.y, vz = cz - o.z;
+      const t = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (t < 0 || t > bestT) continue;
+      const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
+      if (Math.abs(py) < 1.3 && Math.hypot(px, pz) < 0.8){ best = d; bestT = t; }
+    }
+    return best;
+  },
+};
+const tableSys = {
+  group: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const t of game.tables){
+      const g = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1), new THREE.MeshBasicMaterial({ color: 0x9c7344 }));
+      top.position.y = 0.85;
+      const legM = new THREE.MeshBasicMaterial({ color: 0x6b4a26 });
+      for (const [sx, sz] of [[-0.45,-0.45],[0.45,-0.45],[-0.45,0.45],[0.45,0.45]]){
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), legM);
+        leg.position.set(sx, 0.42, sz);
+        g.add(leg);
+      }
+      const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), new THREE.MeshBasicMaterial({ color: 0x59c8d8 }));
+      tools.position.set(0.2, 0.98, -0.15);
+      g.add(top); g.add(tools);
+      g.position.set(t[0], t[1], t[2]);
+      this.group.add(g);
+    }
+    rebuildSolidProps();
+  },
+  add(x, y, z){ game.tables.push([x, y, z]); this.rebuild(); markSave(); },
+  removeNear(x, y, z, r){
+    const keep = [], n0 = game.tables.length;
+    for (const t of game.tables){
+      if (Math.hypot(t[0] - x, t[1] - y, t[2] - z) > r) keep.push(t);
+    }
+    game.tables = keep;
+    const n = n0 - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+};
+function nearTable(){
+  for (const t of game.tables){
+    if (Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z) < 4) return true;
+  }
   return false;
 }
+function rebuildSolidProps(){
+  const props = [];
+  for (const d of game.doors){
+    if (d.open) continue;
+    const yaw = d.yaw;
+    props.push({ t: 'box', yaw,
+      x: d.x + Math.cos(yaw) * 0.6, y: d.y + 1.1, z: d.z - Math.sin(yaw) * 0.6,
+      hx: 0.6, hy: 1.1, hz: 0.09 });
+  }
+  for (const t of game.tables){
+    props.push({ t: 'box', yaw: 0, x: t[0], y: t[1] + 0.45, z: t[2], hx: 0.55, hy: 0.46, hz: 0.55 });
+  }
+  game.solidProps = props;
+}
+
+function addStackItem(kind, n){
+  for (const s of game.slots) if (s && s.kind === kind){ s.count += n; return true; }
+  for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = { kind, count: n }; return true; }
+  return false;
+}
+function addTorchesToInv(n){ return addStackItem('torch', n); }
 
 // ---------- entities ----------
 const ENT_DEF = {
@@ -1912,23 +2259,50 @@ const ENT_DEF = {
 };
 function entMesh(type){
   const g = new THREE.Group();
+  const legs = [];
+  const box = (w, h, d, color, x, y, z, parent) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
+    m.position.set(x, y, z);
+    (parent || g).add(m);
+    return m;
+  };
   if (type === 'grazer'){
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.9), new THREE.MeshBasicMaterial({ color: 0xc8a24b }));
-    body.position.y = 0.4;
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.32, 0.3), new THREE.MeshBasicMaterial({ color: 0x8a6f33 }));
-    head.position.set(0, 0.55, -0.55);
-    g.add(body); g.add(head);
-  } else {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.55), new THREE.MeshBasicMaterial({ color: 0x1c1626 }));
-    body.position.y = 0.55;
-    const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2b2b });
-    for (const sx of [-0.14, 0.14]){
-      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.06), eyeM);
-      eye.position.set(sx, 0.82, -0.26);
-      g.add(eye);
+    box(0.72, 0.5, 1.0, 0xc8a24b, 0, 0.62, 0.05);            // body
+    box(0.6, 0.12, 0.85, 0xb08d3f, 0, 0.9, 0.05);            // back fur ridge
+    const head = box(0.4, 0.36, 0.34, 0xd8b45e, 0, 0.78, -0.62);
+    box(0.22, 0.12, 0.1, 0x8a6f33, 0, -0.08, -0.2, head);    // snout
+    box(0.08, 0.2, 0.06, 0xc8a24b, -0.16, 0.26, 0.02, head); // ears
+    box(0.08, 0.2, 0.06, 0xc8a24b, 0.16, 0.26, 0.02, head);
+    box(0.1, 0.1, 0.3, 0xb08d3f, 0, 0.7, 0.6);               // tail
+    for (const [sx, sz] of [[-0.24,-0.32],[0.24,-0.32],[-0.24,0.36],[0.24,0.36]]){
+      const leg = box(0.16, 0.42, 0.16, 0x8a6f33, sx, 0.21, sz);
+      legs.push(leg);
     }
-    g.add(body);
+  } else {
+    box(0.5, 0.7, 0.42, 0x1c1626, 0, 0.85, 0);               // hunched torso
+    box(0.62, 0.16, 0.5, 0x120e1c, 0, 1.24, -0.02);          // shoulder ridge
+    const head = box(0.36, 0.3, 0.34, 0x241b33, 0, 1.42, -0.12);
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2b2b });
+    for (const sx of [-0.1, 0.1]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.05, 0.05), eyeM);
+      eye.position.set(sx, 0.02, -0.18);
+      head.add(eye);
+    }
+    for (const sx of [-0.2, 0.2]){                            // spikes
+      box(0.08, 0.22, 0.08, 0x3a2c52, sx, 1.4, 0.12);
+    }
+    for (const sx of [-0.34, 0.34]){                          // long arms
+      const arm = box(0.12, 0.7, 0.14, 0x181226, sx, 0.78, -0.04);
+      box(0.14, 0.12, 0.16, 0x3a2c52, 0, -0.4, 0, arm);       // claw
+      legs.push(arm);
+    }
+    for (const sx of [-0.15, 0.15]){
+      const leg = box(0.15, 0.5, 0.16, 0x120e1c, sx, 0.25, 0.05);
+      legs.push(leg);
+    }
   }
+  g.userData.legs = legs;
+  g.userData.phase = Math.random() * 10;
   return g;
 }
 function reviveEntity(type, x, y, z, hp){
@@ -2040,7 +2414,7 @@ function updateEntities(dt, now){
       const cy = e.y + def.r;
       const dd = sdfWorld(e.x, cy, e.z, le);
       if (dd < def.r){
-        const g = CORE.gradSDF(e.x, cy, e.z, le, 0.1, game.gen);
+        const g = gradWorld(e.x, cy, e.z, le);
         const push = Math.min(def.r - dd, 0.4);
         e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
         if (g[1] > 0.5){ grounded = true; if (e.vy < 0) e.vy = 0; }
@@ -2052,12 +2426,16 @@ function updateEntities(dt, now){
     // mesh
     if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
     e.mesh.position.set(e.x, e.y, e.z);
-    if (Math.hypot(e.vx, e.vz) > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
-    e.mesh.position.y += Math.abs(Math.sin(now * 0.008 + i)) * 0.05;
-    const tint = e.flash > 0 ? 4 : 1;
-    e.mesh.traverse(o => { if (o.isMesh) o.material.opacity = 1; });
-    e.mesh.scale.setScalar(e.flash > 0 ? 1.08 : 1);
-    void tint;
+    const spd = Math.hypot(e.vx, e.vz);
+    if (spd > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    // limb swing scales with travel speed
+    const ud = e.mesh.userData;
+    ud.phase += spd * dt * 3.2;
+    const legs = ud.legs || [];
+    for (let li = 0; li < legs.length; li++){
+      legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
+    }
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.1 : 1);
   }
 }
 // closest entity intersecting the view ray
@@ -2081,7 +2459,7 @@ function entityOnRay(maxDist){
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
-function isLocked(){ return document.pointerLockElement === game.renderer.domElement; }
+function isLocked(){ return game.debugLock || document.pointerLockElement === game.renderer.domElement; }
 function requestLock(){
   if (!isLocked()) game.renderer.domElement.requestPointerLock({ unadjustedMovement: true }).catch?.(()=>{});
 }
@@ -2101,6 +2479,14 @@ function bindInput(){
     if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
     if (e.button === 1){ e.preventDefault(); pickMaterial(); }
     if (e.button === 2){
+      const door = doorSys.onRay(3.5);
+      if (door){
+        door.open = !door.open;
+        doorSys.rebuild();
+        AudioSys.sfx('toggle');
+        markSave();
+        return;
+      }
       if (activeTool()){
         game.tool.shape = (game.tool.shape + 1) % 3;
         toast(CORE.SHAPE_NAME[game.tool.shape]);
@@ -2199,7 +2585,7 @@ function collidePlayer(edits, still){
       const cy = game.pos.y + centers[ci];
       const d = sdfWorld(game.pos.x, cy, game.pos.z, edits);
       if (d < r){
-        const g = CORE.gradSDF(game.pos.x, cy, game.pos.z, edits, 0.1, game.gen);
+        const g = gradWorld(game.pos.x, cy, game.pos.z, edits);
         const push = Math.min(r - d, 0.5);
         if (still && g[1] > 0.6){
           // standing on walkable ground with no input: resolve the
@@ -2264,6 +2650,8 @@ function updatePlayer(dt){
     if (game.vel.y < -40) game.vel.y = -40;
   }
 
+  const preX = game.pos.x, preZ = game.pos.z;
+  const intX = game.vel.x * dt, intZ = game.vel.z * dt;
   game.pos.x += game.vel.x * dt;
   game.pos.y += game.vel.y * dt;
   game.pos.z += game.vel.z * dt;
@@ -2274,7 +2662,31 @@ function updatePlayer(dt){
   const still = !game.fly && fwd === 0 && str === 0 && !(canMove && k['Space']);
   const wasGrounded = game.grounded;
   const vyBefore = game.vel.y;
-  collidePlayer(nearEdits(box), still);
+  const colEdits = nearEdits(box);
+  collidePlayer(colEdits, still);
+
+  // step-up assist: when horizontal motion is mostly eaten by a low ledge,
+  // try the same spot a step higher instead of grinding against the lip.
+  // Grounded or rising only — never while dropping into an opening, or the
+  // assist would hoist the player back out of cave mouths.
+  if (!game.fly && !still && (wasGrounded || game.vel.y > 0.5)){
+    const intended = Math.hypot(intX, intZ);
+    const actual = Math.hypot(game.pos.x - preX, game.pos.z - preZ);
+    if (intended > 0.005 && actual < intended * 0.5){
+      const nx = preX + intX + intX / intended * 0.1;
+      const nz = preZ + intZ + intZ / intended * 0.1;
+      // never step UP when there's a clear way DOWN ahead — stepping would
+      // hoist the player out of cave mouths instead of letting them descend
+      const canDescend = capsuleFree(nx, game.pos.y - 0.45, nz, colEdits);
+      for (const step of canDescend ? [] : [0.3, 0.55]){
+        if (capsuleFree(nx, game.pos.y + step, nz, colEdits)){
+          game.pos.x = nx; game.pos.z = nz; game.pos.y += step;
+          if (game.vel.y < 0) game.vel.y = 0;
+          break;
+        }
+      }
+    }
+  }
 
   // fall damage: compare impact speed on the grounded transition
   if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival'){
@@ -2310,8 +2722,11 @@ function activeTool(){
   const it = selectedItem();
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
+  if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
+  if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -2413,6 +2828,18 @@ function doMine(tool, p, shape, eff){
   }
   const poppedTorches = torchSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedTorches){ addTorchesToInv(poppedTorches); parts.push('+' + poppedTorches + ' torch'); }
+  const poppedDoors = doorSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
+  if (poppedDoors){ addStackItem('door', poppedDoors); parts.push('+' + poppedDoors + ' door'); }
+  const poppedTables = tableSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
+  if (poppedTables){ addStackItem('table', poppedTables); parts.push('+' + poppedTables + ' table'); }
+  // trees whose ground was carved away fall and yield their wood
+  for (const [k, v] of [...treeSys.visible]){
+    const t = v.t;
+    if (Math.hypot(t.x - p.x, t.y - p.y, t.z - p.z) < eff * 0.5 + 3 &&
+        CORE.evalSDF(t.x, t.y + 0.2, t.z, game.edits, game.gen) > 0.25){
+      treeSys.fell(k, true);
+    }
+  }
   if (parts.length) toast(parts.join('  ·  '));
   AudioSys.sfx('break', hw / units);
   Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
@@ -2495,6 +2922,33 @@ function tryAction(dt, now){
     game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return;
   }
 
+  // sword: THE melee weapon
+  if (tool.kind === 'sword'){
+    AudioSys.setHum(false, 0, 0);
+    if (game.mouseL && (edge || now - game.lastMelee > 380)){
+      game.lastMelee = now;
+      game.swingT = now;
+      AudioSys.burst({ dur: 0.08, freq: 1400, gain: 0.08 });
+      const ent = entityOnRay(3.6);
+      if (ent) hurtEntity(ent, 10 + tool.tier * 4, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
+    }
+    return;
+  }
+  // placeables
+  if (tool.kind === 'door' || tool.kind === 'table'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no ground in reach'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      if (tool.kind === 'door') doorSys.place(hit[0], hit[1], hit[2]);
+      else tableSys.add(hit[0], hit[1], hit[2]);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
   // blaster: hitscan, hold-fire at 2/s
   if (tool.kind === 'gun'){
     AudioSys.setHum(false, 0, 0);
@@ -2525,14 +2979,17 @@ function tryAction(dt, now){
     return;
   }
 
-  // drill doubles as the melee weapon: entities in reach take priority
+  // drill chops trees (fighting needs a sword or the blaster)
   if (tool.kind === 'drill' && game.mouseL){
-    const ent = entityOnRay(PLAYER.reach * 0.7);
-    if (ent){
-      AudioSys.setHum(false, 0, 0);
-      if (edge || now - game.lastMelee > 450){
-        game.lastMelee = now;
-        hurtEntity(ent, 6 + tool.tier * 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
+    const treeKey = treeSys.onRay(PLAYER.reach * 0.8);
+    if (treeKey){
+      const chopDur = game.mode === 'creative' ? 0.15 : 1.4 / (1 + tool.tier * 0.35);
+      game.act.t += dt;
+      game.actProgress = Math.min(1, game.act.t / chopDur);
+      AudioSys.setHum(true, tool.tier, game.actProgress);
+      if (game.act.t >= chopDur){
+        game.act.t = 0;
+        treeSys.fell(treeKey, true);
       }
       return;
     }
@@ -2650,7 +3107,7 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
-    : it.kind === 'gun' ? 'gun' : it.kind === 'torch' ? 'torch' : it.kind + it.tier;
+    : ['gun', 'torch', 'door', 'table'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -2666,6 +3123,20 @@ function itemIconURL(it){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
+  } else if (it.kind === 'door'){
+    c.fillStyle = '#8a6237'; c.fillRect(4, 2, 8, 12);
+    c.fillStyle = '#6b4a26'; c.fillRect(4, 2, 8, 1); c.fillRect(4, 7, 8, 1);
+    c.fillStyle = '#d8c485'; c.fillRect(10, 8, 1, 2);
+  } else if (it.kind === 'table'){
+    c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
+    c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
+    c.fillStyle = '#59c8d8'; c.fillRect(8, 3, 3, 2);
+  } else if (it.kind === 'sword'){
+    const col = TIER_COL[it.tier];
+    c.fillStyle = '#5a4632'; c.fillRect(3, 11, 3, 3);
+    c.fillStyle = '#3c3a44'; c.fillRect(2, 10, 6, 2);
+    c.fillStyle = col;
+    for (let i = 0; i < 7; i++) c.fillRect(6 + i, 9 - i, 2, 2);
   } else {
     const col = TIER_COL[it.tier];
     if (it.kind === 'drill'){
@@ -2696,7 +3167,10 @@ function itemLabel(it){
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
   if (it.kind === 'gun') return 'blaster';
   if (it.kind === 'torch') return 'torches';
+  if (it.kind === 'door') return 'door';
+  if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
+  if (it.kind === 'sword') return t + ' sword';
   if (it.kind === 'drill') return t + ' drill';
   return t + ' dispenser';
 }
@@ -2719,7 +3193,7 @@ function paintSlot(el){
   const img = el.querySelector('img'), cnt = el.querySelector('.cnt');
   const url = itemIconURL(it);
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
-  cnt.textContent = (it && (it.kind === 'mat' || it.kind === 'torch')) ? fmtCount(it.count) : '';
+  cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
   el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
@@ -2840,6 +3314,12 @@ function refreshToolHUD(){
     }
   } else if (it.kind === 'gun'){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'sword'){
+    html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
+  } else if (it.kind === 'door'){
+    html = '<div class="t1">door ×' + it.count + '</div><div class="t2">click ground to place · right click a door to open/close</div>';
+  } else if (it.kind === 'table'){
+    html = '<div class="t1">crafting table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q for full crafting</div>';
   } else if (it.kind === 'torch'){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
   } else if (it.kind === 'mat'){
@@ -2915,7 +3395,7 @@ function tryPickupCache(){
   let left = 0;
   for (const it of items){
     if (it.kind === 'mat'){ CORE.addMat(game.slots, it.mat, it.count); continue; }
-    if (it.kind === 'torch'){ addTorchesToInv(it.count); continue; }
+    if (['torch', 'door', 'table'].includes(it.kind)){ addStackItem(it.kind, it.count); continue; }
     let placed = false;
     for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = it; placed = true; break; }
     if (!placed) left++;
@@ -2964,15 +3444,23 @@ function openCraft(){
 }
 function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
+  const atTable = nearTable();
+  const head = document.createElement('div');
+  head.className = 'sub';
+  head.textContent = atTable ? 'crafting table in range — full catalog' : 'basic recipes — stand near a crafting table for tools';
+  list.appendChild(head);
   for (const r of CORE.RECIPES){
+    if (r.station && !atTable) continue;
     const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
                : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
                : r.kind === 'gun' ? CORE.makeGun()
-               : CORE.makeTorches(r.yields);
+               : r.kind === 'sword' ? CORE.makeSword(r.tier)
+               : r.kind === 'matout' ? CORE.makeStack(r.matOut, r.yields)
+               : { kind: r.kind, count: r.yields };
     const row = document.createElement('div'); row.className = 'craftrow';
     const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
     const nm = document.createElement('div'); nm.className = 'cname';
-    nm.textContent = itemLabel(item) + (r.kind === 'torch' ? ' ×' + r.yields : '');
+    nm.textContent = itemLabel(item) + (r.yields > 1 ? ' ×' + r.yields : '');
     row.appendChild(nm);
     const cost = document.createElement('div');
     cost.className = 'ccost' + (CORE.canCraft(game.slots, r) ? ' ok' : '');
@@ -3098,6 +3586,9 @@ function defaultSlots(mode){
     for (let t = 0; t < 5; t++) s[t] = CORE.makeDrill(t);
     s[5] = CORE.makeGun();
     s[6] = CORE.makeTorches(64);
+    s[7] = CORE.makeSword(4);
+    s[8] = CORE.makeDoors(10);
+    s[9] = CORE.makeTables(4);
     for (let m = 1; m <= CORE.NMAT; m++){
       if (m === CORE.MAT.BEDROCK) continue;
       CORE.addMat(s, m, 99999);
@@ -3123,6 +3614,9 @@ function saveNow(){
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
     torches: game.torches,
+    doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0]),
+    tables: game.tables,
+    removedTrees: [...(game.removedTreeSet || [])],
     entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
@@ -3158,6 +3652,9 @@ function startWorld(id){
   game.food = data.food == null ? 100 : data.food;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
+  game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4] }));
+  game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
+  game.removedTreeSet = new Set(data.removedTrees || []);
   game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
@@ -3185,6 +3682,9 @@ function startWorld(id){
   buildScene();
   game.terrain.edits = game.edits;
   torchSys.rebuild();
+  doorSys.rebuild();
+  tableSys.rebuild();
+  treeSys.refresh();
   game.cacheMarker = null;
   updateCacheMarker();
   $('statbars').classList.toggle('hidden', game.mode !== 'survival');
@@ -3233,6 +3733,7 @@ function frame(now){
   if (ck !== lastChunk || game.forceStream){
     lastChunk = ck; game.forceStream = false;
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
+    treeSys.refresh();
   }
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
@@ -3329,7 +3830,8 @@ requestAnimationFrame(frame);
 window.__game = game;
 window.__CORE = CORE;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD,
-  spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight };
+  spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
+  treeSys, doorSys, tableSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
 </script>
 </body>
 </html>
