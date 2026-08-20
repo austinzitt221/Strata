@@ -43,9 +43,17 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .worlditem{display:flex; justify-content:space-between; align-items:center; gap:10px; border:2px solid var(--ui-border); background:var(--ui-bg2); padding:8px 10px; margin:6px 0;}
 .worlditem .wname{font-size:15px;}
 .worlditem .wmeta{font-size:11px; color:var(--ui-hi);}
+.modebtn{margin:0;}
+.modebtn.sel{border-color:var(--accent); color:#fff;}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
+.statbar{width:220px; height:12px; background:rgba(10,9,16,0.75); border:2px solid var(--ui-border);}
+.statfill{height:100%;}
+.statfill.hp{background:#e04545; width:100%;}
+.statfill.food{background:#c8a24b; width:100%;}
+#hurt{position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 40%, rgba(200,20,20,0.55) 100%); opacity:0; transition:opacity .12s;}
 #chargebar{position:absolute; left:50%; bottom:74px; transform:translateX(-50%); width:180px; height:10px; background:rgba(10,9,16,0.7); border:2px solid var(--ui-border); display:none;}
 #chargefill{height:100%; width:0%; background:var(--accent);}
 #toolinfo{position:absolute; left:14px; bottom:14px; background:rgba(10,9,16,0.6); border:2px solid rgba(74,68,88,0.6); padding:8px 12px; font-size:13px; line-height:1.5; letter-spacing:1px;}
@@ -53,6 +61,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .t2{color:var(--ui-hi);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
+#navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
+#navarrow{display:inline-block; color:var(--accent); font-size:13px;}
 
 /* ---------- hotbar ---------- */
 #hotbar{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); display:flex; gap:4px;}
@@ -89,8 +99,14 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <body>
 
 <div id="hud" class="hidden">
+  <div id="statbars" class="hidden">
+    <div class="statbar"><div id="hpfill" class="statfill hp"></div></div>
+    <div class="statbar"><div id="foodfill" class="statfill food"></div></div>
+  </div>
+  <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
+  <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
   <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
 </div>
@@ -111,6 +127,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="worldlist" id="worldlist"></div>
     <div class="row"><input type="text" id="newWorldName" placeholder="world name" maxlength="24">
     <input type="text" id="newWorldSeed" placeholder="seed (blank = random)" maxlength="16" style="width:180px;"></div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn modebtn sel" id="modeSurvival">SURVIVAL</button>
+      <button class="btn modebtn" id="modeCreative">CREATIVE</button>
+    </div>
     <button class="btn" id="btnCreateWorld">CREATE WORLD</button>
     <button class="btn" id="btnWorldsBack">BACK</button>
   </div>
@@ -133,6 +153,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>MOUSE SENSITIVITY</label><input type="range" id="optSens" min="20" max="300" step="5"><span class="val" id="optSensV"></span></div>
     <div class="optrow"><label>FOV</label><input type="range" id="optFov" min="60" max="110" step="1"><span class="val" id="optFovV"></span></div>
     <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="6" step="1"><span class="val" id="optRdV"></span></div>
+    <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
 </div>
@@ -149,11 +170,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <div id="invscreen" class="screen hidden dim">
   <div class="panel">
     <h2>INVENTORY</h2>
+    <div class="invlabel">DISPENSER SLOT</div>
+    <div class="invgrid" style="grid-template-columns:52px;" id="invdisp"></div>
     <div class="invlabel">STORAGE</div>
     <div class="invgrid" id="invmain"></div>
     <div class="invlabel">HOTBAR</div>
     <div class="invgrid" id="invhot"></div>
-    <div class="sub" style="margin-top:12px;">drag a material stack onto a dispenser to load it &nbsp;·&nbsp; E to close</div>
+    <div class="sub" style="margin-top:12px;">with a dispenser slotted, any material you hold becomes buildable &nbsp;·&nbsp; E to close</div>
   </div>
 </div>
 
@@ -163,6 +186,14 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
     <div id="craftlist"></div>
     <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
+  </div>
+</div>
+
+<div id="deathscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:380px;">
+    <h2 style="color:#ff8b8b;">YOU DIED</h2>
+    <div class="sub" id="deathinfo"></div>
+    <button class="btn" id="btnRespawn">RESPAWN</button>
   </div>
 </div>
 
@@ -213,13 +244,13 @@ const VOX = 0.5;              // voxel edge in meters
 const N = 16;                 // cells per chunk edge
 const CHUNK_M = N * VOX;      // chunk edge in meters (8)
 const SURFACE_Y = 0.01;       // base rock plane (off-grid to avoid exact-zero samples)
-const BEDROCK_Y = -15.99;     // everything below is permanently solid
-const CY_MIN = -2, CY_MAX = 5; // vertical chunk range: y in [-16, +48) meters
+const BEDROCK_Y = -63.99;     // everything below is permanently solid
+const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8 };
-const NMAT = 8;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9 };
+const NMAT = 9;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -288,12 +319,12 @@ function fbm2(seed, x, z, oct){
 //   mat(x,y,z), makeLocal(x0,z0,x1,z1), caves }
 // Everything derives deterministically from the seed; the same interface with
 // a flat plane (FLAT_GEN) is the default so build-1 behavior and tests hold.
-const CAVE_T = 0.615;
 const ORE_TYPES = [
-  { mat: MAT.IRON,     yMin: -11,   yMax: -3,    p: 0.50, rMin: 0.8, rMax: 1.4 },
-  { mat: MAT.RUBY,     yMin: -14,   yMax: -6,    p: 0.36, rMin: 0.7, rMax: 1.2 },
-  { mat: MAT.OBSIDIAN, yMin: -15.5, yMax: -9,    p: 0.30, rMin: 0.7, rMax: 1.2 },
-  { mat: MAT.DIAMOND,  yMin: -15.8, yMax: -12.5, p: 0.22, rMin: 0.6, rMax: 1.0 },
+  { mat: MAT.IRON,       yMin: -30,   yMax: -4,   p: 0.50, rMin: 0.8, rMax: 1.5 },
+  { mat: MAT.RUBY,       yMin: -45,   yMax: -16,  p: 0.38, rMin: 0.7, rMax: 1.3 },
+  { mat: MAT.OBSIDIAN,   yMin: -58,   yMax: -30,  p: 0.34, rMin: 0.7, rMax: 1.3 },
+  { mat: MAT.DIAMOND,    yMin: -63.5, yMax: -46,  p: 0.28, rMin: 0.6, rMax: 1.1 },
+  { mat: MAT.GLOWSHROOM, yMin: -20,   yMax: -1,   p: 0.48, rMin: 0.5, rMax: 0.9 },
 ];
 const VEIN_CELL = 4;
 function makeGen(seed){
@@ -301,7 +332,8 @@ function makeGen(seed){
   const sH = hashInt(seed ^ 0x68e31da4), sR = hashInt(seed ^ 0xb5297a4d);
   const sB = hashInt(seed ^ 0x1b56c4e9), sD = hashInt(seed ^ 0x7feb352d);
   const sA = hashInt(seed ^ 0x846ca68b), sC = hashInt(seed ^ 0x9e3779b9);
-  const sV = hashInt(seed ^ 0x2545f491);
+  const sV = hashInt(seed ^ 0x2545f491), sW = hashInt(seed ^ 0x3c6ef372);
+  const sE = hashInt(seed ^ 0xdaa66d2b), sM = hashInt(seed ^ 0x14057b7f);
 
   function biome(x, z){ return fbm2(sB, x * 0.0045, z * 0.0045, 2); }
   function height(x, z){
@@ -320,30 +352,45 @@ function makeGen(seed){
   function isDesert(x, z){
     return fbm2(sD, x * 0.004 + 37.7, z * 0.004, 2) > 0.62 && biome(x, z) < 0.45;
   }
-  // spaghetti caves: intersection band of two 3D noises, faded out near the
-  // surface so the ground isn't pitted (fade keeps the field continuous)
-  function caveVal(x, y, z, h){
-    const nA = noise3(sA, x * 0.045, y * 0.06, z * 0.045);
-    const nB = noise3(sC, x * 0.045 + 53.1, y * 0.06, z * 0.045 + 11.7);
-    let v = Math.min(nA, nB);
+  // Caves = union of two carve systems, each unique by position:
+  //  - spaghetti tunnels (intersection band of two 3D noises) whose width
+  //    varies regionally and grows with depth
+  //  - blobby caverns, larger and more common at depth
+  // Near the surface both are faded out — EXCEPT in entrance zones (a 2D
+  // noise mask), where tunnels are allowed to climb out and breach the
+  // ground, so cave systems are actually discoverable from above.
+  // Returns a value < 0 inside carved space; the fade keeps it continuous.
+  function caveCarve(x, y, z, h){
     const depth = h - y;
-    if (depth < 5) v -= (5 - depth) * 0.09;
-    return v;
+    let fade = 0;
+    if (depth < 6){
+      const ent = sstep(0.57, 0.70, noise2(sE, x * 0.016, z * 0.016));
+      fade = (6 - depth) * 0.09 * (1 - ent);
+    }
+    const nA = noise3(sA, x * 0.045, y * 0.055, z * 0.045);
+    const nB = noise3(sC, x * 0.045 + 53.1, y * 0.055, z * 0.045 + 11.7);
+    const width = noise3(sW, x * 0.012, y * 0.012, z * 0.012);
+    const tunnelT = 0.72 - width * 0.08 - Math.min(depth, 55) * 0.0008;
+    const tunnel = (tunnelT + fade) - Math.min(nA, nB);
+    const nR = noise3(sM, x * 0.02, y * 0.026, z * 0.02);
+    const roomT = 0.865 - Math.min(depth, 55) * 0.0016;
+    const room = (roomT + fade * 0.8) - nR;
+    return Math.min(tunnel, room);
   }
   function sdfFromH(h, x, y, z){
     const d = (y - h) * 0.65;
     if (d > 0.05) return d;    // above ground: caves only ever remove material
-    const c = (CAVE_T - caveVal(x, y, z, h)) * 4;
+    const c = caveCarve(x, y, z, h) * 4;
     return Math.max(d, -c);
   }
   function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
   function oreAt(x, y, z){
-    if (y > -2 || y < BEDROCK_Y) return 0;
+    if (y > -1 || y < BEDROCK_Y) return 0;
     const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
     for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
       const gx = cx + dx, gy = cy + dy, gz = cz + dz;
       const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
-      const t = ORE_TYPES[hashInt(h0 ^ 0x51ab3f27) & 3];
+      const t = ORE_TYPES[hashInt(h0 ^ 0x51ab3f27) % ORE_TYPES.length];
       if (h0 / 4294967296 > t.p) continue;
       const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
       if (oy < t.yMin || oy > t.yMax) continue;
@@ -419,23 +466,42 @@ function sdSphere(px, py, pz, e){
 }
 function sdCube(px, py, pz, e){
   const h = e.size * 0.5;
-  const qx = Math.abs(px - e.x) - h, qy = Math.abs(py - e.y) - h, qz = Math.abs(pz - e.z) - h;
+  let dx = px - e.x, dz = pz - e.z;
+  if (e.rot){
+    const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
+    const rx = dx * c - dz * s;
+    dz = dx * s + dz * c; dx = rx;
+  }
+  const qx = Math.abs(dx) - h, qy = Math.abs(py - e.y) - h, qz = Math.abs(dz) - h;
   const ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
   const outside = Math.sqrt(ax*ax + ay*ay + az*az);
   const inside = Math.min(Math.max(qx, Math.max(qy, qz)), 0);
   return outside + inside;
 }
-function shapeSDF(px, py, pz, e){
-  return e.shape === 1 ? sdCube(px, py, pz, e) : sdSphere(px, py, pz, e);
+function sdCylinder(px, py, pz, e){
+  const r = e.size * 0.5, hh = e.size * 0.5;   // y-axis, height = diameter = size
+  const d2 = Math.hypot(px - e.x, pz - e.z) - r;
+  const dy = Math.abs(py - e.y) - hh;
+  const ox = Math.max(d2, 0), oy = Math.max(dy, 0);
+  return Math.hypot(ox, oy) + Math.min(Math.max(d2, dy), 0);
 }
+function shapeSDF(px, py, pz, e){
+  return e.shape === 1 ? sdCube(px, py, pz, e)
+       : e.shape === 2 ? sdCylinder(px, py, pz, e)
+       : sdSphere(px, py, pz, e);
+}
+const SHAPE_NAME = ['sphere', 'cube', 'cylinder'];
 
-// edit: { op: 0 subtract | 1 union, shape: 0 sphere | 1 cube, x,y,z, size, mat }
-function makeEdit(op, shape, x, y, z, size, mat){
-  return { op, shape, x, y, z, size, mat: mat|0 };
+// edit: { op: 0 subtract | 1 union | 2 paint, shape: 0 sphere | 1 cube |
+//         2 cylinder, x,y,z, size, mat, rot (cube yaw, radians) }
+function makeEdit(op, shape, x, y, z, size, mat, rot){
+  return { op, shape, x, y, z, size, mat: mat|0, rot: rot || 0 };
 }
 function editAABB(e){
-  const h = e.size * 0.5;
-  return [e.x - h, e.y - h, e.z - h, e.x + h, e.y + h, e.z + h];
+  let h = e.size * 0.5;
+  const hy = h;
+  if (e.shape === 1 && e.rot) h *= Math.SQRT2;   // conservative for rotated cubes
+  return [e.x - h, e.y - hy, e.z - h, e.x + h, e.y + hy, e.z + h];
 }
 function aabbOverlap(a, b, pad){
   return a[0] - pad <= b[3] && a[3] + pad >= b[0] &&
@@ -456,6 +522,7 @@ function evalSDF(px, py, pz, edits, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
+    if (e.op === 2) continue;              // paint: material only, no geometry
     const s = shapeSDF(px, py, pz, e);
     d = e.op === 1 ? Math.min(d, s) : Math.max(d, -s);
   }
@@ -472,7 +539,7 @@ function materialAt(px, py, pz, edits, gen){
   let m = (gen || FLAT_GEN).mat(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    if (e.op === 1 && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
+    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
   }
   return m;
 }
@@ -494,6 +561,16 @@ function gradSDF(px, py, pz, edits, h, gen){
 // ---- grid snap ----
 function snapVal(v, cell){ return Math.round(v / cell) * cell; }
 function snapVec(x, y, z, cell){ return [snapVal(x, cell), snapVal(y, cell), snapVal(z, cell)]; }
+// shape placement snap: lattice spacing is the shape size (or the grid cell
+// when that's larger), anchored so FACES land on the lattice — two adjacent
+// snapped placements always connect flush, never eating into each other
+function snapSpacing(size, cell){ return cell >= size ? cell : size; }
+function snapPlace(px, py, pz, size, cell){
+  const s = snapSpacing(size, cell);
+  const h = size * 0.5;
+  const q = v => Math.round((v - h) / s) * s + h;
+  return [q(px), q(py), q(pz)];
+}
 
 // ---- dual contouring ----
 // Chunk (cx,cy,cz) covers global sample indices [c*N, c*N+N] per axis; world
@@ -541,6 +618,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   }
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
+    if (e.op === 2) continue;              // paint: material only
     const b = editAABB(e);
     const x0 = Math.max(-1, Math.floor(b[0] / VOX) - gx0), x1 = Math.min(N, Math.ceil(b[3] / VOX) - gx0);
     const y0 = Math.max(-1, Math.floor(b[1] / VOX) - gy0), y1 = Math.min(N, Math.ceil(b[4] / VOX) - gy0);
@@ -701,7 +779,14 @@ function meshChunk(cx, cy, cz, allEdits, gen){
         if (cellVertex(x, y, z)) hasVert[CI(x, y, z)] = 1;
 
   // emit quads for owned sign-change edges
-  const pos = [], nrm = [], mat = [];
+  const pos = [], nrm = [], mat = [], sky = [];
+  // skylight: 1 at/above the surface, fading out by ~10m of overburden —
+  // computed from the same local height grid, so it's seam-consistent
+  function skyAt(px, py, pz){
+    const depth = lgen.height(px, pz) - py;
+    const s = 1 - (depth - 1) / 9;
+    return s < 0 ? 0 : s > 1 ? 1 : s;
+  }
   const AX = [
     { d:[1,0,0], u:[0,1,0], v:[0,0,1] },
     { d:[0,1,0], u:[0,0,1], v:[1,0,0] },
@@ -755,7 +840,8 @@ function meshChunk(cx, cy, cz, allEdits, gen){
             if (area2 < 1e-14) continue;
             if (flip) pushTri(a0, a2, a1);
             else pushTri(a0, a1, a2);
-            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); }
+            const sv = skyAt(h.px, h.py, h.pz);
+            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
           }
         }
       }
@@ -766,6 +852,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     positions: new Float32Array(pos),
     normals: new Float32Array(nrm),
     mats: new Float32Array(mat),
+    skys: new Float32Array(sky),
   };
 }
 
@@ -773,27 +860,22 @@ function meshChunk(cx, cy, cz, allEdits, gen){
 // slot item: null | {kind:'drill',tier,sizeIdx,size}
 //                 | {kind:'disp', tier, loaded:matId, sizeIdx, size}
 //                 | {kind:'mat', mat, count}
-function defaultItemSize(tier){
-  return tier >= 4 ? 1.5 : STEPS[Math.floor((tierMin(tier) + tierMax(tier)) / 2)];
-}
-function makeDrill(tier){
-  return { kind:'drill', tier, sizeIdx: Math.floor((tierMin(tier)+tierMax(tier))/2), size: defaultItemSize(tier) };
-}
-function makeDispenser(tier){
-  return { kind:'disp', tier, loaded: 0, sizeIdx: Math.floor((tierMin(tier)+tierMax(tier))/2), size: defaultItemSize(tier) };
-}
+function makeDrill(tier){ return { kind:'drill', tier }; }
+function makeDispenser(tier){ return { kind:'disp', tier }; }
 function makeStack(matId, count){ return { kind:'mat', mat: matId, count }; }
+function makeGun(){ return { kind:'gun' }; }
+function makeTorches(count){ return { kind:'torch', count }; }
 
 // move/drop slot a onto slot b. mutates slots. returns action string.
 function invMove(slots, a, b){
   if (a === b) return 'none';
   const A = slots[a], B = slots[b];
   if (!A) return 'none';
-  if (B && B.kind === 'disp' && A.kind === 'mat'){
-    B.loaded = A.mat;               // load dispenser; stack is not consumed (build 1)
-    return 'loaded';
-  }
   if (B && A.kind === 'mat' && B.kind === 'mat' && A.mat === B.mat){
+    B.count += A.count; slots[a] = null;
+    return 'merged';
+  }
+  if (B && A.kind === 'torch' && B.kind === 'torch'){
     B.count += A.count; slots[a] = null;
     return 'merged';
   }
@@ -801,24 +883,24 @@ function invMove(slots, a, b){
   return 'swapped';
 }
 
-// scroll-resize a tool item. dir = +1/-1. mutates item.
-function resizeTool(item, dir){
-  if (item.tier >= 4){
-    item.size = Math.min(SIZE_MAX, Math.max(SIZE_MIN, item.size * Math.pow(1.13, dir)));
-  } else {
-    item.sizeIdx = Math.min(tierMax(item.tier), Math.max(tierMin(item.tier), item.sizeIdx + dir));
-    item.size = STEPS[item.sizeIdx];
+// --- shared tool state: shape & size follow the PLAYER, not the item ---
+// the size a given tier actually uses: diamond is continuous, others snap
+// to the nearest unlocked step (so the shared size survives tool swaps)
+function effSize(size, tier){
+  if (tier >= 4) return Math.min(SIZE_MAX, Math.max(SIZE_MIN, size));
+  let bi = tierMin(tier), bd = Infinity;
+  for (let i = tierMin(tier); i <= tierMax(tier); i++){
+    const d = Math.abs(STEPS[i] - size);
+    if (d < bd - 1e-9){ bd = d; bi = i; }
   }
-  return item.size;
+  return STEPS[bi];
 }
-// keep a tool's size legal for its tier (e.g. after load)
-function clampToolSize(item){
-  if (item.tier >= 4){
-    item.size = Math.min(SIZE_MAX, Math.max(SIZE_MIN, item.size || 1.5));
-  } else {
-    item.sizeIdx = Math.min(tierMax(item.tier), Math.max(tierMin(item.tier), item.sizeIdx|0));
-    item.size = STEPS[item.sizeIdx];
-  }
+// scroll: returns the new shared size for this tier
+function scrollSize(size, tier, dir){
+  if (tier >= 4) return Math.min(SIZE_MAX, Math.max(SIZE_MIN, size * Math.pow(1.13, dir)));
+  let idx = STEPS.indexOf(effSize(size, tier));
+  idx = Math.min(tierMax(tier), Math.max(tierMin(tier), idx + dir));
+  return STEPS[idx];
 }
 
 // ---- resource economy ----
@@ -864,6 +946,40 @@ function placeCost(edits, e, gen){
   const u = Math.round(vol / UNIT_VOL);
   return u > 0 ? u : (vol > 0 ? 1 : 0);
 }
+// units to repaint existing solid of a different material inside the shape
+function paintCost(edits, e, gen){
+  const box = editAABB(e);
+  const le = cullEdits(edits, box, 0.1);
+  let vol = 0;
+  sampleShape(e, (x, y, z, v) => {
+    if (y < BEDROCK_Y) return;
+    if (evalSDF(x, y, z, le, gen) <= 0 && materialAt(x, y, z, le, gen) !== e.mat) vol += v;
+  });
+  const u = Math.round(vol / UNIT_VOL);
+  return u > 0 ? u : (vol > 0 ? 1 : 0);
+}
+
+// ---- action durations: tier base x volume factor x material hardness ----
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45]; // by MAT id
+const VOL_REF = 4.19;                                       // a 2m sphere, m^3
+function volFactor(volM3){
+  return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
+}
+// duration to mine a shape given its yield preview; -1 = nothing to mine
+function mineDuration(tier, yieldMap){
+  const base = TIER_TIME[tier];
+  let units = 0, hw = 0;
+  for (const m in yieldMap){ units += yieldMap[m]; hw += yieldMap[m] * (HARDNESS[m] || 1); }
+  if (units === 0) return -1;
+  if (base === 0) return 0;
+  return base * volFactor(units * UNIT_VOL) * (hw / units);
+}
+function placeDuration(tier, costUnits){
+  const base = TIER_TIME[tier];
+  if (base === 0) return 0;
+  return base * volFactor(costUnits * UNIT_VOL);
+}
+
 function countMat(slots, mat){
   let n = 0;
   for (const s of slots) if (s && s.kind === 'mat' && s.mat === mat) n += s.count;
@@ -889,21 +1005,40 @@ function consumeMat(slots, mat, n){
 }
 
 // ---- crafting ----
-// tier progression: craft tier-N tools from the matching ore
+// tier progression from matching ore, plus survival gear
 const RECIPES = [];
 {
   const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
   for (let t = 1; t <= 4; t++){
-    RECIPES.push({ kind: 'drill', tier: t, mat: ore[t], cost: 24 });
-    RECIPES.push({ kind: 'disp',  tier: t, mat: ore[t], cost: 18 });
+    RECIPES.push({ kind: 'drill', tier: t, costs: [{ mat: ore[t], n: 24 }] });
+    RECIPES.push({ kind: 'disp',  tier: t, costs: [{ mat: ore[t], n: 18 }] });
   }
+  RECIPES.push({ kind: 'gun',   tier: 0, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
+  RECIPES.push({ kind: 'torch', tier: 0, yields: 6, costs: [{ mat: MAT.ROCK, n: 6 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+}
+function canCraft(slots, r){
+  return r.costs.every(c => countMat(slots, c.mat) >= c.n);
 }
 function craft(slots, r){
-  let empty = -1;
-  for (let i = 0; i < slots.length; i++) if (!slots[i]){ empty = i; break; }
-  if (empty < 0) return 'full';
-  if (!consumeMat(slots, r.mat, r.cost)) return 'poor';
-  slots[empty] = r.kind === 'drill' ? makeDrill(r.tier) : makeDispenser(r.tier);
+  if (!canCraft(slots, r)) return 'poor';
+  let target = -1;
+  if (r.kind === 'torch'){
+    for (let i = 0; i < slots.length; i++)
+      if (slots[i] && slots[i].kind === 'torch'){ target = i; break; }
+  }
+  if (target < 0){
+    for (let i = 0; i < slots.length; i++) if (!slots[i]){ target = i; break; }
+    if (target < 0) return 'full';
+  }
+  for (const c of r.costs) consumeMat(slots, c.mat, c.n);
+  if (r.kind === 'torch'){
+    if (slots[target] && slots[target].kind === 'torch') slots[target].count += r.yields;
+    else slots[target] = makeTorches(r.yields);
+  } else {
+    slots[target] = r.kind === 'drill' ? makeDrill(r.tier)
+                  : r.kind === 'disp' ? makeDispenser(r.tier)
+                  : makeGun();
+  }
   return 'ok';
 }
 
@@ -912,7 +1047,7 @@ function serializeEdits(edits){
   const a = new Array(edits.length);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    a[i] = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat];
+    a[i] = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat, e.rot || 0];
   }
   return a;
 }
@@ -920,7 +1055,7 @@ function deserializeEdits(arr){
   const out = new Array(arr.length);
   for (let i = 0; i < arr.length; i++){
     const r = arr[i];
-    out[i] = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
+    out[i] = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7] || 0);
   }
   return out;
 }
@@ -946,12 +1081,14 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
   SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, shapeSDF, makeEdit, editAABB, aabbOverlap, cullEdits,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
-  makeDrill, makeDispenser, makeStack, invMove, resizeTool, clampToolSize,
-  defaultItemSize, serializeEdits, deserializeEdits, mulberry32, hashSeed,
+  makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
+  snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
-  mineYield, placeCost, countMat, addMat, consumeMat, RECIPES, craft,
+  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft, canCraft,
+  makeGun, makeTorches,
+  HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
@@ -1049,6 +1186,14 @@ function makeTileDrawers(){
         ctx.fillStyle = '#b39a58'; ctx.fillRect(x, y, 1, 1);
       }
     },
+    [CORE.MAT.GLOWSHROOM](ctx, rng){
+      speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
+      for (let i = 0; i < 6; i++){
+        const x = (rng()*14)|0, y = (rng()*14)|0;
+        ctx.fillStyle = '#e8c4ff'; ctx.fillRect(x, y, 1, 1);
+        ctx.fillStyle = '#c490ef'; ctx.fillRect(x+1, y, 1, 1);
+      }
+    },
   };
 }
 function buildAtlas(seed){
@@ -1081,13 +1226,16 @@ function tileCanvas(matId, seed){
 // ---------- terrain shader (triplanar, pixel-crisp, single pass) ----------
 const TERRAIN_VERT = `
 attribute float aMat;
+attribute float aSky;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
+varying float vSky;
 void main(){
   vPos = position;              // chunk meshes live in world space
   vNrm = normal;
   vMat = aMat;
+  vSky = aSky;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const TERRAIN_FRAG = `
@@ -1100,9 +1248,15 @@ uniform vec3 uAmbCol;
 uniform vec3 uFogCol;
 uniform float uFogNear;
 uniform float uFogFar;
+uniform vec3 uPlayerPos;
+uniform float uLampR;
+uniform float uLampSky;
+uniform vec4 uTorch[16];
+uniform float uTorchN;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
+varying float vSky;
 void main(){
   vec3 n = normalize(vNrm);
   vec3 an = abs(n);
@@ -1117,10 +1271,30 @@ void main(){
   vec4 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy));
   float diff = max(dot(n, uSunDir), 0.0);
   float upAmb = 0.85 + 0.15 * n.y;       // cheap sky-occlusion feel
-  vec3 col = tex.rgb * min(uAmbCol * upAmb + uSunCol * diff, vec3(1.05));
+  vec3 dayLit = min(uAmbCol * upAmb + uSunCol * diff, vec3(1.05));
+  // headlamp: its own warm light, strongest where the day light isn't
+  float lampD = length(vPos - uPlayerPos);
+  float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
+  lamp = lamp * lamp * (3.0 - 2.0 * lamp);
+  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky));
+  // placed torches
+  float tl = 0.0;
+  for (int i = 0; i < 16; i++){
+    if (float(i) >= uTorchN) break;
+    float td = length(vPos - uTorch[i].xyz);
+    float t = clamp(1.0 - td / uTorch[i].w, 0.0, 1.0);
+    tl = max(tl, t * t * (3.0 - 2.0 * t));
+  }
+  vec3 torchLit = vec3(1.0, 0.72, 0.42) * (0.9 * tl);
+  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + torchLit + vec3(0.02), vec3(1.05));
+  // ores shimmer faintly in the dark so veins catch the eye
+  float dark = 1.0 - min(vSky, 1.0) * (uLampSky / 0.85);
+  if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * dark);
+  if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   float fog = smoothstep(uFogNear, uFogFar, dist);
-  gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
+  vec3 fogC = uFogCol * max(vSky, 0.03);  // fog goes black at depth
+  gl_FragColor = vec4(mix(col, fogC, fog), 1.0);
 }`;
 
 // ---------- chunk manager ----------
@@ -1134,15 +1308,15 @@ class Terrain {
     this.gen = gen;
     this.chunks = new Map();         // key -> {mesh|null}
     this.dirty = new Map();          // key -> [cx,cy,cz], pending remesh
-    this.center = [0, 0];            // chunk coords of player (x,z)
+    this.center = [0, 0, 0];         // chunk coords of player (x,y,z)
     this.radius = 3;
   }
   chunkOfWorld(x, z){ return [Math.floor(x / CORE.CHUNK_M), Math.floor(z / CORE.CHUNK_M)]; }
 
   // stream chunks around player; returns true if set changed
-  update(px, pz){
+  update(px, py, pz){
     const [ccx, ccz] = this.chunkOfWorld(px, pz);
-    this.center = [ccx, ccz];
+    this.center = [ccx, Math.floor(py / CORE.CHUNK_M), ccz];
     const want = new Set();
     const R = this.radius;
     for (let dz = -R; dz <= R; dz++)
@@ -1189,9 +1363,10 @@ class Terrain {
     if (this.dirty.size === 0) return;
     const t0 = performance.now();
     const entries = [...this.dirty.entries()];
+    const [cx, cy, cz] = this.center;
     entries.sort((A, B) => {
-      const da = (A[1][0]-this.center[0])**2 + (A[1][2]-this.center[1])**2;
-      const db = (B[1][0]-this.center[0])**2 + (B[1][2]-this.center[1])**2;
+      const da = (A[1][0]-cx)**2 + (A[1][1]-cy)**2 + (A[1][2]-cz)**2;
+      const db = (B[1][0]-cx)**2 + (B[1][1]-cy)**2 + (B[1][2]-cz)**2;
       return da - db;
     });
     for (const [key, c] of entries){
@@ -1211,6 +1386,7 @@ class Terrain {
     g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mats, 1));
+    g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
     const mesh = new THREE.Mesh(g, this.material);
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
@@ -1227,7 +1403,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4, vol: 70 };
 function loadOpts(){
   try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
   catch { return Object.assign({}, DEFAULT_OPTS); }
@@ -1264,6 +1440,13 @@ const game = {
   fHeld: false, fUsedCombo: false,
   // tools/ui state
   slots: [], hotSel: 0,
+  dispSlot: null,                     // the one special dispenser slot
+  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 },  // shared across all tools
+  undoStack: [], orbFlash: 0,
+  // survival state
+  mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
+  torches: [], entities: [], deathCache: null,
+  lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
   lastAction: 0,
   act: { t: 0, charging: false }, mouseEdge: false, actProgress: 0,
@@ -1315,7 +1498,7 @@ function initRenderer(){
 const SKY = new THREE.Color(0x8fb8e8);
 function buildScene(){
   const scene = new THREE.Scene();
-  scene.background = SKY;
+  scene.background = SKY.clone();
   game.scene = scene;
   const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 400);
   cam.rotation.order = 'YXZ';
@@ -1335,6 +1518,11 @@ function buildScene(){
       uFogCol: { value: SKY.clone() },
       uFogNear: { value: fogFar * 0.55 },
       uFogFar: { value: fogFar },
+      uPlayerPos: { value: new THREE.Vector3() },
+      uLampR: { value: 13 },
+      uLampSky: { value: 0.85 },
+      uTorch: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, -9999, 0, 1)) },
+      uTorchN: { value: 0 },
     },
     side: THREE.DoubleSide,
   });
@@ -1347,17 +1535,22 @@ function buildScene(){
   const ghostLine = new THREE.LineBasicMaterial({ color: 0xcfeeff, transparent: true, opacity: 0.85 });
   const sphereG = new THREE.SphereGeometry(0.5, 20, 14);
   const cubeG = new THREE.BoxGeometry(1, 1, 1);
+  const cylG = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
   game.ghostSet = {
     0: { fill: new THREE.Mesh(sphereG, ghostFill),
          wire: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(0.5, 12, 8)), ghostLine) },
     1: { fill: new THREE.Mesh(cubeG, ghostFill),
          wire: new THREE.LineSegments(new THREE.EdgesGeometry(cubeG), ghostLine) },
+    2: { fill: new THREE.Mesh(cylG, ghostFill),
+         wire: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1)), ghostLine) },
   };
-  for (const k of [0, 1]){
+  for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false; game.ghostSet[k].wire.visible = false;
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
+  Particles.init(scene);
+  torchSys.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -1367,7 +1560,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4];
 function buildViewmodel(cam){
   const vm = new THREE.Group();
   const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
@@ -1392,28 +1585,55 @@ function buildViewmodel(cam){
   const orb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), orbMat);
   orb.position.set(0, 0, -0.26); disp.add(orb);
 
-  vm.add(drill); vm.add(disp);
+  const gun = new THREE.Group();
+  gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.3), dark));
+  const gBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), tierMat.clone());
+  gBarrel.material.color.set(0x8a8a92);
+  gBarrel.position.set(0, 0.02, -0.2); gun.add(gBarrel);
+  const gAccent = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.02, 0.1), tierMat.clone());
+  gAccent.material.color.set(0xd84a63);
+  gAccent.position.set(0, 0.07, -0.02); gun.add(gAccent);
+  const gGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.07), grip);
+  gGrip.position.set(0, -0.11, 0.1); gun.add(gGrip);
+
+  const torch = new THREE.Group();
+  const tStick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), grip);
+  torch.add(tStick);
+  const tTip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
+  tTip.position.y = 0.21; torch.add(tTip);
+  torch.rotation.z = 0.3;
+
+  vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch);
   vm.scale.setScalar(0.5);
   vm.rotation.y = -0.22;               // angle inward so the barrel end reads
   vm.position.set(0.33, -0.27, -0.62);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, bit, ring, orb, bob: 0 };
+  game.vm = { root: vm, drill, disp, gun, torch, bit, ring, orb, bob: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
-  const it = selectedItem();
-  const kind = it && (it.kind === 'drill' || it.kind === 'disp') ? it.kind : null;
-  v.drill.visible = kind === 'drill';
-  v.disp.visible = kind === 'disp';
-  if (!kind) return;
-  const tc = new THREE.Color(TIER_COL[it.tier]);
-  if (kind === 'drill'){
+  const tool = activeTool();
+  v.drill.visible = !!tool && tool.kind === 'drill';
+  v.disp.visible = !!tool && tool.kind === 'disp';
+  v.gun.visible = !!tool && tool.kind === 'gun';
+  v.torch.visible = !!tool && tool.kind === 'torch';
+  if (!tool) return;
+  if (tool.kind === 'torch'){
+    v.torch.children[1].material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
+    return;
+  }
+  if (tool.kind === 'gun') return;
+  const tc = new THREE.Color(TIER_COL[tool.tier]);
+  if (tool.kind === 'drill'){
     v.bit.material.color.copy(tc);
     if (game.mouseL && isLocked() && game.ui === 'none') v.bit.rotation.z += dt * 22;
   } else {
     v.ring.material.color.copy(tc);
-    v.orb.material.color.set(it.loaded ? MAT_COLOR[it.loaded] : 0x222028);
-    v.orb.scale.setScalar(it.loaded ? 1 + Math.sin(performance.now() * 0.004) * 0.08 : 0.7);
+    const flash = performance.now() - game.orbFlash < 320;
+    v.orb.material.color.set(flash ? 0xff3b3b : MAT_COLOR[tool.mat]);
+    // the orb is the ammo gauge: it shrinks as the held stack runs down
+    const fill = Math.min(1, Math.max(0.45, 0.45 + tool.count / 1200));
+    v.orb.scale.setScalar(fill * (1 + Math.sin(performance.now() * 0.004) * 0.07));
   }
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
@@ -1439,6 +1659,425 @@ function buildGridViz(cell){
   game.scene.add(game.gridViz);
 }
 
+// ---------- procedural audio (no assets; built on first user gesture) ----------
+const AudioSys = {
+  ctx: null, master: null, noiseBuf: null,
+  hum: null, humGain: null, humFilter: null, ambGain: null,
+  init(){
+    if (this.ctx) return true;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = (game.opts.vol == null ? 70 : game.opts.vol) / 100;
+      this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate;
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = this.noiseBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++){
+        const w = Math.random() * 2 - 1;
+        last = (last + 0.02 * w) / 1.02;
+        d[i] = w * 0.4 + last * 2.2;
+      }
+      // persistent drill hum (gain 0 when idle)
+      this.hum = this.ctx.createOscillator();
+      this.hum.type = 'sawtooth'; this.hum.frequency.value = 60;
+      this.humFilter = this.ctx.createBiquadFilter();
+      this.humFilter.type = 'lowpass'; this.humFilter.frequency.value = 500;
+      this.humGain = this.ctx.createGain(); this.humGain.gain.value = 0;
+      this.hum.connect(this.humFilter); this.humFilter.connect(this.humGain);
+      this.humGain.connect(this.master);
+      this.hum.start();
+      // looping cave ambience, faded in with depth
+      const amb = this.ctx.createBufferSource();
+      amb.buffer = this.noiseBuf; amb.loop = true; amb.playbackRate.value = 0.3;
+      const af = this.ctx.createBiquadFilter(); af.type = 'lowpass'; af.frequency.value = 150;
+      this.ambGain = this.ctx.createGain(); this.ambGain.gain.value = 0;
+      amb.connect(af); af.connect(this.ambGain); this.ambGain.connect(this.master);
+      amb.start();
+      return true;
+    } catch (err) { this.ctx = null; return false; }
+  },
+  resume(){ if (this.init() && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {}); },
+  setVolume(v){ if (this.master) this.master.gain.value = v / 100; },
+  setHum(on, tier, progress){
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.humGain.gain.setTargetAtTime(on ? 0.045 + tier * 0.01 : 0, t, 0.05);
+    if (on){
+      this.hum.frequency.setTargetAtTime(48 + tier * 24 + progress * 65, t, 0.05);
+      this.humFilter.frequency.setTargetAtTime(380 + progress * 900, t, 0.06);
+    }
+  },
+  setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
+  burst(o){
+    if (!this.ctx) return;
+    const { dur = 0.25, freq = 900, gain = 0.22, drop = 0 } = o || {};
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.7 + Math.random() * 0.6;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = freq;
+    if (drop) f.frequency.setTargetAtTime(Math.max(120, freq - drop), t, dur * 0.5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(t, Math.random() * 0.8, dur + 0.05);
+    src.stop(t + dur + 0.1);
+  },
+  tone(o){
+    if (!this.ctx) return;
+    const { freq = 600, dur = 0.08, gain = 0.1, type = 'square' } = o || {};
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = type; osc.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  },
+  sfx(name, arg){
+    if (!this.ctx) return;
+    switch (name){
+      case 'break':
+        this.burst({ dur: 0.32, freq: Math.max(300, 800 - (arg || 1) * 90), gain: 0.3, drop: 420 });
+        this.burst({ dur: 0.14, freq: 1900, gain: 0.1 });
+        break;
+      case 'place': this.tone({ freq: 170, dur: 0.11, gain: 0.18, type: 'sine' }); this.burst({ dur: 0.08, freq: 900, gain: 0.09 }); break;
+      case 'paint': this.burst({ dur: 0.13, freq: 2300, gain: 0.08 }); break;
+      case 'deny': this.tone({ freq: 130, dur: 0.16, gain: 0.13 }); break;
+      case 'toggle': this.tone({ freq: 780, dur: 0.05, gain: 0.07 }); break;
+      case 'select': this.tone({ freq: 520, dur: 0.04, gain: 0.05 }); break;
+      case 'craft': this.tone({ freq: 660, dur: 0.09, gain: 0.09 }); this.tone({ freq: 990, dur: 0.13, gain: 0.07 }); break;
+      case 'undo': this.tone({ freq: 400, dur: 0.08, gain: 0.08, type: 'triangle' }); break;
+      case 'shot': this.burst({ dur: 0.09, freq: 2600, gain: 0.28 }); this.tone({ freq: 240, dur: 0.12, gain: 0.16, type: 'sawtooth' }); break;
+      case 'hit': this.burst({ dur: 0.08, freq: 700, gain: 0.16 }); break;
+      case 'die': this.burst({ dur: 0.3, freq: 500, gain: 0.2, drop: 300 }); this.tone({ freq: 220, dur: 0.25, gain: 0.1, type: 'triangle' }); break;
+      case 'hurt': this.tone({ freq: 110, dur: 0.2, gain: 0.2, type: 'sawtooth' }); break;
+      case 'eat': this.tone({ freq: 340, dur: 0.06, gain: 0.1, type: 'sine' }); this.tone({ freq: 260, dur: 0.09, gain: 0.1, type: 'sine' }); break;
+      case 'step': {
+        const soft = arg === CORE.MAT.GRASS || arg === CORE.MAT.SAND;
+        this.burst({ dur: soft ? 0.07 : 0.045, freq: soft ? 480 : 1500, gain: soft ? 0.06 : 0.05 });
+        break;
+      }
+    }
+  },
+};
+
+// ---------- particles (single pooled Points cloud) ----------
+const Particles = {
+  MAX: 800, cursor: 0, points: null, colAttr: null, posAttr: null,
+  vel: null, life: null,
+  init(scene){
+    const pos = new Float32Array(this.MAX * 3).fill(1e6);
+    this.vel = new Float32Array(this.MAX * 3);
+    this.life = new Float32Array(this.MAX);
+    const g = new THREE.BufferGeometry();
+    this.posAttr = new THREE.BufferAttribute(pos, 3);
+    this.posAttr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('position', this.posAttr);
+    this.colAttr = new THREE.BufferAttribute(new Float32Array(this.MAX * 3), 3);
+    this.colAttr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('color', this.colAttr);
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.14, vertexColors: true }));
+    this.points.frustumCulled = false;
+    scene.add(this.points);
+  },
+  burst(x, y, z, radius, colors, n, speed){
+    if (!this.points || !colors.length) return;
+    const P = this.posAttr.array, C = this.colAttr.array;
+    for (let i = 0; i < n; i++){
+      const idx = this.cursor; this.cursor = (this.cursor + 1) % this.MAX;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+      const sx = Math.sin(ph) * Math.cos(th), sy = Math.cos(ph), sz = Math.sin(ph) * Math.sin(th);
+      const rr = radius * Math.cbrt(Math.random());
+      P[idx*3] = x + sx * rr; P[idx*3+1] = y + sy * rr; P[idx*3+2] = z + sz * rr;
+      const sp = speed * (0.4 + Math.random() * 0.9);
+      this.vel[idx*3] = sx * sp;
+      this.vel[idx*3+1] = Math.abs(sy) * sp * 0.7 + 1.4;
+      this.vel[idx*3+2] = sz * sp;
+      this.life[idx] = 0.45 + Math.random() * 0.5;
+      const c = new THREE.Color(colors[(Math.random() * colors.length) | 0]);
+      const sh = 0.65 + Math.random() * 0.55;
+      C[idx*3] = c.r * sh; C[idx*3+1] = c.g * sh; C[idx*3+2] = c.b * sh;
+    }
+    this.posAttr.needsUpdate = true; this.colAttr.needsUpdate = true;
+  },
+  update(dt){
+    if (!this.points) return;
+    const P = this.posAttr.array;
+    let any = false;
+    for (let i = 0; i < this.MAX; i++){
+      if (this.life[i] <= 0) continue;
+      any = true;
+      this.life[i] -= dt;
+      if (this.life[i] <= 0){ P[i*3+1] = 1e6; continue; }
+      this.vel[i*3+1] -= 15 * dt;
+      P[i*3] += this.vel[i*3] * dt;
+      P[i*3+1] += this.vel[i*3+1] * dt;
+      P[i*3+2] += this.vel[i*3+2] * dt;
+    }
+    if (any) this.posAttr.needsUpdate = true;
+  },
+};
+
+// ---------- day/night ----------
+const DAY_CYCLE = 600;                       // seconds per full day
+const SKY_NIGHT = new THREE.Color(0x0b1020);
+const SUN_BASE = new THREE.Color(0.42, 0.40, 0.36);
+const AMB_DAY = new THREE.Color(0.62, 0.63, 0.68);
+const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
+function updateDayNight(dt){
+  if (game.ui === 'none') game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
+  const phase = game.timeOfDay * Math.PI * 2;
+  const sunH = Math.sin(phase);
+  const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
+  game.dayF = dayF;
+  const u = game.terrainMat.uniforms;
+  u.uSunDir.value.set(Math.cos(phase) * 0.5, Math.max(sunH, 0.12), 0.35).normalize();
+  u.uSunCol.value.copy(SUN_BASE).multiplyScalar(dayF);
+  u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
+  u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
+  game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
+  u.uFogCol.value.copy(game.skyNow);
+}
+
+// ---------- torches ----------
+const torchSys = {
+  group: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length){
+      const c = this.group.children.pop();
+      this.group.remove(c);
+    }
+    for (const t of game.torches){
+      const g = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), new THREE.MeshBasicMaterial({ color: 0x5a4632 }));
+      stick.position.y = 0.21;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
+      tip.position.y = 0.46;
+      g.add(stick); g.add(tip);
+      g.position.set(t[0], t[1], t[2]);
+      this.group.add(g);
+    }
+  },
+  add(x, y, z){ game.torches.push([x, y, z]); this.rebuild(); markSave(); },
+  // remove torches near a point; returns how many were popped
+  removeNear(x, y, z, r){
+    const keep = [], popped = game.torches.length;
+    for (const t of game.torches){
+      if (Math.hypot(t[0]-x, t[1]-y, t[2]-z) > r) keep.push(t);
+    }
+    game.torches = keep;
+    const n = popped - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+  // feed the nearest 16 torches to the shader, with flicker
+  updateUniforms(now){
+    const u = game.terrainMat.uniforms;
+    const near = [];
+    for (let i = 0; i < game.torches.length; i++){
+      const t = game.torches[i];
+      const d = Math.hypot(t[0]-game.pos.x, t[1]-game.pos.y, t[2]-game.pos.z);
+      if (d < 50) near.push([d, i, t]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const n = Math.min(16, near.length);
+    for (let i = 0; i < n; i++){
+      const t = near[i][2];
+      const flick = 9.5 + Math.sin(now * 0.011 + near[i][1] * 2.7) * 0.8;
+      u.uTorch.value[i].set(t[0], t[1] + 0.45, t[2], flick);
+    }
+    u.uTorchN.value = n;
+  },
+};
+function addTorchesToInv(n){
+  for (const s of game.slots) if (s && s.kind === 'torch'){ s.count += n; return true; }
+  for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = CORE.makeTorches(n); return true; }
+  return false;
+}
+
+// ---------- entities ----------
+const ENT_DEF = {
+  grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
+  lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
+};
+function entMesh(type){
+  const g = new THREE.Group();
+  if (type === 'grazer'){
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.9), new THREE.MeshBasicMaterial({ color: 0xc8a24b }));
+    body.position.y = 0.4;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.32, 0.3), new THREE.MeshBasicMaterial({ color: 0x8a6f33 }));
+    head.position.set(0, 0.55, -0.55);
+    g.add(body); g.add(head);
+  } else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.55), new THREE.MeshBasicMaterial({ color: 0x1c1626 }));
+    body.position.y = 0.55;
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2b2b });
+    for (const sx of [-0.14, 0.14]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.06), eyeM);
+      eye.position.set(sx, 0.82, -0.26);
+      g.add(eye);
+    }
+    g.add(body);
+  }
+  return g;
+}
+function reviveEntity(type, x, y, z, hp){
+  return { type, x, y, z, vx: 0, vy: 0, vz: 0, hp,
+           tt: 0, tx: x, tz: z, flash: 0, atkT: 0, fleeT: 0, mesh: null };
+}
+function spawnEntity(type, x, y, z){
+  const e = reviveEntity(type, x, y, z, ENT_DEF[type].hp);
+  game.entities.push(e);
+  return e;
+}
+function killEntity(e, byPlayer){
+  const i = game.entities.indexOf(e);
+  if (i >= 0) game.entities.splice(i, 1);
+  if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+  Particles.burst(e.x, e.y + 0.5, e.z, 0.5, [e.type === 'grazer' ? 0xc8a24b : 0x1c1626], 24, 2.2);
+  AudioSys.sfx('die');
+  if (byPlayer){
+    if (e.type === 'grazer'){ CORE.addMat(game.slots, CORE.MAT.GLOWSHROOM, 8); toast('+8 glowshroom'); }
+    else { CORE.addMat(game.slots, CORE.MAT.IRON, 4); toast('+4 iron (scavenged)'); }
+    refreshHotbar(); refreshToolHUD();
+  }
+  markSave();
+}
+function hurtEntity(e, dmg, kx, kz){
+  e.hp -= dmg;
+  e.flash = 0.15;
+  e.fleeT = 6;
+  e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
+  AudioSys.sfx('hit');
+  if (e.hp <= 0) killEntity(e, true);
+}
+function nearestTorchDist(x, y, z){
+  let best = 1e9;
+  for (const t of game.torches){
+    const d = Math.hypot(t[0]-x, t[1]-y, t[2]-z);
+    if (d < best) best = d;
+  }
+  return best;
+}
+function trySpawnEntities(){
+  if (game.mode !== 'survival') return;
+  const counts = { grazer: 0, lurker: 0 };
+  for (const e of game.entities) counts[e.type]++;
+  const a = Math.random() * Math.PI * 2;
+  const d = 22 + Math.random() * 20;
+  const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+  const h = game.gen.height(x, z);
+  const night = game.dayF < 0.25;
+  // lurkers spawn in the dark: night surface, or an underground air pocket
+  if (counts.lurker < ENT_DEF.lurker.cap){
+    if (night && nearestTorchDist(x, h, z) > 12){
+      spawnEntity('lurker', x, h + 0.5, z); return;
+    }
+    const uy = h - 8 - Math.random() * 40;
+    if (uy > CORE.BEDROCK_Y + 2 && CORE.evalSDF(x, uy, z, nearEdits([x-1,uy-1,z-1,x+1,uy+1,z+1]), game.gen) > 0.4 &&
+        nearestTorchDist(x, uy, z) > 12){
+      spawnEntity('lurker', x, uy, z); return;
+    }
+  }
+  // grazers wander the surface by day
+  if (counts.grazer < ENT_DEF.grazer.cap && game.dayF > 0.4){
+    spawnEntity('grazer', x, h + 0.5, z);
+  }
+}
+function updateEntities(dt, now){
+  if (game.mode !== 'survival') return;
+  game.spawnT += dt;
+  if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
+  for (let i = game.entities.length - 1; i >= 0; i--){
+    const e = game.entities[i];
+    const def = ENT_DEF[e.type];
+    const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    if (pd > 70){                                  // too far — despawn
+      if (e.mesh){ game.scene.remove(e.mesh); }
+      game.entities.splice(i, 1);
+      continue;
+    }
+    // steering
+    e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
+    let sx = 0, sz = 0, sp = def.speed;
+    if (e.type === 'lurker' && pd < 15){
+      sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+      if (d3 < 1.6 && e.atkT <= 0){
+        e.atkT = 1;
+        damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5);
+      }
+    } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
+      sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else {
+      if (e.tt <= 0){ e.tt = 4 + Math.random() * 5; e.tx = e.x + (Math.random() - 0.5) * 14; e.tz = e.z + (Math.random() - 0.5) * 14; }
+      sx = e.tx - e.x; sz = e.tz - e.z;
+      if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+    }
+    const sl = Math.hypot(sx, sz) || 1;
+    const wx = sx / sl * sp, wz = sz / sl * sp;
+    e.vx += (wx - e.vx) * Math.min(1, 8 * dt);
+    e.vz += (wz - e.vz) * Math.min(1, 8 * dt);
+    e.vy -= 22 * dt;
+    const ox = e.x;
+    const oz = e.z;
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    // sphere-vs-SDF collide
+    const box = [e.x - 1.2, e.y - 1.2, e.z - 1.2, e.x + 1.2, e.y + def.h + 1.2, e.z + 1.2];
+    const le = nearEdits(box);
+    let grounded = false;
+    for (let it = 0; it < 2; it++){
+      const cy = e.y + def.r;
+      const dd = sdfWorld(e.x, cy, e.z, le);
+      if (dd < def.r){
+        const g = CORE.gradSDF(e.x, cy, e.z, le, 0.1, game.gen);
+        const push = Math.min(def.r - dd, 0.4);
+        e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
+        if (g[1] > 0.5){ grounded = true; if (e.vy < 0) e.vy = 0; }
+      }
+    }
+    // hop when stuck against a wall
+    if (grounded && sl > 1 && Math.hypot(e.x - ox, e.z - oz) < sp * dt * 0.25) e.vy = 6.5;
+    if (e.y < CORE.BEDROCK_Y + 0.3){ e.y = CORE.BEDROCK_Y + 0.3; e.vy = 0; }
+    // mesh
+    if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (Math.hypot(e.vx, e.vz) > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    e.mesh.position.y += Math.abs(Math.sin(now * 0.008 + i)) * 0.05;
+    const tint = e.flash > 0 ? 4 : 1;
+    e.mesh.traverse(o => { if (o.isMesh) o.material.opacity = 1; });
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.08 : 1);
+    void tint;
+  }
+}
+// closest entity intersecting the view ray
+function entityOnRay(maxDist){
+  if (!game.entities.length) return null;
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  let best = null, bestT = maxDist;
+  for (const e of game.entities){
+    const def = ENT_DEF[e.type];
+    const vx = e.x - o.x, vy = e.y + def.h * 0.6 - o.y, vz = e.z - o.z;
+    const t = vx * dir.x + vy * dir.y + vz * dir.z;
+    if (t < 0 || t > bestT) continue;
+    const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
+    if (Math.hypot(px, py, pz) < def.r + 0.35){ best = e; bestT = t; }
+  }
+  return best;
+}
+
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
@@ -1460,12 +2099,13 @@ function bindInput(){
     if (!game.running || game.ui !== 'none') return;
     if (!isLocked()){ requestLock(); return; }
     if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
+    if (e.button === 1){ e.preventDefault(); pickMaterial(); }
     if (e.button === 2){
-      const it = selectedItem();
-      if (it && (it.kind === 'drill' || it.kind === 'disp')){
-        it.shape = it.shape === 1 ? 0 : 1;
-        toast(it.shape === 1 ? 'cube' : 'sphere');
-        markSave();
+      if (activeTool()){
+        game.tool.shape = (game.tool.shape + 1) % 3;
+        toast(CORE.SHAPE_NAME[game.tool.shape]);
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
       }
     }
   });
@@ -1473,11 +2113,17 @@ function bindInput(){
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
-    const it = selectedItem();
-    if (it && (it.kind === 'drill' || it.kind === 'disp')){
-      CORE.resizeTool(it, e.deltaY < 0 ? 1 : -1);
-      refreshToolHUD(); markSave();
+    const tool = activeTool();
+    if (!tool) return;
+    const dir = e.deltaY < 0 ? 1 : -1;
+    if (game.keys['KeyG'] && game.tool.shape === 1 && !game.snapOn){
+      // hold G + scroll: rotate the cube in 15° steps (free-place only)
+      game.tool.rot = (game.tool.rot + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
+      toast('rotate ' + Math.round(game.tool.rot * 180 / Math.PI) + '°');
+    } else {
+      game.tool.size = CORE.scrollSize(game.tool.size, tool.tier, dir);
     }
+    refreshToolHUD(); markSave();
   }, { passive: true });
 
   document.addEventListener('keydown', e => {
@@ -1502,7 +2148,21 @@ function bindInput(){
       }
       return;
     }
-    if (code === 'KeyZ'){ game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); }
+    if (code === 'KeyZ' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); undoEdit(); return; }
+    if (code === 'KeyZ'){
+      if (game.mode === 'survival'){ toast('flying is creative-only'); }
+      else { game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); AudioSys.sfx('toggle'); }
+    }
+    if (code === 'KeyH'){ tryEat(); }
+    if (code === 'KeyR'){
+      const tool = activeTool();
+      if (tool && tool.kind === 'disp'){
+        game.tool.mode = game.tool.mode === 'paint' ? 'build' : 'paint';
+        toast(game.tool.mode === 'paint' ? 'paint mode — repaints existing ground' : 'build mode');
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
+      }
+    }
     if (code === 'KeyE'){ openInventory(); }
     if (code === 'KeyQ'){ openCraft(); }
   });
@@ -1513,20 +2173,22 @@ function bindInput(){
       if (!game.fUsedCombo){
         game.snapOn = !game.snapOn;
         toast(game.snapOn ? 'grid snap on' : 'grid snap off');
+        AudioSys.sfx('toggle');
         refreshToolHUD();
       }
     }
   });
   document.addEventListener('pointerlockchange', () => {
     if (!game.running) return;
-    if (!isLocked() && game.ui === 'none'){
+    if (isLocked()){ AudioSys.resume(); return; }
+    if (game.ui === 'none'){
       openPause(); // Esc (or lost lock) -> pause
     }
   });
 }
 
 // ---------- player physics ----------
-function collidePlayer(edits){
+function collidePlayer(edits, still){
   // capsule approximated by 3 spheres; iterative gradient pushout
   const r = PLAYER.radius;
   const h = playerHeight();
@@ -1538,10 +2200,17 @@ function collidePlayer(edits){
       const d = sdfWorld(game.pos.x, cy, game.pos.z, edits);
       if (d < r){
         const g = CORE.gradSDF(game.pos.x, cy, game.pos.z, edits, 0.1, game.gen);
-        const push = r - d;
-        game.pos.x += g[0] * push;
-        game.pos.y += g[1] * push;
-        game.pos.z += g[2] * push;
+        const push = Math.min(r - d, 0.5);
+        if (still && g[1] > 0.6){
+          // standing on walkable ground with no input: resolve the
+          // penetration straight up so the slope's normal can't drag the
+          // player downhill frame by frame
+          game.pos.y += push / g[1];
+        } else {
+          game.pos.x += g[0] * push;
+          game.pos.y += g[1] * push;
+          game.pos.z += g[2] * push;
+        }
         const vn = game.vel.x*g[0] + game.vel.y*g[1] + game.vel.z*g[2];
         if (vn < 0){
           game.vel.x -= g[0]*vn; game.vel.y -= g[1]*vn; game.vel.z -= g[2]*vn;
@@ -1550,6 +2219,7 @@ function collidePlayer(edits){
       }
     }
   }
+  if (still && game.grounded){ game.vel.x = 0; game.vel.z = 0; }
   // extra ground probe (for jump when standing exactly on surface)
   if (!game.grounded && !game.fly){
     const d = sdfWorld(game.pos.x, game.pos.y + r, game.pos.z, edits);
@@ -1601,29 +2271,62 @@ function updatePlayer(dt){
   const h = playerHeight();
   const box = [game.pos.x - 1.5, game.pos.y - 1.5, game.pos.z - 1.5,
                game.pos.x + 1.5, game.pos.y + h + 1.5, game.pos.z + 1.5];
-  collidePlayer(nearEdits(box));
+  const still = !game.fly && fwd === 0 && str === 0 && !(canMove && k['Space']);
+  const wasGrounded = game.grounded;
+  const vyBefore = game.vel.y;
+  collidePlayer(nearEdits(box), still);
+
+  // fall damage: compare impact speed on the grounded transition
+  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival'){
+    const impact = -vyBefore;
+    if (impact > 11) damagePlayer(Math.round((impact - 11) * 5), 0, 0);
+  }
 
   // never fall through bedrock even at low fps
   if (game.pos.y < CORE.BEDROCK_Y + 0.2){ game.pos.y = CORE.BEDROCK_Y + 0.2; if (game.vel.y < 0) game.vel.y = 0; }
 
   game.camera.position.set(game.pos.x, game.pos.y + h - PLAYER.eyeGap, game.pos.z);
   game.camera.rotation.set(game.pitch, game.yaw, 0);
+
+  // footsteps
+  const spd = Math.hypot(game.vel.x, game.vel.z);
+  if (game.grounded && !game.fly && spd > 1.2){
+    game.stepAcc = (game.stepAcc || 0) + spd * dt;
+    if (game.stepAcc > 2.3){
+      game.stepAcc = 0;
+      const box = [game.pos.x - 1, game.pos.y - 1, game.pos.z - 1, game.pos.x + 1, game.pos.y + 1, game.pos.z + 1];
+      AudioSys.sfx('step', CORE.materialAt(game.pos.x, game.pos.y - 0.15, game.pos.z, nearEdits(box), game.gen));
+    }
+  }
 }
 
 // ---------- tools / ghost / actions ----------
 function selectedItem(){ return game.slots[game.hotSel] || null; }
 
-function itemShape(it){ return it.shape === 1 ? 1 : 0; }
+// What the player is wielding right now. Holding a material stack while a
+// dispenser sits in the dispenser slot auto-equips that dispenser loaded
+// with the held material.
+function activeTool(){
+  const it = selectedItem();
+  if (!it) return null;
+  if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
+  if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
+  if (it.kind === 'mat' && game.dispSlot)
+    return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
+  return null;
+}
 
-// ghost position: fixed distance in front of the player normally; in grid
-// mode, raymarch onto the surface and snap to the grid
-function ghostPlacement(it){
+// ghost position: fixed player-adjustable distance (V closer / B farther)
+// normally; in grid mode, raymarch onto the surface and snap to the tiling
+// lattice so placements connect flush
+function ghostPlacement(eff){
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
   const reach = PLAYER.reach;
   if (!game.snapOn){
-    const tt = Math.min(reach, 3.2 + it.size * 0.55);
+    const tt = Math.min(reach, Math.max(1.0, game.tool.dist));
     return { x: o.x + dir.x*tt, y: o.y + dir.y*tt, z: o.z + dir.z*tt };
   }
   const segBox = [
@@ -1637,44 +2340,46 @@ function ghostPlacement(it){
     if (d < 0.02){ hit = t; break; }
     t += Math.max(0.045, d * 0.5);
   }
-  const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + it.size * 0.6);
-  let cx = o.x + dir.x*tt, cy = o.y + dir.y*tt, cz = o.z + dir.z*tt;
-  if (game.snapOn){
-    const cell = CORE.GRID_SIZES[game.gridIdx];
-    [cx, cy, cz] = CORE.snapVec(cx, cy, cz, cell);
-  }
+  const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + eff * 0.6);
+  const cell = CORE.GRID_SIZES[game.gridIdx];
+  const [cx, cy, cz] = CORE.snapPlace(o.x + dir.x*tt, o.y + dir.y*tt, o.z + dir.z*tt, eff, cell);
   return { x: cx, y: cy, z: cz };
 }
 
 function updateGhost(){
-  const it = selectedItem();
-  const usable = it && (it.kind === 'drill' || it.kind === 'disp') && game.ui === 'none' && isLocked();
-  for (const k of [0, 1]){
+  const tool = activeTool();
+  const usable = tool && (tool.kind === 'drill' || tool.kind === 'disp') &&
+                 game.ui === 'none' && isLocked();
+  for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
   }
   if (game.gridViz) game.gridViz.visible = false;
   if (!usable){ game.ghostPos = null; return; }
 
-  const p = ghostPlacement(it);
+  const eff = CORE.effSize(game.tool.size, tool.tier);
+  game.ghostEff = eff;
+  const p = ghostPlacement(eff);
   game.ghostPos = p;
-  const shape = itemShape(it);
-  const gs = game.ghostSet[shape];
-  const isDisp = it.kind === 'disp';
-  gs.fill.material.color.set(isDisp ? 0x8bff9e : 0x6fd3ff);
+  const gs = game.ghostSet[game.tool.shape];
+  const paint = tool.kind === 'disp' && game.tool.mode === 'paint';
+  gs.fill.material.color.set(paint ? 0xffb44d : tool.kind === 'disp' ? 0x8bff9e : 0x6fd3ff);
   gs.fill.visible = true; gs.wire.visible = true;
   gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
-  gs.fill.scale.setScalar(it.size); gs.wire.scale.setScalar(it.size);
+  gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
+  const rot = editRot(game.tool.shape);
+  gs.fill.rotation.y = rot; gs.wire.rotation.y = rot;
+  // charging feedback: the shape visibly "fills in" as the action completes
+  gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
 
   if (game.snapOn){
-    const cell = CORE.GRID_SIZES[game.gridIdx];
-    if (!game.gridViz || game.gridVizCell !== cell) buildGridViz(cell);
+    // visualize the actual placement lattice (spacing = shape size when the
+    // grid cell is smaller), anchored on the ghost's bottom face
+    const s = CORE.snapSpacing(eff, CORE.GRID_SIZES[game.gridIdx]);
+    if (!game.gridViz || game.gridVizCell !== s) buildGridViz(s);
     game.gridViz.visible = true;
-    // sit the grid just under the ghost, snapped to the grid planes
-    game.gridViz.position.set(
-      CORE.snapVal(p.x, cell),
-      CORE.snapVal(p.y - it.size * 0.5, cell),
-      CORE.snapVal(p.z, cell));
+    const h = eff * 0.5;
+    game.gridViz.position.set(p.x - h, p.y - h, p.z - h);
   }
 }
 
@@ -1684,70 +2389,258 @@ function applyEdit(e){
   markSave();
 }
 
-function doMine(it, p, shape){
-  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, it.size, 0);
+function editRot(shape){
+  return (shape === 1 && !game.snapOn) ? game.tool.rot : 0;
+}
+function yieldColors(got){
+  const cols = [];
+  for (const m in got) cols.push(MAT_COLOR[m]);
+  return cols;
+}
+function doMine(tool, p, shape, eff){
+  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape));
   const got = CORE.mineYield(game.edits, e, game.gen);
+  let units = 0, hw = 0;
+  for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+  if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
+  game.undoStack.push({ edit: e, type: 'mine', gained: got });
+  if (game.undoStack.length > 64) game.undoStack.shift();
   const parts = [];
   for (const m in got){
     if (CORE.addMat(game.slots, +m, got[m])) parts.push('+' + got[m] + ' ' + CORE.MAT_NAME[m]);
     else parts.push('inventory full — lost ' + got[m] + ' ' + CORE.MAT_NAME[m]);
   }
+  const poppedTorches = torchSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
+  if (poppedTorches){ addTorchesToInv(poppedTorches); parts.push('+' + poppedTorches + ' torch'); }
   if (parts.length) toast(parts.join('  ·  '));
-  refreshHotbar();
+  AudioSys.sfx('break', hw / units);
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
+  refreshHotbar(); refreshToolHUD();
 }
-function doPlace(it, p, shape){
-  const e = CORE.makeEdit(1, shape, p.x, p.y, p.z, it.size, it.loaded);
-  const cost = CORE.placeCost(game.edits, e, game.gen);
+function doPlace(tool, p, shape, eff){
+  const paint = game.tool.mode === 'paint';
+  const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape));
+  const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
+                     : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
-  if (!CORE.consumeMat(game.slots, it.loaded, cost)){
-    toast('need ' + cost + ' ' + CORE.MAT_NAME[it.loaded] + ' — have ' + CORE.countMat(game.slots, it.loaded));
+  if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, tool.mat, cost)){
+    toast('need ' + cost + ' ' + CORE.MAT_NAME[tool.mat] + ' — have ' + CORE.countMat(game.slots, tool.mat));
+    game.orbFlash = performance.now();
+    AudioSys.sfx('deny');
     return;
   }
   applyEdit(e);
-  refreshHotbar();
+  game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat,
+                        cost: game.mode === 'creative' ? 0 : cost });
+  if (game.undoStack.length > 64) game.undoStack.shift();
+  toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat] + (paint ? ' (painted)' : ''));
+  AudioSys.sfx(paint ? 'paint' : 'place');
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[tool.mat]], Math.min(40, 8 + cost / 6), 1.6);
+  refreshHotbar(); refreshToolHUD();
+}
+function undoEdit(){
+  if (!game.edits.length){ toast('nothing to undo'); return; }
+  const e = game.edits.pop();
+  game.terrain.invalidate(e);
+  const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
+    ? game.undoStack.pop() : null;
+  if (rec){
+    if (rec.type === 'mine'){
+      for (const m in rec.gained){
+        const have = CORE.countMat(game.slots, +m);
+        CORE.consumeMat(game.slots, +m, Math.min(have, rec.gained[m]));
+      }
+    } else {
+      CORE.addMat(game.slots, rec.mat, rec.cost);
+    }
+  }
+  toast('undo');
+  AudioSys.sfx('undo');
+  refreshHotbar(); refreshToolHUD(); markSave();
 }
 
 // Hold LMB to break one shape over the tier's mine time (drill keeps cycling
 // while held). Dispenser builds one shape per click — hold to charge, release
 // cancels, and it never auto-repeats. Diamond tier is instant.
+// duration of the pending action, cached per ghost target (recomputed when
+// the target moves — mine time scales with solid volume and hardness, build
+// time with the volume actually being filled)
+function actionPlan(tool, p, shape, eff){
+  const key = tool.kind + tool.tier + '|' + (tool.mat || 0) + '|' + game.tool.mode + '|' + shape + '|' + eff.toFixed(2) + '|' +
+    Math.round(p.x * 2) + ',' + Math.round(p.y * 2) + ',' + Math.round(p.z * 2);
+  if (game.act.key === key) return game.act.plan;
+  const rot = editRot(shape);
+  let plan;
+  if (tool.kind === 'drill'){
+    const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, rot);
+    const dur = CORE.mineDuration(tool.tier, CORE.mineYield(game.edits, e, game.gen));
+    plan = { dur: (game.mode === 'creative' && dur > 0) ? 0 : dur };
+  } else {
+    const paint = game.tool.mode === 'paint';
+    const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, rot);
+    const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
+                       : CORE.placeCost(game.edits, e, game.gen);
+    plan = { dur: cost === 0 ? -1 : game.mode === 'creative' ? 0 : CORE.placeDuration(tool.tier, cost) };
+  }
+  game.act.key = key; game.act.plan = plan;
+  return plan;
+}
+
 function tryAction(dt, now){
-  const it = selectedItem();
+  const tool = activeTool();
   const edge = game.mouseEdge; game.mouseEdge = false;
   game.actProgress = 0;
-  const usable = it && (it.kind === 'drill' || it.kind === 'disp') &&
-                 game.ui === 'none' && isLocked() && game.ghostPos;
-  if (!usable){ game.act.t = 0; game.act.charging = false; return; }
-  const isDisp = it.kind === 'disp';
-  const dur = CORE.TIER_TIME[it.tier];
-  const p = game.ghostPos, shape = itemShape(it);
+  if (!tool || game.ui !== 'none' || !isLocked()){
+    game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return;
+  }
 
-  if (!isDisp){
-    if (!game.mouseL){ game.act.t = 0; return; }
-    if (dur === 0){
-      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(it, p, shape); }
-      return;
+  // blaster: hitscan, hold-fire at 2/s
+  if (tool.kind === 'gun'){
+    AudioSys.setHum(false, 0, 0);
+    if (game.mouseL && now - game.lastShot > 500){
+      game.lastShot = now;
+      AudioSys.sfx('shot');
+      game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + 0.025);
+      const ent = entityOnRay(45);
+      if (ent){
+        hurtEntity(ent, 18, (ent.x - game.pos.x) * 0.8, (ent.z - game.pos.z) * 0.8);
+        Particles.burst(ent.x, ent.y + 0.6, ent.z, 0.3, [0xff5544], 10, 2);
+      }
     }
-    game.act.t += dt;
-    game.actProgress = Math.min(1, game.act.t / dur);
-    if (game.act.t >= dur){ game.act.t = 0; doMine(it, p, shape); }
+    return;
+  }
+  // torch: place one on the surface you're looking at
+  if (tool.kind === 'torch'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no surface in reach'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      torchSys.add(hit[0], hit[1], hit[2]);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
     return;
   }
 
-  if (!it.loaded){ if (edge) toast('dispenser empty — load a material (E)'); return; }
-  if (dur === 0){
-    if (edge) doPlace(it, p, shape);
+  // drill doubles as the melee weapon: entities in reach take priority
+  if (tool.kind === 'drill' && game.mouseL){
+    const ent = entityOnRay(PLAYER.reach * 0.7);
+    if (ent){
+      AudioSys.setHum(false, 0, 0);
+      if (edge || now - game.lastMelee > 450){
+        game.lastMelee = now;
+        hurtEntity(ent, 6 + tool.tier * 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
+      }
+      return;
+    }
+  }
+
+  const usable = game.ghostPos;
+  if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
+  const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
+
+  if (tool.kind === 'drill'){
+    if (!game.mouseL){ game.act.t = 0; AudioSys.setHum(false, 0, 0); return; }
+    const plan = actionPlan(tool, p, shape, eff);
+    if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
+    if (plan.dur === 0){
+      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(tool, p, shape, eff); }
+      return;
+    }
+    game.act.t += dt;
+    game.actProgress = Math.min(1, game.act.t / plan.dur);
+    AudioSys.setHum(true, tool.tier, game.actProgress);
+    if (Math.random() < dt * 22)
+      Particles.burst(p.x, p.y, p.z, eff * 0.4, [0x9a9aa0], 2, 1.2);
+    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMine(tool, p, shape, eff); }
+    return;
+  }
+
+  // dispenser: one placement per click, consumes the held material by volume
+  AudioSys.setHum(false, 0, 0);
+  const plan = actionPlan(tool, p, shape, eff);
+  if (plan.dur < 0) return;                                       // nothing to fill/paint
+  if (plan.dur === 0){
+    if (edge) doPlace(tool, p, shape, eff);
     return;
   }
   if (edge){ game.act.charging = true; game.act.t = 0; }
   if (!game.mouseL){ game.act.charging = false; game.act.t = 0; return; }
   if (game.act.charging){
     game.act.t += dt;
-    game.actProgress = Math.min(1, game.act.t / dur);
-    if (game.act.t >= dur){
-      game.act.charging = false; game.act.t = 0;
-      doPlace(it, p, shape);
+    game.actProgress = Math.min(1, game.act.t / plan.dur);
+    if (game.act.t >= plan.dur){
+      game.act.charging = false; game.act.t = 0; game.act.key = null;
+      doPlace(tool, p, shape, eff);
     }
+  }
+}
+
+// raymarch the view ray to the first surface within reach
+function surfaceHit(){
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const edits = nearEdits(segBox);
+  let t = 0.4;
+  for (let i = 0; i < 96 && t < PLAYER.reach; i++){
+    const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+    const d = sdfWorld(x, y, z, edits);
+    if (d < 0.02) return [x, y, z];
+    t += Math.max(0.045, d * 0.5);
+  }
+  return null;
+}
+
+// middle click: pick the material you're looking at into your hand
+function pickMaterial(){
+  if (!game.running || !isLocked() || game.ui !== 'none') return;
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const edits = nearEdits(segBox);
+  let t = 0.4, hit = null;
+  for (let i = 0; i < 96 && t < PLAYER.reach; i++){
+    const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+    const d = sdfWorld(x, y, z, edits);
+    if (d < 0.02){ hit = [x, y, z]; break; }
+    t += Math.max(0.045, d * 0.5);
+  }
+  if (!hit){ toast('nothing in reach'); return; }
+  const m = CORE.materialAt(hit[0], hit[1] - 0.05, hit[2], edits, game.gen);
+  if (m === CORE.MAT.BEDROCK){ toast('bedrock is not collectable'); return; }
+  let idx = -1;
+  for (let i = 0; i < 40; i++){
+    const s = game.slots[i];
+    if (s && s.kind === 'mat' && s.mat === m){ idx = i; break; }
+  }
+  if (idx < 0){ toast('no ' + CORE.MAT_NAME[m] + ' in inventory'); return; }
+  if (idx < 10){ game.hotSel = idx; }
+  else {
+    const tmp = game.slots[game.hotSel];
+    game.slots[game.hotSel] = game.slots[idx];
+    game.slots[idx] = tmp;
+  }
+  toast(CORE.MAT_NAME[m]);
+  AudioSys.sfx('select');
+  refreshHotbar(); refreshToolHUD();
+}
+
+// V/B: pull the ghost closer / push it farther (free-place mode only)
+function updateGhostDist(dt){
+  if (game.ui !== 'none' || !isLocked() || game.snapOn) return;
+  const k = game.keys;
+  let d = 0;
+  if (k['KeyV']) d -= 1;
+  if (k['KeyB']) d += 1;
+  if (d){
+    game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist + d * 6 * dt));
+    refreshToolHUD(); markSave();
   }
 }
 
@@ -1757,13 +2650,22 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
-    : it.kind + it.tier + '.' + (it.kind === 'disp' ? (it.loaded || 0) : 0);
+    : it.kind === 'gun' ? 'gun' : it.kind === 'torch' ? 'torch' : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
   const c = cv.getContext('2d');
   if (it.kind === 'mat'){
     c.drawImage(tileCanvas(it.mat, game.seed || 1), 0, 0);
+  } else if (it.kind === 'gun'){
+    c.fillStyle = '#5a4632'; c.fillRect(4, 9, 3, 5);
+    c.fillStyle = '#2f2d38'; c.fillRect(3, 6, 9, 4);
+    c.fillStyle = '#3c3a44'; c.fillRect(12, 7, 3, 2);
+    c.fillStyle = '#d84a63'; c.fillRect(6, 5, 3, 1); c.fillRect(13, 7, 1, 1);
+  } else if (it.kind === 'torch'){
+    c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
+    c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
+    c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
   } else {
     const col = TIER_COL[it.tier];
     if (it.kind === 'drill'){
@@ -1781,14 +2683,8 @@ function itemIconURL(it){
       c.fillStyle = '#5a4632'; c.fillRect(2, 10, 3, 4);
       c.fillStyle = '#3c3a44'; c.fillRect(3, 6, 6, 5);
       c.fillStyle = col; c.fillRect(3, 5, 6, 1); c.fillRect(9, 7, 2, 3);
-      if (it.loaded){
-        const t = tileCanvas(it.loaded, game.seed || 1);
-        c.save(); c.beginPath(); c.arc(12.5, 8.5, 3, 0, Math.PI*2); c.clip();
-        c.drawImage(t, 9, 5, 7, 7); c.restore();
-        c.strokeStyle = '#ffffff55'; c.strokeRect(9.5, 5.5, 6, 6);
-      } else {
-        c.fillStyle = '#222028'; c.fillRect(11, 7, 3, 3);
-      }
+      c.fillStyle = '#222028'; c.fillRect(11, 7, 3, 3);
+      c.fillStyle = col; c.fillRect(11, 7, 1, 1);
     }
   }
   const url = cv.toDataURL();
@@ -1798,9 +2694,11 @@ function itemIconURL(it){
 function itemLabel(it){
   if (!it) return '';
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
+  if (it.kind === 'gun') return 'blaster';
+  if (it.kind === 'torch') return 'torches';
   const t = CORE.TIER_NAME[it.tier];
   if (it.kind === 'drill') return t + ' drill';
-  return t + ' dispenser' + (it.loaded ? ' [' + CORE.MAT_NAME[it.loaded] + ']' : ' [empty]');
+  return t + ' dispenser';
 }
 function fmtCount(n){ return n >= 10000 ? Math.floor(n/1000) + 'k' : String(n); }
 
@@ -1813,13 +2711,15 @@ function slotEl(i, keyLabel){
   const cnt = document.createElement('span'); cnt.className = 'cnt'; d.appendChild(cnt);
   return d;
 }
+function slotItem(key){ return key === 'disp' ? game.dispSlot : game.slots[+key]; }
 function paintSlot(el){
-  const i = +el.dataset.slot;
-  const it = game.slots[i];
+  const key = el.dataset.slot;
+  const it = slotItem(key);
+  const i = key === 'disp' ? -1 : +key;
   const img = el.querySelector('img'), cnt = el.querySelector('.cnt');
   const url = itemIconURL(it);
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
-  cnt.textContent = (it && it.kind === 'mat') ? fmtCount(it.count) : '';
+  cnt.textContent = (it && (it.kind === 'mat' || it.kind === 'torch')) ? fmtCount(it.count) : '';
   el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
@@ -1832,14 +2732,31 @@ function refreshHotbar(){
   document.querySelectorAll('#hotbar .slot').forEach(paintSlot);
 }
 function buildInvUI(){
-  const main = $('invmain'), hot = $('invhot');
-  main.innerHTML = ''; hot.innerHTML = '';
+  const main = $('invmain'), hot = $('invhot'), dsp = $('invdisp');
+  main.innerHTML = ''; hot.innerHTML = ''; dsp.innerHTML = '';
+  dsp.appendChild(slotEl('disp'));
   for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   refreshInvUI();
 }
 function refreshInvUI(){
-  document.querySelectorAll('#invmain .slot, #invhot .slot').forEach(paintSlot);
+  document.querySelectorAll('#invmain .slot, #invhot .slot, #invdisp .slot').forEach(paintSlot);
+}
+
+// slot move including the dispenser pseudo-slot ('disp'), which only ever
+// accepts a dispenser
+function uiMove(from, to){
+  if (from === to) return 'none';
+  if (typeof from === 'number' && typeof to === 'number')
+    return CORE.invMove(game.slots, from, to);
+  const get = k => k === 'disp' ? game.dispSlot : game.slots[k];
+  const set = (k, v) => { if (k === 'disp') game.dispSlot = v; else game.slots[k] = v; };
+  const A = get(from), B = get(to);
+  if (!A) return 'none';
+  if (to === 'disp' && A.kind !== 'disp'){ toast('only a dispenser fits in the dispenser slot'); return 'none'; }
+  if (from === 'disp' && B && B.kind !== 'disp'){ toast('that slot is taken'); return 'none'; }
+  set(from, B || null); set(to, A);
+  return 'swapped';
 }
 
 // drag & drop
@@ -1850,10 +2767,10 @@ function bindInvDnD(){
     if (game.ui !== 'inv') return;
     const el = e.target.closest('.slot');
     if (!el || el.parentElement.id === 'hotbar') return;
-    const i = +el.dataset.slot;
-    if (!game.slots[i]) return;
-    drag.active = true; drag.from = i;
-    dgi.src = itemIconURL(game.slots[i]);
+    const key = el.dataset.slot === 'disp' ? 'disp' : +el.dataset.slot;
+    if (!slotItem(key)) return;
+    drag.active = true; drag.from = key;
+    dgi.src = itemIconURL(slotItem(key));
     dgy.style.display = 'block';
     dgy.style.left = (e.clientX - 26) + 'px'; dgy.style.top = (e.clientY - 26) + 'px';
     e.preventDefault();
@@ -1871,11 +2788,8 @@ function bindInvDnD(){
     document.querySelectorAll('.drop-ok').forEach(x => x.classList.remove('drop-ok'));
     const el = e.target.closest && e.target.closest('.slot');
     if (el && el.parentElement.id !== 'hotbar'){
-      const to = +el.dataset.slot;
-      const act = CORE.invMove(game.slots, drag.from, to);
-      if (act === 'loaded'){
-        toast('loaded ' + CORE.MAT_NAME[game.slots[to].loaded] + ' into ' + CORE.TIER_NAME[game.slots[to].tier] + ' dispenser');
-      }
+      const to = el.dataset.slot === 'disp' ? 'disp' : +el.dataset.slot;
+      uiMove(drag.from, to);
       refreshInvUI(); refreshHotbar(); refreshToolHUD(); markSave();
     }
     drag.from = -1;
@@ -1901,17 +2815,142 @@ function toast(msg){
 }
 function refreshToolHUD(){
   const it = selectedItem();
+  const tool = activeTool();
   const el = $('toolinfo');
-  if (!it){ el.innerHTML = '<span class="t2">empty hand</span>'; return; }
-  let html = '<div class="t1">' + itemLabel(it) + '</div>';
-  if (it.kind === 'drill' || it.kind === 'disp'){
-    const shape = itemShape(it) === 1 ? 'cube' : 'sphere';
-    const sizeStr = it.tier >= 4 ? it.size.toFixed(2) + 'm (smooth)' : it.size + 'm';
+  let html = '';
+  if (!it){
+    html = '<span class="t2">empty hand</span>';
+  } else if (tool){
+    const name = tool.kind === 'drill'
+      ? CORE.TIER_NAME[tool.tier] + ' drill'
+      : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
+    html = '<div class="t1">' + name + '</div>';
+    const eff = CORE.effSize(game.tool.size, tool.tier);
+    let shape = CORE.SHAPE_NAME[game.tool.shape];
+    if (game.tool.shape === 1 && !game.snapOn && game.tool.rot)
+      shape += ' ' + Math.round(game.tool.rot * 180 / Math.PI) + '° (G+scroll)';
+    const sizeStr = tool.tier >= 4 ? eff.toFixed(2) + 'm (smooth)' : eff + 'm';
     html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
-    html += '<div class="t2">snap: ' + (game.snapOn ? '<span class="on">on · ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span>' : 'off') + '</div>';
+    if (tool.kind === 'disp')
+      html += '<div class="t2">mode: ' + (game.tool.mode === 'paint' ? '<span class="on">paint (R)</span>' : 'build (R)') + '</div>';
+    if (game.snapOn){
+      html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>';
+    } else {
+      html += '<div class="t2">snap: off · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
+    }
+  } else if (it.kind === 'gun'){
+    html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'torch'){
+    html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
+  } else if (it.kind === 'mat'){
+    html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
+           '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
+           (it.mat === CORE.MAT.GLOWSHROOM && game.mode === 'survival' ? ' · H to eat' : '') + '</div>';
+  } else if (it.kind === 'disp'){
+    html = '<div class="t1">' + itemLabel(it) + '</div>' +
+           '<div class="t2">goes in the dispenser slot (E)</div>';
   }
   if (game.fly) html += '<div class="t2 on">flying</div>';
   el.innerHTML = html;
+}
+
+// ---------- survival: damage, death, hunger ----------
+function damagePlayer(dmg, kx, kz){
+  if (game.mode !== 'survival' || game.ui !== 'none') return;
+  game.hp = Math.max(0, game.hp - dmg);
+  game.hurtT = performance.now();
+  $('hurt').style.opacity = 1;
+  setTimeout(() => { $('hurt').style.opacity = 0; }, 180);
+  if (kx || kz){ game.vel.x += kx; game.vel.z += kz; game.vel.y += 2.5; }
+  AudioSys.sfx('hurt');
+  if (game.hp <= 0) die();
+}
+function die(){
+  // everything drops where you fell; you keep a mercy stone drill
+  game.deathCache = {
+    x: game.pos.x, y: game.pos.y + 0.6, z: game.pos.z,
+    slots: game.slots, dispSlot: game.dispSlot,
+  };
+  game.slots = new Array(40).fill(null);
+  game.slots[0] = CORE.makeDrill(0);
+  game.dispSlot = null;
+  game.hotSel = 0;
+  game.ui = 'dead';
+  $('deathinfo').textContent = 'your gear dropped at ' +
+    Math.round(game.deathCache.x) + ' ' + Math.round(game.deathCache.y) + ' ' + Math.round(game.deathCache.z);
+  show('deathscreen');
+  document.exitPointerLock();
+  updateCacheMarker();
+  saveNow();
+}
+function respawn(){
+  const h = game.gen.height(0, 0);
+  game.pos.set(0, h + 1.5, 0);
+  game.vel.set(0, 0, 0);
+  game.hp = 100; game.food = 100;
+  hide('deathscreen');
+  game.ui = 'none';
+  requestLock();
+  refreshHotbar(); refreshToolHUD();
+  markSave();
+}
+function updateCacheMarker(){
+  if (game.cacheMarker){ game.scene.remove(game.cacheMarker); game.cacheMarker = null; }
+  if (!game.deathCache) return;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0xffd23b, transparent: true, opacity: 0.9 }));
+  m.position.set(game.deathCache.x, game.deathCache.y, game.deathCache.z);
+  game.scene.add(m);
+  game.cacheMarker = m;
+}
+function tryPickupCache(){
+  const c = game.deathCache;
+  if (!c) return;
+  if (Math.hypot(c.x - game.pos.x, c.y - game.pos.y, c.z - game.pos.z) > 2.5) return;
+  const items = c.slots.filter(Boolean);
+  if (c.dispSlot){
+    if (!game.dispSlot) game.dispSlot = c.dispSlot;
+    else items.push(c.dispSlot);
+  }
+  let left = 0;
+  for (const it of items){
+    if (it.kind === 'mat'){ CORE.addMat(game.slots, it.mat, it.count); continue; }
+    if (it.kind === 'torch'){ addTorchesToInv(it.count); continue; }
+    let placed = false;
+    for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = it; placed = true; break; }
+    if (!placed) left++;
+  }
+  game.deathCache = null;
+  updateCacheMarker();
+  toast(left ? 'gear recovered (inventory full — ' + left + ' items lost)' : 'gear recovered');
+  AudioSys.sfx('craft');
+  refreshHotbar(); refreshToolHUD();
+  markSave();
+}
+function updateSurvival(dt){
+  if (game.mode !== 'survival'){ return; }
+  if (game.ui !== 'none') return;
+  const sprint = (game.keys['ShiftLeft'] || game.keys['ShiftRight']) && Math.hypot(game.vel.x, game.vel.z) > 4;
+  game.food = Math.max(0, game.food - dt * (sprint ? 0.45 : 0.2));
+  if (game.food <= 0) damagePlayer(dt * 2.2, 0, 0);
+  else if (game.food > 60 && game.hp < 100 && game.hp > 0){
+    game.hp = Math.min(100, game.hp + dt * 1.6);
+    game.food = Math.max(0, game.food - dt * 0.1);
+  }
+  tryPickupCache();
+}
+function tryEat(){
+  if (game.mode !== 'survival'){ toast('no hunger in creative'); return; }
+  const it = selectedItem();
+  if (!it || it.kind !== 'mat' || it.mat !== CORE.MAT.GLOWSHROOM){ toast('hold glowshroom to eat (H)'); return; }
+  if (game.food > 95){ toast('not hungry'); return; }
+  if (it.count < 8){ toast('need 8 glowshroom to eat'); return; }
+  it.count -= 8;
+  if (it.count === 0) game.slots[game.hotSel] = null;
+  game.food = Math.min(100, game.food + 30);
+  toast('ate glowshroom (+30 food)');
+  AudioSys.sfx('eat');
+  refreshHotbar(); refreshToolHUD();
 }
 
 // ---------- overlays / menus ----------
@@ -1926,20 +2965,24 @@ function openCraft(){
 function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
   for (const r of CORE.RECIPES){
-    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier) : CORE.makeDispenser(r.tier);
-    const have = CORE.countMat(game.slots, r.mat);
+    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
+               : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
+               : r.kind === 'gun' ? CORE.makeGun()
+               : CORE.makeTorches(r.yields);
     const row = document.createElement('div'); row.className = 'craftrow';
     const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
-    const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = itemLabel(item); row.appendChild(nm);
+    const nm = document.createElement('div'); nm.className = 'cname';
+    nm.textContent = itemLabel(item) + (r.kind === 'torch' ? ' ×' + r.yields : '');
+    row.appendChild(nm);
     const cost = document.createElement('div');
-    cost.className = 'ccost' + (have >= r.cost ? ' ok' : '');
-    cost.textContent = r.cost + ' ' + CORE.MAT_NAME[r.mat] + ' (have ' + have + ')';
+    cost.className = 'ccost' + (CORE.canCraft(game.slots, r) ? ' ok' : '');
+    cost.textContent = r.costs.map(c => c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(game.slots, c.mat) + ')').join(' + ');
     row.appendChild(cost);
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
       const res = CORE.craft(game.slots, r);
-      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); buildCraftUI(); refreshHotbar(); markSave(); }
-      else if (res === 'poor') toast('not enough ' + CORE.MAT_NAME[r.mat]);
+      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave(); }
+      else if (res === 'poor') toast('missing materials');
       else toast('inventory full');
     });
     row.appendChild(btn);
@@ -1963,7 +3006,7 @@ let optionsReturn = 'main';
 function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
-  $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd;
+  $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -1974,11 +3017,14 @@ function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = $('optRd').value;
+  $('optVolV').textContent = $('optVol').value + '%';
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
   game.opts.fov = +$('optFov').value;
   game.opts.rd = +$('optRd').value;
+  game.opts.vol = +$('optVol').value;
+  AudioSys.setVolume(game.opts.vol);
   saveOpts(game.opts);
   if (game.camera){
     game.camera.fov = game.opts.fov; game.camera.updateProjectionMatrix();
@@ -2011,7 +3057,7 @@ function refreshWorldList(){
   for (const w of ix){
     const row = document.createElement('div'); row.className = 'worlditem';
     const left = document.createElement('div');
-    left.innerHTML = '<div class="wname">' + escapeHtml(w.name) + '</div><div class="wmeta">seed ' + escapeHtml(String(w.seed)) + '</div>';
+    left.innerHTML = '<div class="wname">' + escapeHtml(w.name) + '</div><div class="wmeta">seed ' + escapeHtml(String(w.seed)) + ' · ' + (w.mode || 'creative') + '</div>';
     const right = document.createElement('div'); right.className = 'row';
     const bPlay = document.createElement('button'); bPlay.className = 'btn small'; bPlay.textContent = 'PLAY';
     bPlay.addEventListener('click', () => startWorld(w.id));
@@ -2025,31 +3071,43 @@ function refreshWorldList(){
   }
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let newWorldMode = 'survival';
 function createWorld(){
   const name = $('newWorldName').value.trim() || 'world ' + (worldIndex().length + 1);
   let seedStr = $('newWorldSeed').value.trim();
   if (!seedStr) seedStr = String(Math.floor(Math.random() * 1e9));
   const id = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
   const ix = worldIndex();
-  ix.push({ id, name, seed: seedStr, created: Date.now() });
+  ix.push({ id, name, seed: seedStr, mode: newWorldMode, created: Date.now() });
   saveWorldIndex(ix);
-  saveWorldData(id, freshWorldData(name, seedStr));
+  saveWorldData(id, freshWorldData(name, seedStr, newWorldMode));
   $('newWorldName').value = ''; $('newWorldSeed').value = '';
   refreshWorldList();
 }
-function freshWorldData(name, seedStr){
+function freshWorldData(name, seedStr, mode){
   return {
-    v: 1, name, seed: seedStr,
+    v: 4, name, seed: seedStr, mode: mode || 'survival',
     edits: [],
-    player: { x: 0, y: 2.5, z: 0, yaw: 0, pitch: 0, fly: false },
+    player: { x: 0, y: null, z: 0, yaw: 0, pitch: 0, fly: false },
     slots: null, hotSel: 0, snapOn: false, gridIdx: 3,
   };
 }
-function defaultSlots(){
-  // build 2: start with stone tools; higher tiers are crafted from mined ore
+function defaultSlots(mode){
   const s = new Array(40).fill(null);
-  s[0] = CORE.makeDrill(0);
-  s[1] = CORE.makeDispenser(0);
+  if (mode === 'creative'){
+    for (let t = 0; t < 5; t++) s[t] = CORE.makeDrill(t);
+    s[5] = CORE.makeGun();
+    s[6] = CORE.makeTorches(64);
+    for (let m = 1; m <= CORE.NMAT; m++){
+      if (m === CORE.MAT.BEDROCK) continue;
+      CORE.addMat(s, m, 99999);
+    }
+    for (let t = 0; t < 4; t++){
+      for (let i = 10; i < 40; i++) if (!s[i]){ s[i] = CORE.makeDispenser(t); break; }
+    }
+  } else {
+    s[0] = CORE.makeDrill(0);   // survival: earn the rest
+  }
   return s;
 }
 
@@ -2058,10 +3116,16 @@ function markSave(){ game.savePending = true; game.saveTimer = performance.now()
 function saveNow(){
   if (!game.running || !game.worldId) return;
   const data = {
-    v: 1, name: game.worldName, seed: game.seedStr,
+    v: 4, name: game.worldName, seed: game.seedStr, mode: game.mode,
     edits: CORE.serializeEdits(game.edits),
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
-    slots: game.slots, hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
+    slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
+    hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
+    hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
+    torches: game.torches,
+    entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
+    deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
+                                    slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
   try { saveWorldData(game.worldId, data); game.savePending = false; }
   catch (err) { toast('save failed: ' + err.message); }
@@ -2076,7 +3140,30 @@ function startWorld(id){
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
   game.edits = CORE.deserializeEdits(data.edits || []);
-  game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots();
+  game.mode = data.mode || 'creative';   // pre-survival saves stay creative
+  game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
+  if (data.dispSlot !== undefined){
+    game.dispSlot = data.dispSlot;
+  } else {
+    // older save (or fresh world): pull the first dispenser out of the slots
+    game.dispSlot = null;
+    for (let i = 0; i < game.slots.length; i++){
+      if (game.slots[i] && game.slots[i].kind === 'disp'){
+        game.dispSlot = game.slots[i]; game.slots[i] = null; break;
+      }
+    }
+    if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(game.mode === 'creative' ? 4 : 0);
+  }
+  game.hp = data.hp == null ? 100 : data.hp;
+  game.food = data.food == null ? 100 : data.food;
+  game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
+  game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
+  game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
+  game.deathCache = data.deathCache || null;
+  game.undoStack = [];
+  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 }, data.tool || {});
+  game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
+  game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
   game.snapOn = !!data.snapOn;
   game.gridIdx = Math.min(9, Math.max(0, data.gridIdx | 0));
@@ -2097,18 +3184,21 @@ function startWorld(id){
   hide('mainmenu'); hide('worldsmenu'); show('hud');
   buildScene();
   game.terrain.edits = game.edits;
+  torchSys.rebuild();
+  game.cacheMarker = null;
+  updateCacheMarker();
+  $('statbars').classList.toggle('hidden', game.mode !== 'survival');
   buildHotbar(); refreshToolHUD();
   game.running = true;
   game.forceStream = true;
   requestLock();
 }
 function reviveItem(it){
-  if (!it) return null;
-  if (it.kind === 'drill' || it.kind === 'disp') CORE.clampToolSize(it);
-  return it;
+  return it || null;
 }
 function quitToTitle(){
   saveNow();
+  for (const e of game.entities) e.mesh = null;
   game.running = false;
   hide('pausemenu'); hide('hud');
   if (game.terrain) game.terrain.disposeAll();
@@ -2130,6 +3220,7 @@ function frame(now){
 
   if (game.ui === 'none'){
     updatePlayer(dt);
+    updateGhostDist(dt);
     updateGhost();
     tryAction(dt, now);
   }
@@ -2141,9 +3232,49 @@ function frame(now){
   const ck = cc[0] + ',' + cc[1];
   if (ck !== lastChunk || game.forceStream){
     lastChunk = ck; game.forceStream = false;
-    game.terrain.update(game.pos.x, game.pos.z);
+    game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
   }
-  game.terrain.process(game.dirtyBudget || 6);
+  // adaptive meshing budget: clear big backlogs (world load, long teleports)
+  // faster at the cost of brief hitches nobody can see terrain through anyway
+  game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
+
+  game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
+  updateDayNight(dt);
+  if (game.ui === 'none') updateEntities(dt, now);
+  torchSys.updateUniforms(now);
+  updateSurvival(dt);
+  Particles.update(dt);
+  if (game.mode === 'survival'){
+    $('hpfill').style.width = game.hp.toFixed(0) + '%';
+    $('foodfill').style.width = game.food.toFixed(0) + '%';
+  }
+  if (game.cacheMarker){
+    game.cacheMarker.rotation.y += dt * 2;
+    game.cacheMarker.scale.setScalar(1 + Math.sin(now * 0.004) * 0.15);
+  }
+
+  // cave ambience + compass, throttled
+  game.navT = (game.navT || 0) + dt;
+  if (game.navT > 0.2){
+    game.navT = 0;
+    const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
+    AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
+    // the sky itself goes black as you descend — caves feel enclosed and
+    // not-yet-meshed frontier chunks never flash bright blue in the dark
+    const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
+    game.scene.background.copy(game.skyNow || SKY).multiplyScalar(skyF);
+    const dist = Math.hypot(game.pos.x, game.pos.z);
+    const thv = Math.atan2(-game.pos.x, -game.pos.z);
+    const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
+    $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
+    $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';
+    let posTxt = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
+    if (game.deathCache){
+      const c = game.deathCache;
+      posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
+    }
+    $('navpos').textContent = posTxt;
+  }
 
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
@@ -2163,6 +3294,10 @@ function bindMenus(){
   $('btnWorlds').addEventListener('click', () => { hide('mainmenu'); refreshWorldList(); show('worldsmenu'); });
   $('btnWorldsBack').addEventListener('click', () => { hide('worldsmenu'); show('mainmenu'); });
   $('btnCreateWorld').addEventListener('click', createWorld);
+  $('modeSurvival').addEventListener('click', () => { newWorldMode = 'survival';
+    $('modeSurvival').classList.add('sel'); $('modeCreative').classList.remove('sel'); });
+  $('modeCreative').addEventListener('click', () => { newWorldMode = 'creative';
+    $('modeCreative').classList.add('sel'); $('modeSurvival').classList.remove('sel'); });
   $('btnOptionsMain').addEventListener('click', () => openOptions('main'));
   $('btnOptionsBack').addEventListener('click', closeOptions);
   $('btnQuit').addEventListener('click', () => { window.close(); toast('close the tab to quit'); });
@@ -2179,7 +3314,8 @@ function bindMenus(){
   $('btnPauseOptions').addEventListener('click', () => openOptions('pause'));
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
-  for (const id of ['optSens', 'optFov', 'optRd']) $(id).addEventListener('input', syncOptLabels);
+  $('btnRespawn').addEventListener('click', respawn);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol']) $(id).addEventListener('input', syncOptLabels);
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
 
@@ -2192,6 +3328,8 @@ requestAnimationFrame(frame);
 // debug handles (also used by the headless smoke test)
 window.__game = game;
 window.__CORE = CORE;
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD,
+  spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight };
 </script>
 </body>
 </html>

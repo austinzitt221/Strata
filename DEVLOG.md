@@ -2,6 +2,180 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 4 — Survival layer (2026-08-20)
+
+### Modes
+World creation now picks **survival** (default) or **creative**. Creative =
+build 1-3 feel: everything pre-loaded (all drills, blaster, torches, big
+stacks, diamond dispenser slotted), instant mine/place, free placement, fly,
+no hunger/damage/enemies. Survival = stone drill + stone dispenser, real
+costs and timings, no fly. Pre-build-4 saves load as creative.
+
+### Day/night
+10-minute cycle. Sun direction/color, ambient, sky, and fog all follow it;
+the headlamp automatically matters on the surface at night. Time advances
+only while actually playing (menus pause it).
+
+### Health / hunger / death
+- HP + food bars above the hotbar. Fall damage from impact speed (>~7m
+  hurts). Food drains slowly (faster sprinting); at 0 it eats HP; above 60
+  it regenerates HP.
+- **Glowshroom** (new material 9): glowing purple veins in the top 20m of
+  ground and cave walls — the food source. Hold a stack and press **H** to
+  eat 8 units for +30 food. It glows in the dark and grazers drop it.
+- **Death drops everything** where you fell (pulsing marker, skull distance
+  in the compass bar). You respawn at spawn with a mercy stone drill; walk
+  within 2.5m of the cache to recover it all.
+
+### Creatures
+- **Grazer** (passive, surface, daytime): wanders, flees when hit, drops
+  8 glowshroom.
+- **Lurker** (hostile): spawns in darkness — night surface or underground
+  air pockets, never within 12m of a torch. Chases within 15m, hits for 8
+  with knockback, hops obstacles. Drops 4 iron. Caps: 6 lurkers, 5
+  grazers, despawn beyond 70m. Entities persist in the save.
+- The drill is the melee weapon (6 + 3/tier damage, entities take priority
+  over terrain when in your crosshair). The **blaster** (craft: 20 iron +
+  12 ruby) fires hitscan for 18 at 2/s with recoil.
+
+### Torches
+Craft 6 from 6 rock + 2 glowshroom. Left click places one on any surface;
+up to 16 nearest torches light the terrain shader with warm flicker.
+Mining near a torch pops it back into your inventory. Torches suppress
+lurker spawns — light as territory.
+
+### Validation
+138 headless tests (multi-cost recipes, torch stack merging, glowshroom
+band) plus the browser run: torch shader lights, lurker chase/attack/
+kill/drop, eating, and the full death -> cache -> respawn -> recovery loop
+verified end-to-end; night screenshot shows the headlamp pool and lurker
+eyes in the dark. No errors.
+
+### Notes / deferred
+- Entity AI is deliberately simple (no pathfinding — steer + hop). Fine
+  for open terrain and caves; revisit if tunnels confuse them.
+- One ambient track and music are still build 6. Water is build 5.
+- Ore layout shifted slightly vs build 3 (vein type hash now mod-5 to
+  include glowshroom) — existing worlds keep their edits, veins move.
+
+## Build 3 — Depth & Feel (2026-08-20)
+Roadmap restructured first (see ROADMAP.md): darkness, audio, and the full
+tool kit land BEFORE survival, since enemies need darkness to matter and
+combat will lean on finished tools.
+
+### Lighting
+- Per-vertex **skylight** attribute computed at meshing time from the same
+  chunk-local height grid DC uses (depth below the heightfield, full light
+  to ~1m, black by ~10m of overburden) — seam-consistent by construction.
+- **Headlamp**: warm point light around the player in the terrain shader,
+  smooth falloff over 13m, faded out where skylight already lights things.
+- **Ore shimmer**: iron/ruby/obsidian/diamond stay faintly self-lit in the
+  dark so veins catch the eye at lamp range.
+- Fog fades to black at depth, and the sky background itself darkens as the
+  player descends (also stops unmeshed frontier chunks flashing blue).
+- Known limitation: skylight is vertical-only — a horizontal tunnel mouth
+  under a hill reads dark until the lamp hits it. Real light propagation is
+  a later-build item if it bothers in playtest.
+
+### Audio (procedural, zero assets)
+Web Audio built on first pointer-lock gesture: drill hum (pitch by tier +
+charge progress), break crumble (filtered noise, pitched by hardness),
+place thunk, paint hiss, deny buzz, footsteps by surface material, UI
+clicks, crafting chime, undo blip, looping low ambience that fades in with
+depth. Volume slider in Options.
+
+### Particles
+One pooled Points cloud (800): debris burst on break colored by the
+yielded materials, dust on place, chips trickling while the drill charges.
+Ghost fill opacity also ramps with charge progress.
+
+### Tool kit
+- **Mine/build time scales** with tier x volume x hardness (grass 0.6,
+  rock 1.0, iron 1.35, ruby 1.7, obsidian 2.2, diamond ore 2.6; volume
+  factor cbrt-clamped 0.6-2.2). Diamond stays instant. Aiming at pure air
+  is a no-op (no empty edits, no charge).
+- **Paint mode** (R with dispenser out): op 2 in the edit list — recolors
+  existing solid inside the shape without touching geometry, charged only
+  for the volume actually changing material, fully ordered with unions
+  (later edit wins) and undoable. Ghost turns orange.
+- **Pick material** (middle click): grabs the material you're looking at
+  into your hand (swaps from storage if needed).
+- **Undo** (Ctrl+Z): pops the last edit and reverses its economy (mine
+  yields taken back, place/paint costs refunded). Session-only, 64 deep.
+  Plain Z is still fly.
+- **Cylinder brush**: third shape in the right-click cycle (y-axis, height
+  = diameter). Sharp rims via the same QEF path.
+- **Cube yaw rotation**: hold G + scroll, 15° steps, free-place only —
+  grid mode forces 0° so the tiling lattice guarantee holds. `rot` is the
+  8th edit field; old 7-field saves load fine.
+- **Dispenser orb** doubles as the ammo gauge (shrinks with the held
+  stack, flashes red on refusal).
+
+### Navigation
+Compass bar top-center: arrow + distance to spawn, live coordinates.
+
+### Validation
+129 headless tests (new: cylinder/rotated-cube SDFs + manifold meshing,
+paint semantics/costs/ordering, duration scaling, skylight attribute,
+legacy save compat) and the Playwright run (paint+undo end-to-end with
+exact refunds, dark cavern + headlamp screenshots). Perf unchanged:
+~1.9ms/chunk pristine, ~7ms hot remesh.
+
+## Build 2.1 — cave overhaul + build/tool UX rework (2026-08-19)
+Playtest-driven patch before build 3.
+
+### Caves (why none were findable)
+Build 2's near-surface fade suppressed caves within 5m of the ground with no
+exceptions — every cave system was sealed; there were literally zero
+entrances. Reworked:
+- **Entrance zones**: a 2D noise mask disables the surface fade in patches,
+  so tunnels climb out and visibly breach the ground (verified: dozens of
+  breach columns per 480m² in every test seed; smoke test screenshots one).
+- **Unique shapes**: tunnel threshold varies with a low-frequency 3D noise
+  (regional wide/tight systems) and widens with depth; a second blobby
+  "cavern" field adds large rooms, bigger and more common deeper. ~9% of
+  underground volume is air (5-7% shallow, 11-12% deep).
+- **Bedrock moved to y=-64** (was -16): stone layer is 4× deeper, meshed
+  world now y -64..+48. Ore bands respread: iron -4..-30, ruby -16..-45,
+  obsidian -30..-58, diamond -46..-63.5. Chunk streaming prioritizes by 3D
+  distance and the mesh budget doubles while a big backlog exists.
+
+### Building / tools
+- **Grid snap is now a tiling lattice.** The shape's FACES snap to a
+  lattice whose spacing is the shape size (or the grid cell when that's
+  larger). Adjacent snapped placements always connect flush — full-size,
+  face-to-face, nothing eaten inside the previous shape. Grid viz draws
+  the actual lattice anchored on the ghost's bottom face.
+- **Shape + size are shared tool state** (the player's, not the item's).
+  Swap drill↔dispenser↔any tier and the sphere/cube and size carry over;
+  non-diamond tiers clamp to their nearest unlocked step at use time
+  without losing the shared value.
+- **Dispenser slot**: one special inventory slot only a dispenser fits.
+  No more loading — holding any material stack in the hotbar auto-equips
+  the slotted dispenser loaded with that material (swap hotbar slot =
+  swap loaded material). Crafted dispensers go to inventory; drag into
+  the slot to upgrade. New worlds start stone drill in hotbar + stone
+  dispenser already slotted.
+- **Consumption verified end-to-end in the browser harness**: a 2m cube
+  costs 64 units, a 4m cube 512 (exactly 8×), and placement is refused
+  when the held stack is short. (The build-2 "didn't consume" report:
+  consumption existed but gave no feedback and counts sat in unopened
+  inventory; there's now a "-N material" toast and live hotbar counts.)
+- **V/B moves the ghost** closer/farther (1m..reach) in free-place mode;
+  distance shown in the HUD and saved.
+
+### Player
+- **No more sliding down inclines.** Penetration from gravity was resolved
+  along the slope normal every frame (horizontal component = downhill
+  drift). When standing still on walkable ground (normal.y > 0.6) the
+  pushout is now resolved straight up and horizontal velocity is zeroed;
+  moving/jumping keeps the normal-based resolve. Verified: 0.000m drift
+  over 2.5s on a 0.65-gradient slope.
+
+### Save format v3
+Adds shared tool state + dispenser slot. Older saves migrate: first
+dispenser found in the inventory moves into the dispenser slot.
+
 ## Build 2 — terrain, ores, economy + build-1 playtest fixes (2026-08-19)
 
 ### Playtest fixes (from first build-1 session)
