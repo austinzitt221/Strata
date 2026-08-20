@@ -94,6 +94,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #fatal{z-index:100; background:#14060a;}
 .statfill.breath{background:#4aa3e8;}
 #uwater{position:fixed;inset:0;background:rgba(18,58,98,0.38);pointer-events:none;z-index:3;}
+#sleepfade{position:fixed;inset:0;background:#000;opacity:0.92;pointer-events:none;z-index:4;transition:opacity 0.8s;}
 #fatal .panel{border-color:#a33;}
 #fatal pre{white-space:pre-wrap; color:#ff9b9b; font-size:12px; margin:10px 0; max-width:60vw;}
 </style>
@@ -107,6 +108,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="statbar hidden" id="breathbar"><div id="breathfill" class="statfill breath"></div></div>
   </div>
   <div id="uwater" class="hidden"></div>
+  <div id="sleepfade" class="hidden"></div>
   <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
@@ -454,7 +456,7 @@ function makeGen(seed){
     if (!R) return 0;
     if (ruinSDF(x, y, z) > 0.35) return 0;
     if (Math.max(Math.abs(x - R.x), Math.abs(z - R.z)) < 0.8){
-      return y > R.base + 1.1 ? MAT.DIAMOND : MAT.OBSIDIAN;
+      return y > R.base + 1.1 ? MAT.RUBY : MAT.IRON;
     }
     return MAT.STONEBRICK;
   }
@@ -1093,7 +1095,7 @@ function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon'];
+const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed'];
 function stackableWith(A, B){
   if (!A || !B || A.kind !== B.kind) return false;
   if (A.kind === 'mat') return A.mat === B.mat;
@@ -1276,6 +1278,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
   RECIPES.push({ kind: 'beacon', yields: 1, station: true,
     costs: [{ mat: MAT.IRON, n: 8 }, { mat: MAT.RUBY, n: 4 }, { mat: MAT.PLANKS, n: 4 }] });
+  RECIPES.push({ kind: 'bed', yields: 1, station: true,
+    costs: [{ mat: MAT.PLANKS, n: 6 }, { item: 'wool', n: 3 }] });
 }
 function canCraft(slots, r){
   return r.costs.every(c => (c.item ? countItem(slots, c.item) : countMat(slots, c.mat)) >= c.n);
@@ -1639,6 +1643,7 @@ class Terrain {
     for (const [key, ch] of this.chunks){
       if (!want.has(key)){
         if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
+        if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
         this.chunks.delete(key);
         this.dirty.delete(key);
       }
@@ -1689,6 +1694,7 @@ class Terrain {
   remesh(key, cx, cy, cz){
     const ch = this.chunks.get(key);
     if (!ch) return;
+    this.remeshWater(ch, cx, cy, cz);
     const data = CORE.meshChunk(cx, cy, cz, this.edits, this.gen);
     if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); ch.mesh = null; }
     if (!data) return;
@@ -1704,9 +1710,46 @@ class Terrain {
     ch.mesh = mesh;
   }
 
+  // lake surface quads for this chunk footprint: 1m cells at sea level over
+  // columns whose ground is below it. Built only for the vertical chunk
+  // containing the sea plane, so a footprint gets exactly one water mesh.
+  remeshWater(ch, cx, cy, cz){
+    const sea = this.gen.seaLevel, M = CORE.CHUNK_M;
+    if (sea == null || cy !== Math.floor(sea / M)) return;
+    if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
+    if (!game.waterMat) return;
+    const x0 = cx * M, z0 = cz * M;
+    const hs = [];                                    // 9x9 corner heights
+    for (let j = 0; j <= M; j++)
+      for (let i = 0; i <= M; i++)
+        hs.push(this.gen.height(x0 + i, z0 + j));
+    const pos = [], uv = [];
+    for (let j = 0; j < M; j++)
+      for (let i = 0; i < M; i++){
+        const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
+        const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
+        if (Math.min(a, b, c, d) >= sea) continue;    // dry cell
+        const xa = x0 + i, xb = x0 + i + 1, za = z0 + j, zb = z0 + j + 1;
+        pos.push(xa, sea, za, xa, sea, zb, xb, sea, zb,
+                 xa, sea, za, xb, sea, zb, xb, sea, za);
+        uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
+                xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+      }
+    if (!pos.length) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    g.computeBoundingSphere();
+    const mesh = new THREE.Mesh(g, game.waterMat);
+    mesh.renderOrder = 3;
+    this.scene.add(mesh);
+    ch.water = mesh;
+  }
+
   disposeAll(){
     for (const [, ch] of this.chunks){
       if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
+      if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
     }
     this.chunks.clear(); this.dirty.clear();
   }
@@ -1755,7 +1798,7 @@ const game = {
   undoStack: [], orbFlash: 0,
   // survival state
   mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
-  torches: [], beacons: [], entities: [], deathCache: null,
+  torches: [], beacons: [], beds: [], spawnPoint: null, entities: [], deathCache: null,
   doors: [], tables: [], removedTrees: [], solidProps: [],
   lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
@@ -1809,6 +1852,11 @@ function propSDF(x, y, z){
     if (pd < d) d = pd;
   }
   return d;
+}
+// water occupies air below sea level over lake columns (ground below sea)
+function inWater(x, y, z){
+  const sea = game.gen.seaLevel;
+  return sea != null && y < sea && game.gen.height(x, z) < sea;
 }
 function sdfWorld(x, y, z, edits){
   let d = CORE.evalSDF(x, y, z, edits, game.gen);
@@ -1916,12 +1964,11 @@ function buildScene(){
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
-  // sea-level water: one big translucent plane following the player. The
-  // world's water is a global table at gen.seaLevel — valleys, mined pits
-  // and cave sections below it are all "in water", and this single plane is
-  // the visible surface wherever air meets that level (depth test hides it
-  // behind terrain automatically, including inside flooded caves).
-  game.water = null;
+  // water surface material — per-chunk lake meshes are built alongside
+  // terrain chunks (Terrain.remesh), so water only ever appears where
+  // meshed ground actually dips below sea level: no phantom ocean beyond
+  // render distance, no blanket table under the whole world
+  game.waterMat = null;
   if (game.gen.seaLevel != null){
     const wTex = PixTex.make('water', (c, w, h, rng) => {
       pxSpeckle(c, rng, '#2e6fa3', '#27618f', '#3a80b8', 30);
@@ -1929,22 +1976,17 @@ function buildScene(){
       c.fillRect(1, 3, 5, 1); c.fillRect(9, 7, 5, 1); c.fillRect(4, 12, 5, 1);
     });
     const wt = wTex.clone(); wt.needsUpdate = true;
-    wt.repeat.set(150, 150);
-    const wm = new THREE.MeshBasicMaterial({
+    game.waterMat = new THREE.MeshBasicMaterial({
       map: wt, color: 0xbcd4e8, transparent: true, opacity: 0.62,
       depthWrite: false, side: THREE.DoubleSide,
     });
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), wm);
-    water.rotation.x = -Math.PI / 2;
-    water.position.y = game.gen.seaLevel;
-    water.renderOrder = 3;
-    scene.add(water);
-    game.water = water;
   }
   Particles.init(scene);
   Embers.init(scene);
   torchSys.init(scene);
   beaconSys.init(scene);
+  bedSys.init(scene);
+  skySys.init(scene);
   treeSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
@@ -2048,6 +2090,21 @@ const PROP_TEX = {
     for (let i = 0; i < 7; i++) c.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 2, 1);
     c.fillStyle = '#c85a10';
     for (let i = 0; i < 5; i++) c.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 1, 1);
+  }); },
+  get wool(){ return PixTex.make('wool', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#f2f0e8', '#e2dfd4', '#fbfaf5', 34);
+    c.fillStyle = '#d5d1c2';
+    for (let i = 0; i < 6; i++){                       // curly tufts
+      const x = (rng() * 13) | 0, y = (rng() * 13) | 0;
+      c.fillRect(x, y, 2, 1); c.fillRect(x + 1, y + 1, 1, 1);
+    }
+  }); },
+  get blanket(){ return PixTex.make('blanket', (c, w, h, rng) => {
+    pxSpeckle(c, rng, '#b03a3a', '#9c3030', '#c24848', 28);
+    c.fillStyle = '#872626';
+    for (const y of [4, 9, 14]) c.fillRect(0, y, 16, 1);  // stitch rows
+    c.fillStyle = '#d86a6a';
+    for (const y of [3, 8, 13]) for (let x = 1; x < 16; x += 3) c.fillRect(x, y, 1, 1);
   }); },
   get planksV(){ return PixTex.make('planksV', (c, w, h, rng) => {
     // vertical door planks with grooves + panel lines
@@ -2311,6 +2368,31 @@ function buildViewmodel(cam){
     return t;
   });
 
+  const bed = held(() => {
+    const t = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.4), pixMat(PROP_TEX.planksV));
+    frame.position.y = 0.05;
+    const mat2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.36), pixMat(PROP_TEX.wool));
+    mat2.position.y = 0.09;
+    const blk = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.03, 0.22), pixMat(PROP_TEX.blanket));
+    blk.position.set(0, 0.11, 0.07);
+    const plw = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.035, 0.09), pixMat(PROP_TEX.wool));
+    plw.position.set(0, 0.115, -0.13);
+    t.add(frame); t.add(mat2); t.add(blk); t.add(plw);
+    t.rotation.y = 0.5; t.rotation.x = 0.25;
+    return t;
+  });
+
+  const wool = held(() => {
+    const t = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.13, 0.15), pixMat(PROP_TEX.wool));
+    m.rotation.y = 0.4; m.position.y = 0.1;
+    const m2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.09, 0.11), pixMat(PROP_TEX.wool));
+    m2.rotation.y = -0.3; m2.position.set(0.04, 0.17, 0.02);
+    t.add(m); t.add(m2);
+    return t;
+  });
+
   const matCube = held(() => {
     const t = new THREE.Group();
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15),
@@ -2323,12 +2405,12 @@ function buildViewmodel(cam){
   });
 
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
-  vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(matCube);
+  vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(matCube);
   vm.scale.setScalar(0.5);
   vm.rotation.y = 0.42;                // tips angle inward so the business end reads
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, matCube,
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, matCube,
               bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
@@ -2345,6 +2427,8 @@ function updateViewmodel(dt){
   v.door.visible = kind === 'door';
   v.table.visible = kind === 'table';
   v.beacon.visible = kind === 'beacon';
+  v.bed.visible = kind === 'bed';
+  v.wool.visible = kind === 'wool';
   v.matCube.visible = kind === 'mat';
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
@@ -2365,11 +2449,11 @@ function updateViewmodel(dt){
   if (kind === 'torch'){
     // steady flame (no flicker) + embers drifting off the held tip
     v.emberT += dt;
-    if (v.emberT > 0.16){
+    if (v.emberT > 0.5){
       v.emberT = 0;
       const p = new THREE.Vector3();
       v.torch.userData.item.userData.tip.getWorldPosition(p);
-      Embers.burst(p.x, p.y + 0.05, p.z, 0.03, [0xffb347, 0xffdd66, 0xff8830], 1, 0.35);
+      Embers.burst(p.x, p.y + 0.05, p.z, 0.03, [0xffb347, 0xffdd66, 0xff8830], 1, 0.1);
     }
     return;
   }
@@ -2521,9 +2605,11 @@ const AudioSys = {
 };
 
 // ---------- particles (single pooled Points cloud) ----------
-function makeParticleSys(MAX, size){
+function makeParticleSys(MAX, size, upBias, grav, lifeMin, lifeVar){
   return {
-  MAX, size, cursor: 0, points: null, colAttr: null, posAttr: null,
+  MAX, size, upBias: upBias == null ? 1.4 : upBias, grav: grav == null ? 15 : grav,
+  lifeMin: lifeMin == null ? 0.45 : lifeMin, lifeVar: lifeVar == null ? 0.5 : lifeVar,
+  cursor: 0, points: null, colAttr: null, posAttr: null,
   vel: null, life: null,
   init(scene){
     const pos = new Float32Array(this.MAX * 3).fill(1e6);
@@ -2551,9 +2637,9 @@ function makeParticleSys(MAX, size){
       P[idx*3] = x + sx * rr; P[idx*3+1] = y + sy * rr; P[idx*3+2] = z + sz * rr;
       const sp = speed * (0.4 + Math.random() * 0.9);
       this.vel[idx*3] = sx * sp;
-      this.vel[idx*3+1] = Math.abs(sy) * sp * 0.7 + 1.4;
+      this.vel[idx*3+1] = Math.abs(sy) * sp * 0.7 + this.upBias;
       this.vel[idx*3+2] = sz * sp;
-      this.life[idx] = 0.45 + Math.random() * 0.5;
+      this.life[idx] = this.lifeMin + Math.random() * this.lifeVar;
       const c = new THREE.Color(colors[(Math.random() * colors.length) | 0]);
       const sh = 0.65 + Math.random() * 0.55;
       C[idx*3] = c.r * sh; C[idx*3+1] = c.g * sh; C[idx*3+2] = c.b * sh;
@@ -2569,7 +2655,7 @@ function makeParticleSys(MAX, size){
       any = true;
       this.life[i] -= dt;
       if (this.life[i] <= 0){ P[i*3+1] = 1e6; continue; }
-      this.vel[i*3+1] -= 15 * dt;
+      this.vel[i*3+1] -= this.grav * dt;
       P[i*3] += this.vel[i*3] * dt;
       P[i*3+1] += this.vel[i*3+1] * dt;
       P[i*3+2] += this.vel[i*3+2] * dt;
@@ -2579,7 +2665,8 @@ function makeParticleSys(MAX, size){
   };
 }
 const Particles = makeParticleSys(800, 0.14);
-const Embers = makeParticleSys(240, 0.055);   // small sparks for torches
+// embers: tiny, slow-rising, long-lived drift — subtle, not a fountain
+const Embers = makeParticleSys(240, 0.045, 0.32, 0.9, 1.1, 0.9);
 
 // ---------- day/night ----------
 const DAY_CYCLE = 600;                       // seconds per full day
@@ -2646,7 +2733,181 @@ const beaconSys = {
     if (n){ this.rebuild(); markSave(); }
     return n;
   },
-  home(){ return game.beacons.length ? game.beacons[game.beacons.length - 1] : null; },
+  // closest beacon to the player (compass target); null with none placed
+  nearest(){
+    let best = null, bd = Infinity;
+    for (const b of game.beacons){
+      const d = Math.hypot(b[0] - game.pos.x, b[2] - game.pos.z);
+      if (d < bd){ bd = d; best = b; }
+    }
+    return best;
+  },
+};
+
+// ---------- sky: sun & moon arcs, night stars, drifting 3D clouds ----------
+// the sun/moon positions read timeOfDay directly, so their height in the sky
+// IS the day/night progress bar
+const skySys = {
+  dome: null, sun: null, sunGlow: null, moon: null, stars: null,
+  cloudGroup: null, clouds: [], cloudMat: null,
+  init(scene){
+    this.dome = new THREE.Group();               // follows the camera
+    scene.add(this.dome);
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xffedb0, depthWrite: false });
+    this.sun = new THREE.Mesh(new THREE.CircleGeometry(24, 20), sunMat);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.22, depthWrite: false });
+    this.sunGlow = new THREE.Mesh(new THREE.CircleGeometry(38, 20), glowMat);
+    this.sun.add(this.sunGlow);
+    this.sunGlow.position.z = -0.5;
+    // moon: pale disc with pixel craters
+    const moonTex = PixTex.make('moon', (c, w, h, rng) => {
+      c.clearRect(0, 0, 16, 16);
+      c.fillStyle = '#dde4f0';
+      c.beginPath(); c.arc(8, 8, 7.6, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#b8c2d6';
+      c.fillRect(4, 5, 3, 2); c.fillRect(9, 9, 2, 3); c.fillRect(10, 3, 2, 2); c.fillRect(5, 11, 2, 1);
+    });
+    const moonMat = new THREE.MeshBasicMaterial({ map: moonTex, transparent: true, depthWrite: false });
+    this.moon = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), moonMat);
+    this.dome.add(this.sun); this.dome.add(this.moon);
+    // stars: points on the upper dome
+    const starPos = [];
+    for (let i = 0; i < 420; i++){
+      const a = Math.random() * Math.PI * 2, e = Math.asin(Math.random() * 0.98 + 0.02);
+      starPos.push(Math.cos(a) * Math.cos(e) * 355, Math.sin(e) * 355, Math.sin(a) * Math.cos(e) * 355);
+    }
+    const sg = new THREE.BufferGeometry();
+    sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+    this.stars = new THREE.Points(sg, new THREE.PointsMaterial({
+      color: 0xeef2ff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false }));
+    this.stars.frustumCulled = false;
+    this.dome.add(this.stars);
+    // clouds: rounded blob clusters drifting in world space
+    this.cloudGroup = new THREE.Group();
+    scene.add(this.cloudGroup);
+    this.cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, depthWrite: false });
+    this.clouds = [];
+    const rng = CORE.mulberry32(game.seed ^ 0x517cc1b7);
+    for (let i = 0; i < 12; i++){
+      const g = new THREE.Group();
+      const n = 4 + ((rng() * 4) | 0);
+      for (let k = 0; k < n; k++){
+        const r = 6 + rng() * 9;
+        const b = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), this.cloudMat);
+        b.position.set((rng() - 0.5) * 34, (rng() - 0.5) * 4, (rng() - 0.5) * 20);
+        b.scale.y = 0.32 + rng() * 0.1;
+        g.add(b);
+      }
+      g.position.set((rng() - 0.5) * 640, 58 + rng() * 22, (rng() - 0.5) * 640);
+      this.cloudGroup.add(g);
+      this.clouds.push(g);
+    }
+  },
+  update(dt){
+    if (!this.dome) return;
+    const cam = game.camera.position;
+    this.dome.position.copy(cam);
+    const phase = game.timeOfDay * Math.PI * 2;
+    const sh = Math.sin(phase), ch = Math.cos(phase);
+    const dir = new THREE.Vector3(ch * 0.5, sh, 0.35).normalize();
+    this.sun.position.copy(dir).multiplyScalar(335);
+    this.sun.visible = sh > -0.18;
+    this.sun.lookAt(cam);
+    this.moon.position.copy(dir).multiplyScalar(-335);
+    this.moon.visible = sh < 0.18;
+    this.moon.lookAt(cam);
+    this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
+    // clouds: slow drift, wrapped into a band around the player; fade and
+    // darken at night
+    const b = 0.35 + 0.65 * game.dayF;
+    this.cloudMat.color.setScalar(b);
+    this.cloudMat.opacity = 0.25 + 0.57 * game.dayF;
+    for (const c of this.clouds){
+      c.position.x += dt * 1.3;
+      if (c.position.x - cam.x > 340) c.position.x -= 680;
+      if (cam.x - c.position.x > 340) c.position.x += 680;
+      if (c.position.z - cam.z > 340) c.position.z -= 680;
+      if (cam.z - c.position.z > 340) c.position.z += 680;
+    }
+  },
+};
+
+// ---------- beds: sleep through the night, set your spawn ----------
+const bedSys = {
+  group: null, mats: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    if (!this.mats){
+      this.mats = {
+        frame: pixMat(PROP_TEX.planksV), leg: pixMat(PROP_TEX.bark),
+        wool: pixMat(PROP_TEX.wool), blanket: pixMat(PROP_TEX.blanket),
+      };
+    }
+    for (const b of game.beds){
+      const g = new THREE.Group();
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 2.0), this.mats.frame);
+      frame.position.set(0, 0.25, 0);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.12), this.mats.frame);
+      head.position.set(0, 0.35, -0.94);
+      const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 1.86), this.mats.wool);
+      mattress.position.set(0, 0.43, 0);
+      const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.1, 1.2), this.mats.blanket);
+      blanket.position.set(0, 0.47, 0.34);
+      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.4), this.mats.wool);
+      pillow.position.set(0, 0.53, -0.66);
+      for (const [lx, lz] of [[-0.48, -0.9], [0.48, -0.9], [-0.48, 0.9], [0.48, 0.9]]){
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), this.mats.leg);
+        leg.position.set(lx, 0.15, lz);
+        g.add(leg);
+      }
+      g.add(frame); g.add(head); g.add(mattress); g.add(blanket); g.add(pillow);
+      g.position.set(b[0], b[1], b[2]);
+      g.rotation.y = b[3] || 0;
+      this.group.add(g);
+    }
+    rebuildSolidProps();
+  },
+  add(x, y, z, yaw){ game.beds.push([x, y, z, yaw]); this.rebuild(); markSave(); },
+  removeNear(x, y, z, r){
+    const keep = [], n0 = game.beds.length;
+    for (const b of game.beds){
+      if (Math.hypot(b[0] - x, b[1] + 0.4 - y, b[2] - z) > r) keep.push(b);
+    }
+    game.beds = keep;
+    const n = n0 - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const b of game.beds){
+      const vx = b[0] - o.x, vy = b[1] + 0.4 - o.y, vz = b[2] - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.abs(py) < 0.8 && Math.hypot(px, pz) < 1.2){ best = b; bestT = tt; }
+    }
+    return best;
+  },
+  sleep(b){
+    game.spawnPoint = [b[0], b[1], b[2]];
+    if (game.dayF < 0.22){
+      game.timeOfDay = 0.03;                       // wake at dawn
+      $('sleepfade').classList.remove('hidden');
+      setTimeout(() => $('sleepfade').classList.add('hidden'), 900);
+      toast('you sleep until dawn · spawn point set');
+      AudioSys.sfx('toggle');
+    } else {
+      toast('spawn point set — you can only sleep at night');
+      AudioSys.sfx('toggle');
+    }
+    markSave();
+  },
 };
 
 // ---------- torches ----------
@@ -2784,8 +3045,9 @@ const treeSys = {
     if (!this.group) return;
     const cc = [Math.floor(game.pos.x / CORE.TREE_CELL), Math.floor(game.pos.z / CORE.TREE_CELL)];
     const key = cc[0] + ',' + cc[1];
-    if (key === this.lastCell) return;
+    if (key === this.lastCell && !this.pending) return;   // retry while ground is still meshing
     this.lastCell = key;
+    this.pending = false;
     const R = Math.ceil(((game.opts.rd + 1) * CORE.CHUNK_M) / CORE.TREE_CELL) + 1;
     const want = new Set();
     for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++){
@@ -2794,6 +3056,10 @@ const treeSys = {
       if (game.removedTreeSet.has(k)) continue;
       const t = game.gen.treeAt(cx, cz);
       if (!t) continue;
+      // never show a tree floating over not-yet-meshed ground
+      const gk = Math.floor(t.x / CORE.CHUNK_M) + ',' + Math.floor(t.y / CORE.CHUNK_M) + ',' + Math.floor(t.z / CORE.CHUNK_M);
+      const gch = game.terrain.chunks.get(gk);
+      if (!gch || (!gch.mesh && game.terrain.dirty.has(gk))){ this.pending = true; continue; }
       want.add(k);
       if (!this.visible.has(k)){
         const m = this.mesh(t);
@@ -2991,6 +3257,9 @@ function rebuildSolidProps(){
   for (const t of game.tables){
     props.push({ t: 'box', yaw: 0, x: t[0], y: t[1] + 0.45, z: t[2], hx: 0.55, hy: 0.46, hz: 0.55 });
   }
+  for (const b of game.beds){
+    props.push({ t: 'box', yaw: b[3] || 0, x: b[0], y: b[1] + 0.27, z: b[2], hx: 0.55, hy: 0.28, hz: 1.0 });
+  }
   game.solidProps = props;
 }
 
@@ -3005,6 +3274,7 @@ function addTorchesToInv(n){ return addStackItem('torch', n); }
 const ENT_DEF = {
   grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
+  sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
 };
 function entMesh(type){
   const g = new THREE.Group();
@@ -3032,6 +3302,26 @@ function entMesh(type){
     box(0.1, 0.1, 0.3, 0xb08d3f, 0, 0.7, 0.6);               // tail
     for (const [sx, sz] of [[-0.24,-0.32],[0.24,-0.32],[-0.24,0.36],[0.24,0.36]]){
       const leg = box(0.16, 0.42, 0.16, 0x8a6f33, sx, 0.21, sz);
+      legs.push(leg);
+    }
+  } else if (type === 'sheep'){
+    box(0.78, 0.55, 1.0, 0xeceae2, 0, 0.68, 0.02);           // wool body
+    box(0.6, 0.18, 0.8, 0xf7f5ee, 0, 0.98, 0.02);            // fluffy back
+    box(0.3, 0.22, 0.24, 0xdedbd0, -0.28, 0.55, -0.42);      // shoulder tufts
+    box(0.3, 0.22, 0.24, 0xdedbd0, 0.28, 0.55, -0.42);
+    const head = box(0.34, 0.32, 0.3, 0xd8c4a8, 0, 0.82, -0.6);
+    box(0.38, 0.16, 0.18, 0xf7f5ee, 0, 0.16, 0.04, head);    // wool cap
+    for (const sx of [-0.1, 0.1]){                            // eyes + glints
+      box(0.07, 0.07, 0.03, 0x241b12, sx, 0.04, -0.145, head);
+      box(0.025, 0.025, 0.032, 0xffffff, sx + 0.018, 0.06, -0.146, head);
+    }
+    box(0.12, 0.026, 0.02, 0xa88a68, 0, -0.1, -0.148, head); // mouth
+    box(0.028, 0.02, 0.02, 0x8a6f52, -0.032, -0.055, -0.15, head); // nostrils
+    box(0.028, 0.02, 0.02, 0x8a6f52, 0.032, -0.055, -0.15, head);
+    box(0.1, 0.07, 0.05, 0xd8c4a8, -0.2, 0.1, 0.02, head);   // ears
+    box(0.1, 0.07, 0.05, 0xd8c4a8, 0.2, 0.1, 0.02, head);
+    for (const [sx, sz] of [[-0.24,-0.3],[0.24,-0.3],[-0.24,0.34],[0.24,0.34]]){
+      const leg = box(0.14, 0.4, 0.14, 0x9a8c76, sx, 0.2, sz);
       legs.push(leg);
     }
   } else {
@@ -3078,10 +3368,12 @@ function killEntity(e, byPlayer){
   const i = game.entities.indexOf(e);
   if (i >= 0) game.entities.splice(i, 1);
   if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
-  Particles.burst(e.x, e.y + 0.5, e.z, 0.5, [e.type === 'grazer' ? 0xc8a24b : 0x1c1626], 24, 2.2);
+  Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
+    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
   if (byPlayer){
     if (e.type === 'grazer'){ CORE.addMat(game.slots, CORE.MAT.GLOWSHROOM, 8); toast('+8 glowshroom'); }
+    else if (e.type === 'sheep'){ const n = 2 + ((Math.random() * 2) | 0); addStackItem('wool', n); toast('+' + n + ' wool'); }
     else { CORE.addMat(game.slots, CORE.MAT.IRON, 4); toast('+4 iron (scavenged)'); }
     refreshHotbar(); refreshToolHUD();
   }
@@ -3105,7 +3397,7 @@ function nearestTorchDist(x, y, z){
 }
 function trySpawnEntities(){
   if (game.mode !== 'survival') return;
-  const counts = { grazer: 0, lurker: 0 };
+  const counts = { grazer: 0, lurker: 0, sheep: 0 };
   for (const e of game.entities) counts[e.type]++;
   const a = Math.random() * Math.PI * 2;
   const d = 22 + Math.random() * 20;
@@ -3123,9 +3415,11 @@ function trySpawnEntities(){
       spawnEntity('lurker', x, uy, z); return;
     }
   }
-  // grazers wander the surface by day
-  if (counts.grazer < ENT_DEF.grazer.cap && game.dayF > 0.4){
-    spawnEntity('grazer', x, h + 0.5, z);
+  // grazers and sheep wander the surface by day
+  if (game.dayF > 0.4){
+    const wantSheep = Math.random() < 0.45;
+    if (wantSheep && counts.sheep < ENT_DEF.sheep.cap){ spawnEntity('sheep', x, h + 0.5, z); return; }
+    if (counts.grazer < ENT_DEF.grazer.cap) spawnEntity('grazer', x, h + 0.5, z);
   }
 }
 function updateEntities(dt, now){
@@ -3243,6 +3537,8 @@ function bindInput(){
     if (e.button === 2){
       // a crafting table in reach overrides the held item's right click
       if (tableSys.onRay(3.5)){ openCraft(); AudioSys.sfx('toggle'); return; }
+      const bed = bedSys.onRay(3.5);
+      if (bed){ bedSys.sleep(bed); return; }
       const tool = activeTool();
       if (tool && tool.kind === 'door'){
         // choose which side of the grid square the door aligns to
@@ -3406,9 +3702,9 @@ function updatePlayer(dt){
     if (k['KeyD']) str += 1;
     if (k['KeyA']) str -= 1;
   }
-  // waist below the water table = swimming (fly overrides)
-  const sea = game.gen.seaLevel;
-  game.swim = !game.fly && sea != null && game.pos.y + playerHeight() * 0.45 < sea;
+  // in water = below sea level AND over a column that is actually a lake —
+  // dry caves under normal land stay dry (no blanket world water table)
+  game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
   // camera-relative on the horizontal plane (yaw only — never world axes)
   const sin = Math.sin(game.yaw), cos = Math.cos(game.yaw);
   let mx = (-sin * fwd + cos * str);
@@ -3523,6 +3819,7 @@ function activeTool(){
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
+  if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -3664,6 +3961,8 @@ function doMine(tool, p, shape, eff){
   if (poppedTables){ addStackItem('table', poppedTables); parts.push('+' + poppedTables + ' table'); }
   const poppedBeacons = beaconSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.9);
   if (poppedBeacons){ addStackItem('beacon', poppedBeacons); parts.push('+' + poppedBeacons + ' beacon'); }
+  const poppedBeds = bedSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 1.0);
+  if (poppedBeds){ addStackItem('bed', poppedBeds); parts.push('+' + poppedBeds + ' bed'); }
   // trees whose ground was carved away fall and yield their wood
   for (const [k, v] of [...treeSys.visible]){
     const t = v.t;
@@ -3780,7 +4079,7 @@ function tryAction(dt, now){
     }
     return;
   }
-  if (tool.kind === 'table' || tool.kind === 'beacon'){
+  if (tool.kind === 'table' || tool.kind === 'beacon' || tool.kind === 'bed'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       const hit = surfaceHit();
@@ -3788,7 +4087,8 @@ function tryAction(dt, now){
       tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2]);
-      else beaconSys.add(hit[0], hit[1], hit[2]);
+      else if (tool.kind === 'beacon') beaconSys.add(hit[0], hit[1], hit[2]);
+      else bedSys.add(hit[0], hit[1], hit[2], Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2));
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -3952,7 +4252,7 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
-    : ['gun', 'torch', 'door', 'table', 'stick', 'beacon'].includes(it.kind) ? it.kind : it.kind + it.tier;
+    : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -3976,6 +4276,15 @@ function itemIconURL(it){
     for (let i = 0; i < 10; i++) c.fillRect(3 + i, 12 - i, 2, 1);
     c.fillStyle = '#5f421f'; c.fillRect(7, 8, 2, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(12, 2, 2, 2);
+  } else if (it.kind === 'wool'){
+    c.fillStyle = '#f2f0e8'; c.fillRect(3, 4, 10, 9);
+    c.fillStyle = '#fbfaf5'; c.fillRect(2, 6, 3, 5); c.fillRect(11, 5, 3, 5); c.fillRect(5, 3, 6, 3);
+    c.fillStyle = '#d5d1c2'; c.fillRect(5, 7, 2, 1); c.fillRect(9, 9, 2, 1); c.fillRect(7, 11, 2, 1);
+  } else if (it.kind === 'bed'){
+    c.fillStyle = '#6b4a26'; c.fillRect(1, 9, 14, 2); c.fillRect(1, 11, 2, 3); c.fillRect(13, 11, 2, 3);
+    c.fillStyle = '#f2f0e8'; c.fillRect(2, 7, 5, 2);           // pillow
+    c.fillStyle = '#b03a3a'; c.fillRect(7, 7, 8, 2);           // blanket
+    c.fillStyle = '#872626'; c.fillRect(7, 8, 8, 1);
   } else if (it.kind === 'beacon'){
     c.fillStyle = '#3a3f4c'; c.fillRect(4, 12, 8, 3);          // base
     c.fillStyle = '#59c8d8'; c.fillRect(7, 4, 2, 8);           // pillar
@@ -4027,6 +4336,8 @@ function itemLabel(it){
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
+  if (it.kind === 'wool') return 'wool';
+  if (it.kind === 'bed') return 'bed';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -4191,7 +4502,11 @@ function refreshToolHUD(){
   } else if (it.kind === 'stick'){
     html = '<div class="t1">sticks ×' + it.count + '</div><div class="t2">crafting material — torches, doors, swords (Q)</div>';
   } else if (it.kind === 'beacon'){
-    html = '<div class="t1">beacon ×' + it.count + '</div><div class="t2">place to set home — compass points there, you respawn beside it</div>';
+    html = '<div class="t1">beacon ×' + it.count + '</div><div class="t2">place as a waypoint — the compass points to your closest beacon</div>';
+  } else if (it.kind === 'wool'){
+    html = '<div class="t1">wool ×' + it.count + '</div><div class="t2">from sheep — craft a bed with planks (Q at a table)</div>';
+  } else if (it.kind === 'bed'){
+    html = '<div class="t1">bed ×' + it.count + '</div><div class="t2">place, then right click it: sets spawn · sleeps through night</div>';
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
            '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
@@ -4234,9 +4549,9 @@ function die(){
   saveNow();
 }
 function respawn(){
-  const home = beaconSys.home();
-  if (home){
-    game.pos.set(home[0] + 1.2, home[1] + 1.2, home[2] + 1.2);
+  const sp = game.spawnPoint;   // set by sleeping in a bed
+  if (sp){
+    game.pos.set(sp[0] + 1.1, sp[1] + 1.0, sp[2] + 1.1);
   } else {
     const h = game.gen.height(0, 0);
     game.pos.set(0, h + 1.5, 0);
@@ -4286,9 +4601,8 @@ function updateSurvival(dt){
   if (game.mode !== 'survival'){ return; }
   if (game.ui !== 'none') return;
   // breath: eyes under the water table drain it; surfacing refills fast
-  const sea = game.gen.seaLevel;
-  const eyeUnder = sea != null && !game.fly &&
-                   game.pos.y + playerHeight() - PLAYER.eyeGap < sea;
+  const eyeUnder = !game.fly &&
+                   inWater(game.pos.x, game.pos.y + playerHeight() - PLAYER.eyeGap, game.pos.z);
   if (game.breath == null) game.breath = 100;
   if (eyeUnder) game.breath = Math.max(0, game.breath - dt * 8);
   else game.breath = Math.min(100, game.breath + dt * 30);
@@ -4505,6 +4819,8 @@ function saveNow(){
     hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
     torches: game.torches,
     beacons: game.beacons,
+    beds: game.beds,
+    spawnPoint: game.spawnPoint,
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     removedTrees: [...(game.removedTreeSet || [])],
@@ -4544,6 +4860,8 @@ function startWorld(id){
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
+  game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
+  game.spawnPoint = data.spawnPoint || null;
   game.breath = 100; game.underwater = false;
   game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
@@ -4576,6 +4894,7 @@ function startWorld(id){
   game.terrain.edits = game.edits;
   torchSys.rebuild();
   beaconSys.rebuild();
+  bedSys.rebuild();
   doorSys.rebuild();
   tableSys.rebuild();
   treeSys.refresh();
@@ -4628,6 +4947,10 @@ function frame(now){
     lastChunk = ck; game.forceStream = false;
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
     treeSys.refresh();
+  } else if (treeSys.pending){
+    // trees held back until their ground meshed — retry as chunks land
+    game.treeRetryT = (game.treeRetryT || 0) + dt;
+    if (game.treeRetryT > 0.3){ game.treeRetryT = 0; treeSys.refresh(); }
   }
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
@@ -4635,20 +4958,21 @@ function frame(now){
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
   updateDayNight(dt);
+  skySys.update(dt);
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   updateSurvival(dt);
   // embers off nearby placed torches
   game.emberT = (game.emberT || 0) + dt;
-  if (game.emberT > 0.14){
+  if (game.emberT > 0.4){
     game.emberT = 0;
     let emitted = 0;
     for (const t of game.torches){
-      if (emitted >= 8) break;
+      if (emitted >= 6) break;
       const d = Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z);
       if (d > 28) continue;
-      if (Math.random() < 0.55){
-        Embers.burst(t[0], t[1] + 0.5, t[2], 0.05, [0xffb347, 0xffdd66, 0xff8830], 1, 0.4);
+      if (Math.random() < 0.4){
+        Embers.burst(t[0], t[1] + 0.5, t[2], 0.04, [0xffb347, 0xffdd66, 0xff8830], 1, 0.12);
         emitted++;
       }
     }
@@ -4664,14 +4988,9 @@ function frame(now){
     game.cacheMarker.scale.setScalar(1 + Math.sin(now * 0.004) * 0.15);
   }
 
-  // water plane follows the player (snapped to the 4m texture period so the
-  // pixel texels stay world-anchored); underwater tint when the eye is below
-  if (game.water){
-    const per = 4;
-    game.water.position.x = Math.round(game.pos.x / per) * per;
-    game.water.position.z = Math.round(game.pos.z / per) * per;
-    const eyeY = game.pos.y + playerHeight() - PLAYER.eyeGap;
-    const under = eyeY < game.gen.seaLevel;
+  // underwater tint when the eye is in lake water
+  if (game.gen.seaLevel != null){
+    const under = inWater(game.pos.x, game.pos.y + playerHeight() - PLAYER.eyeGap, game.pos.z);
     if (under !== game.underwater){
       game.underwater = under;
       $('uwater').classList.toggle('hidden', !under);
@@ -4694,7 +5013,7 @@ function frame(now){
     } else {
       game.terrainMat.uniforms.uFogCol.value.copy(game.skyNow || SKY);
     }
-    const home = beaconSys.home() || [0, 0, 0];
+    const home = beaconSys.nearest() || [0, 0, 0];
     const dist = Math.hypot(home[0] - game.pos.x, home[2] - game.pos.z);
     const thv = Math.atan2(home[0] - game.pos.x, home[2] - game.pos.z);
     const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
