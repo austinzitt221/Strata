@@ -92,6 +92,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- fatal ---------- */
 #fatal{z-index:100; background:#14060a;}
+.statfill.breath{background:#4aa3e8;}
+#uwater{position:fixed;inset:0;background:rgba(18,58,98,0.38);pointer-events:none;z-index:3;}
 #fatal .panel{border-color:#a33;}
 #fatal pre{white-space:pre-wrap; color:#ff9b9b; font-size:12px; margin:10px 0; max-width:60vw;}
 </style>
@@ -102,7 +104,9 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div id="statbars" class="hidden">
     <div class="statbar"><div id="hpfill" class="statfill hp"></div></div>
     <div class="statbar"><div id="foodfill" class="statfill food"></div></div>
+    <div class="statbar hidden" id="breathbar"><div id="breathfill" class="statfill breath"></div></div>
   </div>
+  <div id="uwater" class="hidden"></div>
   <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
@@ -248,9 +252,9 @@ const BEDROCK_Y = -63.99;     // everything below is permanently solid
 const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11 };
-const NMAT = 11;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13 };
+const NMAT = 13;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -334,7 +338,9 @@ function makeGen(seed){
   const sA = hashInt(seed ^ 0x846ca68b), sC = hashInt(seed ^ 0x9e3779b9);
   const sV = hashInt(seed ^ 0x2545f491), sW = hashInt(seed ^ 0x3c6ef372);
   const sE = hashInt(seed ^ 0xdaa66d2b), sM = hashInt(seed ^ 0x14057b7f);
+  const sU = hashInt(seed ^ 0x27d4eb2f), sU2 = hashInt(seed ^ 0x165667b1);
 
+  const seaLevel = -1.5;   // global water table: valleys and caves below flood
   function biome(x, z){ return fbm2(sB, x * 0.0045, z * 0.0045, 2); }
   function height(x, z){
     const b = biome(x, z);
@@ -386,18 +392,89 @@ function makeGen(seed){
     // old 4x scale a 2m tunnel read as ~0.3m and no cave was enterable)
     return Math.min(tunnel * 22, room * 34);
   }
+  // ---- ruins: broken stonebrick shells with an ore pillar, one candidate
+  // per 72m lattice cell. Solid geometry lives in the GENERATOR (union with
+  // the terrain field), so seams, collision and mining all just work.
+  const RUIN_CELL = 72;
+  const ruinCache = new Map();
+  function ruinInCell(cx, cz){
+    const key = cx + ',' + cz;
+    if (ruinCache.has(key)) return ruinCache.get(key);
+    let R = null;
+    const h0 = hashInt(sU ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    if (h0 / 4294967296 < 0.42){
+      const x = cx * RUIN_CELL + 12 + (hashInt(h0 ^ 1) / 4294967296) * (RUIN_CELL - 24);
+      const z = cz * RUIN_CELL + 12 + (hashInt(h0 ^ 3) / 4294967296) * (RUIN_CELL - 24);
+      const gh = height(x, z);
+      const slope = Math.abs(height(x + 3, z) - height(x - 3, z)) +
+                    Math.abs(height(x, z + 3) - height(x, z - 3));
+      if (gh > seaLevel + 0.5 && gh < 14 && slope < 2.6){
+        R = {
+          x, z, base: gh - 0.5,
+          r: 3.2 + (hashInt(h0 ^ 4) / 4294967296) * 2.2,
+          wallH: 2.3 + (hashInt(h0 ^ 5) / 4294967296) * 1.2,
+          doorSide: hashInt(h0 ^ 6) & 3,
+        };
+      }
+    }
+    ruinCache.set(key, R);
+    return R;
+  }
+  function ruinNear(x, z){
+    // candidates sit >= 12m inside their cell and r <= 5.4, so only the
+    // containing cell can ever reach a given point
+    return ruinInCell(Math.floor(x / RUIN_CELL), Math.floor(z / RUIN_CELL));
+  }
+  function ruinSDF(x, y, z){
+    const R = ruinNear(x, z);
+    if (!R) return 1e9;
+    const dx = x - R.x, dz = z - R.z;
+    const cheb = Math.max(Math.abs(dx), Math.abs(dz));
+    if (cheb > R.r + 2 || y > R.base + R.wallH + 1.5 || y < R.base - 3) return 1e9;
+    // floor slab
+    const slab = Math.max(cheb - (R.r + 0.4), Math.abs(y - (R.base - 0.8)) - 1.0);
+    // ring wall, 0.6 thick, jagged broken top
+    const topY = R.base + R.wallH * (0.3 + 0.7 * sstep(0.25, 0.75,
+      noise2(sU2, (x + z * 0.37) * 0.55, (z - x * 0.21) * 0.55)));
+    let wall = Math.max(cheb - R.r, (R.r - 0.6) - cheb, y - topY, R.base - 1.5 - y);
+    // doorway gap on one side
+    const ds = R.doorSide;
+    const gx = ds === 0 ? dx - R.r : ds === 1 ? dx + R.r : dx;
+    const gz = ds === 2 ? dz - R.r : ds === 3 ? dz + R.r : dz;
+    const gap = Math.max(Math.abs(gx) - 1.1, Math.abs(gz) - 1.1, Math.abs(y - (R.base + 1.15)) - 1.25);
+    wall = Math.max(wall, -gap);
+    // center ore pillar
+    const pillar = Math.max(Math.max(Math.abs(dx), Math.abs(dz)) - 0.55, y - (R.base + 1.7), R.base - 1.5 - y);
+    return Math.min(slab, wall, pillar) * 0.8;   // Chebyshev-ish: shrink to stay conservative
+  }
+  // material inside ruin geometry: stonebrick shell, obsidian pillar with a
+  // diamond cap — surface-findable loot worth breaking open
+  function ruinMat(x, y, z){
+    const R = ruinNear(x, z);
+    if (!R) return 0;
+    if (ruinSDF(x, y, z) > 0.35) return 0;
+    if (Math.max(Math.abs(x - R.x), Math.abs(z - R.z)) < 0.8){
+      return y > R.base + 1.1 ? MAT.DIAMOND : MAT.OBSIDIAN;
+    }
+    return MAT.STONEBRICK;
+  }
   function sdfFromH(h, x, y, z){
-    const d = (y - h) * 0.65;
-    if (d > 2.5) return d;
+    let d = (y - h) * 0.65;
+    if (d > 2.5){
+      const rs = ruinSDF(x, y, z);
+      return rs < d ? rs : d;
+    }
     if (d > 0.05){
       // Above the heightfield the naive answer is "surface d below you" —
       // but over a cave mouth that surface is carved away, and returning d
       // builds an invisible floor the collider bounces on. Near entrance
       // zones, keep taking max with the carve so the air over a hole knows
       // the nearest solid is the rim, not the missing ground.
-      if (entranceMask(x, z) < 0.15) return d;
+      if (entranceMask(x, z) < 0.15) return Math.min(d, ruinSDF(x, y, z));
     }
-    return Math.max(d, -caveCarve(x, y, z, h));
+    d = Math.max(d, -caveCarve(x, y, z, h));
+    const rs = ruinSDF(x, y, z);
+    return rs < d ? rs : d;
   }
   function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
   function oreAt(x, y, z){
@@ -419,13 +496,17 @@ function makeGen(seed){
     return 0;
   }
   function mat(x, y, z){
+    const rm = ruinMat(x, y, z);
+    if (rm) return rm;
     const ore = oreAt(x, y, z);
     if (ore) return ore;
     const h = height(x, z);
     if (y > h - 0.9){
+      if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
       if (isDesert(x, z)) return MAT.SAND;
-      if (h < 12) return MAT.GRASS;   // bare rock on high mountains
-      return MAT.ROCK;
+      if (h >= 13.5) return MAT.SNOW;            // snow-capped peaks
+      if (h < 12) return MAT.GRASS;
+      return MAT.ROCK;                           // bare rock band below the caps
     }
     return MAT.ROCK;
   }
@@ -436,6 +517,15 @@ function makeGen(seed){
       if (h < mn) mn = h;
       if (h > mx) mx = h;
     }
+    // ruin walls rise above the terrain — chunks holding them must not be
+    // skipped as "all air"
+    for (let cx = Math.floor((x0 - 2) / RUIN_CELL); cx <= Math.floor((x1 + 2) / RUIN_CELL); cx++)
+      for (let cz = Math.floor((z0 - 2) / RUIN_CELL); cz <= Math.floor((z1 + 2) / RUIN_CELL); cz++){
+        const R = ruinInCell(cx, cz);
+        if (R && R.x + R.r + 2 > x0 && R.x - R.r - 2 < x1 && R.z + R.r + 2 > z0 && R.z - R.r - 2 < z1){
+          mx = Math.max(mx, R.base + R.wallH);
+        }
+      }
     return [mn - 4, mx + 4];
   }
   // chunk-local gen: heights precomputed on the sample grid and bilinearly
@@ -458,7 +548,7 @@ function makeGen(seed){
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
     return {
-      height: lh, heightRange, mat, caves: true,
+      height: lh, heightRange, mat, caves: true, seaLevel, ruinInCell,
       sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z),
       makeLocal,
     };
@@ -467,22 +557,23 @@ function makeGen(seed){
   const sT = hashInt(seed ^ 0x71f68b1c);
   function treeAt(cx, cz){
     const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
-    if (h0 / 4294967296 > 0.32) return null;
+    if (h0 / 4294967296 > 0.52) return null;   // denser: beaches/water now exclude many cells
     const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
     const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
     if (biome(x, z) > 0.55 || isDesert(x, z)) return null;
     const h = height(x, z);
-    if (h < -1 || h > 12) return null;
+    if (h < seaLevel + 1.8 || h > 12) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, caves: true, seed };
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, caves: true, seed, seaLevel, ruinInCell };
 }
 const TREE_CELL = 11;
 const FLAT_GEN = {
   treeAt: () => null,
+  seaLevel: null, ruinInCell: () => null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
   sdf: (x, y, z) => y - SURFACE_Y,
@@ -1002,7 +1093,7 @@ function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick'];
+const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon'];
 function stackableWith(A, B){
   if (!A || !B || A.kind !== B.kind) return false;
   if (A.kind === 'mat') return A.mat === B.mat;
@@ -1099,7 +1190,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -1168,6 +1259,7 @@ const RECIPES = [];
   // basic
   RECIPES.push({ kind: 'matout', matOut: MAT.PLANKS, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
+  RECIPES.push({ kind: 'matout', matOut: MAT.STONEBRICK, yields: 4, costs: [{ mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
   // station
@@ -1182,6 +1274,8 @@ const RECIPES = [];
   }
   RECIPES.push({ kind: 'gun', station: true, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
+  RECIPES.push({ kind: 'beacon', yields: 1, station: true,
+    costs: [{ mat: MAT.IRON, n: 8 }, { mat: MAT.RUBY, n: 4 }, { mat: MAT.PLANKS, n: 4 }] });
 }
 function canCraft(slots, r){
   return r.costs.every(c => (c.item ? countItem(slots, c.item) : countMat(slots, c.mat)) >= c.n);
@@ -1383,6 +1477,24 @@ function makeTileDrawers(){
       ctx.fillRect(3, 9, 1, 3); ctx.fillRect(9, 13, 1, 3);
       ctx.fillStyle = '#5f4720';
       ctx.fillRect(6, 2, 1, 1); ctx.fillRect(12, 6, 1, 1); ctx.fillRect(4, 10, 1, 1);
+    },
+    [CORE.MAT.SNOW](ctx, rng){
+      speckle(ctx, rng, '#e8f0f8', '#d5e2ef', '#f8fcff', 0.25, 0.25);
+      for (let i = 0; i < 5; i++){                       // sparkles
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect((rng()*15)|0, (rng()*15)|0, 1, 1);
+      }
+      ctx.fillStyle = '#c2d4e6';
+      for (let i = 0; i < 4; i++) ctx.fillRect((rng()*14)|0, (rng()*14)|0, 2, 1);
+    },
+    [CORE.MAT.STONEBRICK](ctx, rng){
+      speckle(ctx, rng, '#8f8f96', '#7c7c84', '#a0a0a8', 0.28, 0.18);
+      ctx.fillStyle = '#5f5f66';                          // mortar courses
+      for (const y of [0, 5, 10, 15]) ctx.fillRect(0, y, 16, 1);
+      ctx.fillRect(7, 1, 1, 4); ctx.fillRect(3, 6, 1, 4); ctx.fillRect(11, 6, 1, 4);
+      ctx.fillRect(7, 11, 1, 4);
+      ctx.fillStyle = '#6d6d74';                          // weathering chips
+      for (let i = 0; i < 4; i++) ctx.fillRect((rng()*14)|0, (rng()*14)|0, 2, 1);
     },
     [CORE.MAT.GLOWSHROOM](ctx, rng){
       speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
@@ -1643,7 +1755,7 @@ const game = {
   undoStack: [], orbFlash: 0,
   // survival state
   mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
-  torches: [], entities: [], deathCache: null,
+  torches: [], beacons: [], entities: [], deathCache: null,
   doors: [], tables: [], removedTrees: [], solidProps: [],
   lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
@@ -1804,9 +1916,35 @@ function buildScene(){
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
+  // sea-level water: one big translucent plane following the player. The
+  // world's water is a global table at gen.seaLevel — valleys, mined pits
+  // and cave sections below it are all "in water", and this single plane is
+  // the visible surface wherever air meets that level (depth test hides it
+  // behind terrain automatically, including inside flooded caves).
+  game.water = null;
+  if (game.gen.seaLevel != null){
+    const wTex = PixTex.make('water', (c, w, h, rng) => {
+      pxSpeckle(c, rng, '#2e6fa3', '#27618f', '#3a80b8', 30);
+      c.fillStyle = '#4a94cc';
+      c.fillRect(1, 3, 5, 1); c.fillRect(9, 7, 5, 1); c.fillRect(4, 12, 5, 1);
+    });
+    const wt = wTex.clone(); wt.needsUpdate = true;
+    wt.repeat.set(150, 150);
+    const wm = new THREE.MeshBasicMaterial({
+      map: wt, color: 0xbcd4e8, transparent: true, opacity: 0.62,
+      depthWrite: false, side: THREE.DoubleSide,
+    });
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), wm);
+    water.rotation.x = -Math.PI / 2;
+    water.position.y = game.gen.seaLevel;
+    water.renderOrder = 3;
+    scene.add(water);
+    game.water = water;
+  }
   Particles.init(scene);
   Embers.init(scene);
   torchSys.init(scene);
+  beaconSys.init(scene);
   treeSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
@@ -1819,7 +1957,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -2161,6 +2299,18 @@ function buildViewmodel(cam){
     return t;
   });
 
+  const beacon = held(() => {
+    const t = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.07, 0.14), steelM);
+    base.position.y = 0.02;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), pixMat(PROP_TEX.energy, 0x59c8d8, 1, 2));
+    pillar.position.y = 0.2;
+    const gem = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.09), pixMat(PROP_TEX.energy, 0x9fe8ff));
+    gem.position.y = 0.38; gem.rotation.y = Math.PI / 4; gem.rotation.z = Math.PI / 4;
+    t.add(base); t.add(pillar); t.add(gem);
+    return t;
+  });
+
   const matCube = held(() => {
     const t = new THREE.Group();
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15),
@@ -2173,12 +2323,12 @@ function buildViewmodel(cam){
   });
 
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
-  vm.add(stick); vm.add(door); vm.add(table); vm.add(matCube);
+  vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(matCube);
   vm.scale.setScalar(0.5);
   vm.rotation.y = 0.42;                // tips angle inward so the business end reads
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, matCube,
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, matCube,
               bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
@@ -2194,6 +2344,7 @@ function updateViewmodel(dt){
   v.stick.visible = kind === 'stick';
   v.door.visible = kind === 'door';
   v.table.visible = kind === 'table';
+  v.beacon.visible = kind === 'beacon';
   v.matCube.visible = kind === 'mat';
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
@@ -2448,12 +2599,55 @@ function updateDayNight(dt){
   u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
   u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
   game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
-  u.uFogCol.value.copy(game.skyNow);
+  if (!game.underwater) u.uFogCol.value.copy(game.skyNow);
   if (treeSys.mats){
     const b = 0.3 + 0.7 * dayF;                    // trees darken with the sky
     for (const k in treeSys.mats) treeSys.mats[k].color.setScalar(b);
   }
 }
+
+// ---------- beacons: craftable home anchor ----------
+// the LAST placed beacon is "home": the compass points to it and survival
+// respawn lands beside it (fall back to world spawn with none placed)
+const beaconSys = {
+  group: null, mats: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    if (!this.mats){
+      this.mats = {
+        base: pixMat(PROP_TEX.steel),
+        pillar: pixMat(PROP_TEX.energy, 0x59c8d8, 1, 3),
+        gem: pixMat(PROP_TEX.energy, 0x9fe8ff),
+      };
+    }
+    for (const b of game.beacons){
+      const g = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.7), this.mats.base);
+      base.position.y = 0.17;
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.5, 0.24), this.mats.pillar);
+      pillar.position.y = 1.05;
+      const gem = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), this.mats.gem);
+      gem.position.y = 1.95; gem.rotation.y = Math.PI / 4; gem.rotation.z = Math.PI / 4;
+      g.add(base); g.add(pillar); g.add(gem);
+      g.position.set(b[0], b[1], b[2]);
+      this.group.add(g);
+    }
+  },
+  add(x, y, z){ game.beacons.push([x, y, z]); this.rebuild(); markSave(); toast('home beacon set'); },
+  removeNear(x, y, z, r){
+    const keep = [], n0 = game.beacons.length;
+    for (const b of game.beacons){
+      if (Math.hypot(b[0] - x, b[1] + 1 - y, b[2] - z) > r) keep.push(b);
+    }
+    game.beacons = keep;
+    const n = n0 - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+  home(){ return game.beacons.length ? game.beacons[game.beacons.length - 1] : null; },
+};
 
 // ---------- torches ----------
 const torchSys = {
@@ -2498,13 +2692,18 @@ const torchSys = {
     for (let i = 0; i < game.torches.length; i++){
       const t = game.torches[i];
       const d = Math.hypot(t[0]-game.pos.x, t[1]-game.pos.y, t[2]-game.pos.z);
-      if (d < 50) near.push([d, i, t]);
+      if (d < 50) near.push([d, t, 0.45, 9.8]);
+    }
+    for (let i = 0; i < game.beacons.length; i++){
+      const b = game.beacons[i];
+      const d = Math.hypot(b[0]-game.pos.x, b[1]-game.pos.y, b[2]-game.pos.z);
+      if (d < 60) near.push([d, b, 1.6, 13.5]);
     }
     near.sort((a, b) => a[0] - b[0]);
     const n = Math.min(16, near.length);
     for (let i = 0; i < n; i++){
-      const t = near[i][2];
-      u.uTorch.value[i].set(t[0], t[1] + 0.45, t[2], 9.8);
+      const [, t, dy, pw] = near[i];
+      u.uTorch.value[i].set(t[0], t[1] + dy, t[2], pw);
     }
     u.uTorchN.value = n;
   },
@@ -3207,6 +3406,9 @@ function updatePlayer(dt){
     if (k['KeyD']) str += 1;
     if (k['KeyA']) str -= 1;
   }
+  // waist below the water table = swimming (fly overrides)
+  const sea = game.gen.seaLevel;
+  game.swim = !game.fly && sea != null && game.pos.y + playerHeight() * 0.45 < sea;
   // camera-relative on the horizontal plane (yaw only — never world axes)
   const sin = Math.sin(game.yaw), cos = Math.cos(game.yaw);
   let mx = (-sin * fwd + cos * str);
@@ -3222,6 +3424,15 @@ function updatePlayer(dt){
     if (canMove && k['Space']) vy += sp;
     if (canMove && k['KeyC']) vy -= sp;
     game.vel.y = vy;
+  } else if (game.swim){
+    // buoyant water movement: slow drift, space up / C down, no hard jumps
+    const sp = PLAYER.walk * 0.55;
+    game.vel.x += (mx * sp - game.vel.x) * Math.min(1, 8 * dt);
+    game.vel.z += (mz * sp - game.vel.z) * Math.min(1, 8 * dt);
+    let ty = -1.4;                                   // slow sink at rest
+    if (canMove && k['Space']) ty = 3.4;             // swim up (enough to climb out)
+    else if (canMove && k['KeyC']) ty = -3.6;        // dive
+    game.vel.y += (ty - game.vel.y) * Math.min(1, 6 * dt);
   } else {
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1);
     // snappy ground control, mild air control
@@ -3271,8 +3482,9 @@ function updatePlayer(dt){
     }
   }
 
-  // fall damage: compare impact speed on the grounded transition
-  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival'){
+  // fall damage: compare impact speed on the grounded transition (water
+  // breaks the fall)
+  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival' && !game.swim){
     const impact = -vyBefore;
     if (impact > 11) damagePlayer(Math.round((impact - 11) * 5), 0, 0);
   }
@@ -3310,6 +3522,7 @@ function activeTool(){
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
+  if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -3449,6 +3662,8 @@ function doMine(tool, p, shape, eff){
   if (poppedDoors){ addStackItem('door', poppedDoors); parts.push('+' + poppedDoors + ' door'); }
   const poppedTables = tableSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
   if (poppedTables){ addStackItem('table', poppedTables); parts.push('+' + poppedTables + ' table'); }
+  const poppedBeacons = beaconSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.9);
+  if (poppedBeacons){ addStackItem('beacon', poppedBeacons); parts.push('+' + poppedBeacons + ' beacon'); }
   // trees whose ground was carved away fall and yield their wood
   for (const [k, v] of [...treeSys.visible]){
     const t = v.t;
@@ -3565,14 +3780,15 @@ function tryAction(dt, now){
     }
     return;
   }
-  if (tool.kind === 'table'){
+  if (tool.kind === 'table' || tool.kind === 'beacon'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       const hit = surfaceHit();
       if (!hit){ toast('no ground in reach'); return; }
       tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
-      tableSys.add(hit[0], hit[1], hit[2]);
+      if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2]);
+      else beaconSys.add(hit[0], hit[1], hit[2]);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -3736,7 +3952,7 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
-    : ['gun', 'torch', 'door', 'table', 'stick'].includes(it.kind) ? it.kind : it.kind + it.tier;
+    : ['gun', 'torch', 'door', 'table', 'stick', 'beacon'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -3760,6 +3976,11 @@ function itemIconURL(it){
     for (let i = 0; i < 10; i++) c.fillRect(3 + i, 12 - i, 2, 1);
     c.fillStyle = '#5f421f'; c.fillRect(7, 8, 2, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(12, 2, 2, 2);
+  } else if (it.kind === 'beacon'){
+    c.fillStyle = '#3a3f4c'; c.fillRect(4, 12, 8, 3);          // base
+    c.fillStyle = '#59c8d8'; c.fillRect(7, 4, 2, 8);           // pillar
+    c.fillStyle = '#9fe8ff'; c.fillRect(6, 1, 4, 4);           // gem
+    c.fillStyle = '#ffffff'; c.fillRect(7, 2, 1, 1);
   } else if (it.kind === 'door'){
     c.fillStyle = '#8a6237'; c.fillRect(4, 2, 8, 12);
     c.fillStyle = '#6b4a26'; c.fillRect(4, 2, 8, 1); c.fillRect(4, 7, 8, 1);
@@ -3805,6 +4026,7 @@ function itemLabel(it){
   if (it.kind === 'gun') return 'blaster';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'stick') return 'sticks';
+  if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -3968,6 +4190,8 @@ function refreshToolHUD(){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
   } else if (it.kind === 'stick'){
     html = '<div class="t1">sticks ×' + it.count + '</div><div class="t2">crafting material — torches, doors, swords (Q)</div>';
+  } else if (it.kind === 'beacon'){
+    html = '<div class="t1">beacon ×' + it.count + '</div><div class="t2">place to set home — compass points there, you respawn beside it</div>';
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
            '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
@@ -4010,8 +4234,13 @@ function die(){
   saveNow();
 }
 function respawn(){
-  const h = game.gen.height(0, 0);
-  game.pos.set(0, h + 1.5, 0);
+  const home = beaconSys.home();
+  if (home){
+    game.pos.set(home[0] + 1.2, home[1] + 1.2, home[2] + 1.2);
+  } else {
+    const h = game.gen.height(0, 0);
+    game.pos.set(0, h + 1.5, 0);
+  }
   game.vel.set(0, 0, 0);
   game.hp = 100; game.food = 100;
   hide('deathscreen');
@@ -4056,6 +4285,19 @@ function tryPickupCache(){
 function updateSurvival(dt){
   if (game.mode !== 'survival'){ return; }
   if (game.ui !== 'none') return;
+  // breath: eyes under the water table drain it; surfacing refills fast
+  const sea = game.gen.seaLevel;
+  const eyeUnder = sea != null && !game.fly &&
+                   game.pos.y + playerHeight() - PLAYER.eyeGap < sea;
+  if (game.breath == null) game.breath = 100;
+  if (eyeUnder) game.breath = Math.max(0, game.breath - dt * 8);
+  else game.breath = Math.min(100, game.breath + dt * 30);
+  if (eyeUnder && game.breath <= 0) damagePlayer(dt * 6, 0, 0);
+  const bb = $('breathbar');
+  if (game.breath < 100){
+    bb.classList.remove('hidden');
+    $('breathfill').style.width = game.breath.toFixed(0) + '%';
+  } else bb.classList.add('hidden');
   const sprint = (game.keys['ShiftLeft'] || game.keys['ShiftRight']) && Math.hypot(game.vel.x, game.vel.z) > 4;
   game.food = Math.max(0, game.food - dt * (sprint ? 0.45 : 0.2));
   if (game.food <= 0) damagePlayer(dt * 2.2, 0, 0);
@@ -4255,14 +4497,15 @@ function markSave(){ game.savePending = true; game.saveTimer = performance.now()
 function saveNow(){
   if (!game.running || !game.worldId) return;
   const data = {
-    v: 4, name: game.worldName, seed: game.seedStr, mode: game.mode,
+    v: 5, name: game.worldName, seed: game.seedStr, mode: game.mode,
     edits: CORE.serializeEdits(game.edits),
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
     torches: game.torches,
-    doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0]),
+    beacons: game.beacons,
+    doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     removedTrees: [...(game.removedTreeSet || [])],
     entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
@@ -4300,7 +4543,9 @@ function startWorld(id){
   game.food = data.food == null ? 100 : data.food;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
-  game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4] }));
+  game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
+  game.breath = 100; game.underwater = false;
+  game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
@@ -4330,6 +4575,7 @@ function startWorld(id){
   buildScene();
   game.terrain.edits = game.edits;
   torchSys.rebuild();
+  beaconSys.rebuild();
   doorSys.rebuild();
   tableSys.rebuild();
   treeSys.refresh();
@@ -4418,6 +4664,20 @@ function frame(now){
     game.cacheMarker.scale.setScalar(1 + Math.sin(now * 0.004) * 0.15);
   }
 
+  // water plane follows the player (snapped to the 4m texture period so the
+  // pixel texels stay world-anchored); underwater tint when the eye is below
+  if (game.water){
+    const per = 4;
+    game.water.position.x = Math.round(game.pos.x / per) * per;
+    game.water.position.z = Math.round(game.pos.z / per) * per;
+    const eyeY = game.pos.y + playerHeight() - PLAYER.eyeGap;
+    const under = eyeY < game.gen.seaLevel;
+    if (under !== game.underwater){
+      game.underwater = under;
+      $('uwater').classList.toggle('hidden', !under);
+    }
+  }
+
   // cave ambience + compass, throttled
   game.navT = (game.navT || 0) + dt;
   if (game.navT > 0.2){
@@ -4428,8 +4688,15 @@ function frame(now){
     // not-yet-meshed frontier chunks never flash bright blue in the dark
     const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
     game.scene.background.copy(game.skyNow || SKY).multiplyScalar(skyF);
-    const dist = Math.hypot(game.pos.x, game.pos.z);
-    const thv = Math.atan2(-game.pos.x, -game.pos.z);
+    if (game.underwater){
+      game.scene.background.setRGB(0.07, 0.2, 0.34).multiplyScalar(Math.max(skyF, 0.35));
+      game.terrainMat.uniforms.uFogCol.value.copy(game.scene.background);
+    } else {
+      game.terrainMat.uniforms.uFogCol.value.copy(game.skyNow || SKY);
+    }
+    const home = beaconSys.home() || [0, 0, 0];
+    const dist = Math.hypot(home[0] - game.pos.x, home[2] - game.pos.z);
+    const thv = Math.atan2(home[0] - game.pos.x, home[2] - game.pos.z);
     const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
     $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
     $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';

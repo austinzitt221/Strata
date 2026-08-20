@@ -2,6 +2,64 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5 — water & world depth (2026-08-20)
+
+### Water
+- **Global water table at y = -1.5** (gen.seaLevel): valleys flood into
+  lakes, mined pits below sea level fill, and cave sections under it are
+  flooded — one consistent rule, no simulation. The flat build-1 world has
+  no sea (seaLevel null), so all legacy behavior holds.
+- Rendering: one big translucent pixel-textured plane that follows the
+  player (position snapped to the 4m texture period so texels stay
+  world-anchored). The depth test hides it behind terrain, which makes it
+  correct inside flooded caves for free. Underwater: blue screen tint +
+  fog/sky shift to deep blue.
+- **Swimming**: waist below the table = buoyant movement (slow sink at
+  rest, Space swims up hard enough to climb out, C dives, ~half walk
+  speed). Water breaks falls (no fall damage into water).
+- **Breath** (survival): 12.5s of air, refills fast at the surface; blue
+  breath bar appears when it's not full; drowning deals 6 hp/s at zero.
+
+### World depth
+- **Beaches**: sand rings every waterline (h < sea+1.6). Trees no longer
+  spawn there (density retuned so overall tree count holds).
+- **Snow**: new SNOW material caps terrain above h≈13.5, with sparkle
+  texture; buildable/minable like any material.
+- **Ruins**: broken stonebrick shells (one candidate per 72m cell, ~40%
+  occupancy, flat-ground/altitude gated) baked directly into the
+  generator's field + material functions — so seams, collision, mining
+  and chunk skipping (heightRange sees the walls) all just work. Jagged
+  broken wall tops, a doorway, a floor slab, and a center loot pillar:
+  obsidian with a **diamond cap** — surface-findable diamond, worth
+  breaking open. New STONEBRICK material; 4 rock -> 4 stonebrick (basic
+  recipe) so ruins are also a building-block source.
+
+### Beacons
+Station recipe (8 iron + 4 ruby + 4 planks) -> beacon item. Place it to
+set **home**: the compass arrow and distance now point at the latest
+beacon (spawn if none), and survival respawn lands beside it. Placed
+beacons are steel-based glowing pillars that light their surroundings
+like oversized torches (16-light budget shared, nearest win). Mining
+near one pops it back into inventory, like tables/doors.
+
+### Fixes riding along
+- Door sizes (w/h) now survive save/load — the v4 serializer dropped
+  them, so every door reloaded at default size. Save format is v5
+  (beacons added; old saves load fine with defaults).
+
+### Verification
+187 headless tests (new: sea level, beaches/snow coverage, ruin
+determinism + solidity + materials + local/global agreement + watertight
+meshing, stonebrick/beacon recipes). Browser: swim/overlay/breath/
+swim-up verified numerically; beacon place -> compass 2m -> respawn
+beside home; screenshots of lake, lakebed dive, ruin, snow peak, placed
+beacon. Full smoke green, zero console errors.
+
+### Known issues
+- Entities ignore water (walk on lakebeds). Water is invisible at long
+  range where the 600m plane ends.
+- Distant trees can float briefly over unmeshed shore chunks.
+
 ## Build 4.3 — hole fix, freeze fix, viewmodel & texture overhaul (2026-08-20)
 
 ### Bug: holes in geo when building/mining (see under the map) — FIXED

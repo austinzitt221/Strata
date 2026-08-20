@@ -13,7 +13,7 @@ save/load. See CLAUDE.md "Definition of done."
 - Tiling grid snap, shared tool shape/size, dispenser slot with auto-equip,
   V/B ghost distance, anti-slide.
 
-## Build 3 — Depth & Feel (CURRENT)
+## Build 3 — Depth & Feel (DONE)
 The world gets dark, loud, and juicy; the tools get their full kit.
 - **Lighting**: darkness underground (skylight falls off with depth), player
   headlamp radius, ore shimmer in the dark, fog fades to black at depth.
@@ -35,7 +35,7 @@ The world gets dark, loud, and juicy; the tools get their full kit.
   - Dispenser orb shrinks with the held stack and flashes red when short.
 - **Navigation**: coordinates readout + compass arrow to spawn.
 
-## Build 4 — Survival layer
+## Build 4 — Survival layer (DONE, incl. 4.1–4.3 patches)
 - Creative/survival mode toggle at world creation.
 - Health, fall damage, hunger or equivalent; death drops your stuff where
   you died (the world's geography starts to matter).
@@ -43,7 +43,7 @@ The world gets dark, loud, and juicy; the tools get their full kit.
 - Enemies + animals with spawning rules (dark spawns underground); guns.
 - Torch/light-source item — doubles as cave breadcrumbs.
 
-## Build 5 — Water & world depth
+## Build 5 — Water & world depth (IN PLAYTEST)
 - Water: sea level filling valleys, swimming, flooded cave sections.
 - More biomes/environments; structures and cave features worth finding.
 - Waypoint/beacon items and a base anchor (compass targets, fast travel or
