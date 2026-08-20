@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 4.3 — hole fix, freeze fix, viewmodel & texture overhaul (2026-08-20)
+
+### Bug: holes in geo when building/mining (see under the map) — FIXED
+Root cause pinned by A/B headless scans: 4.2's dual-vertex cells. Splitting
+a cell into two sheet vertices needs full manifold-DC face bookkeeping to
+stay watertight; the per-cell-edge stitching left slit holes — worst at
+small brush sizes where thin features put two-sheet cells everywhere (up
+to 24 open edges in a 6-carve cluster; the playtest's "pretty big holes").
+Fix: thin-gap cells now solve ONE vertex on the DOMINANT sheet only. The
+vertex lies on a real surface (no mid-gap QEF spike, so the 4.2 shard fix
+holds — placed-cube quality test still passes) and topology stays standard
+one-vertex DC, so holes are impossible by construction. Watertight bound
+tightened back to ZERO and 7 new small-brush regression tests added
+(spheres/cubes/mixed at 0.5–1.5m). 171 headless tests green.
+
+### Bug: game freezes holding a dispenser item in the hotbar — FIXED
+updateViewmodel derived the held kind from the ITEM ('disp') but the
+tier-color path dereferenced activeTool(), which is null for a bare
+dispenser in hand (only drills activate from the hotbar) — a TypeError
+every frame killed the loop. Guarded; regression-checked in the browser.
+
+### Viewmodel overhaul
+- **Minecraft arm**: rectangular arm from the bottom-right — blue
+  pixel-textured sleeve up the arm, pale skin hand, chunky MC proportions.
+  Every held item (torch, stick, sword, door, table, material chunk) sits
+  in/on the fist — nothing floats in front of the camera. Loose material
+  stacks show a textured chunk of that material in the hand.
+- **Drill redesign**: big industrial driver — armored body with panel-seam
+  and rivet textures, side/rear vents, light steel spine, energy core
+  stripe and spiral-fluted bit both tinted by tier; the whole head spins
+  while mining.
+- **Dispenser redesign**: armored emitter — textured body, crown plate,
+  side plates, tier-tinted energy core + front ring, three claw prongs
+  cradling the loaded-material orb (still the ammo gauge, still flashes
+  red when short).
+- All 16x16 canvas pixel textures (NearestFilter), grayscale where
+  tier-tinted, built once and cached (PixTex/PROP_TEX).
+
+### Prop texture rework
+Torch (bark stick + ember-pixel tip), door (vertical plank texture with
+grooves + panel lines), crafting table (plank top with painted saw,
+hammer and nails; bark legs, plank sides). Held versions match.
+
+### Torch feel
+Light flicker removed — torch light is steady now (held tip no longer
+pulses either). Instead torches shed small ember particles: placed
+torches within ~28m emit rising sparks (dedicated small-point particle
+system so close embers don't render as giant squares), and the held torch
+sheds embers from its tip.
+
+### Verification
+171 headless tests; full browser smoke green (4/4 cave mouths on foot,
+wood chain, sized doors, purity 900/0); wall forensic re-run: 845 pixels,
+zero shard triangles — the dominant-sheet change keeps 4.2's fixes.
+
 ## Build 4.2 — playtest fixes: shards, floating, doors, hands (2026-08-20)
 
 ### Bug: triangle shards on placed cubes — FIXED (three layers deep)
