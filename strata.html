@@ -53,6 +53,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .t2{color:var(--ui-hi);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
+#navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
+#navarrow{display:inline-block; color:var(--accent); font-size:13px;}
 
 /* ---------- hotbar ---------- */
 #hotbar{position:absolute; left:50%; bottom:12px; transform:translateX(-50%); display:flex; gap:4px;}
@@ -91,6 +93,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <div id="hud" class="hidden">
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
+  <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
   <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
 </div>
@@ -133,6 +136,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>MOUSE SENSITIVITY</label><input type="range" id="optSens" min="20" max="300" step="5"><span class="val" id="optSensV"></span></div>
     <div class="optrow"><label>FOV</label><input type="range" id="optFov" min="60" max="110" step="1"><span class="val" id="optFovV"></span></div>
     <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="6" step="1"><span class="val" id="optRdV"></span></div>
+    <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
 </div>
@@ -436,23 +440,42 @@ function sdSphere(px, py, pz, e){
 }
 function sdCube(px, py, pz, e){
   const h = e.size * 0.5;
-  const qx = Math.abs(px - e.x) - h, qy = Math.abs(py - e.y) - h, qz = Math.abs(pz - e.z) - h;
+  let dx = px - e.x, dz = pz - e.z;
+  if (e.rot){
+    const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
+    const rx = dx * c - dz * s;
+    dz = dx * s + dz * c; dx = rx;
+  }
+  const qx = Math.abs(dx) - h, qy = Math.abs(py - e.y) - h, qz = Math.abs(dz) - h;
   const ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
   const outside = Math.sqrt(ax*ax + ay*ay + az*az);
   const inside = Math.min(Math.max(qx, Math.max(qy, qz)), 0);
   return outside + inside;
 }
-function shapeSDF(px, py, pz, e){
-  return e.shape === 1 ? sdCube(px, py, pz, e) : sdSphere(px, py, pz, e);
+function sdCylinder(px, py, pz, e){
+  const r = e.size * 0.5, hh = e.size * 0.5;   // y-axis, height = diameter = size
+  const d2 = Math.hypot(px - e.x, pz - e.z) - r;
+  const dy = Math.abs(py - e.y) - hh;
+  const ox = Math.max(d2, 0), oy = Math.max(dy, 0);
+  return Math.hypot(ox, oy) + Math.min(Math.max(d2, dy), 0);
 }
+function shapeSDF(px, py, pz, e){
+  return e.shape === 1 ? sdCube(px, py, pz, e)
+       : e.shape === 2 ? sdCylinder(px, py, pz, e)
+       : sdSphere(px, py, pz, e);
+}
+const SHAPE_NAME = ['sphere', 'cube', 'cylinder'];
 
-// edit: { op: 0 subtract | 1 union, shape: 0 sphere | 1 cube, x,y,z, size, mat }
-function makeEdit(op, shape, x, y, z, size, mat){
-  return { op, shape, x, y, z, size, mat: mat|0 };
+// edit: { op: 0 subtract | 1 union | 2 paint, shape: 0 sphere | 1 cube |
+//         2 cylinder, x,y,z, size, mat, rot (cube yaw, radians) }
+function makeEdit(op, shape, x, y, z, size, mat, rot){
+  return { op, shape, x, y, z, size, mat: mat|0, rot: rot || 0 };
 }
 function editAABB(e){
-  const h = e.size * 0.5;
-  return [e.x - h, e.y - h, e.z - h, e.x + h, e.y + h, e.z + h];
+  let h = e.size * 0.5;
+  const hy = h;
+  if (e.shape === 1 && e.rot) h *= Math.SQRT2;   // conservative for rotated cubes
+  return [e.x - h, e.y - hy, e.z - h, e.x + h, e.y + hy, e.z + h];
 }
 function aabbOverlap(a, b, pad){
   return a[0] - pad <= b[3] && a[3] + pad >= b[0] &&
@@ -473,6 +496,7 @@ function evalSDF(px, py, pz, edits, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
+    if (e.op === 2) continue;              // paint: material only, no geometry
     const s = shapeSDF(px, py, pz, e);
     d = e.op === 1 ? Math.min(d, s) : Math.max(d, -s);
   }
@@ -489,7 +513,7 @@ function materialAt(px, py, pz, edits, gen){
   let m = (gen || FLAT_GEN).mat(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    if (e.op === 1 && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
+    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) < 0) m = e.mat || MAT.ROCK;
   }
   return m;
 }
@@ -568,6 +592,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   }
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
+    if (e.op === 2) continue;              // paint: material only
     const b = editAABB(e);
     const x0 = Math.max(-1, Math.floor(b[0] / VOX) - gx0), x1 = Math.min(N, Math.ceil(b[3] / VOX) - gx0);
     const y0 = Math.max(-1, Math.floor(b[1] / VOX) - gy0), y1 = Math.min(N, Math.ceil(b[4] / VOX) - gy0);
@@ -728,7 +753,14 @@ function meshChunk(cx, cy, cz, allEdits, gen){
         if (cellVertex(x, y, z)) hasVert[CI(x, y, z)] = 1;
 
   // emit quads for owned sign-change edges
-  const pos = [], nrm = [], mat = [];
+  const pos = [], nrm = [], mat = [], sky = [];
+  // skylight: 1 at/above the surface, fading out by ~10m of overburden —
+  // computed from the same local height grid, so it's seam-consistent
+  function skyAt(px, py, pz){
+    const depth = lgen.height(px, pz) - py;
+    const s = 1 - (depth - 1) / 9;
+    return s < 0 ? 0 : s > 1 ? 1 : s;
+  }
   const AX = [
     { d:[1,0,0], u:[0,1,0], v:[0,0,1] },
     { d:[0,1,0], u:[0,0,1], v:[1,0,0] },
@@ -782,7 +814,8 @@ function meshChunk(cx, cy, cz, allEdits, gen){
             if (area2 < 1e-14) continue;
             if (flip) pushTri(a0, a2, a1);
             else pushTri(a0, a1, a2);
-            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); }
+            const sv = skyAt(h.px, h.py, h.pz);
+            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
           }
         }
       }
@@ -793,6 +826,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     positions: new Float32Array(pos),
     normals: new Float32Array(nrm),
     mats: new Float32Array(mat),
+    skys: new Float32Array(sky),
   };
 }
 
@@ -880,6 +914,40 @@ function placeCost(edits, e, gen){
   const u = Math.round(vol / UNIT_VOL);
   return u > 0 ? u : (vol > 0 ? 1 : 0);
 }
+// units to repaint existing solid of a different material inside the shape
+function paintCost(edits, e, gen){
+  const box = editAABB(e);
+  const le = cullEdits(edits, box, 0.1);
+  let vol = 0;
+  sampleShape(e, (x, y, z, v) => {
+    if (y < BEDROCK_Y) return;
+    if (evalSDF(x, y, z, le, gen) <= 0 && materialAt(x, y, z, le, gen) !== e.mat) vol += v;
+  });
+  const u = Math.round(vol / UNIT_VOL);
+  return u > 0 ? u : (vol > 0 ? 1 : 0);
+}
+
+// ---- action durations: tier base x volume factor x material hardness ----
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5]; // by MAT id
+const VOL_REF = 4.19;                                       // a 2m sphere, m^3
+function volFactor(volM3){
+  return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
+}
+// duration to mine a shape given its yield preview; -1 = nothing to mine
+function mineDuration(tier, yieldMap){
+  const base = TIER_TIME[tier];
+  let units = 0, hw = 0;
+  for (const m in yieldMap){ units += yieldMap[m]; hw += yieldMap[m] * (HARDNESS[m] || 1); }
+  if (units === 0) return -1;
+  if (base === 0) return 0;
+  return base * volFactor(units * UNIT_VOL) * (hw / units);
+}
+function placeDuration(tier, costUnits){
+  const base = TIER_TIME[tier];
+  if (base === 0) return 0;
+  return base * volFactor(costUnits * UNIT_VOL);
+}
+
 function countMat(slots, mat){
   let n = 0;
   for (const s of slots) if (s && s.kind === 'mat' && s.mat === mat) n += s.count;
@@ -928,7 +996,7 @@ function serializeEdits(edits){
   const a = new Array(edits.length);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    a[i] = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat];
+    a[i] = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat, e.rot || 0];
   }
   return a;
 }
@@ -936,7 +1004,7 @@ function deserializeEdits(arr){
   const out = new Array(arr.length);
   for (let i = 0; i < arr.length; i++){
     const r = arr[i];
-    out[i] = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6]);
+    out[i] = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7] || 0);
   }
   return out;
 }
@@ -962,12 +1030,13 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
   SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, shapeSDF, makeEdit, editAABB, aabbOverlap, cullEdits,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
-  mineYield, placeCost, countMat, addMat, consumeMat, RECIPES, craft,
+  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft,
+  HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
@@ -1097,13 +1166,16 @@ function tileCanvas(matId, seed){
 // ---------- terrain shader (triplanar, pixel-crisp, single pass) ----------
 const TERRAIN_VERT = `
 attribute float aMat;
+attribute float aSky;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
+varying float vSky;
 void main(){
   vPos = position;              // chunk meshes live in world space
   vNrm = normal;
   vMat = aMat;
+  vSky = aSky;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const TERRAIN_FRAG = `
@@ -1116,9 +1188,12 @@ uniform vec3 uAmbCol;
 uniform vec3 uFogCol;
 uniform float uFogNear;
 uniform float uFogFar;
+uniform vec3 uPlayerPos;
+uniform float uLampR;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
+varying float vSky;
 void main(){
   vec3 n = normalize(vNrm);
   vec3 an = abs(n);
@@ -1133,10 +1208,19 @@ void main(){
   vec4 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy));
   float diff = max(dot(n, uSunDir), 0.0);
   float upAmb = 0.85 + 0.15 * n.y;       // cheap sky-occlusion feel
-  vec3 col = tex.rgb * min(uAmbCol * upAmb + uSunCol * diff, vec3(1.05));
+  vec3 dayLit = min(uAmbCol * upAmb + uSunCol * diff, vec3(1.05));
+  // headlamp: its own warm light, strongest where the day light isn't
+  float lampD = length(vPos - uPlayerPos);
+  float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
+  lamp = lamp * lamp * (3.0 - 2.0 * lamp);
+  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * 0.85));
+  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + vec3(0.02), vec3(1.05));
+  // ores shimmer faintly in the dark so veins catch the eye
+  if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * (1.0 - vSky));
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   float fog = smoothstep(uFogNear, uFogFar, dist);
-  gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
+  vec3 fogC = uFogCol * max(vSky, 0.03);  // fog goes black at depth
+  gl_FragColor = vec4(mix(col, fogC, fog), 1.0);
 }`;
 
 // ---------- chunk manager ----------
@@ -1228,6 +1312,7 @@ class Terrain {
     g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mats, 1));
+    g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
     const mesh = new THREE.Mesh(g, this.material);
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
@@ -1244,7 +1329,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4, vol: 70 };
 function loadOpts(){
   try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
   catch { return Object.assign({}, DEFAULT_OPTS); }
@@ -1282,7 +1367,8 @@ const game = {
   // tools/ui state
   slots: [], hotSel: 0,
   dispSlot: null,                     // the one special dispenser slot
-  tool: { shape: 0, size: 1.5, dist: 4.5 },  // shared across all drills/dispensers
+  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 },  // shared across all tools
+  undoStack: [], orbFlash: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
   lastAction: 0,
   act: { t: 0, charging: false }, mouseEdge: false, actProgress: 0,
@@ -1334,7 +1420,7 @@ function initRenderer(){
 const SKY = new THREE.Color(0x8fb8e8);
 function buildScene(){
   const scene = new THREE.Scene();
-  scene.background = SKY;
+  scene.background = SKY.clone();
   game.scene = scene;
   const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 400);
   cam.rotation.order = 'YXZ';
@@ -1354,6 +1440,8 @@ function buildScene(){
       uFogCol: { value: SKY.clone() },
       uFogNear: { value: fogFar * 0.55 },
       uFogFar: { value: fogFar },
+      uPlayerPos: { value: new THREE.Vector3() },
+      uLampR: { value: 13 },
     },
     side: THREE.DoubleSide,
   });
@@ -1366,17 +1454,21 @@ function buildScene(){
   const ghostLine = new THREE.LineBasicMaterial({ color: 0xcfeeff, transparent: true, opacity: 0.85 });
   const sphereG = new THREE.SphereGeometry(0.5, 20, 14);
   const cubeG = new THREE.BoxGeometry(1, 1, 1);
+  const cylG = new THREE.CylinderGeometry(0.5, 0.5, 1, 20);
   game.ghostSet = {
     0: { fill: new THREE.Mesh(sphereG, ghostFill),
          wire: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(0.5, 12, 8)), ghostLine) },
     1: { fill: new THREE.Mesh(cubeG, ghostFill),
          wire: new THREE.LineSegments(new THREE.EdgesGeometry(cubeG), ghostLine) },
+    2: { fill: new THREE.Mesh(cylG, ghostFill),
+         wire: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1)), ghostLine) },
   };
-  for (const k of [0, 1]){
+  for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false; game.ghostSet[k].wire.visible = false;
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
+  Particles.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -1430,8 +1522,11 @@ function updateViewmodel(dt){
     if (game.mouseL && isLocked() && game.ui === 'none') v.bit.rotation.z += dt * 22;
   } else {
     v.ring.material.color.copy(tc);
-    v.orb.material.color.set(MAT_COLOR[tool.mat]);
-    v.orb.scale.setScalar(1 + Math.sin(performance.now() * 0.004) * 0.08);
+    const flash = performance.now() - game.orbFlash < 320;
+    v.orb.material.color.set(flash ? 0xff3b3b : MAT_COLOR[tool.mat]);
+    // the orb is the ammo gauge: it shrinks as the held stack runs down
+    const fill = Math.min(1, Math.max(0.45, 0.45 + tool.count / 1200));
+    v.orb.scale.setScalar(fill * (1 + Math.sin(performance.now() * 0.004) * 0.07));
   }
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
@@ -1457,6 +1552,168 @@ function buildGridViz(cell){
   game.scene.add(game.gridViz);
 }
 
+// ---------- procedural audio (no assets; built on first user gesture) ----------
+const AudioSys = {
+  ctx: null, master: null, noiseBuf: null,
+  hum: null, humGain: null, humFilter: null, ambGain: null,
+  init(){
+    if (this.ctx) return true;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = (game.opts.vol == null ? 70 : game.opts.vol) / 100;
+      this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate;
+      this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = this.noiseBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++){
+        const w = Math.random() * 2 - 1;
+        last = (last + 0.02 * w) / 1.02;
+        d[i] = w * 0.4 + last * 2.2;
+      }
+      // persistent drill hum (gain 0 when idle)
+      this.hum = this.ctx.createOscillator();
+      this.hum.type = 'sawtooth'; this.hum.frequency.value = 60;
+      this.humFilter = this.ctx.createBiquadFilter();
+      this.humFilter.type = 'lowpass'; this.humFilter.frequency.value = 500;
+      this.humGain = this.ctx.createGain(); this.humGain.gain.value = 0;
+      this.hum.connect(this.humFilter); this.humFilter.connect(this.humGain);
+      this.humGain.connect(this.master);
+      this.hum.start();
+      // looping cave ambience, faded in with depth
+      const amb = this.ctx.createBufferSource();
+      amb.buffer = this.noiseBuf; amb.loop = true; amb.playbackRate.value = 0.3;
+      const af = this.ctx.createBiquadFilter(); af.type = 'lowpass'; af.frequency.value = 150;
+      this.ambGain = this.ctx.createGain(); this.ambGain.gain.value = 0;
+      amb.connect(af); af.connect(this.ambGain); this.ambGain.connect(this.master);
+      amb.start();
+      return true;
+    } catch (err) { this.ctx = null; return false; }
+  },
+  resume(){ if (this.init() && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {}); },
+  setVolume(v){ if (this.master) this.master.gain.value = v / 100; },
+  setHum(on, tier, progress){
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.humGain.gain.setTargetAtTime(on ? 0.045 + tier * 0.01 : 0, t, 0.05);
+    if (on){
+      this.hum.frequency.setTargetAtTime(48 + tier * 24 + progress * 65, t, 0.05);
+      this.humFilter.frequency.setTargetAtTime(380 + progress * 900, t, 0.06);
+    }
+  },
+  setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
+  burst(o){
+    if (!this.ctx) return;
+    const { dur = 0.25, freq = 900, gain = 0.22, drop = 0 } = o || {};
+    const t = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.playbackRate.value = 0.7 + Math.random() * 0.6;
+    const f = this.ctx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = freq;
+    if (drop) f.frequency.setTargetAtTime(Math.max(120, freq - drop), t, dur * 0.5);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(this.master);
+    src.start(t, Math.random() * 0.8, dur + 0.05);
+    src.stop(t + dur + 0.1);
+  },
+  tone(o){
+    if (!this.ctx) return;
+    const { freq = 600, dur = 0.08, gain = 0.1, type = 'square' } = o || {};
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    osc.type = type; osc.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g); g.connect(this.master);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  },
+  sfx(name, arg){
+    if (!this.ctx) return;
+    switch (name){
+      case 'break':
+        this.burst({ dur: 0.32, freq: Math.max(300, 800 - (arg || 1) * 90), gain: 0.3, drop: 420 });
+        this.burst({ dur: 0.14, freq: 1900, gain: 0.1 });
+        break;
+      case 'place': this.tone({ freq: 170, dur: 0.11, gain: 0.18, type: 'sine' }); this.burst({ dur: 0.08, freq: 900, gain: 0.09 }); break;
+      case 'paint': this.burst({ dur: 0.13, freq: 2300, gain: 0.08 }); break;
+      case 'deny': this.tone({ freq: 130, dur: 0.16, gain: 0.13 }); break;
+      case 'toggle': this.tone({ freq: 780, dur: 0.05, gain: 0.07 }); break;
+      case 'select': this.tone({ freq: 520, dur: 0.04, gain: 0.05 }); break;
+      case 'craft': this.tone({ freq: 660, dur: 0.09, gain: 0.09 }); this.tone({ freq: 990, dur: 0.13, gain: 0.07 }); break;
+      case 'undo': this.tone({ freq: 400, dur: 0.08, gain: 0.08, type: 'triangle' }); break;
+      case 'step': {
+        const soft = arg === CORE.MAT.GRASS || arg === CORE.MAT.SAND;
+        this.burst({ dur: soft ? 0.07 : 0.045, freq: soft ? 480 : 1500, gain: soft ? 0.06 : 0.05 });
+        break;
+      }
+    }
+  },
+};
+
+// ---------- particles (single pooled Points cloud) ----------
+const Particles = {
+  MAX: 800, cursor: 0, points: null, colAttr: null, posAttr: null,
+  vel: null, life: null,
+  init(scene){
+    const pos = new Float32Array(this.MAX * 3).fill(1e6);
+    this.vel = new Float32Array(this.MAX * 3);
+    this.life = new Float32Array(this.MAX);
+    const g = new THREE.BufferGeometry();
+    this.posAttr = new THREE.BufferAttribute(pos, 3);
+    this.posAttr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('position', this.posAttr);
+    this.colAttr = new THREE.BufferAttribute(new Float32Array(this.MAX * 3), 3);
+    this.colAttr.setUsage(THREE.DynamicDrawUsage);
+    g.setAttribute('color', this.colAttr);
+    this.points = new THREE.Points(g, new THREE.PointsMaterial({ size: 0.14, vertexColors: true }));
+    this.points.frustumCulled = false;
+    scene.add(this.points);
+  },
+  burst(x, y, z, radius, colors, n, speed){
+    if (!this.points || !colors.length) return;
+    const P = this.posAttr.array, C = this.colAttr.array;
+    for (let i = 0; i < n; i++){
+      const idx = this.cursor; this.cursor = (this.cursor + 1) % this.MAX;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+      const sx = Math.sin(ph) * Math.cos(th), sy = Math.cos(ph), sz = Math.sin(ph) * Math.sin(th);
+      const rr = radius * Math.cbrt(Math.random());
+      P[idx*3] = x + sx * rr; P[idx*3+1] = y + sy * rr; P[idx*3+2] = z + sz * rr;
+      const sp = speed * (0.4 + Math.random() * 0.9);
+      this.vel[idx*3] = sx * sp;
+      this.vel[idx*3+1] = Math.abs(sy) * sp * 0.7 + 1.4;
+      this.vel[idx*3+2] = sz * sp;
+      this.life[idx] = 0.45 + Math.random() * 0.5;
+      const c = new THREE.Color(colors[(Math.random() * colors.length) | 0]);
+      const sh = 0.65 + Math.random() * 0.55;
+      C[idx*3] = c.r * sh; C[idx*3+1] = c.g * sh; C[idx*3+2] = c.b * sh;
+    }
+    this.posAttr.needsUpdate = true; this.colAttr.needsUpdate = true;
+  },
+  update(dt){
+    if (!this.points) return;
+    const P = this.posAttr.array;
+    let any = false;
+    for (let i = 0; i < this.MAX; i++){
+      if (this.life[i] <= 0) continue;
+      any = true;
+      this.life[i] -= dt;
+      if (this.life[i] <= 0){ P[i*3+1] = 1e6; continue; }
+      this.vel[i*3+1] -= 15 * dt;
+      P[i*3] += this.vel[i*3] * dt;
+      P[i*3+1] += this.vel[i*3+1] * dt;
+      P[i*3+2] += this.vel[i*3+2] * dt;
+    }
+    if (any) this.posAttr.needsUpdate = true;
+  },
+};
+
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
@@ -1478,10 +1735,12 @@ function bindInput(){
     if (!game.running || game.ui !== 'none') return;
     if (!isLocked()){ requestLock(); return; }
     if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
+    if (e.button === 1){ e.preventDefault(); pickMaterial(); }
     if (e.button === 2){
       if (activeTool()){
-        game.tool.shape = game.tool.shape === 1 ? 0 : 1;
-        toast(game.tool.shape === 1 ? 'cube' : 'sphere');
+        game.tool.shape = (game.tool.shape + 1) % 3;
+        toast(CORE.SHAPE_NAME[game.tool.shape]);
+        AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
       }
     }
@@ -1491,10 +1750,16 @@ function bindInput(){
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
     const tool = activeTool();
-    if (tool){
-      game.tool.size = CORE.scrollSize(game.tool.size, tool.tier, e.deltaY < 0 ? 1 : -1);
-      refreshToolHUD(); markSave();
+    if (!tool) return;
+    const dir = e.deltaY < 0 ? 1 : -1;
+    if (game.keys['KeyG'] && game.tool.shape === 1 && !game.snapOn){
+      // hold G + scroll: rotate the cube in 15° steps (free-place only)
+      game.tool.rot = (game.tool.rot + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
+      toast('rotate ' + Math.round(game.tool.rot * 180 / Math.PI) + '°');
+    } else {
+      game.tool.size = CORE.scrollSize(game.tool.size, tool.tier, dir);
     }
+    refreshToolHUD(); markSave();
   }, { passive: true });
 
   document.addEventListener('keydown', e => {
@@ -1519,7 +1784,17 @@ function bindInput(){
       }
       return;
     }
-    if (code === 'KeyZ'){ game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); }
+    if (code === 'KeyZ' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); undoEdit(); return; }
+    if (code === 'KeyZ'){ game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); AudioSys.sfx('toggle'); }
+    if (code === 'KeyR'){
+      const tool = activeTool();
+      if (tool && tool.kind === 'disp'){
+        game.tool.mode = game.tool.mode === 'paint' ? 'build' : 'paint';
+        toast(game.tool.mode === 'paint' ? 'paint mode — repaints existing ground' : 'build mode');
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
+      }
+    }
     if (code === 'KeyE'){ openInventory(); }
     if (code === 'KeyQ'){ openCraft(); }
   });
@@ -1530,13 +1805,15 @@ function bindInput(){
       if (!game.fUsedCombo){
         game.snapOn = !game.snapOn;
         toast(game.snapOn ? 'grid snap on' : 'grid snap off');
+        AudioSys.sfx('toggle');
         refreshToolHUD();
       }
     }
   });
   document.addEventListener('pointerlockchange', () => {
     if (!game.running) return;
-    if (!isLocked() && game.ui === 'none'){
+    if (isLocked()){ AudioSys.resume(); return; }
+    if (game.ui === 'none'){
       openPause(); // Esc (or lost lock) -> pause
     }
   });
@@ -1634,6 +1911,17 @@ function updatePlayer(dt){
 
   game.camera.position.set(game.pos.x, game.pos.y + h - PLAYER.eyeGap, game.pos.z);
   game.camera.rotation.set(game.pitch, game.yaw, 0);
+
+  // footsteps
+  const spd = Math.hypot(game.vel.x, game.vel.z);
+  if (game.grounded && !game.fly && spd > 1.2){
+    game.stepAcc = (game.stepAcc || 0) + spd * dt;
+    if (game.stepAcc > 2.3){
+      game.stepAcc = 0;
+      const box = [game.pos.x - 1, game.pos.y - 1, game.pos.z - 1, game.pos.x + 1, game.pos.y + 1, game.pos.z + 1];
+      AudioSys.sfx('step', CORE.materialAt(game.pos.x, game.pos.y - 0.15, game.pos.z, nearEdits(box), game.gen));
+    }
+  }
 }
 
 // ---------- tools / ghost / actions ----------
@@ -1683,7 +1971,7 @@ function ghostPlacement(eff){
 function updateGhost(){
   const tool = activeTool();
   const usable = tool && game.ui === 'none' && isLocked();
-  for (const k of [0, 1]){
+  for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
   }
@@ -1695,10 +1983,15 @@ function updateGhost(){
   const p = ghostPlacement(eff);
   game.ghostPos = p;
   const gs = game.ghostSet[game.tool.shape];
-  gs.fill.material.color.set(tool.kind === 'disp' ? 0x8bff9e : 0x6fd3ff);
+  const paint = tool.kind === 'disp' && game.tool.mode === 'paint';
+  gs.fill.material.color.set(paint ? 0xffb44d : tool.kind === 'disp' ? 0x8bff9e : 0x6fd3ff);
   gs.fill.visible = true; gs.wire.visible = true;
   gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
   gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
+  const rot = editRot(game.tool.shape);
+  gs.fill.rotation.y = rot; gs.wire.rotation.y = rot;
+  // charging feedback: the shape visibly "fills in" as the action completes
+  gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
 
   if (game.snapOn){
     // visualize the actual placement lattice (spacing = shape size when the
@@ -1717,57 +2010,130 @@ function applyEdit(e){
   markSave();
 }
 
+function editRot(shape){
+  return (shape === 1 && !game.snapOn) ? game.tool.rot : 0;
+}
+function yieldColors(got){
+  const cols = [];
+  for (const m in got) cols.push(MAT_COLOR[m]);
+  return cols;
+}
 function doMine(tool, p, shape, eff){
-  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0);
+  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape));
   const got = CORE.mineYield(game.edits, e, game.gen);
+  let units = 0, hw = 0;
+  for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+  if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
+  game.undoStack.push({ edit: e, type: 'mine', gained: got });
+  if (game.undoStack.length > 64) game.undoStack.shift();
   const parts = [];
   for (const m in got){
     if (CORE.addMat(game.slots, +m, got[m])) parts.push('+' + got[m] + ' ' + CORE.MAT_NAME[m]);
     else parts.push('inventory full — lost ' + got[m] + ' ' + CORE.MAT_NAME[m]);
   }
   if (parts.length) toast(parts.join('  ·  '));
+  AudioSys.sfx('break', hw / units);
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
   refreshHotbar(); refreshToolHUD();
 }
 function doPlace(tool, p, shape, eff){
-  const e = CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat);
-  const cost = CORE.placeCost(game.edits, e, game.gen);
+  const paint = game.tool.mode === 'paint';
+  const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape));
+  const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
+                     : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
   if (!CORE.consumeMat(game.slots, tool.mat, cost)){
     toast('need ' + cost + ' ' + CORE.MAT_NAME[tool.mat] + ' — have ' + CORE.countMat(game.slots, tool.mat));
+    game.orbFlash = performance.now();
+    AudioSys.sfx('deny');
     return;
   }
   applyEdit(e);
-  toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat]);
+  game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat, cost });
+  if (game.undoStack.length > 64) game.undoStack.shift();
+  toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat] + (paint ? ' (painted)' : ''));
+  AudioSys.sfx(paint ? 'paint' : 'place');
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[tool.mat]], Math.min(40, 8 + cost / 6), 1.6);
   refreshHotbar(); refreshToolHUD();
+}
+function undoEdit(){
+  if (!game.edits.length){ toast('nothing to undo'); return; }
+  const e = game.edits.pop();
+  game.terrain.invalidate(e);
+  const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
+    ? game.undoStack.pop() : null;
+  if (rec){
+    if (rec.type === 'mine'){
+      for (const m in rec.gained){
+        const have = CORE.countMat(game.slots, +m);
+        CORE.consumeMat(game.slots, +m, Math.min(have, rec.gained[m]));
+      }
+    } else {
+      CORE.addMat(game.slots, rec.mat, rec.cost);
+    }
+  }
+  toast('undo');
+  AudioSys.sfx('undo');
+  refreshHotbar(); refreshToolHUD(); markSave();
 }
 
 // Hold LMB to break one shape over the tier's mine time (drill keeps cycling
 // while held). Dispenser builds one shape per click — hold to charge, release
 // cancels, and it never auto-repeats. Diamond tier is instant.
+// duration of the pending action, cached per ghost target (recomputed when
+// the target moves — mine time scales with solid volume and hardness, build
+// time with the volume actually being filled)
+function actionPlan(tool, p, shape, eff){
+  const key = tool.kind + tool.tier + '|' + (tool.mat || 0) + '|' + game.tool.mode + '|' + shape + '|' + eff.toFixed(2) + '|' +
+    Math.round(p.x * 2) + ',' + Math.round(p.y * 2) + ',' + Math.round(p.z * 2);
+  if (game.act.key === key) return game.act.plan;
+  const rot = editRot(shape);
+  let plan;
+  if (tool.kind === 'drill'){
+    const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, rot);
+    plan = { dur: CORE.mineDuration(tool.tier, CORE.mineYield(game.edits, e, game.gen)) };
+  } else {
+    const paint = game.tool.mode === 'paint';
+    const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, rot);
+    const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
+                       : CORE.placeCost(game.edits, e, game.gen);
+    plan = { dur: cost === 0 ? -1 : CORE.placeDuration(tool.tier, cost) };
+  }
+  game.act.key = key; game.act.plan = plan;
+  return plan;
+}
+
 function tryAction(dt, now){
   const tool = activeTool();
   const edge = game.mouseEdge; game.mouseEdge = false;
   game.actProgress = 0;
   const usable = tool && game.ui === 'none' && isLocked() && game.ghostPos;
-  if (!usable){ game.act.t = 0; game.act.charging = false; return; }
-  const dur = CORE.TIER_TIME[tool.tier];
+  if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
 
   if (tool.kind === 'drill'){
-    if (!game.mouseL){ game.act.t = 0; return; }
-    if (dur === 0){
+    if (!game.mouseL){ game.act.t = 0; AudioSys.setHum(false, 0, 0); return; }
+    const plan = actionPlan(tool, p, shape, eff);
+    if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
+    if (plan.dur === 0){
       if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(tool, p, shape, eff); }
       return;
     }
     game.act.t += dt;
-    game.actProgress = Math.min(1, game.act.t / dur);
-    if (game.act.t >= dur){ game.act.t = 0; doMine(tool, p, shape, eff); }
+    game.actProgress = Math.min(1, game.act.t / plan.dur);
+    AudioSys.setHum(true, tool.tier, game.actProgress);
+    if (Math.random() < dt * 22)
+      Particles.burst(p.x, p.y, p.z, eff * 0.4, [0x9a9aa0], 2, 1.2);
+    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMine(tool, p, shape, eff); }
     return;
   }
 
   // dispenser: one placement per click, consumes the held material by volume
-  if (dur === 0){
+  AudioSys.setHum(false, 0, 0);
+  const plan = actionPlan(tool, p, shape, eff);
+  if (plan.dur < 0) return;                                       // nothing to fill/paint
+  if (plan.dur === 0){
     if (edge) doPlace(tool, p, shape, eff);
     return;
   }
@@ -1775,12 +2141,47 @@ function tryAction(dt, now){
   if (!game.mouseL){ game.act.charging = false; game.act.t = 0; return; }
   if (game.act.charging){
     game.act.t += dt;
-    game.actProgress = Math.min(1, game.act.t / dur);
-    if (game.act.t >= dur){
-      game.act.charging = false; game.act.t = 0;
+    game.actProgress = Math.min(1, game.act.t / plan.dur);
+    if (game.act.t >= plan.dur){
+      game.act.charging = false; game.act.t = 0; game.act.key = null;
       doPlace(tool, p, shape, eff);
     }
   }
+}
+
+// middle click: pick the material you're looking at into your hand
+function pickMaterial(){
+  if (!game.running || !isLocked() || game.ui !== 'none') return;
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const edits = nearEdits(segBox);
+  let t = 0.4, hit = null;
+  for (let i = 0; i < 96 && t < PLAYER.reach; i++){
+    const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+    const d = sdfWorld(x, y, z, edits);
+    if (d < 0.02){ hit = [x, y, z]; break; }
+    t += Math.max(0.045, d * 0.5);
+  }
+  if (!hit){ toast('nothing in reach'); return; }
+  const m = CORE.materialAt(hit[0], hit[1] - 0.05, hit[2], edits, game.gen);
+  if (m === CORE.MAT.BEDROCK){ toast('bedrock is not collectable'); return; }
+  let idx = -1;
+  for (let i = 0; i < 40; i++){
+    const s = game.slots[i];
+    if (s && s.kind === 'mat' && s.mat === m){ idx = i; break; }
+  }
+  if (idx < 0){ toast('no ' + CORE.MAT_NAME[m] + ' in inventory'); return; }
+  if (idx < 10){ game.hotSel = idx; }
+  else {
+    const tmp = game.slots[game.hotSel];
+    game.slots[game.hotSel] = game.slots[idx];
+    game.slots[idx] = tmp;
+  }
+  toast(CORE.MAT_NAME[m]);
+  AudioSys.sfx('select');
+  refreshHotbar(); refreshToolHUD();
 }
 
 // V/B: pull the ghost closer / push it farther (free-place mode only)
@@ -1966,9 +2367,13 @@ function refreshToolHUD(){
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
     const eff = CORE.effSize(game.tool.size, tool.tier);
-    const shape = game.tool.shape === 1 ? 'cube' : 'sphere';
+    let shape = CORE.SHAPE_NAME[game.tool.shape];
+    if (game.tool.shape === 1 && !game.snapOn && game.tool.rot)
+      shape += ' ' + Math.round(game.tool.rot * 180 / Math.PI) + '° (G+scroll)';
     const sizeStr = tool.tier >= 4 ? eff.toFixed(2) + 'm (smooth)' : eff + 'm';
     html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
+    if (tool.kind === 'disp')
+      html += '<div class="t2">mode: ' + (game.tool.mode === 'paint' ? '<span class="on">paint (R)</span>' : 'build (R)') + '</div>';
     if (game.snapOn){
       html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>';
     } else {
@@ -2009,7 +2414,7 @@ function buildCraftUI(){
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
       const res = CORE.craft(game.slots, r);
-      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); buildCraftUI(); refreshHotbar(); markSave(); }
+      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave(); }
       else if (res === 'poor') toast('not enough ' + CORE.MAT_NAME[r.mat]);
       else toast('inventory full');
     });
@@ -2034,7 +2439,7 @@ let optionsReturn = 'main';
 function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
-  $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd;
+  $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -2045,11 +2450,14 @@ function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = $('optRd').value;
+  $('optVolV').textContent = $('optVol').value + '%';
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
   game.opts.fov = +$('optFov').value;
   game.opts.rd = +$('optRd').value;
+  game.opts.vol = +$('optVol').value;
+  AudioSys.setVolume(game.opts.vol);
   saveOpts(game.opts);
   if (game.camera){
     game.camera.fov = game.opts.fov; game.camera.updateProjectionMatrix();
@@ -2160,7 +2568,8 @@ function startWorld(id){
     }
     if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(0);
   }
-  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5 }, data.tool || {});
+  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 }, data.tool || {});
+  game.undoStack = [];
   game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
   game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
@@ -2232,6 +2641,27 @@ function frame(now){
   // faster at the cost of brief hitches nobody can see terrain through anyway
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
 
+  game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
+  Particles.update(dt);
+
+  // cave ambience + compass, throttled
+  game.navT = (game.navT || 0) + dt;
+  if (game.navT > 0.2){
+    game.navT = 0;
+    const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
+    AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
+    // the sky itself goes black as you descend — caves feel enclosed and
+    // not-yet-meshed frontier chunks never flash bright blue in the dark
+    const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
+    game.scene.background.copy(SKY).multiplyScalar(skyF);
+    const dist = Math.hypot(game.pos.x, game.pos.z);
+    const thv = Math.atan2(-game.pos.x, -game.pos.z);
+    const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
+    $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
+    $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';
+    $('navpos').textContent = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
+  }
+
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
 
@@ -2266,7 +2696,7 @@ function bindMenus(){
   $('btnPauseOptions').addEventListener('click', () => openOptions('pause'));
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
-  for (const id of ['optSens', 'optFov', 'optRd']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol']) $(id).addEventListener('input', syncOptLabels);
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
 
@@ -2279,7 +2709,7 @@ requestAnimationFrame(frame);
 // debug handles (also used by the headless smoke test)
 window.__game = game;
 window.__CORE = CORE;
-window.__api = { activeTool, doMine, doPlace, refreshHotbar, refreshToolHUD };
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD };
 </script>
 </body>
 </html>

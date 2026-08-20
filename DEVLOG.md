@@ -2,6 +2,69 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 3 — Depth & Feel (2026-08-20)
+Roadmap restructured first (see ROADMAP.md): darkness, audio, and the full
+tool kit land BEFORE survival, since enemies need darkness to matter and
+combat will lean on finished tools.
+
+### Lighting
+- Per-vertex **skylight** attribute computed at meshing time from the same
+  chunk-local height grid DC uses (depth below the heightfield, full light
+  to ~1m, black by ~10m of overburden) — seam-consistent by construction.
+- **Headlamp**: warm point light around the player in the terrain shader,
+  smooth falloff over 13m, faded out where skylight already lights things.
+- **Ore shimmer**: iron/ruby/obsidian/diamond stay faintly self-lit in the
+  dark so veins catch the eye at lamp range.
+- Fog fades to black at depth, and the sky background itself darkens as the
+  player descends (also stops unmeshed frontier chunks flashing blue).
+- Known limitation: skylight is vertical-only — a horizontal tunnel mouth
+  under a hill reads dark until the lamp hits it. Real light propagation is
+  a later-build item if it bothers in playtest.
+
+### Audio (procedural, zero assets)
+Web Audio built on first pointer-lock gesture: drill hum (pitch by tier +
+charge progress), break crumble (filtered noise, pitched by hardness),
+place thunk, paint hiss, deny buzz, footsteps by surface material, UI
+clicks, crafting chime, undo blip, looping low ambience that fades in with
+depth. Volume slider in Options.
+
+### Particles
+One pooled Points cloud (800): debris burst on break colored by the
+yielded materials, dust on place, chips trickling while the drill charges.
+Ghost fill opacity also ramps with charge progress.
+
+### Tool kit
+- **Mine/build time scales** with tier x volume x hardness (grass 0.6,
+  rock 1.0, iron 1.35, ruby 1.7, obsidian 2.2, diamond ore 2.6; volume
+  factor cbrt-clamped 0.6-2.2). Diamond stays instant. Aiming at pure air
+  is a no-op (no empty edits, no charge).
+- **Paint mode** (R with dispenser out): op 2 in the edit list — recolors
+  existing solid inside the shape without touching geometry, charged only
+  for the volume actually changing material, fully ordered with unions
+  (later edit wins) and undoable. Ghost turns orange.
+- **Pick material** (middle click): grabs the material you're looking at
+  into your hand (swaps from storage if needed).
+- **Undo** (Ctrl+Z): pops the last edit and reverses its economy (mine
+  yields taken back, place/paint costs refunded). Session-only, 64 deep.
+  Plain Z is still fly.
+- **Cylinder brush**: third shape in the right-click cycle (y-axis, height
+  = diameter). Sharp rims via the same QEF path.
+- **Cube yaw rotation**: hold G + scroll, 15° steps, free-place only —
+  grid mode forces 0° so the tiling lattice guarantee holds. `rot` is the
+  8th edit field; old 7-field saves load fine.
+- **Dispenser orb** doubles as the ammo gauge (shrinks with the held
+  stack, flashes red on refusal).
+
+### Navigation
+Compass bar top-center: arrow + distance to spawn, live coordinates.
+
+### Validation
+129 headless tests (new: cylinder/rotated-cube SDFs + manifold meshing,
+paint semantics/costs/ordering, duration scaling, skylight attribute,
+legacy save compat) and the Playwright run (paint+undo end-to-end with
+exact refunds, dark cavern + headlamp screenshots). Perf unchanged:
+~1.9ms/chunk pristine, ~7ms hot remesh.
+
 ## Build 2.1 — cave overhaul + build/tool UX rework (2026-08-19)
 Playtest-driven patch before build 3.
 
