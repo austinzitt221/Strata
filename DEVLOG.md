@@ -2,6 +2,62 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 4 — Survival layer (2026-08-20)
+
+### Modes
+World creation now picks **survival** (default) or **creative**. Creative =
+build 1-3 feel: everything pre-loaded (all drills, blaster, torches, big
+stacks, diamond dispenser slotted), instant mine/place, free placement, fly,
+no hunger/damage/enemies. Survival = stone drill + stone dispenser, real
+costs and timings, no fly. Pre-build-4 saves load as creative.
+
+### Day/night
+10-minute cycle. Sun direction/color, ambient, sky, and fog all follow it;
+the headlamp automatically matters on the surface at night. Time advances
+only while actually playing (menus pause it).
+
+### Health / hunger / death
+- HP + food bars above the hotbar. Fall damage from impact speed (>~7m
+  hurts). Food drains slowly (faster sprinting); at 0 it eats HP; above 60
+  it regenerates HP.
+- **Glowshroom** (new material 9): glowing purple veins in the top 20m of
+  ground and cave walls — the food source. Hold a stack and press **H** to
+  eat 8 units for +30 food. It glows in the dark and grazers drop it.
+- **Death drops everything** where you fell (pulsing marker, skull distance
+  in the compass bar). You respawn at spawn with a mercy stone drill; walk
+  within 2.5m of the cache to recover it all.
+
+### Creatures
+- **Grazer** (passive, surface, daytime): wanders, flees when hit, drops
+  8 glowshroom.
+- **Lurker** (hostile): spawns in darkness — night surface or underground
+  air pockets, never within 12m of a torch. Chases within 15m, hits for 8
+  with knockback, hops obstacles. Drops 4 iron. Caps: 6 lurkers, 5
+  grazers, despawn beyond 70m. Entities persist in the save.
+- The drill is the melee weapon (6 + 3/tier damage, entities take priority
+  over terrain when in your crosshair). The **blaster** (craft: 20 iron +
+  12 ruby) fires hitscan for 18 at 2/s with recoil.
+
+### Torches
+Craft 6 from 6 rock + 2 glowshroom. Left click places one on any surface;
+up to 16 nearest torches light the terrain shader with warm flicker.
+Mining near a torch pops it back into your inventory. Torches suppress
+lurker spawns — light as territory.
+
+### Validation
+138 headless tests (multi-cost recipes, torch stack merging, glowshroom
+band) plus the browser run: torch shader lights, lurker chase/attack/
+kill/drop, eating, and the full death -> cache -> respawn -> recovery loop
+verified end-to-end; night screenshot shows the headlamp pool and lurker
+eyes in the dark. No errors.
+
+### Notes / deferred
+- Entity AI is deliberately simple (no pathfinding — steer + hop). Fine
+  for open terrain and caves; revisit if tunnels confuse them.
+- One ambient track and music are still build 6. Water is build 5.
+- Ore layout shifted slightly vs build 3 (vein type hash now mod-5 to
+  include glowshroom) — existing worlds keep their edits, veins move.
+
 ## Build 3 — Depth & Feel (2026-08-20)
 Roadmap restructured first (see ROADMAP.md): darkness, audio, and the full
 tool kit land BEFORE survival, since enemies need darkness to matter and

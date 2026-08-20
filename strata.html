@@ -43,9 +43,17 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .worlditem{display:flex; justify-content:space-between; align-items:center; gap:10px; border:2px solid var(--ui-border); background:var(--ui-bg2); padding:8px 10px; margin:6px 0;}
 .worlditem .wname{font-size:15px;}
 .worlditem .wmeta{font-size:11px; color:var(--ui-hi);}
+.modebtn{margin:0;}
+.modebtn.sel{border-color:var(--accent); color:#fff;}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
+.statbar{width:220px; height:12px; background:rgba(10,9,16,0.75); border:2px solid var(--ui-border);}
+.statfill{height:100%;}
+.statfill.hp{background:#e04545; width:100%;}
+.statfill.food{background:#c8a24b; width:100%;}
+#hurt{position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 40%, rgba(200,20,20,0.55) 100%); opacity:0; transition:opacity .12s;}
 #chargebar{position:absolute; left:50%; bottom:74px; transform:translateX(-50%); width:180px; height:10px; background:rgba(10,9,16,0.7); border:2px solid var(--ui-border); display:none;}
 #chargefill{height:100%; width:0%; background:var(--accent);}
 #toolinfo{position:absolute; left:14px; bottom:14px; background:rgba(10,9,16,0.6); border:2px solid rgba(74,68,88,0.6); padding:8px 12px; font-size:13px; line-height:1.5; letter-spacing:1px;}
@@ -91,6 +99,11 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <body>
 
 <div id="hud" class="hidden">
+  <div id="statbars" class="hidden">
+    <div class="statbar"><div id="hpfill" class="statfill hp"></div></div>
+    <div class="statbar"><div id="foodfill" class="statfill food"></div></div>
+  </div>
+  <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
   <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
@@ -114,6 +127,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="worldlist" id="worldlist"></div>
     <div class="row"><input type="text" id="newWorldName" placeholder="world name" maxlength="24">
     <input type="text" id="newWorldSeed" placeholder="seed (blank = random)" maxlength="16" style="width:180px;"></div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn modebtn sel" id="modeSurvival">SURVIVAL</button>
+      <button class="btn modebtn" id="modeCreative">CREATIVE</button>
+    </div>
     <button class="btn" id="btnCreateWorld">CREATE WORLD</button>
     <button class="btn" id="btnWorldsBack">BACK</button>
   </div>
@@ -172,6 +189,14 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="deathscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:380px;">
+    <h2 style="color:#ff8b8b;">YOU DIED</h2>
+    <div class="sub" id="deathinfo"></div>
+    <button class="btn" id="btnRespawn">RESPAWN</button>
+  </div>
+</div>
+
 <div id="fatal" class="screen hidden">
   <div class="panel">
     <h2>STRATA FAILED TO START</h2>
@@ -223,9 +248,9 @@ const BEDROCK_Y = -63.99;     // everything below is permanently solid
 const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8 };
-const NMAT = 8;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9 };
+const NMAT = 9;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -295,10 +320,11 @@ function fbm2(seed, x, z, oct){
 // Everything derives deterministically from the seed; the same interface with
 // a flat plane (FLAT_GEN) is the default so build-1 behavior and tests hold.
 const ORE_TYPES = [
-  { mat: MAT.IRON,     yMin: -30,   yMax: -4,   p: 0.50, rMin: 0.8, rMax: 1.5 },
-  { mat: MAT.RUBY,     yMin: -45,   yMax: -16,  p: 0.38, rMin: 0.7, rMax: 1.3 },
-  { mat: MAT.OBSIDIAN, yMin: -58,   yMax: -30,  p: 0.34, rMin: 0.7, rMax: 1.3 },
-  { mat: MAT.DIAMOND,  yMin: -63.5, yMax: -46,  p: 0.28, rMin: 0.6, rMax: 1.1 },
+  { mat: MAT.IRON,       yMin: -30,   yMax: -4,   p: 0.50, rMin: 0.8, rMax: 1.5 },
+  { mat: MAT.RUBY,       yMin: -45,   yMax: -16,  p: 0.38, rMin: 0.7, rMax: 1.3 },
+  { mat: MAT.OBSIDIAN,   yMin: -58,   yMax: -30,  p: 0.34, rMin: 0.7, rMax: 1.3 },
+  { mat: MAT.DIAMOND,    yMin: -63.5, yMax: -46,  p: 0.28, rMin: 0.6, rMax: 1.1 },
+  { mat: MAT.GLOWSHROOM, yMin: -20,   yMax: -1,   p: 0.48, rMin: 0.5, rMax: 0.9 },
 ];
 const VEIN_CELL = 4;
 function makeGen(seed){
@@ -359,12 +385,12 @@ function makeGen(seed){
   }
   function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
   function oreAt(x, y, z){
-    if (y > -2 || y < BEDROCK_Y) return 0;
+    if (y > -1 || y < BEDROCK_Y) return 0;
     const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
     for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
       const gx = cx + dx, gy = cy + dy, gz = cz + dz;
       const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
-      const t = ORE_TYPES[hashInt(h0 ^ 0x51ab3f27) & 3];
+      const t = ORE_TYPES[hashInt(h0 ^ 0x51ab3f27) % ORE_TYPES.length];
       if (h0 / 4294967296 > t.p) continue;
       const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
       if (oy < t.yMin || oy > t.yMax) continue;
@@ -837,6 +863,8 @@ function meshChunk(cx, cy, cz, allEdits, gen){
 function makeDrill(tier){ return { kind:'drill', tier }; }
 function makeDispenser(tier){ return { kind:'disp', tier }; }
 function makeStack(matId, count){ return { kind:'mat', mat: matId, count }; }
+function makeGun(){ return { kind:'gun' }; }
+function makeTorches(count){ return { kind:'torch', count }; }
 
 // move/drop slot a onto slot b. mutates slots. returns action string.
 function invMove(slots, a, b){
@@ -844,6 +872,10 @@ function invMove(slots, a, b){
   const A = slots[a], B = slots[b];
   if (!A) return 'none';
   if (B && A.kind === 'mat' && B.kind === 'mat' && A.mat === B.mat){
+    B.count += A.count; slots[a] = null;
+    return 'merged';
+  }
+  if (B && A.kind === 'torch' && B.kind === 'torch'){
     B.count += A.count; slots[a] = null;
     return 'merged';
   }
@@ -928,7 +960,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -973,21 +1005,40 @@ function consumeMat(slots, mat, n){
 }
 
 // ---- crafting ----
-// tier progression: craft tier-N tools from the matching ore
+// tier progression from matching ore, plus survival gear
 const RECIPES = [];
 {
   const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
   for (let t = 1; t <= 4; t++){
-    RECIPES.push({ kind: 'drill', tier: t, mat: ore[t], cost: 24 });
-    RECIPES.push({ kind: 'disp',  tier: t, mat: ore[t], cost: 18 });
+    RECIPES.push({ kind: 'drill', tier: t, costs: [{ mat: ore[t], n: 24 }] });
+    RECIPES.push({ kind: 'disp',  tier: t, costs: [{ mat: ore[t], n: 18 }] });
   }
+  RECIPES.push({ kind: 'gun',   tier: 0, costs: [{ mat: MAT.IRON, n: 20 }, { mat: MAT.RUBY, n: 12 }] });
+  RECIPES.push({ kind: 'torch', tier: 0, yields: 6, costs: [{ mat: MAT.ROCK, n: 6 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+}
+function canCraft(slots, r){
+  return r.costs.every(c => countMat(slots, c.mat) >= c.n);
 }
 function craft(slots, r){
-  let empty = -1;
-  for (let i = 0; i < slots.length; i++) if (!slots[i]){ empty = i; break; }
-  if (empty < 0) return 'full';
-  if (!consumeMat(slots, r.mat, r.cost)) return 'poor';
-  slots[empty] = r.kind === 'drill' ? makeDrill(r.tier) : makeDispenser(r.tier);
+  if (!canCraft(slots, r)) return 'poor';
+  let target = -1;
+  if (r.kind === 'torch'){
+    for (let i = 0; i < slots.length; i++)
+      if (slots[i] && slots[i].kind === 'torch'){ target = i; break; }
+  }
+  if (target < 0){
+    for (let i = 0; i < slots.length; i++) if (!slots[i]){ target = i; break; }
+    if (target < 0) return 'full';
+  }
+  for (const c of r.costs) consumeMat(slots, c.mat, c.n);
+  if (r.kind === 'torch'){
+    if (slots[target] && slots[target].kind === 'torch') slots[target].count += r.yields;
+    else slots[target] = makeTorches(r.yields);
+  } else {
+    slots[target] = r.kind === 'drill' ? makeDrill(r.tier)
+                  : r.kind === 'disp' ? makeDispenser(r.tier)
+                  : makeGun();
+  }
   return 'ok';
 }
 
@@ -1035,7 +1086,8 @@ return {
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
-  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft,
+  mineYield, placeCost, paintCost, countMat, addMat, consumeMat, RECIPES, craft, canCraft,
+  makeGun, makeTorches,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -1134,6 +1186,14 @@ function makeTileDrawers(){
         ctx.fillStyle = '#b39a58'; ctx.fillRect(x, y, 1, 1);
       }
     },
+    [CORE.MAT.GLOWSHROOM](ctx, rng){
+      speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
+      for (let i = 0; i < 6; i++){
+        const x = (rng()*14)|0, y = (rng()*14)|0;
+        ctx.fillStyle = '#e8c4ff'; ctx.fillRect(x, y, 1, 1);
+        ctx.fillStyle = '#c490ef'; ctx.fillRect(x+1, y, 1, 1);
+      }
+    },
   };
 }
 function buildAtlas(seed){
@@ -1190,6 +1250,9 @@ uniform float uFogNear;
 uniform float uFogFar;
 uniform vec3 uPlayerPos;
 uniform float uLampR;
+uniform float uLampSky;
+uniform vec4 uTorch[16];
+uniform float uTorchN;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
@@ -1213,10 +1276,21 @@ void main(){
   float lampD = length(vPos - uPlayerPos);
   float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
   lamp = lamp * lamp * (3.0 - 2.0 * lamp);
-  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * 0.85));
-  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + vec3(0.02), vec3(1.05));
+  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky));
+  // placed torches
+  float tl = 0.0;
+  for (int i = 0; i < 16; i++){
+    if (float(i) >= uTorchN) break;
+    float td = length(vPos - uTorch[i].xyz);
+    float t = clamp(1.0 - td / uTorch[i].w, 0.0, 1.0);
+    tl = max(tl, t * t * (3.0 - 2.0 * t));
+  }
+  vec3 torchLit = vec3(1.0, 0.72, 0.42) * (0.9 * tl);
+  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + torchLit + vec3(0.02), vec3(1.05));
   // ores shimmer faintly in the dark so veins catch the eye
-  if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * (1.0 - vSky));
+  float dark = 1.0 - min(vSky, 1.0) * (uLampSky / 0.85);
+  if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * dark);
+  if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   float fog = smoothstep(uFogNear, uFogFar, dist);
   vec3 fogC = uFogCol * max(vSky, 0.03);  // fog goes black at depth
@@ -1369,6 +1443,10 @@ const game = {
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
+  // survival state
+  mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
+  torches: [], entities: [], deathCache: null,
+  lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
   snapOn: false, gridIdx: 3,          // default 1m grid
   lastAction: 0,
   act: { t: 0, charging: false }, mouseEdge: false, actProgress: 0,
@@ -1442,6 +1520,9 @@ function buildScene(){
       uFogFar: { value: fogFar },
       uPlayerPos: { value: new THREE.Vector3() },
       uLampR: { value: 13 },
+      uLampSky: { value: 0.85 },
+      uTorch: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, -9999, 0, 1)) },
+      uTorchN: { value: 0 },
     },
     side: THREE.DoubleSide,
   });
@@ -1469,6 +1550,7 @@ function buildScene(){
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
   Particles.init(scene);
+  torchSys.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -1478,7 +1560,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4];
 function buildViewmodel(cam){
   const vm = new THREE.Group();
   const dark = new THREE.MeshBasicMaterial({ color: 0x2f2d38 });
@@ -1503,19 +1585,44 @@ function buildViewmodel(cam){
   const orb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 8), orbMat);
   orb.position.set(0, 0, -0.26); disp.add(orb);
 
-  vm.add(drill); vm.add(disp);
+  const gun = new THREE.Group();
+  gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.3), dark));
+  const gBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.16), tierMat.clone());
+  gBarrel.material.color.set(0x8a8a92);
+  gBarrel.position.set(0, 0.02, -0.2); gun.add(gBarrel);
+  const gAccent = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.02, 0.1), tierMat.clone());
+  gAccent.material.color.set(0xd84a63);
+  gAccent.position.set(0, 0.07, -0.02); gun.add(gAccent);
+  const gGrip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.13, 0.07), grip);
+  gGrip.position.set(0, -0.11, 0.1); gun.add(gGrip);
+
+  const torch = new THREE.Group();
+  const tStick = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.05), grip);
+  torch.add(tStick);
+  const tTip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
+  tTip.position.y = 0.21; torch.add(tTip);
+  torch.rotation.z = 0.3;
+
+  vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch);
   vm.scale.setScalar(0.5);
   vm.rotation.y = -0.22;               // angle inward so the barrel end reads
   vm.position.set(0.33, -0.27, -0.62);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, bit, ring, orb, bob: 0 };
+  game.vm = { root: vm, drill, disp, gun, torch, bit, ring, orb, bob: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
   const tool = activeTool();
   v.drill.visible = !!tool && tool.kind === 'drill';
   v.disp.visible = !!tool && tool.kind === 'disp';
+  v.gun.visible = !!tool && tool.kind === 'gun';
+  v.torch.visible = !!tool && tool.kind === 'torch';
   if (!tool) return;
+  if (tool.kind === 'torch'){
+    v.torch.children[1].material.color.setHSL(0.09, 1, 0.55 + Math.sin(performance.now() * 0.01) * 0.08);
+    return;
+  }
+  if (tool.kind === 'gun') return;
   const tc = new THREE.Color(TIER_COL[tool.tier]);
   if (tool.kind === 'drill'){
     v.bit.material.color.copy(tc);
@@ -1648,6 +1755,11 @@ const AudioSys = {
       case 'select': this.tone({ freq: 520, dur: 0.04, gain: 0.05 }); break;
       case 'craft': this.tone({ freq: 660, dur: 0.09, gain: 0.09 }); this.tone({ freq: 990, dur: 0.13, gain: 0.07 }); break;
       case 'undo': this.tone({ freq: 400, dur: 0.08, gain: 0.08, type: 'triangle' }); break;
+      case 'shot': this.burst({ dur: 0.09, freq: 2600, gain: 0.28 }); this.tone({ freq: 240, dur: 0.12, gain: 0.16, type: 'sawtooth' }); break;
+      case 'hit': this.burst({ dur: 0.08, freq: 700, gain: 0.16 }); break;
+      case 'die': this.burst({ dur: 0.3, freq: 500, gain: 0.2, drop: 300 }); this.tone({ freq: 220, dur: 0.25, gain: 0.1, type: 'triangle' }); break;
+      case 'hurt': this.tone({ freq: 110, dur: 0.2, gain: 0.2, type: 'sawtooth' }); break;
+      case 'eat': this.tone({ freq: 340, dur: 0.06, gain: 0.1, type: 'sine' }); this.tone({ freq: 260, dur: 0.09, gain: 0.1, type: 'sine' }); break;
       case 'step': {
         const soft = arg === CORE.MAT.GRASS || arg === CORE.MAT.SAND;
         this.burst({ dur: soft ? 0.07 : 0.045, freq: soft ? 480 : 1500, gain: soft ? 0.06 : 0.05 });
@@ -1713,6 +1825,258 @@ const Particles = {
     if (any) this.posAttr.needsUpdate = true;
   },
 };
+
+// ---------- day/night ----------
+const DAY_CYCLE = 600;                       // seconds per full day
+const SKY_NIGHT = new THREE.Color(0x0b1020);
+const SUN_BASE = new THREE.Color(0.42, 0.40, 0.36);
+const AMB_DAY = new THREE.Color(0.62, 0.63, 0.68);
+const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
+function updateDayNight(dt){
+  if (game.ui === 'none') game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
+  const phase = game.timeOfDay * Math.PI * 2;
+  const sunH = Math.sin(phase);
+  const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
+  game.dayF = dayF;
+  const u = game.terrainMat.uniforms;
+  u.uSunDir.value.set(Math.cos(phase) * 0.5, Math.max(sunH, 0.12), 0.35).normalize();
+  u.uSunCol.value.copy(SUN_BASE).multiplyScalar(dayF);
+  u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
+  u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
+  game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
+  u.uFogCol.value.copy(game.skyNow);
+}
+
+// ---------- torches ----------
+const torchSys = {
+  group: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length){
+      const c = this.group.children.pop();
+      this.group.remove(c);
+    }
+    for (const t of game.torches){
+      const g = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), new THREE.MeshBasicMaterial({ color: 0x5a4632 }));
+      stick.position.y = 0.21;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffb347 }));
+      tip.position.y = 0.46;
+      g.add(stick); g.add(tip);
+      g.position.set(t[0], t[1], t[2]);
+      this.group.add(g);
+    }
+  },
+  add(x, y, z){ game.torches.push([x, y, z]); this.rebuild(); markSave(); },
+  // remove torches near a point; returns how many were popped
+  removeNear(x, y, z, r){
+    const keep = [], popped = game.torches.length;
+    for (const t of game.torches){
+      if (Math.hypot(t[0]-x, t[1]-y, t[2]-z) > r) keep.push(t);
+    }
+    game.torches = keep;
+    const n = popped - keep.length;
+    if (n){ this.rebuild(); markSave(); }
+    return n;
+  },
+  // feed the nearest 16 torches to the shader, with flicker
+  updateUniforms(now){
+    const u = game.terrainMat.uniforms;
+    const near = [];
+    for (let i = 0; i < game.torches.length; i++){
+      const t = game.torches[i];
+      const d = Math.hypot(t[0]-game.pos.x, t[1]-game.pos.y, t[2]-game.pos.z);
+      if (d < 50) near.push([d, i, t]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    const n = Math.min(16, near.length);
+    for (let i = 0; i < n; i++){
+      const t = near[i][2];
+      const flick = 9.5 + Math.sin(now * 0.011 + near[i][1] * 2.7) * 0.8;
+      u.uTorch.value[i].set(t[0], t[1] + 0.45, t[2], flick);
+    }
+    u.uTorchN.value = n;
+  },
+};
+function addTorchesToInv(n){
+  for (const s of game.slots) if (s && s.kind === 'torch'){ s.count += n; return true; }
+  for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = CORE.makeTorches(n); return true; }
+  return false;
+}
+
+// ---------- entities ----------
+const ENT_DEF = {
+  grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
+  lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
+};
+function entMesh(type){
+  const g = new THREE.Group();
+  if (type === 'grazer'){
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.9), new THREE.MeshBasicMaterial({ color: 0xc8a24b }));
+    body.position.y = 0.4;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.32, 0.3), new THREE.MeshBasicMaterial({ color: 0x8a6f33 }));
+    head.position.set(0, 0.55, -0.55);
+    g.add(body); g.add(head);
+  } else {
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.55), new THREE.MeshBasicMaterial({ color: 0x1c1626 }));
+    body.position.y = 0.55;
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xff2b2b });
+    for (const sx of [-0.14, 0.14]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.06), eyeM);
+      eye.position.set(sx, 0.82, -0.26);
+      g.add(eye);
+    }
+    g.add(body);
+  }
+  return g;
+}
+function reviveEntity(type, x, y, z, hp){
+  return { type, x, y, z, vx: 0, vy: 0, vz: 0, hp,
+           tt: 0, tx: x, tz: z, flash: 0, atkT: 0, fleeT: 0, mesh: null };
+}
+function spawnEntity(type, x, y, z){
+  const e = reviveEntity(type, x, y, z, ENT_DEF[type].hp);
+  game.entities.push(e);
+  return e;
+}
+function killEntity(e, byPlayer){
+  const i = game.entities.indexOf(e);
+  if (i >= 0) game.entities.splice(i, 1);
+  if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+  Particles.burst(e.x, e.y + 0.5, e.z, 0.5, [e.type === 'grazer' ? 0xc8a24b : 0x1c1626], 24, 2.2);
+  AudioSys.sfx('die');
+  if (byPlayer){
+    if (e.type === 'grazer'){ CORE.addMat(game.slots, CORE.MAT.GLOWSHROOM, 8); toast('+8 glowshroom'); }
+    else { CORE.addMat(game.slots, CORE.MAT.IRON, 4); toast('+4 iron (scavenged)'); }
+    refreshHotbar(); refreshToolHUD();
+  }
+  markSave();
+}
+function hurtEntity(e, dmg, kx, kz){
+  e.hp -= dmg;
+  e.flash = 0.15;
+  e.fleeT = 6;
+  e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
+  AudioSys.sfx('hit');
+  if (e.hp <= 0) killEntity(e, true);
+}
+function nearestTorchDist(x, y, z){
+  let best = 1e9;
+  for (const t of game.torches){
+    const d = Math.hypot(t[0]-x, t[1]-y, t[2]-z);
+    if (d < best) best = d;
+  }
+  return best;
+}
+function trySpawnEntities(){
+  if (game.mode !== 'survival') return;
+  const counts = { grazer: 0, lurker: 0 };
+  for (const e of game.entities) counts[e.type]++;
+  const a = Math.random() * Math.PI * 2;
+  const d = 22 + Math.random() * 20;
+  const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+  const h = game.gen.height(x, z);
+  const night = game.dayF < 0.25;
+  // lurkers spawn in the dark: night surface, or an underground air pocket
+  if (counts.lurker < ENT_DEF.lurker.cap){
+    if (night && nearestTorchDist(x, h, z) > 12){
+      spawnEntity('lurker', x, h + 0.5, z); return;
+    }
+    const uy = h - 8 - Math.random() * 40;
+    if (uy > CORE.BEDROCK_Y + 2 && CORE.evalSDF(x, uy, z, nearEdits([x-1,uy-1,z-1,x+1,uy+1,z+1]), game.gen) > 0.4 &&
+        nearestTorchDist(x, uy, z) > 12){
+      spawnEntity('lurker', x, uy, z); return;
+    }
+  }
+  // grazers wander the surface by day
+  if (counts.grazer < ENT_DEF.grazer.cap && game.dayF > 0.4){
+    spawnEntity('grazer', x, h + 0.5, z);
+  }
+}
+function updateEntities(dt, now){
+  if (game.mode !== 'survival') return;
+  game.spawnT += dt;
+  if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
+  for (let i = game.entities.length - 1; i >= 0; i--){
+    const e = game.entities[i];
+    const def = ENT_DEF[e.type];
+    const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    if (pd > 70){                                  // too far — despawn
+      if (e.mesh){ game.scene.remove(e.mesh); }
+      game.entities.splice(i, 1);
+      continue;
+    }
+    // steering
+    e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
+    let sx = 0, sz = 0, sp = def.speed;
+    if (e.type === 'lurker' && pd < 15){
+      sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+      if (d3 < 1.6 && e.atkT <= 0){
+        e.atkT = 1;
+        damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5);
+      }
+    } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
+      sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else {
+      if (e.tt <= 0){ e.tt = 4 + Math.random() * 5; e.tx = e.x + (Math.random() - 0.5) * 14; e.tz = e.z + (Math.random() - 0.5) * 14; }
+      sx = e.tx - e.x; sz = e.tz - e.z;
+      if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+    }
+    const sl = Math.hypot(sx, sz) || 1;
+    const wx = sx / sl * sp, wz = sz / sl * sp;
+    e.vx += (wx - e.vx) * Math.min(1, 8 * dt);
+    e.vz += (wz - e.vz) * Math.min(1, 8 * dt);
+    e.vy -= 22 * dt;
+    const ox = e.x;
+    const oz = e.z;
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    // sphere-vs-SDF collide
+    const box = [e.x - 1.2, e.y - 1.2, e.z - 1.2, e.x + 1.2, e.y + def.h + 1.2, e.z + 1.2];
+    const le = nearEdits(box);
+    let grounded = false;
+    for (let it = 0; it < 2; it++){
+      const cy = e.y + def.r;
+      const dd = sdfWorld(e.x, cy, e.z, le);
+      if (dd < def.r){
+        const g = CORE.gradSDF(e.x, cy, e.z, le, 0.1, game.gen);
+        const push = Math.min(def.r - dd, 0.4);
+        e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
+        if (g[1] > 0.5){ grounded = true; if (e.vy < 0) e.vy = 0; }
+      }
+    }
+    // hop when stuck against a wall
+    if (grounded && sl > 1 && Math.hypot(e.x - ox, e.z - oz) < sp * dt * 0.25) e.vy = 6.5;
+    if (e.y < CORE.BEDROCK_Y + 0.3){ e.y = CORE.BEDROCK_Y + 0.3; e.vy = 0; }
+    // mesh
+    if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (Math.hypot(e.vx, e.vz) > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    e.mesh.position.y += Math.abs(Math.sin(now * 0.008 + i)) * 0.05;
+    const tint = e.flash > 0 ? 4 : 1;
+    e.mesh.traverse(o => { if (o.isMesh) o.material.opacity = 1; });
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.08 : 1);
+    void tint;
+  }
+}
+// closest entity intersecting the view ray
+function entityOnRay(maxDist){
+  if (!game.entities.length) return null;
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  let best = null, bestT = maxDist;
+  for (const e of game.entities){
+    const def = ENT_DEF[e.type];
+    const vx = e.x - o.x, vy = e.y + def.h * 0.6 - o.y, vz = e.z - o.z;
+    const t = vx * dir.x + vy * dir.y + vz * dir.z;
+    if (t < 0 || t > bestT) continue;
+    const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
+    if (Math.hypot(px, py, pz) < def.r + 0.35){ best = e; bestT = t; }
+  }
+  return best;
+}
 
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
@@ -1785,7 +2149,11 @@ function bindInput(){
       return;
     }
     if (code === 'KeyZ' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); undoEdit(); return; }
-    if (code === 'KeyZ'){ game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); AudioSys.sfx('toggle'); }
+    if (code === 'KeyZ'){
+      if (game.mode === 'survival'){ toast('flying is creative-only'); }
+      else { game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); AudioSys.sfx('toggle'); }
+    }
+    if (code === 'KeyH'){ tryEat(); }
     if (code === 'KeyR'){
       const tool = activeTool();
       if (tool && tool.kind === 'disp'){
@@ -1904,7 +2272,15 @@ function updatePlayer(dt){
   const box = [game.pos.x - 1.5, game.pos.y - 1.5, game.pos.z - 1.5,
                game.pos.x + 1.5, game.pos.y + h + 1.5, game.pos.z + 1.5];
   const still = !game.fly && fwd === 0 && str === 0 && !(canMove && k['Space']);
+  const wasGrounded = game.grounded;
+  const vyBefore = game.vel.y;
   collidePlayer(nearEdits(box), still);
+
+  // fall damage: compare impact speed on the grounded transition
+  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival'){
+    const impact = -vyBefore;
+    if (impact > 11) damagePlayer(Math.round((impact - 11) * 5), 0, 0);
+  }
 
   // never fall through bedrock even at low fps
   if (game.pos.y < CORE.BEDROCK_Y + 0.2){ game.pos.y = CORE.BEDROCK_Y + 0.2; if (game.vel.y < 0) game.vel.y = 0; }
@@ -1934,6 +2310,8 @@ function activeTool(){
   const it = selectedItem();
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
+  if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -1970,7 +2348,8 @@ function ghostPlacement(eff){
 
 function updateGhost(){
   const tool = activeTool();
-  const usable = tool && game.ui === 'none' && isLocked();
+  const usable = tool && (tool.kind === 'drill' || tool.kind === 'disp') &&
+                 game.ui === 'none' && isLocked();
   for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
@@ -2032,6 +2411,8 @@ function doMine(tool, p, shape, eff){
     if (CORE.addMat(game.slots, +m, got[m])) parts.push('+' + got[m] + ' ' + CORE.MAT_NAME[m]);
     else parts.push('inventory full — lost ' + got[m] + ' ' + CORE.MAT_NAME[m]);
   }
+  const poppedTorches = torchSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
+  if (poppedTorches){ addTorchesToInv(poppedTorches); parts.push('+' + poppedTorches + ' torch'); }
   if (parts.length) toast(parts.join('  ·  '));
   AudioSys.sfx('break', hw / units);
   Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
@@ -2043,14 +2424,15 @@ function doPlace(tool, p, shape, eff){
   const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
                      : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
-  if (!CORE.consumeMat(game.slots, tool.mat, cost)){
+  if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, tool.mat, cost)){
     toast('need ' + cost + ' ' + CORE.MAT_NAME[tool.mat] + ' — have ' + CORE.countMat(game.slots, tool.mat));
     game.orbFlash = performance.now();
     AudioSys.sfx('deny');
     return;
   }
   applyEdit(e);
-  game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat, cost });
+  game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat,
+                        cost: game.mode === 'creative' ? 0 : cost });
   if (game.undoStack.length > 64) game.undoStack.shift();
   toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat] + (paint ? ' (painted)' : ''));
   AudioSys.sfx(paint ? 'paint' : 'place');
@@ -2092,13 +2474,14 @@ function actionPlan(tool, p, shape, eff){
   let plan;
   if (tool.kind === 'drill'){
     const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, rot);
-    plan = { dur: CORE.mineDuration(tool.tier, CORE.mineYield(game.edits, e, game.gen)) };
+    const dur = CORE.mineDuration(tool.tier, CORE.mineYield(game.edits, e, game.gen));
+    plan = { dur: (game.mode === 'creative' && dur > 0) ? 0 : dur };
   } else {
     const paint = game.tool.mode === 'paint';
     const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, rot);
     const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
                        : CORE.placeCost(game.edits, e, game.gen);
-    plan = { dur: cost === 0 ? -1 : CORE.placeDuration(tool.tier, cost) };
+    plan = { dur: cost === 0 ? -1 : game.mode === 'creative' ? 0 : CORE.placeDuration(tool.tier, cost) };
   }
   game.act.key = key; game.act.plan = plan;
   return plan;
@@ -2108,7 +2491,54 @@ function tryAction(dt, now){
   const tool = activeTool();
   const edge = game.mouseEdge; game.mouseEdge = false;
   game.actProgress = 0;
-  const usable = tool && game.ui === 'none' && isLocked() && game.ghostPos;
+  if (!tool || game.ui !== 'none' || !isLocked()){
+    game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return;
+  }
+
+  // blaster: hitscan, hold-fire at 2/s
+  if (tool.kind === 'gun'){
+    AudioSys.setHum(false, 0, 0);
+    if (game.mouseL && now - game.lastShot > 500){
+      game.lastShot = now;
+      AudioSys.sfx('shot');
+      game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + 0.025);
+      const ent = entityOnRay(45);
+      if (ent){
+        hurtEntity(ent, 18, (ent.x - game.pos.x) * 0.8, (ent.z - game.pos.z) * 0.8);
+        Particles.burst(ent.x, ent.y + 0.6, ent.z, 0.3, [0xff5544], 10, 2);
+      }
+    }
+    return;
+  }
+  // torch: place one on the surface you're looking at
+  if (tool.kind === 'torch'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no surface in reach'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      torchSys.add(hit[0], hit[1], hit[2]);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+
+  // drill doubles as the melee weapon: entities in reach take priority
+  if (tool.kind === 'drill' && game.mouseL){
+    const ent = entityOnRay(PLAYER.reach * 0.7);
+    if (ent){
+      AudioSys.setHum(false, 0, 0);
+      if (edge || now - game.lastMelee > 450){
+        game.lastMelee = now;
+        hurtEntity(ent, 6 + tool.tier * 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
+      }
+      return;
+    }
+  }
+
+  const usable = game.ghostPos;
   if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
 
@@ -2147,6 +2577,23 @@ function tryAction(dt, now){
       doPlace(tool, p, shape, eff);
     }
   }
+}
+
+// raymarch the view ray to the first surface within reach
+function surfaceHit(){
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const edits = nearEdits(segBox);
+  let t = 0.4;
+  for (let i = 0; i < 96 && t < PLAYER.reach; i++){
+    const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+    const d = sdfWorld(x, y, z, edits);
+    if (d < 0.02) return [x, y, z];
+    t += Math.max(0.045, d * 0.5);
+  }
+  return null;
 }
 
 // middle click: pick the material you're looking at into your hand
@@ -2202,13 +2649,23 @@ const TIER_COL = ['#8a8a92', '#c9c7d1', '#d84a63', '#5d4a86', '#6fe3ef'];
 const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
-  const key = it.kind === 'mat' ? 'm' + it.mat : it.kind + it.tier;
+  const key = it.kind === 'mat' ? 'm' + it.mat
+    : it.kind === 'gun' ? 'gun' : it.kind === 'torch' ? 'torch' : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
   const c = cv.getContext('2d');
   if (it.kind === 'mat'){
     c.drawImage(tileCanvas(it.mat, game.seed || 1), 0, 0);
+  } else if (it.kind === 'gun'){
+    c.fillStyle = '#5a4632'; c.fillRect(4, 9, 3, 5);
+    c.fillStyle = '#2f2d38'; c.fillRect(3, 6, 9, 4);
+    c.fillStyle = '#3c3a44'; c.fillRect(12, 7, 3, 2);
+    c.fillStyle = '#d84a63'; c.fillRect(6, 5, 3, 1); c.fillRect(13, 7, 1, 1);
+  } else if (it.kind === 'torch'){
+    c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
+    c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
+    c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
   } else {
     const col = TIER_COL[it.tier];
     if (it.kind === 'drill'){
@@ -2237,6 +2694,8 @@ function itemIconURL(it){
 function itemLabel(it){
   if (!it) return '';
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
+  if (it.kind === 'gun') return 'blaster';
+  if (it.kind === 'torch') return 'torches';
   const t = CORE.TIER_NAME[it.tier];
   if (it.kind === 'drill') return t + ' drill';
   return t + ' dispenser';
@@ -2260,7 +2719,7 @@ function paintSlot(el){
   const img = el.querySelector('img'), cnt = el.querySelector('.cnt');
   const url = itemIconURL(it);
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
-  cnt.textContent = (it && it.kind === 'mat') ? fmtCount(it.count) : '';
+  cnt.textContent = (it && (it.kind === 'mat' || it.kind === 'torch')) ? fmtCount(it.count) : '';
   el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
@@ -2379,15 +2838,119 @@ function refreshToolHUD(){
     } else {
       html += '<div class="t2">snap: off · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     }
+  } else if (it.kind === 'gun'){
+    html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'torch'){
+    html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
-           '<div class="t2">put a dispenser in the dispenser slot (E) to build</div>';
+           '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
+           (it.mat === CORE.MAT.GLOWSHROOM && game.mode === 'survival' ? ' · H to eat' : '') + '</div>';
   } else if (it.kind === 'disp'){
     html = '<div class="t1">' + itemLabel(it) + '</div>' +
            '<div class="t2">goes in the dispenser slot (E)</div>';
   }
   if (game.fly) html += '<div class="t2 on">flying</div>';
   el.innerHTML = html;
+}
+
+// ---------- survival: damage, death, hunger ----------
+function damagePlayer(dmg, kx, kz){
+  if (game.mode !== 'survival' || game.ui !== 'none') return;
+  game.hp = Math.max(0, game.hp - dmg);
+  game.hurtT = performance.now();
+  $('hurt').style.opacity = 1;
+  setTimeout(() => { $('hurt').style.opacity = 0; }, 180);
+  if (kx || kz){ game.vel.x += kx; game.vel.z += kz; game.vel.y += 2.5; }
+  AudioSys.sfx('hurt');
+  if (game.hp <= 0) die();
+}
+function die(){
+  // everything drops where you fell; you keep a mercy stone drill
+  game.deathCache = {
+    x: game.pos.x, y: game.pos.y + 0.6, z: game.pos.z,
+    slots: game.slots, dispSlot: game.dispSlot,
+  };
+  game.slots = new Array(40).fill(null);
+  game.slots[0] = CORE.makeDrill(0);
+  game.dispSlot = null;
+  game.hotSel = 0;
+  game.ui = 'dead';
+  $('deathinfo').textContent = 'your gear dropped at ' +
+    Math.round(game.deathCache.x) + ' ' + Math.round(game.deathCache.y) + ' ' + Math.round(game.deathCache.z);
+  show('deathscreen');
+  document.exitPointerLock();
+  updateCacheMarker();
+  saveNow();
+}
+function respawn(){
+  const h = game.gen.height(0, 0);
+  game.pos.set(0, h + 1.5, 0);
+  game.vel.set(0, 0, 0);
+  game.hp = 100; game.food = 100;
+  hide('deathscreen');
+  game.ui = 'none';
+  requestLock();
+  refreshHotbar(); refreshToolHUD();
+  markSave();
+}
+function updateCacheMarker(){
+  if (game.cacheMarker){ game.scene.remove(game.cacheMarker); game.cacheMarker = null; }
+  if (!game.deathCache) return;
+  const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+    new THREE.MeshBasicMaterial({ color: 0xffd23b, transparent: true, opacity: 0.9 }));
+  m.position.set(game.deathCache.x, game.deathCache.y, game.deathCache.z);
+  game.scene.add(m);
+  game.cacheMarker = m;
+}
+function tryPickupCache(){
+  const c = game.deathCache;
+  if (!c) return;
+  if (Math.hypot(c.x - game.pos.x, c.y - game.pos.y, c.z - game.pos.z) > 2.5) return;
+  const items = c.slots.filter(Boolean);
+  if (c.dispSlot){
+    if (!game.dispSlot) game.dispSlot = c.dispSlot;
+    else items.push(c.dispSlot);
+  }
+  let left = 0;
+  for (const it of items){
+    if (it.kind === 'mat'){ CORE.addMat(game.slots, it.mat, it.count); continue; }
+    if (it.kind === 'torch'){ addTorchesToInv(it.count); continue; }
+    let placed = false;
+    for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = it; placed = true; break; }
+    if (!placed) left++;
+  }
+  game.deathCache = null;
+  updateCacheMarker();
+  toast(left ? 'gear recovered (inventory full — ' + left + ' items lost)' : 'gear recovered');
+  AudioSys.sfx('craft');
+  refreshHotbar(); refreshToolHUD();
+  markSave();
+}
+function updateSurvival(dt){
+  if (game.mode !== 'survival'){ return; }
+  if (game.ui !== 'none') return;
+  const sprint = (game.keys['ShiftLeft'] || game.keys['ShiftRight']) && Math.hypot(game.vel.x, game.vel.z) > 4;
+  game.food = Math.max(0, game.food - dt * (sprint ? 0.45 : 0.2));
+  if (game.food <= 0) damagePlayer(dt * 2.2, 0, 0);
+  else if (game.food > 60 && game.hp < 100 && game.hp > 0){
+    game.hp = Math.min(100, game.hp + dt * 1.6);
+    game.food = Math.max(0, game.food - dt * 0.1);
+  }
+  tryPickupCache();
+}
+function tryEat(){
+  if (game.mode !== 'survival'){ toast('no hunger in creative'); return; }
+  const it = selectedItem();
+  if (!it || it.kind !== 'mat' || it.mat !== CORE.MAT.GLOWSHROOM){ toast('hold glowshroom to eat (H)'); return; }
+  if (game.food > 95){ toast('not hungry'); return; }
+  if (it.count < 8){ toast('need 8 glowshroom to eat'); return; }
+  it.count -= 8;
+  if (it.count === 0) game.slots[game.hotSel] = null;
+  game.food = Math.min(100, game.food + 30);
+  toast('ate glowshroom (+30 food)');
+  AudioSys.sfx('eat');
+  refreshHotbar(); refreshToolHUD();
 }
 
 // ---------- overlays / menus ----------
@@ -2402,20 +2965,24 @@ function openCraft(){
 function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
   for (const r of CORE.RECIPES){
-    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier) : CORE.makeDispenser(r.tier);
-    const have = CORE.countMat(game.slots, r.mat);
+    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
+               : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
+               : r.kind === 'gun' ? CORE.makeGun()
+               : CORE.makeTorches(r.yields);
     const row = document.createElement('div'); row.className = 'craftrow';
     const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
-    const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = itemLabel(item); row.appendChild(nm);
+    const nm = document.createElement('div'); nm.className = 'cname';
+    nm.textContent = itemLabel(item) + (r.kind === 'torch' ? ' ×' + r.yields : '');
+    row.appendChild(nm);
     const cost = document.createElement('div');
-    cost.className = 'ccost' + (have >= r.cost ? ' ok' : '');
-    cost.textContent = r.cost + ' ' + CORE.MAT_NAME[r.mat] + ' (have ' + have + ')';
+    cost.className = 'ccost' + (CORE.canCraft(game.slots, r) ? ' ok' : '');
+    cost.textContent = r.costs.map(c => c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(game.slots, c.mat) + ')').join(' + ');
     row.appendChild(cost);
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
       const res = CORE.craft(game.slots, r);
       if (res === 'ok'){ toast('crafted ' + itemLabel(item)); AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave(); }
-      else if (res === 'poor') toast('not enough ' + CORE.MAT_NAME[r.mat]);
+      else if (res === 'poor') toast('missing materials');
       else toast('inventory full');
     });
     row.appendChild(btn);
@@ -2490,7 +3057,7 @@ function refreshWorldList(){
   for (const w of ix){
     const row = document.createElement('div'); row.className = 'worlditem';
     const left = document.createElement('div');
-    left.innerHTML = '<div class="wname">' + escapeHtml(w.name) + '</div><div class="wmeta">seed ' + escapeHtml(String(w.seed)) + '</div>';
+    left.innerHTML = '<div class="wname">' + escapeHtml(w.name) + '</div><div class="wmeta">seed ' + escapeHtml(String(w.seed)) + ' · ' + (w.mode || 'creative') + '</div>';
     const right = document.createElement('div'); right.className = 'row';
     const bPlay = document.createElement('button'); bPlay.className = 'btn small'; bPlay.textContent = 'PLAY';
     bPlay.addEventListener('click', () => startWorld(w.id));
@@ -2504,30 +3071,43 @@ function refreshWorldList(){
   }
 }
 function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+let newWorldMode = 'survival';
 function createWorld(){
   const name = $('newWorldName').value.trim() || 'world ' + (worldIndex().length + 1);
   let seedStr = $('newWorldSeed').value.trim();
   if (!seedStr) seedStr = String(Math.floor(Math.random() * 1e9));
   const id = Date.now().toString(36) + Math.floor(Math.random() * 1e6).toString(36);
   const ix = worldIndex();
-  ix.push({ id, name, seed: seedStr, created: Date.now() });
+  ix.push({ id, name, seed: seedStr, mode: newWorldMode, created: Date.now() });
   saveWorldIndex(ix);
-  saveWorldData(id, freshWorldData(name, seedStr));
+  saveWorldData(id, freshWorldData(name, seedStr, newWorldMode));
   $('newWorldName').value = ''; $('newWorldSeed').value = '';
   refreshWorldList();
 }
-function freshWorldData(name, seedStr){
+function freshWorldData(name, seedStr, mode){
   return {
-    v: 1, name, seed: seedStr,
+    v: 4, name, seed: seedStr, mode: mode || 'survival',
     edits: [],
-    player: { x: 0, y: 2.5, z: 0, yaw: 0, pitch: 0, fly: false },
+    player: { x: 0, y: null, z: 0, yaw: 0, pitch: 0, fly: false },
     slots: null, hotSel: 0, snapOn: false, gridIdx: 3,
   };
 }
-function defaultSlots(){
-  // start with a stone drill; the stone dispenser begins in the dispenser slot
+function defaultSlots(mode){
   const s = new Array(40).fill(null);
-  s[0] = CORE.makeDrill(0);
+  if (mode === 'creative'){
+    for (let t = 0; t < 5; t++) s[t] = CORE.makeDrill(t);
+    s[5] = CORE.makeGun();
+    s[6] = CORE.makeTorches(64);
+    for (let m = 1; m <= CORE.NMAT; m++){
+      if (m === CORE.MAT.BEDROCK) continue;
+      CORE.addMat(s, m, 99999);
+    }
+    for (let t = 0; t < 4; t++){
+      for (let i = 10; i < 40; i++) if (!s[i]){ s[i] = CORE.makeDispenser(t); break; }
+    }
+  } else {
+    s[0] = CORE.makeDrill(0);   // survival: earn the rest
+  }
   return s;
 }
 
@@ -2536,11 +3116,16 @@ function markSave(){ game.savePending = true; game.saveTimer = performance.now()
 function saveNow(){
   if (!game.running || !game.worldId) return;
   const data = {
-    v: 3, name: game.worldName, seed: game.seedStr,
+    v: 4, name: game.worldName, seed: game.seedStr, mode: game.mode,
     edits: CORE.serializeEdits(game.edits),
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
+    hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
+    torches: game.torches,
+    entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
+    deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
+                                    slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
   try { saveWorldData(game.worldId, data); game.savePending = false; }
   catch (err) { toast('save failed: ' + err.message); }
@@ -2555,7 +3140,8 @@ function startWorld(id){
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
   game.edits = CORE.deserializeEdits(data.edits || []);
-  game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots();
+  game.mode = data.mode || 'creative';   // pre-survival saves stay creative
+  game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
   } else {
@@ -2566,10 +3152,16 @@ function startWorld(id){
         game.dispSlot = game.slots[i]; game.slots[i] = null; break;
       }
     }
-    if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(0);
+    if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(game.mode === 'creative' ? 4 : 0);
   }
-  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 }, data.tool || {});
+  game.hp = data.hp == null ? 100 : data.hp;
+  game.food = data.food == null ? 100 : data.food;
+  game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
+  game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
+  game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
+  game.deathCache = data.deathCache || null;
   game.undoStack = [];
+  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0 }, data.tool || {});
   game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
   game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
@@ -2592,6 +3184,10 @@ function startWorld(id){
   hide('mainmenu'); hide('worldsmenu'); show('hud');
   buildScene();
   game.terrain.edits = game.edits;
+  torchSys.rebuild();
+  game.cacheMarker = null;
+  updateCacheMarker();
+  $('statbars').classList.toggle('hidden', game.mode !== 'survival');
   buildHotbar(); refreshToolHUD();
   game.running = true;
   game.forceStream = true;
@@ -2602,6 +3198,7 @@ function reviveItem(it){
 }
 function quitToTitle(){
   saveNow();
+  for (const e of game.entities) e.mesh = null;
   game.running = false;
   hide('pausemenu'); hide('hud');
   if (game.terrain) game.terrain.disposeAll();
@@ -2642,7 +3239,19 @@ function frame(now){
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
+  updateDayNight(dt);
+  if (game.ui === 'none') updateEntities(dt, now);
+  torchSys.updateUniforms(now);
+  updateSurvival(dt);
   Particles.update(dt);
+  if (game.mode === 'survival'){
+    $('hpfill').style.width = game.hp.toFixed(0) + '%';
+    $('foodfill').style.width = game.food.toFixed(0) + '%';
+  }
+  if (game.cacheMarker){
+    game.cacheMarker.rotation.y += dt * 2;
+    game.cacheMarker.scale.setScalar(1 + Math.sin(now * 0.004) * 0.15);
+  }
 
   // cave ambience + compass, throttled
   game.navT = (game.navT || 0) + dt;
@@ -2653,13 +3262,18 @@ function frame(now){
     // the sky itself goes black as you descend — caves feel enclosed and
     // not-yet-meshed frontier chunks never flash bright blue in the dark
     const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
-    game.scene.background.copy(SKY).multiplyScalar(skyF);
+    game.scene.background.copy(game.skyNow || SKY).multiplyScalar(skyF);
     const dist = Math.hypot(game.pos.x, game.pos.z);
     const thv = Math.atan2(-game.pos.x, -game.pos.z);
     const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
     $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
     $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';
-    $('navpos').textContent = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
+    let posTxt = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
+    if (game.deathCache){
+      const c = game.deathCache;
+      posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
+    }
+    $('navpos').textContent = posTxt;
   }
 
   // autosave: 2.5s after last change
@@ -2680,6 +3294,10 @@ function bindMenus(){
   $('btnWorlds').addEventListener('click', () => { hide('mainmenu'); refreshWorldList(); show('worldsmenu'); });
   $('btnWorldsBack').addEventListener('click', () => { hide('worldsmenu'); show('mainmenu'); });
   $('btnCreateWorld').addEventListener('click', createWorld);
+  $('modeSurvival').addEventListener('click', () => { newWorldMode = 'survival';
+    $('modeSurvival').classList.add('sel'); $('modeCreative').classList.remove('sel'); });
+  $('modeCreative').addEventListener('click', () => { newWorldMode = 'creative';
+    $('modeCreative').classList.add('sel'); $('modeSurvival').classList.remove('sel'); });
   $('btnOptionsMain').addEventListener('click', () => openOptions('main'));
   $('btnOptionsBack').addEventListener('click', closeOptions);
   $('btnQuit').addEventListener('click', () => { window.close(); toast('close the tab to quit'); });
@@ -2696,6 +3314,7 @@ function bindMenus(){
   $('btnPauseOptions').addEventListener('click', () => openOptions('pause'));
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
+  $('btnRespawn').addEventListener('click', respawn);
   for (const id of ['optSens', 'optFov', 'optRd', 'optVol']) $(id).addEventListener('input', syncOptLabels);
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
@@ -2709,7 +3328,8 @@ requestAnimationFrame(frame);
 // debug handles (also used by the headless smoke test)
 window.__game = game;
 window.__CORE = CORE;
-window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD };
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD,
+  spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight };
 </script>
 </body>
 </html>
