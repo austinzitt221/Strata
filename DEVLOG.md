@@ -2,6 +2,58 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.1 — water scoping, beds & sheep, real sky (2026-08-20)
+
+### Water is lakes now, not a blanket table
+- **Mechanics**: a point is water only if it's below sea level AND its
+  terrain column is (y < sea && height(x,z) < sea). Lakes and the caves
+  under them flood; dry caves under normal land stay dry; inland mined
+  pits stay dry. Verified: swim=true in the lake, swim=false at the same
+  depth under high ground.
+- **Rendering**: the 600m follow-plane is gone. Water surface quads are
+  built per terrain chunk (1m cells over columns whose ground dips below
+  sea), created/disposed with the chunk — so water can never appear
+  beyond meshed terrain, killing the fake ocean horizon.
+
+### Beds (respawn moves here from beacons)
+- Sheep-drop wool + 6 planks -> bed (station recipe). Textured prop:
+  plank frame + headboard, wool mattress and pillow, stitched red
+  blanket; solid to walk on; mining pops it back.
+- Right click a placed bed: **sets your spawn point** always, and at
+  night also **sleeps to dawn** (screen fade, time jumps to morning).
+  Survival respawn uses the bed spawn point; world spawn if none.
+- Beacons are pure waypoints now, and the compass points to the
+  **closest** beacon, not the latest.
+
+### Sheep
+New passive surface animal (day spawns, alternates with grazers, cap 4):
+woolly white body with fluffy back/tufts, faced head (eyes with glints,
+nostrils, mouth, ears), animated legs. Killing one drops 2-3 wool.
+
+### Sky
+- **Sun and moon** discs travel a fixed arc tied to timeOfDay — their
+  height in the sky reads as the day/night progress bar. Sun has a soft
+  glow; moon is a cratered pixel disc; each fades out below the horizon.
+- **Stars**: 420-point field, fading in as dayF drops.
+- **Clouds**: twelve rounded blob-cluster clouds (flattened spheres, not
+  boxes) drifting slowly at 58-80m, wrapping around the player, fading
+  and darkening at night.
+
+### Other playtest fixes
+- Ruin loot pillar is now **ruby over iron** (was diamond/obsidian).
+- Torch embers are slower and subtler: smaller points, ~1/3 the spawn
+  rate, low drift velocity, gentle gravity, longer soft fade.
+- Trees no longer float over unmeshed ground: a tree only appears once
+  its ground chunk has meshed (pending trees retry as chunks land).
+
+### Verification
+190 headless tests (ruby/iron pillar, bed recipe consuming wool items).
+Browser: lake swim true / under-land swim false, horizon clean of fake
+water, bed sleep (time 0.75 -> 0.03, spawn set, respawn lands at bed),
+sheep kill -> +3 wool, compass picks the 7m beacon over the 670m one,
+morning sun / moonrise / star field / cloud screenshots. Full smoke
+green, zero console errors.
+
 ## Build 5 — water & world depth (2026-08-20)
 
 ### Water
