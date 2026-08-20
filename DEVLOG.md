@@ -2,6 +2,91 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 4.2 — playtest fixes: shards, floating, doors, hands (2026-08-20)
+
+### Bug: triangle shards on placed cubes — FIXED (three layers deep)
+The "shards of geo sticking out where cubes meet ground / each other":
+1. **Corner gradient poisoning.** Hermite crossings landing exactly on
+   lattice corners sampled tetra gradients (h=0.1) that wrap around cube
+   corners, feeding the QEF planes that exist on neither face. Crossings
+   on an edit's surface now get the primitive's **analytic normal**
+   (cube face argmax, sphere radial, cylinder side/cap) instead of a
+   numeric gradient.
+2. **Opposing sheets in one cell.** Where a thin gap separates a placed
+   cube's bottom from the ground, one DC cell holds two opposite-facing
+   surfaces; a single QEF vertex averages them into a spike. Cells now
+   split into **two vertices** when opposing-normal crossings separate by
+   >0.3m along the normal; quads pick the right sheet per cell-edge slot.
+3. **Material bleed.** Quad material sampled at solid grid corners lying
+   exactly on a snapped cube's face plane got claimed by the cube's union
+   — ground triangles at the wall base rendered obsidian (the visible
+   dark "fins"). Material is now sampled at the crossing point nudged
+   0.06m into the solid side. Verified by raycasting 845 screen pixels
+   across a 5-cube wall scene: zero mismatched triangles.
+
+### Bug: floating over curved cave floors — FIXED
+The combined field is not a true SDF: the heightfield is scaled 0.65 and
+carve noise flattens |∇f| further, so raw d under-states real gaps ~2.4x
+near cave walls — capsules "collided" with air and hovered. All collision
+paths (player, entities, capsuleFree) now divide the field value by the
+local gradient magnitude (clamped [0.25, 1]) — a first-order true-distance
+estimate. Measured: resting gap on a curved carved floor 0.021m (was
+0.3-0.5m); walking contact stays 0.36-0.43m against a 0.42m radius.
+Smoke: still 4/4 cave mouths entered on foot.
+
+### Bug: held door/table showed a torch, named "stone dispenser (undefined)" — FIXED
+refreshToolHUD's tool branch matched ANY active tool and rendered the
+drill/dispenser ternary for torches/doors/tables. Branch now gated to
+drill/disp; every item kind has its own HUD text.
+
+### Planks & sticks rework
+- MAT 11 is now **planks** (buildable, board texture): 1 wood log -> 4.
+- **Sticks are an item**, not a material (stick icon, held-in-hand prop,
+  can't be built with): 2 planks -> 4 sticks.
+- Torch (2 sticks + 2 glowshroom), door (6 sticks), swords (2 sticks +
+  12 material) now consume stick items; crafting supports item costs.
+
+### Trees v2
+Tapered cylinder trunks + clustered sphere-blob canopies (deterministic
+per tree), 16x16 bark/leaf canvas textures (NearestFilter), ~7-11m tall,
+day/night tinted. Trunk collision, chop rays, and felling track the new
+sizes; bigger trees yield more wood (6 + 4x scale).
+
+### First-person hands
+Articulated right hand — palm, heel, four 3-segment tapering fingers,
+opposing thumb, sleeve cuff — gripping every held non-drill/dispenser
+item: torch, stick, door, table, sword, blaster, and loose material
+stacks (textured chunk resting in the hand). Grip pivots so the knuckle
+row and finger curl stay camera-visible.
+
+### Doors v2
+Holding a door shows a **door-shaped ghost panel** (green, skinny) with
+the dispenser's placement kit: scroll resizes (0.7-2.4m wide, height
+1.85x), F toggles grid snap, V/B distance in free mode. With snap on the
+ghost sits on a grid-square edge and **right click cycles which side**
+(N/E/S/W); with snap off right click rotates 90 deg. Doors store their
+size (w/h) — collision, open/close rays, and removal all honor it. Old
+saves default to 1.2x2.2m.
+
+### Crafting table right click
+Right-clicking a placed table within 3.5m opens the crafting menu,
+overriding whatever's held. (Q still works anywhere; table proximity
+still gates the full catalog.)
+
+### Entity faces
+Grazer: eyes with glints, nostrils, mouth line. Lurker: angry brows over
+the red eyes, open maw with teeth.
+
+### Tuning
+All drill/dispenser tiers 30% faster: TIER_TIME [1.1, 0.8, 0.55, 0.32, 0]
+-> [0.85, 0.62, 0.42, 0.25, 0].
+
+### Known issues
+- Adjacent-sphere carves can leave rim slits where thin carve roofs meet
+  single-vertex ground cells (dual-vertex DC limit, <=1% of edge pairs,
+  bounded by test). Revisit if visible in play.
+- Doors/tables/entities are still untinted at night (trees now tint).
+
 ## Build 4.1 — playtest fixes + wood age (2026-08-20)
 
 ### Bug 1: grass specks in placed material — FIXED
