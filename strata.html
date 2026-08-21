@@ -601,28 +601,72 @@ const FLAT_GEN = {
 
 // ---- SDF ----
 // convention: d < 0 solid, d > 0 air.
+// ---- edit transforms ----
+// Edits carry optional extras beyond (x,y,z,size,rot yaw):
+//   rx, rz  — pitch/roll rotation (radians); full orientation = Ry * Rx * Rz
+//   sx, sy, sz — per-axis FULL sizes (default: e.size on every axis)
+// The wrench stretches shapes per-axis; rotate modes add rx/rz.
+function editHalf(e){
+  return [(e.sx || e.size) * 0.5, (e.sy || e.size) * 0.5, (e.sz || e.size) * 0.5];
+}
+function editHasRot(e){ return !!(e.rot || e.rx || e.rz); }
+// world point -> the edit's local frame (undo yaw, then pitch, then roll)
+function toLocal(e, px, py, pz){
+  let x = px - e.x, y = py - e.y, z = pz - e.z;
+  if (e.rot){ const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
+    const r = x * c - z * s; z = x * s + z * c; x = r; }
+  if (e.rx){ const c = Math.cos(-e.rx), s = Math.sin(-e.rx);
+    const r = y * c - z * s; z = y * s + z * c; y = r; }
+  if (e.rz){ const c = Math.cos(-e.rz), s = Math.sin(-e.rz);
+    const r = x * c - y * s; y = x * s + y * c; x = r; }
+  return [x, y, z];
+}
+// local direction -> world (Rz, then Rx, then Ry — inverse of toLocal)
+function rotToWorld(e, x, y, z){
+  if (e.rz){ const c = Math.cos(e.rz), s = Math.sin(e.rz);
+    const r = x * c - y * s; y = x * s + y * c; x = r; }
+  if (e.rx){ const c = Math.cos(e.rx), s = Math.sin(e.rx);
+    const r = y * c - z * s; z = y * s + z * c; y = r; }
+  if (e.rot){ const c = Math.cos(e.rot), s = Math.sin(e.rot);
+    const r = x * c - z * s; z = x * s + z * c; x = r; }
+  return [x, y, z];
+}
 function sdSphere(px, py, pz, e){
-  const dx = px - e.x, dy = py - e.y, dz = pz - e.z;
-  return Math.sqrt(dx*dx + dy*dy + dz*dz) - e.size * 0.5;
+  const [hx, hy, hz] = editHalf(e);
+  if (hx === hy && hy === hz && !editHasRot(e)){
+    const dx = px - e.x, dy = py - e.y, dz = pz - e.z;
+    return Math.sqrt(dx*dx + dy*dy + dz*dz) - hx;
+  }
+  // stretched sphere = ellipsoid (good SDF approximation)
+  const p = toLocal(e, px, py, pz);
+  const k0 = Math.hypot(p[0] / hx, p[1] / hy, p[2] / hz);
+  const k1 = Math.hypot(p[0] / (hx * hx), p[1] / (hy * hy), p[2] / (hz * hz)) || 1e-9;
+  return k0 * (k0 - 1) / k1;
 }
 function sdCube(px, py, pz, e){
-  const h = e.size * 0.5;
-  let dx = px - e.x, dz = pz - e.z;
-  if (e.rot){
-    const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
-    const rx = dx * c - dz * s;
-    dz = dx * s + dz * c; dx = rx;
+  const [hx, hy, hz] = editHalf(e);
+  let lx = px - e.x, ly = py - e.y, lz = pz - e.z;
+  if (editHasRot(e)){
+    const p = toLocal(e, px, py, pz);
+    lx = p[0]; ly = p[1]; lz = p[2];
   }
-  const qx = Math.abs(dx) - h, qy = Math.abs(py - e.y) - h, qz = Math.abs(dz) - h;
+  const qx = Math.abs(lx) - hx, qy = Math.abs(ly) - hy, qz = Math.abs(lz) - hz;
   const ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
   const outside = Math.sqrt(ax*ax + ay*ay + az*az);
   const inside = Math.min(Math.max(qx, Math.max(qy, qz)), 0);
   return outside + inside;
 }
 function sdCylinder(px, py, pz, e){
-  const r = e.size * 0.5, hh = e.size * 0.5;   // y-axis, height = diameter = size
-  const d2 = Math.hypot(px - e.x, pz - e.z) - r;
-  const dy = Math.abs(py - e.y) - hh;
+  const [hx, hy, hz] = editHalf(e);
+  let lx = px - e.x, ly = py - e.y, lz = pz - e.z;
+  if (editHasRot(e)){
+    const p = toLocal(e, px, py, pz);
+    lx = p[0]; ly = p[1]; lz = p[2];
+  }
+  // elliptical cross-section approximation when hx != hz
+  const d2 = hx === hz ? Math.hypot(lx, lz) - hx
+                       : (Math.hypot(lx / hx, lz / hz) - 1) * Math.min(hx, hz);
+  const dy = Math.abs(ly) - hy;
   const ox = Math.max(d2, 0), oy = Math.max(dy, 0);
   return Math.hypot(ox, oy) + Math.min(Math.max(d2, dy), 0);
 }
@@ -634,15 +678,20 @@ function shapeSDF(px, py, pz, e){
 const SHAPE_NAME = ['sphere', 'cube', 'cylinder'];
 
 // edit: { op: 0 subtract | 1 union | 2 paint, shape: 0 sphere | 1 cube |
-//         2 cylinder, x,y,z, size, mat, rot (cube yaw, radians) }
+//         2 cylinder, x,y,z, size, mat, rot (yaw) [, rx, rz, sx, sy, sz] }
 function makeEdit(op, shape, x, y, z, size, mat, rot){
   return { op, shape, x, y, z, size, mat: mat|0, rot: rot || 0 };
 }
 function editAABB(e){
-  let h = e.size * 0.5;
-  const hy = h;
-  if (e.shape === 1 && e.rot) h *= Math.SQRT2;   // conservative for rotated cubes
-  return [e.x - h, e.y - hy, e.z - h, e.x + h, e.y + hy, e.z + h];
+  const [hx, hy, hz] = editHalf(e);
+  if (!editHasRot(e))
+    return [e.x - hx, e.y - hy, e.z - hz, e.x + hx, e.y + hy, e.z + hz];
+  // |R| * h — exact bound for boxes, conservative for the others
+  const cx = rotToWorld(e, 1, 0, 0), cy = rotToWorld(e, 0, 1, 0), cz = rotToWorld(e, 0, 0, 1);
+  const ex = Math.abs(cx[0]) * hx + Math.abs(cy[0]) * hy + Math.abs(cz[0]) * hz;
+  const ey = Math.abs(cx[1]) * hx + Math.abs(cy[1]) * hy + Math.abs(cz[1]) * hz;
+  const ez = Math.abs(cx[2]) * hx + Math.abs(cy[2]) * hy + Math.abs(cz[2]) * hz;
+  return [e.x - ex, e.y - ey, e.z - ez, e.x + ex, e.y + ey, e.z + ez];
 }
 function aabbOverlap(a, b, pad){
   return a[0] - pad <= b[3] && a[3] + pad >= b[0] &&
@@ -658,6 +707,13 @@ function cullEdits(edits, box, pad){
   return out;
 }
 
+// Subtracts are applied a hair (MINE_EPS) larger than they store. Zeros
+// count as SOLID (so subtract-then-place restores solid); without the
+// inflation, placing a cube and re-mining the exact same cube left a
+// zero-thickness "solid" membrane on the old faces — the playtest's
+// un-removable bits. 2cm is invisible at VOX=0.5 but pushes those faces
+// strictly into air.
+const MINE_EPS = 0.02;
 // the world SDF. `edits` must be in creation order (culling preserves order).
 function evalSDF(px, py, pz, edits, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
@@ -665,7 +721,7 @@ function evalSDF(px, py, pz, edits, gen){
     const e = edits[i];
     if (e.op === 2) continue;              // paint: material only, no geometry
     const s = shapeSDF(px, py, pz, e);
-    d = e.op === 1 ? Math.min(d, s) : Math.max(d, -s);
+    d = e.op === 1 ? Math.min(d, s) : Math.max(d, -(s - MINE_EPS));
   }
   // bedrock clamp AFTER edits: below BEDROCK_Y is solid by construction
   const b = py - BEDROCK_Y;
@@ -694,42 +750,41 @@ function materialAt(px, py, pz, edits, gen){
 // component along the edge that crossed it).
 function editNormal(e, px, py, pz, axis){
   let nx = 0, ny = 0, nz = 0;
+  const [hx, hy, hz] = editHalf(e);
+  const rot = editHasRot(e);
+  const p = rot ? toLocal(e, px, py, pz) : [px - e.x, py - e.y, pz - e.z];
   if (e.shape === 0){
-    const dx = px - e.x, dy = py - e.y, dz = pz - e.z;
-    const L = Math.hypot(dx, dy, dz) || 1;
-    nx = dx / L; ny = dy / L; nz = dz / L;
+    // sphere/ellipsoid: gradient ~ p / half^2 in local space
+    let gx = p[0] / (hx * hx), gy = p[1] / (hy * hy), gz = p[2] / (hz * hz);
+    const L = Math.hypot(gx, gy, gz) || 1;
+    nx = gx / L; ny = gy / L; nz = gz / L;
   } else if (e.shape === 2){
-    const d2 = Math.hypot(px - e.x, pz - e.z) - e.size * 0.5;
-    const dy = Math.abs(py - e.y) - e.size * 0.5;
+    const d2 = (hx === hz ? Math.hypot(p[0], p[2]) - hx
+                          : (Math.hypot(p[0] / hx, p[2] / hz) - 1) * Math.min(hx, hz));
+    const dy = Math.abs(p[1]) - hy;
     if (dy > d2 - 1e-9 && (axis === 1 || dy >= d2)){
-      ny = py > e.y ? 1 : -1;
+      ny = p[1] > 0 ? 1 : -1;
     } else {
-      const L = Math.hypot(px - e.x, pz - e.z) || 1;
-      nx = (px - e.x) / L; nz = (pz - e.z) / L;
+      let gx = p[0] / (hx * hx), gz = p[2] / (hz * hz);
+      const L = Math.hypot(gx, gz) || 1;
+      nx = gx / L; nz = gz / L;
     }
   } else {
-    // cube: local frame, pick the dominant |q| axis; on ties (edges and
-    // corners) prefer the DC edge axis so each edge contributes its own face
-    let dx = px - e.x, dz = pz - e.z;
-    if (e.rot){
-      const c = Math.cos(-e.rot), s = Math.sin(-e.rot);
-      const rx = dx * c - dz * s;
-      dz = dx * s + dz * c; dx = rx;
-    }
-    const q = [Math.abs(dx), Math.abs(py - e.y), Math.abs(dz)];
+    // cube: pick the dominant q axis (signed distance to each face pair);
+    // on ties (edges and corners) prefer the DC edge axis so each edge
+    // contributes its own face
+    const q = [Math.abs(p[0]) - hx, Math.abs(p[1]) - hy, Math.abs(p[2]) - hz];
     let best = 0;
-    // rotated local axis index corresponding to the world edge axis
-    const axisLocal = e.rot && axis !== 1 ? -1 : axis;
+    const axisLocal = rot ? -1 : axis;
     for (let i = 1; i < 3; i++) if (q[i] > q[best] + 1e-6) best = i;
     if (axisLocal >= 0 && q[axisLocal] > q[best] - 1e-6) best = axisLocal;
-    if (best === 0){ nx = dx > 0 ? 1 : -1; }
-    else if (best === 1){ ny = py > e.y ? 1 : -1; }
-    else { nz = dz > 0 ? 1 : -1; }
-    if (e.rot && best !== 1){
-      const c = Math.cos(e.rot), s = Math.sin(e.rot);
-      const wx = nx * c - nz * s;
-      nz = nx * s + nz * c; nx = wx;
-    }
+    if (best === 0){ nx = p[0] > 0 ? 1 : -1; }
+    else if (best === 1){ ny = p[1] > 0 ? 1 : -1; }
+    else { nz = p[2] > 0 ? 1 : -1; }
+  }
+  if (rot){
+    const w = rotToWorld(e, nx, ny, nz);
+    nx = w[0]; ny = w[1]; nz = w[2];
   }
   // subtract: the world field is max(d, -s), so its gradient is -grad(s)
   if (e.op === 0){ nx = -nx; ny = -ny; nz = -nz; }
@@ -823,7 +878,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
         for (let x = x0; x <= x1; x++){
           const s = shapeSDF((gx0 + x) * VOX, wy, wz, e);
           const fi = FI(x, y, z);
-          field[fi] = isU ? Math.min(field[fi], s) : Math.max(field[fi], -s);
+          field[fi] = isU ? Math.min(field[fi], s) : Math.max(field[fi], -(s - MINE_EPS));
         }
       }
     }
@@ -1171,7 +1226,8 @@ const UNIT_VOL = 0.125;
 // sample a shape's interior; cb(x,y,z,cellVol) for each sample point
 function sampleShape(e, cb){
   const box = editAABB(e);
-  const step = Math.min(0.5, Math.max(0.15, e.size / 12));
+  const dim = Math.max(e.sx || e.size, e.sy || e.size, e.sz || e.size);
+  const step = Math.min(0.5, Math.max(0.15, dim / 12));
   const v = step * step * step;
   for (let x = box[0] + step / 2; x < box[3]; x += step)
     for (let y = box[1] + step / 2; y < box[4]; y += step)
@@ -1312,6 +1368,7 @@ const RECIPES = [];
   }
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
+  RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
   RECIPES.push({ kind: 'beacon', yields: 1, station: true,
     costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 4 }, { mat: MAT.PLANKS, n: 4 }] });
@@ -1361,7 +1418,10 @@ function serializeEdits(edits){
   const a = new Array(edits.length);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    a[i] = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat, e.rot || 0];
+    const row = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat, e.rot || 0];
+    if (e.rx || e.rz || e.sx || e.sy || e.sz)
+      row.push(e.rx || 0, e.rz || 0, e.sx || 0, e.sy || 0, e.sz || 0);
+    a[i] = row;
   }
   return a;
 }
@@ -1369,7 +1429,15 @@ function deserializeEdits(arr){
   const out = new Array(arr.length);
   for (let i = 0; i < arr.length; i++){
     const r = arr[i];
-    out[i] = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7] || 0);
+    const e = makeEdit(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7] || 0);
+    if (r.length > 8){
+      if (r[8]) e.rx = r[8];
+      if (r[9]) e.rz = r[9];
+      if (r[10]) e.sx = r[10];
+      if (r[11]) e.sy = r[11];
+      if (r[12]) e.sz = r[12];
+    }
+    out[i] = e;
   }
   return out;
 }
@@ -1397,6 +1465,7 @@ return {
   SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
+  editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
@@ -1845,7 +1914,7 @@ const game = {
   // tools/ui state
   slots: [], hotSel: 0,
   dispSlot: null,                     // the one special dispenser slot
-  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
+  tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
   // survival state
   mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
@@ -2040,6 +2109,7 @@ function buildScene(){
   stoveSys.init(scene);
   bulbSys.init(scene);
   skySys.init(scene);
+  wrenchSys.init(scene);
   treeSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
@@ -2456,6 +2526,23 @@ function buildViewmodel(cam){
     return t;
   });
 
+  const wrench = held(() => {
+    const t = new THREE.Group();
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.34, 0.035), steelLM);
+    handle.position.y = 0.06;
+    const jawBase = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.07, 0.04), steelLM);
+    jawBase.position.y = 0.26;
+    const jawL = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.1, 0.04), steelLM);
+    jawL.position.set(-0.045, 0.33, 0);
+    const jawR = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.1, 0.04), steelLM);
+    jawR.position.set(0.055, 0.34, 0);
+    const gripW = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.12, 0.04), gripM);
+    gripW.position.y = -0.05;
+    t.add(handle); t.add(jawBase); t.add(jawL); t.add(jawR); t.add(gripW);
+    t.rotation.x = 0.25; t.rotation.z = -0.35;
+    return t;
+  });
+
   // generic held item: the item's pixel icon on a small plane in the fist —
   // covers meat, ores, ingots, gems, coal, bulbs, stoves without bespoke props
   const generic = held(() => {
@@ -2480,12 +2567,12 @@ function buildViewmodel(cam){
   });
 
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
-  vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(generic); vm.add(matCube);
+  vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
   vm.scale.setScalar(0.5);
   vm.rotation.y = 0.42;                // tips angle inward so the business end reads
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, generic, matCube,
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube,
               bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
@@ -2504,6 +2591,7 @@ function updateViewmodel(dt){
   v.beacon.visible = kind === 'beacon';
   v.bed.visible = kind === 'bed';
   v.wool.visible = kind === 'wool';
+  v.wrench.visible = kind === 'wrench';
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove'];
   v.generic.visible = genericKinds.includes(kind);
@@ -3141,14 +3229,20 @@ const bulbSys = {
       fil.position.y = 0.33;
       g.add(screw); g.add(neck); g.add(globe); g.add(fil);
       g.position.set(b[0], b[1], b[2]);
+      // tilt the whole bulb so its base sits on the surface it was placed on
+      const n = new THREE.Vector3(b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]).normalize();
+      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
       this.group.add(g);
     }
   },
-  add(x, y, z){ game.bulbs.push([x, y, z]); this.rebuild(); markSave(); },
+  add(x, y, z, nx, ny, nz){
+    game.bulbs.push([x, y, z, nx == null ? 0 : nx, ny == null ? 1 : ny, nz == null ? 0 : nz]);
+    this.rebuild(); markSave();
+  },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.bulbs.length;
     for (const b of game.bulbs){
-      if (Math.hypot(b[0] - x, b[1] + 0.3 - y, b[2] - z) > r) keep.push(b);
+      if (Math.hypot(b[0] + (b[3]||0)*0.3 - x, b[1] + (b[4]==null?1:b[4])*0.3 - y, b[2] + (b[5]||0)*0.3 - z) > r) keep.push(b);
     }
     game.bulbs = keep;
     const n = n0 - keep.length;
@@ -3209,8 +3303,10 @@ const torchSys = {
     }
     for (let i = 0; i < game.bulbs.length; i++){
       const b = game.bulbs[i];
-      const d = Math.hypot(b[0]-game.pos.x, b[1]-game.pos.y, b[2]-game.pos.z);
-      if (d < 70) near.push([d, b, 0.36, 19.6]);   // double torch reach
+      const bx = b[0] + (b[3] || 0) * 0.36, by = b[1] + (b[4] == null ? 1 : b[4]) * 0.36,
+            bz = b[2] + (b[5] || 0) * 0.36;
+      const d = Math.hypot(bx-game.pos.x, by-game.pos.y, bz-game.pos.z);
+      if (d < 70) near.push([d, [bx, by - 0.36, bz], 0.36, 19.6]);   // double torch reach
     }
     near.sort((a, b) => a[0] - b[0]);
     const n = Math.min(16, near.length);
@@ -3790,6 +3886,7 @@ function bindInput(){
   const cv = () => game.renderer.domElement;
   document.addEventListener('mousemove', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
+    if (wrenchSys.drag){ wrenchSys.dragMove(e.movementX, e.movementY); return; }
     const s = game.opts.sens / 100 * 0.0022;
     game.yaw -= e.movementX * s;
     game.pitch -= e.movementY * s;
@@ -3798,8 +3895,20 @@ function bindInput(){
   document.addEventListener('mousedown', e => {
     if (!game.running || game.ui !== 'none') return;
     if (!isLocked()){ requestLock(); return; }
-    if (e.button === 0){ game.mouseL = true; game.mouseEdge = true; }
-    if (e.button === 1){ e.preventDefault(); pickMaterial(); }
+    if (e.button === 0){
+      if (wrenchSys.onLMB()) return;
+      game.mouseL = true; game.mouseEdge = true;
+    }
+    if (e.button === 1){
+      e.preventDefault();
+      const t = activeTool();
+      if (t && (t.kind === 'drill' || t.kind === 'disp' || t.kind === 'wrench')){
+        game.tool.scrollMode = (game.tool.scrollMode + 1) % 4;
+        toast('scroll: ' + ['resize', 'rotate Y (yaw)', 'rotate X (pitch)', 'rotate Z (roll)'][game.tool.scrollMode]);
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
+      }
+    }
     if (e.button === 2){
       // a crafting table in reach overrides the held item's right click
       if (tableSys.onRay(3.5)){ openCraft(); AudioSys.sfx('toggle'); return; }
@@ -3807,6 +3916,13 @@ function bindInput(){
       if (bed){ bedSys.sleep(bed); return; }
       const stv = stoveSys.onRay(3.5);
       if (stv){ openStove(stv); AudioSys.sfx('toggle'); return; }
+      const selIt = selectedItem();
+      if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' ||
+          (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
+        tryEat();
+        return;
+      }
+      if (wrenchSys.held()){ wrenchSys.select(); return; }
       const tool = activeTool();
       if (tool && tool.kind === 'door'){
         // choose which side of the grid square the door aligns to
@@ -3833,20 +3949,31 @@ function bindInput(){
       }
     }
   });
-  document.addEventListener('mouseup', e => { if (e.button === 0) game.mouseL = false; });
+  document.addEventListener('mouseup', e => { if (e.button === 0){ wrenchSys.endDrag(); game.mouseL = false; } });
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
     const tool = activeTool();
     if (!tool) return;
     const dir = e.deltaY < 0 ? 1 : -1;
+    if (tool.kind === 'wrench' && game.tool.mode === 'paint'){
+      const n = wrenchSys.palette.length;
+      wrenchSys.palIdx = (wrenchSys.palIdx + dir + n) % n;
+      toast('paint: ' + CORE.MAT_NAME[wrenchSys.palette[wrenchSys.palIdx]]);
+      refreshToolHUD();
+      return;
+    }
     if (tool.kind === 'door'){
       game.tool.doorSize = Math.min(2.4, Math.max(0.7, (game.tool.doorSize || 1.2) + dir * 0.1));
       toast('door ' + game.tool.doorSize.toFixed(1) + 'm × ' + (game.tool.doorSize * 1.85).toFixed(1) + 'm');
-    } else if (game.keys['KeyG'] && game.tool.shape === 1 && !game.snapOn){
-      // hold G + scroll: rotate the cube in 15° steps (free-place only)
-      game.tool.rot = (game.tool.rot + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
-      toast('rotate ' + Math.round(game.tool.rot * 180 / Math.PI) + '°');
+    } else if (game.tool.scrollMode > 0 && (tool.kind === 'drill' || tool.kind === 'disp' || tool.kind === 'wrench')){
+      // rotate mode (middle click cycles resize → yaw → pitch → roll).
+      // Rotation works with grid snap on: the lattice itself stays
+      // world-aligned, so rotated and unrotated builds still snap together.
+      const step = dir * Math.PI / 12;
+      const K = ['', 'rot', 'rx', 'rz'][game.tool.scrollMode];
+      game.tool[K] = ((game.tool[K] || 0) + step + Math.PI * 2) % (Math.PI * 2);
+      toast(['', 'yaw ', 'pitch ', 'roll '][game.tool.scrollMode] + Math.round(game.tool[K] * 180 / Math.PI) + '°');
     } else {
       game.tool.size = CORE.scrollSize(game.tool.size, tool.tier, dir);
     }
@@ -3880,16 +4007,17 @@ function bindInput(){
       if (game.mode === 'survival'){ toast('flying is creative-only'); }
       else { game.fly = !game.fly; game.vel.set(0,0,0); toast(game.fly ? 'fly on' : 'fly off'); AudioSys.sfx('toggle'); }
     }
-    if (code === 'KeyH'){ tryEat(); }
+    if (code === 'KeyG'){ pickMaterial(); }
     if (code === 'KeyR'){
-      const tool = activeTool();
-      if (tool && tool.kind === 'disp'){
+      if (wrenchSys.held()){
         game.tool.mode = game.tool.mode === 'paint' ? 'build' : 'paint';
-        toast(game.tool.mode === 'paint' ? 'paint mode — repaints existing ground' : 'build mode');
+        toast(game.tool.mode === 'paint' ? 'wrench: paint mode — left click recolors' : 'wrench: edit mode');
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
       }
     }
+    if (code === 'KeyH'){ if (wrenchSys.held()) wrenchSys.hollow(); }
+    if (code === 'KeyX'){ if (wrenchSys.held()) wrenchSys.deleteSel(); }
     if (code === 'KeyE'){ openInventory(); }
     if (code === 'KeyQ'){ openCraft(); }
   });
@@ -4090,6 +4218,7 @@ function activeTool(){
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
   if (it.kind === 'bulb') return { kind: 'bulb', tier: 0, item: it };
+  if (it.kind === 'wrench') return { kind: 'wrench', tier: 0 };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -4180,7 +4309,10 @@ function updateGhost(){
   gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
   gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
   const rot = editRot(game.tool.shape);
-  gs.fill.rotation.y = rot; gs.wire.rotation.y = rot;
+  const grx = game.tool.shape !== 0 ? game.tool.rx || 0 : 0;
+  const grz = game.tool.shape !== 0 ? game.tool.rz || 0 : 0;
+  gs.fill.rotation.order = 'YXZ'; gs.wire.rotation.order = 'YXZ';
+  gs.fill.rotation.set(grx, rot, grz); gs.wire.rotation.set(grx, rot, grz);
   // charging feedback: the shape visibly "fills in" as the action completes
   gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
 
@@ -4201,8 +4333,257 @@ function applyEdit(e){
   markSave();
 }
 
+// ---------- the wrench: a material editor over the edit list ----------
+// The edit list IS the memory of how the world was built — every placed cube
+// and mined hole is one entry. The wrench selects one entry and lets you
+// reshape it in place: gizmo arrows extend/shrink (or move) it per axis,
+// H hollows it, X deletes it (refunding/consuming materials), and paint
+// mode recolors it. Everything re-meshes live.
+const wrenchSys = {
+  sel: -1, drag: null, group: null, wires: null, arrows: [], hoverIdx: -1,
+  palette: [CORE.MAT.ROCK, CORE.MAT.GRASS, CORE.MAT.SAND, CORE.MAT.WOOD,
+            CORE.MAT.PLANKS, CORE.MAT.STONEBRICK, CORE.MAT.SNOW,
+            CORE.MAT.OBSIDIAN, CORE.MAT.GLOWSHROOM],
+  palIdx: 0, raycaster: null,
+  arrowDefs: [
+    { axis: 0, sign: 1, color: 0xe04040 }, { axis: 0, sign: -1, color: 0xe04040 },
+    { axis: 1, sign: 1, color: 0x40c050 }, { axis: 1, sign: -1, color: 0x40c050 },
+    { axis: 2, sign: 1, color: 0x4070e8 }, { axis: 2, sign: -1, color: 0x4070e8 },
+  ],
+  init(scene){
+    this.raycaster = new THREE.Raycaster();
+    this.group = new THREE.Group();
+    this.group.visible = false;
+    const wireM = new THREE.LineBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.95, depthWrite: false });
+    const cubeG = new THREE.BoxGeometry(1, 1, 1);
+    this.wires = {
+      0: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.SphereGeometry(0.5, 12, 8)), wireM),
+      1: new THREE.LineSegments(new THREE.EdgesGeometry(cubeG), wireM),
+      2: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1)), wireM),
+    };
+    for (const k of [0, 1, 2]){
+      this.wires[k].visible = false;
+      this.wires[k].renderOrder = 7;
+      this.wires[k].rotation.order = 'YXZ';
+      this.group.add(this.wires[k]);
+    }
+    this.arrows = [];
+    for (const def of this.arrowDefs){
+      const a = new THREE.Group();
+      const mat = new THREE.MeshBasicMaterial({ color: def.color, depthTest: false, transparent: true, opacity: 0.92 });
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.55, 6), mat);
+      shaft.position.y = 0.275;
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.13, 0.3, 8), mat);
+      tip.position.y = 0.7;
+      shaft.renderOrder = 8; tip.renderOrder = 8;
+      a.add(shaft); a.add(tip);
+      a.userData.def = def;
+      a.userData.mat = mat;
+      this.group.add(a);
+      this.arrows.push(a);
+    }
+    scene.add(this.group);
+    this.sel = -1; this.drag = null;
+  },
+  held(){ const t = activeTool(); return !!(t && t.kind === 'wrench'); },
+  edit(){ return this.sel >= 0 && this.sel < game.edits.length ? game.edits[this.sel] : null; },
+  editAtPoint(px, py, pz, tol){
+    for (let i = game.edits.length - 1; i >= 0; i--){
+      if (CORE.shapeSDF(px, py, pz, game.edits[i]) < tol) return i;
+    }
+    return -1;
+  },
+  select(){
+    const hit = surfaceHit();
+    if (!hit){ this.sel = -1; refreshToolHUD(); return; }
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const idx = this.editAtPoint(hit[0] + dir.x * 0.08, hit[1] + dir.y * 0.08, hit[2] + dir.z * 0.08, 0.12);
+    if (idx < 0){
+      this.sel = -1;
+      toast('no build here — aim at something you placed or mined');
+    } else if (idx === this.sel){
+      this.sel = -1;
+      toast('deselected');
+    } else {
+      this.sel = idx;
+      const e = game.edits[idx];
+      toast('selected ' + (e.op === 0 ? 'mined ' : '') + CORE.SHAPE_NAME[e.shape] +
+            ' — drag arrows · Shift move · H hollow · X delete');
+      AudioSys.sfx('toggle');
+    }
+    refreshToolHUD();
+  },
+  axisDirWorld(e, axis, sign){
+    return CORE.rotToWorld(e, axis === 0 ? sign : 0, axis === 1 ? sign : 0, axis === 2 ? sign : 0);
+  },
+  frame(){
+    const on = this.held() && this.edit() && game.ui === 'none';
+    this.group.visible = !!on;
+    if (!on){ this.hoverIdx = -1; return; }
+    const e = this.edit();
+    const [hx, hy, hz] = CORE.editHalf(e);
+    for (const k of [0, 1, 2]) this.wires[k].visible = false;
+    const w = this.wires[e.shape];
+    w.visible = true;
+    w.position.set(e.x, e.y, e.z);
+    w.scale.set(hx * 2 + 0.04, hy * 2 + 0.04, hz * 2 + 0.04);
+    w.rotation.set(e.rx || 0, e.rot || 0, e.rz || 0);
+    const half = [hx, hy, hz];
+    for (let i = 0; i < 6; i++){
+      const def = this.arrowDefs[i];
+      const d = this.axisDirWorld(e, def.axis, def.sign);
+      const off = half[def.axis] + 0.35;
+      this.arrows[i].position.set(e.x + d[0] * off, e.y + d[1] * off, e.z + d[2] * off);
+      this.arrows[i].quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(d[0], d[1], d[2]));
+    }
+    // hover: the crosshair (screen center) is the pointer
+    if (!this.drag){
+      this.raycaster.setFromCamera({ x: 0, y: 0 }, game.camera);
+      const hits = this.raycaster.intersectObjects(this.arrows, true);
+      this.hoverIdx = hits.length ? this.arrows.indexOf(hits[0].object.parent) : -1;
+    }
+    for (let i = 0; i < 6; i++){
+      const active = i === this.hoverIdx || (this.drag && this.drag.idx === i);
+      this.arrows[i].scale.setScalar(active ? 1.3 : 1);
+      this.arrows[i].children[0].material.opacity = active ? 1 : 0.92;
+    }
+  },
+  onLMB(){
+    if (!this.held() || game.ui !== 'none' || !isLocked()) return false;
+    if (game.tool.mode === 'paint'){ this.paintClick(); return true; }
+    if (!this.edit()) return true;               // wrench never mines/places
+    if (this.hoverIdx >= 0){
+      const def = this.arrowDefs[this.hoverIdx];
+      this.drag = { idx: this.hoverIdx, axis: def.axis, sign: def.sign, acc: 0 };
+      AudioSys.sfx('toggle');
+    }
+    return true;
+  },
+  dragMove(mx, my){
+    const e = this.edit();
+    if (!e){ this.drag = null; return; }
+    const d = this.axisDirWorld(e, this.drag.axis, this.drag.sign);
+    // project the arrow direction to screen space; mouse motion along it
+    // drives the edit
+    const [hx0, hy0, hz0] = CORE.editHalf(e);
+    const base = new THREE.Vector3(e.x, e.y, e.z);
+    const p0 = base.clone().project(game.camera);
+    const p1 = base.clone().add(new THREE.Vector3(d[0], d[1], d[2])).project(game.camera);
+    let vx = p1.x - p0.x, vy = -(p1.y - p0.y);
+    const L = Math.hypot(vx, vy) || 1;
+    vx /= L; vy /= L;
+    this.drag.acc += (mx * vx + my * vy) * 0.006;
+    const cell = game.snapOn ? CORE.GRID_SIZES[game.gridIdx] : 0;
+    let apply = 0;
+    if (cell > 0){
+      while (this.drag.acc >= cell){ apply += cell; this.drag.acc -= cell; }
+      while (this.drag.acc <= -cell){ apply -= cell; this.drag.acc += cell; }
+    } else {
+      apply = this.drag.acc; this.drag.acc = 0;
+    }
+    if (apply) this.applyDelta(apply);
+  },
+  applyDelta(amt){
+    const e = this.edit();
+    const before = Object.assign({}, e);
+    const d = this.axisDirWorld(e, this.drag.axis, this.drag.sign);
+    if (game.keys['ShiftLeft'] || game.keys['ShiftRight']){
+      e.x += d[0] * amt; e.y += d[1] * amt; e.z += d[2] * amt;
+    } else {
+      const key = ['sx', 'sy', 'sz'][this.drag.axis];
+      const cur = e[key] || e.size;
+      const next = Math.max(0.25, cur + amt);
+      const real = next - cur;
+      if (real === 0) return;
+      e[key] = next;
+      e.x += d[0] * real / 2; e.y += d[1] * real / 2; e.z += d[2] * real / 2;
+    }
+    game.terrain.invalidate(before);
+    game.terrain.invalidate(e);
+    markSave();
+  },
+  endDrag(){
+    if (this.drag){ this.drag = null; refreshToolHUD(); }
+  },
+  hollow(){
+    const e = this.edit();
+    if (!e || e.op !== 1){ toast('select a placed build to hollow (H)'); return; }
+    const [hx, hy, hz] = CORE.editHalf(e);
+    const t = Math.max(0.3, Math.min(0.5, Math.min(hx, hy, hz) * 0.25));
+    if (Math.min(hx, hy, hz) - t < 0.15){ toast('too small to hollow'); return; }
+    const inner = CORE.makeEdit(0, e.shape, e.x, e.y, e.z, Math.max(0.3, e.size - t * 2), 0, e.rot || 0);
+    if (e.rx) inner.rx = e.rx;
+    if (e.rz) inner.rz = e.rz;
+    if (e.sx || e.sy || e.sz){
+      inner.sx = Math.max(0.3, (e.sx || e.size) - t * 2);
+      inner.sy = Math.max(0.3, (e.sy || e.size) - t * 2);
+      inner.sz = Math.max(0.3, (e.sz || e.size) - t * 2);
+    }
+    applyEdit(inner);
+    toast('hollowed — ' + t.toFixed(2) + 'm walls');
+    AudioSys.sfx('place');
+  },
+  deleteSel(){
+    const e = this.edit();
+    if (!e){ toast('nothing selected (X deletes the selection)'); return; }
+    const idx = this.sel;
+    const prefix = game.edits.slice(0, idx);
+    if (e.op === 1 && game.mode !== 'creative'){
+      // the prefix is exactly the world state when it was placed, so this
+      // recomputes the original cost — a full refund
+      const cost = CORE.placeCost(prefix, e, game.gen);
+      if (cost > 0){ CORE.addMat(game.slots, e.mat, cost); toast('deleted — +' + cost + ' ' + CORE.MAT_NAME[e.mat] + ' back'); }
+      else toast('deleted');
+    } else if (e.op === 0 && game.mode !== 'creative'){
+      const got = CORE.mineYield(prefix, e, game.gen);
+      for (const m in got){
+        const k = CORE.ORE_ITEM[+m];
+        if (k){ const have = CORE.countItem(game.slots, k); CORE.consumeItem(game.slots, k, Math.min(have, got[m])); }
+        else { const have = CORE.countMat(game.slots, +m); CORE.consumeMat(game.slots, +m, Math.min(have, got[m])); }
+      }
+      toast('un-mined — the ground takes its material back');
+    } else {
+      toast('deleted');
+    }
+    game.edits.splice(idx, 1);
+    game.terrain.invalidate(e);
+    this.sel = -1;
+    AudioSys.sfx('undo');
+    refreshHotbar(); refreshToolHUD(); markSave();
+  },
+  paintClick(){
+    const hit = surfaceHit();
+    if (!hit){ toast('nothing in reach'); return; }
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const idx = this.editAtPoint(hit[0] + dir.x * 0.08, hit[1] + dir.y * 0.08, hit[2] + dir.z * 0.08, 0.12);
+    const m = this.palette[this.palIdx];
+    if (idx >= 0){
+      const e = game.edits[idx];
+      if (e.op === 0){ toast("can't paint a mined hole"); return; }
+      e.mat = m;
+      game.terrain.invalidate(e);
+      markSave();
+    } else {
+      // bare terrain: brush-sized repaint (the old dispenser paint, relocated)
+      const eff = CORE.effSize(game.tool.size, 0);
+      applyEdit(CORE.makeEdit(2, game.tool.shape, hit[0], hit[1], hit[2], eff, m, 0));
+    }
+    toast('painted ' + CORE.MAT_NAME[m]);
+    AudioSys.sfx('paint');
+  },
+};
+
 function editRot(shape){
-  return (shape === 1 && !game.snapOn) ? game.tool.rot : 0;
+  return shape !== 0 ? game.tool.rot : 0;
+}
+// attach the tool's full rotation to a new edit (spheres ignore rotation)
+function applyToolRot(e){
+  if (e.shape === 0) return e;
+  if (game.tool.rx) e.rx = game.tool.rx;
+  if (game.tool.rz) e.rz = game.tool.rz;
+  return e;
 }
 function yieldColors(got){
   const cols = [];
@@ -4210,7 +4591,7 @@ function yieldColors(got){
   return cols;
 }
 function doMine(tool, p, shape, eff){
-  const e = CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape));
+  const e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
   const got = CORE.mineYield(game.edits, e, game.gen);
   let units = 0, hw = 0;
   for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
@@ -4254,8 +4635,8 @@ function doMine(tool, p, shape, eff){
   refreshHotbar(); refreshToolHUD();
 }
 function doPlace(tool, p, shape, eff){
-  const paint = game.tool.mode === 'paint';
-  const e = CORE.makeEdit(paint ? 2 : 1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape));
+  const paint = false;   // dispenser paint moved to the wrench
+  const e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
   const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
                      : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
@@ -4296,6 +4677,7 @@ function undoEdit(){
       CORE.addMat(game.slots, rec.mat, rec.cost);
     }
   }
+  if (wrenchSys.sel >= game.edits.length) wrenchSys.sel = -1;
   toast('undo');
   AudioSys.sfx('undo');
   refreshHotbar(); refreshToolHUD(); markSave();
@@ -4309,6 +4691,7 @@ function undoEdit(){
 // time with the volume actually being filled)
 function actionPlan(tool, p, shape, eff){
   const key = tool.kind + tool.tier + '|' + (tool.mat || 0) + '|' + game.tool.mode + '|' + shape + '|' + eff.toFixed(2) + '|' +
+    (game.tool.rot || 0).toFixed(2) + ',' + (game.tool.rx || 0).toFixed(2) + ',' + (game.tool.rz || 0).toFixed(2) + '|' +
     Math.round(p.x * 2) + ',' + Math.round(p.y * 2) + ',' + Math.round(p.z * 2);
   if (game.act.key === key) return game.act.plan;
   const rot = editRot(shape);
@@ -4336,6 +4719,10 @@ function tryAction(dt, now){
     game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return;
   }
 
+  if (tool.kind === 'wrench'){
+    AudioSys.setHum(false, 0, 0);
+    return;
+  }
   // sword: THE melee weapon
   if (tool.kind === 'sword'){
     AudioSys.setHum(false, 0, 0);
@@ -4371,7 +4758,7 @@ function tryAction(dt, now){
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2]);
       else if (tool.kind === 'beacon') beaconSys.add(hit[0], hit[1], hit[2]);
-      else if (tool.kind === 'stove') stoveSys.add(hit[0], hit[1], hit[2], Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2));
+      else if (tool.kind === 'stove') stoveSys.add(hit[0], hit[1], hit[2], Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2));
       else bedSys.add(hit[0], hit[1], hit[2], Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2));
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
@@ -4393,7 +4780,8 @@ function tryAction(dt, now){
     }
     return;
   }
-  // bulb: place one on the surface you're looking at (like a torch)
+  // bulb: place on any surface — floors, walls (sideways), ceilings
+  // (upside down) — oriented along the surface normal
   if (tool.kind === 'bulb'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -4401,7 +4789,9 @@ function tryAction(dt, now){
       if (!hit){ toast('no surface in reach'); return; }
       tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
-      bulbSys.add(hit[0], hit[1], hit[2]);
+      const le = nearEdits([hit[0]-1, hit[1]-1, hit[2]-1, hit[0]+1, hit[1]+1, hit[2]+1]);
+      const n = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], le, 0.15, game.gen) : [0, 1, 0];
+      bulbSys.add(hit[0], hit[1], hit[2], n[0], n[1], n[2]);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -4624,6 +5014,14 @@ function itemIconURL(it){
     c.fillStyle = '#d8a93c'; c.fillRect(7, 5, 2, 2);            // filament
     c.fillStyle = '#8f8f96'; c.fillRect(6, 9, 4, 1); c.fillRect(6, 11, 4, 1);
     c.fillStyle = '#6a6a71'; c.fillRect(6, 10, 4, 1); c.fillRect(7, 12, 2, 1);
+  } else if (it.kind === 'wrench'){
+    // open-end wrench, diagonal
+    c.fillStyle = '#b5b3bd';
+    for (let i = 0; i < 8; i++) c.fillRect(4 + i, 11 - i, 2, 2);   // handle
+    c.fillRect(11, 1, 4, 2); c.fillRect(11, 5, 4, 2);              // jaw prongs
+    c.fillRect(10, 2, 2, 4);                                       // jaw base
+    c.fillStyle = '#e2e0ea'; c.fillRect(4, 11, 1, 1); c.fillRect(11, 1, 4, 1);
+    c.fillStyle = '#84828c'; c.fillRect(5, 12, 7, 1); c.fillRect(11, 6, 4, 1);
   } else if (it.kind === 'stove'){
     c.fillStyle = '#6a6a71'; c.fillRect(2, 3, 12, 11);          // stone body
     c.fillStyle = '#8f8f96'; c.fillRect(2, 3, 12, 2); c.fillRect(2, 3, 2, 11);
@@ -4703,6 +5101,7 @@ function itemLabel(it){
   if (it.kind === 'diamond') return 'diamond';
   if (it.kind === 'bulb') return 'lightbulb';
   if (it.kind === 'stove') return 'stove';
+  if (it.kind === 'wrench') return 'wrench';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -4891,12 +5290,12 @@ function refreshToolHUD(){
     html = '<div class="t1">' + name + '</div>';
     const eff = CORE.effSize(game.tool.size, tool.tier);
     let shape = CORE.SHAPE_NAME[game.tool.shape];
-    if (game.tool.shape === 1 && !game.snapOn && game.tool.rot)
-      shape += ' ' + Math.round(game.tool.rot * 180 / Math.PI) + '° (G+scroll)';
+    if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
+      shape += ' ' + [game.tool.rot, game.tool.rx, game.tool.rz]
+        .map(a => Math.round((a || 0) * 180 / Math.PI) + '°').join('/');
     const sizeStr = tool.tier >= 4 ? eff.toFixed(2) + 'm (smooth)' : eff + 'm';
     html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
-    if (tool.kind === 'disp')
-      html += '<div class="t2">mode: ' + (game.tool.mode === 'paint' ? '<span class="on">paint (R)</span>' : 'build (R)') + '</div>';
+    html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
     if (game.snapOn){
       html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>';
     } else {
@@ -4928,7 +5327,7 @@ function refreshToolHUD(){
     html = '<div class="t1">bed ×' + it.count + '</div><div class="t2">place, then right click it: sets spawn · sleeps through night</div>';
   } else if (it.kind === 'meat' || it.kind === 'cookedmeat'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">' +
-           (game.mode === 'survival' ? 'H to eat' + (it.kind === 'meat' ? ' · cook in a stove for more food' : '') : 'food (survival)') + '</div>';
+           (game.mode === 'survival' ? 'right click to eat' + (it.kind === 'meat' ? ' · cook in a stove for more food' : '') : 'food (survival)') + '</div>';
   } else if (it.kind === 'coal'){
     html = '<div class="t1">coal ×' + it.count + '</div><div class="t2">stove fuel · crafts torches with sticks</div>';
   } else if (it.kind === 'ironore' || it.kind === 'rubyore'){
@@ -4939,6 +5338,21 @@ function refreshToolHUD(){
     html = '<div class="t1">lightbulbs ×' + it.count + '</div><div class="t2">left click to place — twice the reach of a torch</div>';
   } else if (it.kind === 'stove'){
     html = '<div class="t1">stove ×' + it.count + '</div><div class="t2">place, then right click to cook and smelt</div>';
+  } else if (it.kind === 'wrench'){
+    const sel = wrenchSys.edit();
+    html = '<div class="t1">wrench' + (game.tool.mode === 'paint' ? ' — <span class="on">paint</span>' : '') + '</div>';
+    if (game.tool.mode === 'paint'){
+      html += '<div class="t2">left click paints <b>' + CORE.MAT_NAME[wrenchSys.palette[wrenchSys.palIdx]] + '</b> (scroll to change)</div>';
+      html += '<div class="t2">R back to edit mode</div>';
+    } else if (sel){
+      html += '<div class="t2">selected: ' + (sel.op === 0 ? 'mined ' : sel.op === 2 ? 'painted ' : '') +
+        CORE.SHAPE_NAME[sel.shape] + (sel.op === 1 ? ' · ' + CORE.MAT_NAME[sel.mat] : '') + '</div>';
+      html += '<div class="t2">aim at an arrow + hold left click: extend/shrink · Shift = move</div>';
+      html += '<div class="t2">H hollow · X delete · R paint · F grid ' + (game.snapOn ? '<span class="on">on</span>' : 'off') + '</div>';
+    } else {
+      html += '<div class="t2">right click a build (or a mined hole) to select it</div>';
+      html += '<div class="t2">R paint mode · edits follow how you built things</div>';
+    }
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
            '<div class="t2">put a dispenser in the dispenser slot (E) to build' +
@@ -5077,7 +5491,7 @@ function tryEat(){
     refreshHotbar(); refreshToolHUD();
     return;
   }
-  toast('hold meat (or glowshroom) to eat (H)');
+  toast('hold meat (or glowshroom) and right click to eat');
 }
 
 // ---------- overlays / menus ----------
@@ -5312,7 +5726,7 @@ function startWorld(id){
   game.spawnPoint = data.spawnPoint || null;
   game.stoves = (data.stoves || []).map(r => ({ x: r[0], y: r[1], z: r[2], yaw: r[3] || 0,
     in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0 }));
-  game.bulbs = (data.bulbs || []).map(b => [b[0], b[1], b[2]]);
+  game.bulbs = (data.bulbs || []).map(b => [b[0], b[1], b[2], b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]]);
   game.activeStove = null;
   game.breath = 100; game.underwater = false;
   game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
@@ -5321,7 +5735,7 @@ function startWorld(id){
   game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
-  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
+  game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
   game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
   game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
@@ -5416,6 +5830,7 @@ function frame(now){
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
+  wrenchSys.frame();
   updateSurvival(dt);
   // embers off nearby placed torches
   game.emberT = (game.emberT || 0) + dt;
@@ -5535,7 +5950,7 @@ requestAnimationFrame(frame);
 window.__game = game;
 window.__CORE = CORE;
 window.__THREE = THREE;
-window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm,
+window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
 </script>

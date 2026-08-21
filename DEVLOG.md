@@ -2,6 +2,74 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.3 — precision editing & the wrench (2026-08-21)
+
+### Exact removal (the "bits remaining" bug) — FIXED
+Union-then-subtract of the exact same shape left a zero-thickness
+membrane: zeros count as solid (needed so mine-then-place restores
+ground), so the re-mined cube's faces stayed "solid" at d=0. Subtracts
+are now applied 2cm larger than they store (MINE_EPS) — invisible at
+0.5m voxels, but the old faces land strictly in air. Placing a cube on
+the grid and mining it with the same grid + size removes every last bit.
+Regression tests: cube and sphere place-then-mine leave zero solid
+samples and zero stray triangles; mine-then-place still restores solid.
+
+### THE WRENCH — a material editor over the edit list
+The edit list has always been the memory of how the world was built;
+the wrench (station recipe: 3 iron ingots + 2 sticks) turns it into an
+editor. Steel wrench viewmodel, pixel icon, full HUD cheat-sheet.
+- **Right click** selects the build (or mined hole) under the crosshair —
+  the exact cube/sphere/cylinder you placed or carved, latest first —
+  outlined in an orange wireframe.
+- **Gizmo**: six axis arrows (X red, Y green, Z blue) float on the
+  selection's faces, rotated with it. Aim at an arrow and hold left
+  click: mouse movement along the arrow extends/shrinks that face
+  (center compensates, so the far side stays put). **Shift-drag moves**
+  the whole edit instead. F toggles grid snapping for drags — snapped
+  drags apply in exact grid-cell steps. Everything re-meshes live.
+- **H hollows** a selected build: appends an interior subtract with
+  0.3-0.5m walls, matching the build's shape, size and rotation. Place a
+  massive cube, hollow it, cut a doorway, hang a door: instant house.
+- **X deletes** the selected edit outright. Placed builds refund their
+  FULL original cost (recomputed against the exact edit-list prefix from
+  when they were placed); deleting a mine op takes its yield back.
+- **Paint mode (R)** moved here from the dispenser: scroll cycles a
+  9-material palette, left click recolors the aimed build in place (or
+  stamps a brush-shaped repaint on bare terrain). Free — it's an editor.
+
+### Per-axis size + full rotation on edits (CORE)
+Edits now carry optional sx/sy/sz (per-axis sizes) and rx/rz (pitch and
+roll on top of yaw). Box SDFs stay exact under stretch+rotation; spheres
+become ellipsoids and cylinders elliptical (good approximations);
+analytic mesher normals, AABBs (|R|·h bound) and the save format all
+round-trip the extras — legacy 8-field edit rows still load. Meshing a
+stretched, 3-axis-rotated cube is watertight (tested).
+
+### Scroll modes: middle click cycles resize → rotate
+Middle click on drill/dispenser/wrench cycles what the scroll wheel
+does: resize → rotate Y (yaw) → rotate X (pitch) → rotate Z (roll) →
+back. One button, mode always shown in the HUD; 15° steps. Rotation now
+works WITH grid snap: the lattice itself stays world-aligned, so a
+rotated cube still snaps its center to the same grid as an unrotated one
+and the two line up flush. G+scroll rotation is gone; **G now picks the
+material you're looking at** (middle click's old job).
+
+### Quality-of-life
+- **Eating is right click** while holding food (was H).
+- **Stoves face you** when placed — the mouth points back at the placer.
+- **Bulbs mount anywhere**: walls (sideways) and ceilings (upside down),
+  oriented along the surface normal; their light offsets along it. Old
+  saves default to upright.
+
+### Verification
+216 headless tests (exact removal, transform math, serialization,
+watertight stretched+rotated meshing). Browser: RMB eat, stove yaw = π
+toward placer, wall bulb normal (-1,0,0), in-game place+mine leaves 0
+solid, MMB cycle 0→1→…→0 with 15° wheel steps, wrench select → gizmo
+render (screenshot) → drag grows + shifts center → grid drag exact
+0.75m multiples → hollow (air inside, wall solid) → paint recolors →
+delete with cleanup. Full smoke green, zero console errors.
+
 ## Build 5.2 — food, coal & the stove (2026-08-20)
 
 ### Meat & food
