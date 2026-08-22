@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.5.2 — LOD water matches real water (2026-08-22)
+
+Playtest: LOD water was a flat darker blue — with geometry now seamless,
+the water color gap was the one giveaway of where the LOD starts.
+
+Tried approximating the real water's composite color in the LOD shader
+(texture × tint × alpha over an assumed seabed) — pixel-probe comparisons
+against real water kept missing, because the composite depends on the true
+seabed underneath. So the approximation was dropped for construction-level
+parity: LOD lakebeds now render as normal LOD land (true bottom heights,
+shallow-sampled seabed materials, full lighting), and a separate translucent
+water-surface mesh lies on top per ring using the REAL water's exact recipe —
+same tiled 16×16 texture (shared texture object), same 0xbcd4e8 tint, same
+62% alpha — plus the coverage-mask discard and horizon fog. Identical
+texture pattern, identical blend, over an equivalently-shaded bed: the lake
+reads as one body across the real/LOD boundary. Per-ring hair offsets on the
+surface height kill z-fighting in ring underlaps.
+
+Remaining honest difference: real lakebeds are carved by caves, so real
+water over a cave mouth is darker than the heightfield skin predicts —
+that's content the LOD can't know, visible only transitionally while
+streaming.
+
+Verified with before/after pixel probes of the same lake region and the
+full suite (232 tests, smoke green, zero console errors).
+
 ## Build 5.5.1 — LOD done right: geometry-clipmap rings (2026-08-22)
 
 Playtest: the single far mesh read as "real render, then boom, lowest LOD."

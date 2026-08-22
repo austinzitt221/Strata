@@ -6461,7 +6461,41 @@ const farTerrain = {
     this.maskTex.magFilter = THREE.NearestFilter;
     this.maskTex.minFilter = THREE.NearestFilter;
     this.maskTex.needsUpdate = true;
+    this.uMaskOrigin = { value: new THREE.Vector2(1e9, 1e9) };
     const tu = game.terrainMat.uniforms;
+    // LOD water surface: the REAL water look by construction — same tiled
+    // texture, same tint, same 62% alpha over the LOD lakebed below, plus
+    // the coverage-mask discard and horizon fog
+    this.waterSurfMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: {
+        uWaterTex: { value: game.waterMat ? game.waterMat.map : null },
+        uFogCol: tu.uFogCol, uFogFar: tu.uFogFar,
+        uMask: { value: this.maskTex },
+        uMaskOrigin: this.uMaskOrigin,
+        uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
+      },
+      vertexShader: `
+        varying vec3 vW;
+        void main(){
+          vW = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
+        uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
+        varying vec3 vW;
+        void main(){
+          vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
+          if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
+              texture2D(uMask, mi).r > 0.5) discard;
+          vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
+          float dist = gl_FragCoord.z / gl_FragCoord.w;
+          float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
+          gl_FragColor = vec4(mix(col, uFogCol, fog), 0.62);
+        }`,
+    });
     this.mat = new THREE.ShaderMaterial({
       uniforms: {
         uAtlas: tu.uAtlas, uNMat: tu.uNMat,
@@ -6470,7 +6504,7 @@ const farTerrain = {
         uTime: tu.uTime, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
         uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
         uMask: { value: this.maskTex },
-        uMaskOrigin: { value: new THREE.Vector2(1e9, 1e9) },
+        uMaskOrigin: this.uMaskOrigin,
         uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
       },
       vertexShader: `
@@ -6515,20 +6549,15 @@ const farTerrain = {
           if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
               texture2D(uMask, mi).r > 0.5) discard;
           vec3 n = normalize(vN);
-          vec3 col;
-          if (vMat < -0.5){
-            col = vec3(0.13, 0.33, 0.55);          // distant water
-          } else {
-            vec3 an = abs(n);
-            vec2 uv;
-            if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
-            else if (an.x >= an.z)                 uv = vW.zy;
-            else                                   uv = vW.xy;
-            float m = floor(vMat + 0.5);
-            float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
-            float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
-            col = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
-          }
+          vec3 an = abs(n);
+          vec2 uv;
+          if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
+          else if (an.x >= an.z)                 uv = vW.zy;
+          else                                   uv = vW.xy;
+          float m = floor(vMat + 0.5);
+          float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
+          float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
+          vec3 col = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
           float diff = max(dot(n, uSunDir), 0.0);
           float sunVis = 1.0;
           if (uShadowOn > 0.5){
@@ -6623,7 +6652,7 @@ const farTerrain = {
       }
     }
     this.maskTex.needsUpdate = true;
-    this.mat.uniforms.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
+    this.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
   },
   startJob(k){
     const Lk = this.L[k];
@@ -6636,7 +6665,8 @@ const farTerrain = {
     const hole = k === 0 ? 0 : Math.max(0, Math.round((this.L[k - 1].E - 2 * Lk.s) / Lk.s));
     this.job = { k, cx, cz, n, hole, row: 0,
                  h: new Float32Array((n + 1) * (n + 1)),
-                 m: new Float32Array((n + 1) * (n + 1)) };
+                 m: new Float32Array((n + 1) * (n + 1)),
+                 wet: new Uint8Array((n + 1) * (n + 1)) };
   },
   stepJob(){
     const j = this.job, Lk = this.L[j.k], s = Lk.s, n = j.n;
@@ -6649,8 +6679,11 @@ const farTerrain = {
         const kk = r * (n + 1) + i;
         const x = x0 + i * s;
         const h = gen.height(x, z);
-        if (h < sea){ j.h[kk] = sea - 0.2; j.m[kk] = -1; }
-        else { j.h[kk] = h - Lk.sink; j.m[kk] = (gen.mat(x, h - 0.35, z) || 1) - 1; }
+        // lakebeds render as land (the real seabed does too); a translucent
+        // water surface mesh goes on top, so the composite matches reality
+        j.wet[kk] = h < sea ? 1 : 0;
+        j.h[kk] = h - Lk.sink;
+        j.m[kk] = (gen.mat(x, h - 0.1, z) || 1) - 1;   // sample shallow, like the mesher
       }
       budget -= n + 1;
       j.row++;
@@ -6683,15 +6716,24 @@ const farTerrain = {
     const pos = new Float32Array(quads.length * 18);
     const nrm = new Float32Array(quads.length * 18);
     const mats = new Float32Array(quads.length * 6);
+    const wpos = [];
+    const wY = sea > -1e8 ? sea - 0.015 - j.k * 0.012 : 0;
     let w = 0;
     for (const a of quads){
       const b = a + 1, c = a + N1, d = c + 1;
       // quad material: the corner holding the highest ground wins — mixed
       // shoreline quads read as the beach sloping into the water
-      let qm = j.m[a], qh = j.h[a];
-      if (j.h[b] > qh){ qh = j.h[b]; qm = j.m[b]; }
-      if (j.h[c] > qh){ qh = j.h[c]; qm = j.m[c]; }
-      if (j.h[d] > qh){ qh = j.h[d]; qm = j.m[d]; }
+      let qc = a, qh = j.h[a];
+      if (j.h[b] > qh){ qh = j.h[b]; qc = b; }
+      if (j.h[c] > qh){ qh = j.h[c]; qc = c; }
+      if (j.h[d] > qh){ qh = j.h[d]; qc = d; }
+      const qm = j.m[qc];
+      if (j.wet[a] || j.wet[b] || j.wet[c] || j.wet[d]){
+        const xa = x0 + (a % N1) * s, za = z0 + ((a / N1) | 0) * s;
+        const xb = xa + s, zb = za + s;
+        wpos.push(xa, wY, za, xa, wY, zb, xb, wY, zb,
+                  xa, wY, za, xb, wY, zb, xb, wY, za);
+      }
       for (const kk of [a, c, b, b, c, d]){
         const vi = kk % N1, vr = (kk / N1) | 0;
         pos[w * 3] = x0 + vi * s; pos[w * 3 + 1] = j.h[kk]; pos[w * 3 + 2] = z0 + vr * s;
@@ -6706,10 +6748,20 @@ const farTerrain = {
     g.setAttribute('aMat', new THREE.BufferAttribute(mats, 1));
     const lv = this.levels[j.k];
     if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
+    if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
     lv.mesh = new THREE.Mesh(g, this.mat);
     lv.mesh.frustumCulled = false;
     lv.mesh.castShadow = true;
     this.scene.add(lv.mesh);
+    if (wpos.length){
+      const wg = new THREE.BufferGeometry();
+      wg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wpos), 3));
+      lv.water = new THREE.Mesh(wg, this.waterSurfMat);
+      lv.water.frustumCulled = false;
+      lv.water.renderOrder = 3;
+      lv.water.userData.noShadow = true;
+      this.scene.add(lv.water);
+    }
     lv.cx = j.cx; lv.cz = j.cz;
     this.job = null;
   },
