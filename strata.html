@@ -2246,12 +2246,12 @@ function buildScene(){
   const scene = new THREE.Scene();
   scene.background = SKY.clone();
   game.scene = scene;
-  const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 2600);
+  const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 5200);
   cam.rotation.order = 'YXZ';
   game.camera = cam;
 
   game.atlas = buildAtlas(game.seed);
-  const fogFar = 1500;
+  const fogFar = 3200;
   const mat = new THREE.ShaderMaterial({
     vertexShader: TERRAIN_VERT,
     fragmentShader: TERRAIN_FRAG,
@@ -6224,11 +6224,11 @@ function applyOptions(){
     game.terrain.radius = game.opts.rd + 1;
     // the surface fog now reaches the far-terrain horizon; the shader pulls
     // it in for caves (sky-scaled) and underwater on its own
-    game.terrainMat.uniforms.uFogNear.value = 600;
-    game.terrainMat.uniforms.uFogFar.value = 1500;
+    game.terrainMat.uniforms.uFogNear.value = 900;
+    game.terrainMat.uniforms.uFogFar.value = 3200;
     game.forceStream = true;
   }
-  if (farTerrain.mesh) farTerrain.dirty = true;
+  farTerrain.dirty = true;
 }
 function closeOptions(){
   applyOptions();
@@ -6425,128 +6425,292 @@ function quitToTitle(){
 // ---------- main loop ----------
 let lastT = performance.now();
 let lastChunk = null;
-// ---------- far terrain: a low-res heightfield skin out to ~1.6km ----------
-// Real chunks stop at the render-distance radius; beyond that this single
-// 8m-grid mesh carries the horizon — mountains, valleys, distant water —
-// sunk 0.45m under the true surface so full-detail chunks always win the
-// depth test. Built amortized (a few rows per frame), recentered when the
-// player strays 300m from its center.
+// ---------- far terrain v2: geometry-clipmap LOD rings ----------
+// Concentric square rings centered on the player; cell size doubles each
+// ring (1m innermost, 64m at the ~4km horizon), so screen-space detail is
+// roughly constant and the ring that meets real geometry is nearly
+// indistinguishable from it. Rings render with the real terrain's shading
+// family: triplanar pixel-atlas texturing, sun + shadow map + cloud shade +
+// fog. A chunk-column coverage mask discards LOD fragments over columns
+// whose real chunks are meshed, so the skin always meets the loaded world
+// exactly — including chunks still streaming in. Each coarser ring is sunk
+// slightly deeper and underlaps the finer one, so ring seams are tiny
+// backed steps instead of cracks.
 const farTerrain = {
-  mesh: null, mat: null, geoDirty: false, dirty: true, cx: 1e9, cz: 1e9, job: null,
-  R: 1600, STEP: 8,
+  scene: null, mat: null, job: null, dirty: true,
+  levels: null,
+  maskN: 160, maskTex: null, maskData: null, maskFrame: 0,
+  // half-extent (m), cell (m), sink below true surface (m)
+  L: [
+    { E: 64,   s: 1,  sink: 0.06 },
+    { E: 128,  s: 2,  sink: 0.22 },
+    { E: 256,  s: 4,  sink: 0.40 },
+    { E: 512,  s: 8,  sink: 0.62 },
+    { E: 1024, s: 16, sink: 0.95 },
+    { E: 2048, s: 32, sink: 1.40 },
+    { E: 4096, s: 64, sink: 1.90 },
+  ],
   init(scene){
     this.scene = scene;
-    this.mesh = null; this.job = null; this.dirty = true; this.cx = 1e9; this.cz = 1e9;
+    this.job = null; this.dirty = true;
+    this.colCache = new Map();
+    this.levels = this.L.map(() => ({ mesh: null, cx: 1e9, cz: 1e9 }));
+    this.maskData = new Uint8Array(this.maskN * this.maskN);
+    this.maskTex = new THREE.DataTexture(this.maskData, this.maskN, this.maskN,
+      THREE.RedFormat, THREE.UnsignedByteType);
+    this.maskTex.magFilter = THREE.NearestFilter;
+    this.maskTex.minFilter = THREE.NearestFilter;
+    this.maskTex.needsUpdate = true;
     const tu = game.terrainMat.uniforms;
     this.mat = new THREE.ShaderMaterial({
-      vertexColors: true,
       uniforms: {
+        uAtlas: tu.uAtlas, uNMat: tu.uNMat,
         uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
-        uFogCol: tu.uFogCol, uPlayerPos: tu.uPlayerPos,
-        uNearCut: { value: 40 },
+        uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uLampSky: tu.uLampSky,
+        uTime: tu.uTime, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
+        uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
+        uMask: { value: this.maskTex },
+        uMaskOrigin: { value: new THREE.Vector2(1e9, 1e9) },
+        uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
       },
       vertexShader: `
-        varying vec3 vCol; varying vec3 vN; varying vec3 vW;
+        attribute float aMat;
+        uniform mat4 uShadowMatrix;
+        varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
         void main(){
-          vCol = color; vN = normal; vW = position;
+          vW = position; vN = normal; vMat = aMat;
+          vShadowCoord = uShadowMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
       fragmentShader: `
         precision highp float;
-        uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol;
-        uniform vec3 uFogCol; uniform vec3 uPlayerPos; uniform float uNearCut;
-        varying vec3 vCol; varying vec3 vN; varying vec3 vW;
+        uniform sampler2D uAtlas;
+        uniform float uNMat;
+        uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
+        uniform float uFogFar; uniform float uLampSky; uniform float uTime;
+        uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
+        uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
+        varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
+        float hash3(vec3 p){
+          p = mod(p, 64.0);
+          return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+        }
+        float vnoise(vec3 p){
+          vec3 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          float a = hash3(i),                  b = hash3(i + vec3(1, 0, 0));
+          float c = hash3(i + vec3(0, 1, 0)),  d = hash3(i + vec3(1, 1, 0));
+          float e = hash3(i + vec3(0, 0, 1)),  g = hash3(i + vec3(1, 0, 1));
+          float h = hash3(i + vec3(0, 1, 1)),  k = hash3(i + vec3(1, 1, 1));
+          return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
+                     mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
+        }
+        float unpackRGBAToDepth(const in vec4 v){
+          const vec4 UnpackFactors = (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0);
+          return dot(v, UnpackFactors);
+        }
         void main(){
-          if (distance(vW.xz, uPlayerPos.xz) < uNearCut) discard;
+          // coverage mask: where real chunks are meshed, the LOD skin yields
+          vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
+          if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
+              texture2D(uMask, mi).r > 0.5) discard;
           vec3 n = normalize(vN);
+          vec3 col;
+          if (vMat < -0.5){
+            col = vec3(0.13, 0.33, 0.55);          // distant water
+          } else {
+            vec3 an = abs(n);
+            vec2 uv;
+            if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
+            else if (an.x >= an.z)                 uv = vW.zy;
+            else                                   uv = vW.xy;
+            float m = floor(vMat + 0.5);
+            float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
+            float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
+            col = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
+          }
           float diff = max(dot(n, uSunDir), 0.0);
-          vec3 lit = uAmbCol * (0.85 + 0.15 * n.y) + uSunCol * diff;
-          vec3 col = vCol * min(lit, vec3(1.05));
+          float sunVis = 1.0;
+          if (uShadowOn > 0.5){
+            vec3 sc = vShadowCoord.xyz / vShadowCoord.w;
+            if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0){
+              float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
+              float z = sc.z - max(0.0012, 0.0045 * (1.0 - ndl));
+              float lit = 0.0;
+              for (int dy = -1; dy <= 1; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                  lit += step(z, unpackRGBAToDepth(texture2D(uShadowMap,
+                    sc.xy + vec2(float(dx), float(dy)) * uShadowTexel * 1.4)));
+              sunVis = lit / 9.0;
+            }
+          }
+          float dayF = clamp(uLampSky / 0.85 * 1.4, 0.0, 1.0);
+          sunVis = mix(1.0, sunVis, dayF);
+          sunVis *= 1.0 - dayF * 0.28 *
+            smoothstep(0.58, 0.82, vnoise(vec3(vW.x * 0.045 + uTime * 0.055, 3.7, vW.z * 0.045 + uTime * 0.013)));
+          vec3 ambCol = mix(uAmbCol * vec3(0.90, 0.96, 1.10), uAmbCol, sunVis);
+          vec3 lit = ambCol * (0.85 + 0.15 * n.y) + uSunCol * diff * sunVis;
+          col = col * min(lit, vec3(1.05));
+          col *= 0.95 + 0.10 * vnoise(vW * 0.33);
           float dist = gl_FragCoord.z / gl_FragCoord.w;
-          float fog = smoothstep(600.0, 1480.0, dist);
+          float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
           gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
         }`,
     });
   },
+  needRebuild(k){
+    const lv = this.levels[k];
+    if (!lv.mesh) return true;
+    return Math.hypot(game.pos.x - lv.cx, game.pos.z - lv.cz) > this.L[k].E / 8;
+  },
   update(){
     if (!game.gen || !this.mat) return;
-    this.mat.uniforms.uNearCut.value = Math.max(24, (game.opts.rd - 1) * CORE.CHUNK_M);
-    const px = game.pos.x, pz = game.pos.z;
-    // rebuilds are cheap but not free — cap them to one every 8s so rapid
-    // teleports (or fast flight) don't starve the chunk mesher
-    const nowS = performance.now() / 1000;
-    if (!this.job && (this.dirty || Math.hypot(px - this.cx, pz - this.cz) > 300) &&
-        (this.dirty || !this.lastBuild || nowS - this.lastBuild > 8)){
+    if (this.dirty){
       this.dirty = false;
-      this.lastBuild = nowS;
-      const st = this.STEP;
-      this.cx = Math.round(px / st) * st;
-      this.cz = Math.round(pz / st) * st;
-      const n = Math.round(2 * this.R / st);
-      this.job = { n, row: 0, h: new Float32Array((n + 1) * (n + 1)),
-                   col: new Float32Array((n + 1) * (n + 1) * 3) };
+      for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
+    }
+    if (++this.maskFrame >= 20){ this.maskFrame = 0; this.updateMask(); }
+    if (!this.job){
+      for (let k = 0; k < this.L.length; k++){
+        if (this.needRebuild(k)){ this.startJob(k); break; }
+      }
     }
     if (this.job) this.stepJob();
   },
-  stepJob(){
-    const j = this.job, st = this.STEP, n = j.n;
-    const x0 = this.cx - this.R, z0 = this.cz - this.R;
-    const gen = game.gen, sea = gen.seaLevel != null ? gen.seaLevel : -1e9;
-    const rows = 5;
-    for (let r = 0; r < rows && j.row <= n; r++, j.row++){
-      const z = z0 + j.row * st;
-      for (let i = 0; i <= n; i++){
-        const x = x0 + i * st;
-        let h = gen.height(x, z);
-        const k = j.row * (n + 1) + i;
-        if (h < sea){
-          j.h[k] = sea - 0.25;
-          j.col[k*3] = 0.14; j.col[k*3+1] = 0.35; j.col[k*3+2] = 0.58;
-        } else {
-          j.h[k] = h - 0.45;                       // sink under real chunks
-          const m = gen.mat(x, h - 0.4, z) || 1;
-          const c = MAT_COLOR[m] != null ? MAT_COLOR[m] : 0x777777;
-          const vary = 0.92 + 0.13 * (((x * 7 + z * 13) & 15) / 15);
-          j.col[k*3]   = ((c >> 16 & 255) / 255) * vary;
-          j.col[k*3+1] = ((c >> 8 & 255) / 255) * vary;
-          j.col[k*3+2] = ((c & 255) / 255) * vary;
+  // the LOD skin is a SURFACE — a column is covered once the chunks that
+  // hold its surface band are meshed (deep caves and sky chunks mesh last
+  // and don't matter to the skin). The surface band per column is static,
+  // so it's cached.
+  colRange(cx, cz){
+    const key = cx + ',' + cz;
+    let r = this.colCache.get(key);
+    if (!r){
+      const m = CORE.CHUNK_M, g = game.gen;
+      let lo = 1e9, hi = -1e9;
+      for (const o of [[0.5, 0.5], [0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]]){
+        const h = g.height((cx + o[0]) * m, (cz + o[1]) * m);
+        if (h < lo) lo = h;
+        if (h > hi) hi = h;
+      }
+      r = [Math.max(CORE.CY_MIN, Math.floor((lo - 3) / m)),
+           Math.min(CORE.CY_MAX, Math.floor((hi + 2) / m))];
+      if (this.colCache.size > 40000) this.colCache.clear();
+      this.colCache.set(key, r);
+    }
+    return r;
+  },
+  updateMask(){
+    const T = game.terrain;
+    if (!T) return;
+    const n = this.maskN, data = this.maskData;
+    data.fill(0);
+    const pcx = Math.floor(game.pos.x / CORE.CHUNK_M), pcz = Math.floor(game.pos.z / CORE.CHUNK_M);
+    const ox = pcx - n / 2, oz = pcz - n / 2;
+    const R = T.radius;
+    for (let dz = -R; dz <= R; dz++){
+      for (let dx = -R; dx <= R; dx++){
+        const cx = pcx + dx, cz = pcz + dz;
+        const range = this.colRange(cx, cz);
+        let ok = true;
+        for (let cy = range[0]; cy <= range[1] && ok; cy++){
+          const key = cx + ',' + cy + ',' + cz;
+          if (!T.chunks.has(key) || T.dirty.has(key)) ok = false;
+        }
+        if (ok){
+          const ix = cx - ox, iz = cz - oz;
+          if (ix >= 1 && iz >= 1 && ix < n - 1 && iz < n - 1) data[iz * n + ix] = 255;
         }
       }
     }
+    this.maskTex.needsUpdate = true;
+    this.mat.uniforms.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
+  },
+  startJob(k){
+    const Lk = this.L[k];
+    const snap = Lk.s * 2;
+    const cx = Math.round(game.pos.x / snap) * snap;
+    const cz = Math.round(game.pos.z / snap) * snap;
+    const n = Math.round(2 * Lk.E / Lk.s);
+    // inner hole (cells, half-size): the finer ring covers it, minus a
+    // 2-cell underlap so seams are backed from below
+    const hole = k === 0 ? 0 : Math.max(0, Math.round((this.L[k - 1].E - 2 * Lk.s) / Lk.s));
+    this.job = { k, cx, cz, n, hole, row: 0,
+                 h: new Float32Array((n + 1) * (n + 1)),
+                 m: new Float32Array((n + 1) * (n + 1)) };
+  },
+  stepJob(){
+    const j = this.job, Lk = this.L[j.k], s = Lk.s, n = j.n;
+    const x0 = j.cx - Lk.E, z0 = j.cz - Lk.E;
+    const gen = game.gen, sea = gen.seaLevel != null ? gen.seaLevel : -1e9;
+    let budget = 4200;
+    while (budget > 0 && j.row <= n){
+      const r = j.row, z = z0 + r * s;
+      for (let i = 0; i <= n; i++){
+        const kk = r * (n + 1) + i;
+        const x = x0 + i * s;
+        const h = gen.height(x, z);
+        if (h < sea){ j.h[kk] = sea - 0.2; j.m[kk] = -1; }
+        else { j.h[kk] = h - Lk.sink; j.m[kk] = (gen.mat(x, h - 0.35, z) || 1) - 1; }
+      }
+      budget -= n + 1;
+      j.row++;
+    }
     if (j.row <= n) return;
-    // rows complete: assemble the mesh
-    const N1 = n + 1;
-    const pos = new Float32Array(N1 * N1 * 3);
-    const nrm = new Float32Array(N1 * N1 * 3);
+    // assemble UNINDEXED, one material per quad — sharing vertices would
+    // interpolate material ids across boundaries and fringe every shoreline
+    // and snow edge with bogus in-between tiles
+    const N1 = n + 1, half = n / 2;
+    const vnrm = new Float32Array(N1 * N1 * 3);
     for (let r = 0; r <= n; r++){
       for (let i = 0; i <= n; i++){
-        const k = r * N1 + i;
-        pos[k*3] = x0 + i * st; pos[k*3+1] = j.h[k]; pos[k*3+2] = z0 + r * st;
+        const kk = r * N1 + i;
         const hl = j.h[r * N1 + Math.max(0, i - 1)], hr = j.h[r * N1 + Math.min(n, i + 1)];
         const hd = j.h[Math.max(0, r - 1) * N1 + i], hu = j.h[Math.min(n, r + 1) * N1 + i];
-        const nx = hl - hr, nz = hd - hu, ny = 2 * st;
-        const L = Math.hypot(nx, ny, nz) || 1;
-        nrm[k*3] = nx / L; nrm[k*3+1] = ny / L; nrm[k*3+2] = nz / L;
+        const nx = hl - hr, nz = hd - hu, ny = 2 * s;
+        const L2 = Math.hypot(nx, ny, nz) || 1;
+        vnrm[kk * 3] = nx / L2; vnrm[kk * 3 + 1] = ny / L2; vnrm[kk * 3 + 2] = nz / L2;
       }
     }
-    const idx = new Uint32Array(n * n * 6);
-    let q = 0;
-    for (let r = 0; r < n; r++)
+    const quads = [];
+    for (let r = 0; r < n; r++){
       for (let i = 0; i < n; i++){
-        const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
-        idx[q++] = a; idx[q++] = c; idx[q++] = b;
-        idx[q++] = b; idx[q++] = c; idx[q++] = d;
+        if (j.hole > 0 &&
+            i >= half - j.hole && i < half + j.hole &&
+            r >= half - j.hole && r < half + j.hole) continue;
+        quads.push(r * N1 + i);
       }
+    }
+    const pos = new Float32Array(quads.length * 18);
+    const nrm = new Float32Array(quads.length * 18);
+    const mats = new Float32Array(quads.length * 6);
+    let w = 0;
+    for (const a of quads){
+      const b = a + 1, c = a + N1, d = c + 1;
+      // quad material: the corner holding the highest ground wins — mixed
+      // shoreline quads read as the beach sloping into the water
+      let qm = j.m[a], qh = j.h[a];
+      if (j.h[b] > qh){ qh = j.h[b]; qm = j.m[b]; }
+      if (j.h[c] > qh){ qh = j.h[c]; qm = j.m[c]; }
+      if (j.h[d] > qh){ qh = j.h[d]; qm = j.m[d]; }
+      for (const kk of [a, c, b, b, c, d]){
+        const vi = kk % N1, vr = (kk / N1) | 0;
+        pos[w * 3] = x0 + vi * s; pos[w * 3 + 1] = j.h[kk]; pos[w * 3 + 2] = z0 + vr * s;
+        nrm[w * 3] = vnrm[kk * 3]; nrm[w * 3 + 1] = vnrm[kk * 3 + 1]; nrm[w * 3 + 2] = vnrm[kk * 3 + 2];
+        mats[w] = qm;
+        w++;
+      }
+    }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(j.col, 3));
-    g.setIndex(new THREE.BufferAttribute(idx, 1));
-    if (this.mesh){ this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
-    this.mesh = new THREE.Mesh(g, this.mat);
-    this.mesh.frustumCulled = false;
-    this.mesh.userData.noShadow = true;
-    this.scene.add(this.mesh);
+    g.setAttribute('aMat', new THREE.BufferAttribute(mats, 1));
+    const lv = this.levels[j.k];
+    if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
+    lv.mesh = new THREE.Mesh(g, this.mat);
+    lv.mesh.frustumCulled = false;
+    lv.mesh.castShadow = true;
+    this.scene.add(lv.mesh);
+    lv.cx = j.cx; lv.cz = j.cz;
     this.job = null;
   },
 };

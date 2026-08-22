@@ -63,6 +63,9 @@ The world gets dark, loud, and juicy; the tools get their full kit.
 Real sun shadow-mapping (trees/builds/terrain cast, PCF, day-tracking),
 per-vertex SDF ambient occlusion, god rays, drifting cloud shade, far-terrain
 horizon to ~1.6km, render distance to 256m full detail, FPS cap slider.
+5.5.1: far terrain rebuilt as 7-level geometry-clipmap LOD rings (1m→64m
+cells, 4km horizon), triplanar-textured + shadowed like real terrain, with a
+chunk-coverage mask so the LOD always meets loaded geometry exactly.
 
 ## Build 5.6 — Hands & a living surface
 - Surface decor: grass tufts, flowers, shrubs scattered by biome.
