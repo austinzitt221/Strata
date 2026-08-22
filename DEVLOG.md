@@ -2,6 +2,75 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.5 — the STRATA shader pack (2026-08-22)
+
+Playtest asks: AO banding reads as solid lines; dark creases ignore placed
+torches; real cast shadows (trees, mountains, sun direction, shape outlines);
+god rays; much bigger render distance; an FPS cap slider.
+
+### Per-vertex AO (banding gone) + light fills creases
+AO moved from per-quad to per-DC-VERTEX: sampled at each cell vertex with a
+tap direction taken from the mesher's already-computed field grid (free and
+seam-consistent), cached by cell index. Every quad corner carries its own
+AO, so shading interpolates smoothly instead of stepping in per-quad bands.
+Taps trimmed 4→3 to keep meshing throughput. Torch/headlamp light now takes
+only 15% of the AO (was 50%) — placing a torch beside a dark crease visibly
+floods it (verified by screenshot pair).
+
+### Real sun shadows (the headline)
+A directional light drives three.js's shadow-map machinery purely as a
+depth-map generator (props are unlit materials, so its intensity is ~0):
+4096² map, ortho box that follows the player (texel-snapped so edges don't
+shimmer), radius scaling with render distance. Terrain, trees, props, and
+entities all cast; the terrain shader samples the map manually (RGBA depth
+unpack + 3×3 PCF + slope-scaled bias). Trees throw canopy shadows, builds
+throw crisp outlines matching the sun's direction, and shadows track the sun
+across the day. Shadowed ground keeps a cool sky-tinted ambient. Shadows
+fade out at night (no phantom moon shadows) and can be toggled in Options.
+Excluded casters (ghost previews, selection wires, sky, clouds, water, the
+first-person rig) are flagged and skipped by a subtree-aware traversal.
+Deferred: mountains beyond the ~220m shadow box don't cast; a second cascade
+is the next lever if wanted.
+
+### God rays
+Screen-space light shafts: a ¼-res occlusion buffer (bright sun disc, world
+silhouetted black via override material, overlays hidden) radially blurred
+toward the sun's screen position and added over the frame. Day-gated,
+skipped underwater/off-screen; Options toggle. Verified by a brightness
+probe (+14 avg RGB with rays on) and screenshots.
+
+### Drifting cloud shade
+Soft procedural cloud shadows scroll across sunlit ground (value noise in
+the terrain shader, ~22m features), scaled by daylight.
+
+### Far terrain — the horizon at last
+Render distance slider raised 6→32 chunks (256m of full-detail SDF terrain),
+and beyond that a single low-res heightfield mesh (8m grid, ~1.6km radius)
+carries the horizon: mountains, snow caps, lakes, beaches, all lit by the
+same sun uniforms and fogged into the sky. It sits 0.45m under the true
+surface so real chunks always win depth, discards near the player, rebuilds
+amortized (5 rows/frame, at most one rebuild per 8s), and recenters after
+300m of travel. Camera far plane 400→2600; surface fog now reaches 1.5km
+while caves keep their short black fade (fog range scales with skylight)
+and underwater keeps its murk.
+
+### FPS cap
+Options slider: 30/45/60/90/120/144/180 or MAX. Implemented as a frame
+limiter over requestAnimationFrame. Note: browsers vsync rAF to the display,
+so MAX equals the monitor's refresh rate (180 on the reporter's screen) —
+uncapped-beyond-refresh is not possible in a browser, no setting can change
+that.
+
+### Verification
+- 232 headless tests green (AO tests unchanged in spirit, thresholds hold).
+- Screenshot matrix: morning long shadows, tree canopy shadows, god rays
+  past a pillar (+ brightness probe), noon km-horizon, cave (short black
+  fog, no phantom shadows), night (stars, no shadows), torch crease fill,
+  options menu.
+- Full smoke green, zero console errors. Smoke now presets light graphics
+  options + half-res rendering (software rasterizer) and polls the two
+  wall-clock-sensitive tests instead of fixed waits.
+
 ## Build 5.4.1 — depth cues: SDF ambient occlusion + shading gradients (2026-08-22)
 
 Playtest report (second tester): approaching a cube face head-on felt like a

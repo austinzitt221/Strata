@@ -59,7 +59,12 @@ The world gets dark, loud, and juicy; the tools get their full kit.
 - Blueprints: save a copied selection under a name; stamp into any world.
 - Whatever the wrench playtest turns up.
 
-## Build 5.5 — Hands & a living surface
+## Build 5.5 — The shader pack (DONE)
+Real sun shadow-mapping (trees/builds/terrain cast, PCF, day-tracking),
+per-vertex SDF ambient occlusion, god rays, drifting cloud shade, far-terrain
+horizon to ~1.6km, render distance to 256m full detail, FPS cap slider.
+
+## Build 5.6 — Hands & a living surface
 - Surface decor: grass tufts, flowers, shrubs scattered by biome.
 - Empty hand = fists. RMB toggles fists up/down. Fists up: LMB punch
   (small damage). Fists down: LMB picks up decor — and animals; carry
