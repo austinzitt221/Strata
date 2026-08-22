@@ -2,6 +2,58 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.5.1 — LOD done right: geometry-clipmap rings (2026-08-22)
+
+Playtest: the single far mesh read as "real render, then boom, lowest LOD."
+Replaced it with a proper geometry clipmap.
+
+### Seven LOD rings, detail doubling toward the player
+Concentric square rings centered on the player: 1m cells to 64m out, then
+2m to 128m, 4m/256m, 8m/512m, 16m/1km, 32m/2km, 64m to the 4km horizon.
+Cell size doubles exactly as distance does, so screen-space detail is
+roughly constant (~0.9° per cell) — the ring that meets real geometry is
+nearly indistinguishable from it, and there is no single "cliff" drop-off.
+
+### Rings render like real terrain
+The old vertex-color look is gone: rings use the true shading family —
+dominant-axis triplanar pixel-atlas texturing (same atlas), sun diffuse,
+REAL shadow-map sampling (same map, same PCF), drifting cloud shade, the
+luminance noise, and the sky fog. Grass flows from real chunks into the LOD
+without a material seam. Rings are built UNINDEXED with one material per
+quad — sharing vertices interpolated material ids and fringed every
+shoreline/snow edge with rainbow tiles (caught in screenshots, fixed).
+
+### Always connected — the coverage mask
+A 160² chunk-column mask (8m texels, nearest-filtered) marks columns whose
+SURFACE-band chunks are actually meshed; the LOD shader discards its skin
+over covered columns. So the LOD fills everything real chunks haven't
+loaded yet — including inside the render distance while streaming — and
+yields column by column as they land. Teleport 600m: the world is complete
+scenery instantly, then sharpens in place. Coverage uses only the surface
+band per column (cached), not the whole column — deep cave and sky chunks
+mesh last and don't matter to a surface skin. First mask version required
+whole columns and never covered anything (caught by probe, fixed).
+
+### Seams
+Each coarser ring is sunk slightly deeper (0.06m innermost → 1.9m at 64m
+cells) and underlaps the finer ring by two cells, so ring boundaries are
+tiny backed steps rather than cracks; the innermost ring meets real geometry
+at true height. Rebuilds are amortized (~4200 height samples/frame, one
+ring at a time, finest first) and each ring recenters after E/8 of travel —
+walking never hitches.
+
+### Numbers
+~116k grid samples across all rings, ~560k unindexed vertices, 7 draw
+calls. Camera far 5200m; surface fog now 3.2km. Rings cast shadows too, so
+unloaded columns still shade the world plausibly.
+
+### Verification
+- 232 headless tests green.
+- lodshot.js: 7 rings built, mask covers spawn columns and recenters after
+  teleport, screenshot matrix (ground-level transition, 60m aerial, 600m
+  teleport early/late, peak panorama).
+- Full smoke green, zero console errors.
+
 ## Build 5.5 — the STRATA shader pack (2026-08-22)
 
 Playtest asks: AO banding reads as solid lines; dark creases ignore placed
