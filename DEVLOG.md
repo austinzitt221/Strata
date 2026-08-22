@@ -2,6 +2,53 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.3.1 — creative mode overhaul + phantom collision fix (2026-08-22)
+
+### Phantom collision after exact removal (the big one)
+Place a cube, remove the exact same cube: the geometry disappeared (5.3's
+exact-removal fix) but the player still collided with the empty space.
+Root cause: the CSG field is a **lower bound**, not a true distance. After
+union-then-subtract, the union's exterior distance keeps field values small
+near the phantom faces, and the interior of the removed volume sits at
++MINE_EPS with near-zero gradient — so raw `d < r` collision reported
+contacts on surfaces that no longer exist. Fix: `contactReal()` — before
+accepting a claimed contact, march from the query point along −gradient by
+the claimed distance (+0.12 slack) and require the field to actually reach
+< 0.015 there. Real surfaces pass; phantom faces never do. Applied in
+`capsuleFree`, the player collide loop, the grounded probe, and entity
+collision. Verified: probe + physical walk straight through a removed cube
+(scratchpad/ghostcol.js), and no regression on real contacts — cave-floor
+rest gap, wall contact distances, grounded detection all unchanged
+(scratchpad/collide_check.js).
+
+### Creative mode is now actually creative
+- **Loadout:** creative worlds start with just a diamond drill (slot 1) and
+  a diamond dispenser in the dispenser slot. No pre-seeded material stacks.
+- **Catalog panel:** with inventory open in creative, a CATALOG panel sits
+  to the left listing everything in the game — all materials, all 5 tiers
+  of drill/dispenser/sword, blaster, wrench, and every placeable/item
+  (torch, bulb, stick, wool, door, table, stove, bed, beacon, meats, ores,
+  ingots, diamond). Click to take: materials +500, stackables +10, tools 1.
+- **No consumption:** placing torches, bulbs, doors, tables, stoves, beds,
+  beacons in creative no longer decrements the stack.
+- **Free crafting:** the crafting menu in creative shows every recipe
+  (station recipes included, no table needed), costs read "free", and
+  crafting consumes nothing.
+
+### Fixes
+- Crafting a wrench gave a blaster: `craft()`'s output ternary had no
+  wrench case and fell through to `makeGun()`. Added `makeWrench()`.
+- Exported `STACKABLE_KINDS` from CORE (catalog uses it).
+- Inventory + catalog row wraps/scrolls instead of clipping on narrow
+  viewports.
+
+### Verification
+- 216 headless CORE tests green (incl. collision fix regression checks).
+- b531shot.js: creative loadout, catalog visible + click-to-take, torch
+  place keeps count, craft menu all-free, wrench crafts a wrench, and a
+  physical walk through a placed-then-removed cube (ends 5m past it).
+- Full smoke.js green, zero console errors.
+
 ## Build 5.3 — precision editing & the wrench (2026-08-21)
 
 ### Exact removal (the "bits remaining" bug) — FIXED

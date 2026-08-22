@@ -43,15 +43,64 @@ The world gets dark, loud, and juicy; the tools get their full kit.
 - Enemies + animals with spawning rules (dark spawns underground); guns.
 - Torch/light-source item — doubles as cave breadcrumbs.
 
-## Build 5 — Water & world depth (IN PLAYTEST)
-- Water: sea level filling valleys, swimming, flooded cave sections.
-- More biomes/environments; structures and cave features worth finding.
-- Waypoint/beacon items and a base anchor (compass targets, fast travel or
-  respawn point — decide in playtest).
-- More materials/textures as the palette needs them.
+## Build 5 — Water & world depth (DONE incl. 5.1–5.3.1, wrench in playtest)
+- Water scoped to real lakes; swimming, breath, underwater overlay.
+- Ruins + loot, beaches/snow, beacons→beds as spawn anchors, sheep/wool.
+- Sky: sun/moon/stars/3D clouds; stove furnace, ores→ingots, coal,
+  lightbulbs, meat/eating, lurkers burn in daylight.
+- Exact removal (no membranes), per-axis sizes + 3-axis rotation.
+- **The Wrench**: select/resize/move/hollow/delete/paint existing edits.
+- 5.3.1: phantom collision fix, creative catalog + free crafting.
 
-## Build 6 — Content & endgame
-- Bosses, loot structures, endgame progression.
+## Build 5.4 — The editor completed (wrench II)
+- Multi-select: shift-click adds edits to the selection (builds or holes).
+- Copy / paste / delete / drag-move whole selections; paste shows a ghost
+  of the full selection before committing.
+- Blueprints: save a copied selection under a name; stamp into any world.
+- Whatever the wrench playtest turns up.
+
+## Build 5.5 — Hands & a living surface
+- Surface decor: grass tufts, flowers, shrubs scattered by biome.
+- Empty hand = fists. RMB toggles fists up/down. Fists up: LMB punch
+  (small damage). Fists down: LMB picks up decor — and animals; carry
+  them overhead, LMB throws.
+- Photo mode (creative): free camera + time-of-day slider.
+
+## Build 6 — Electricity (analog power, not redstone)
+Power is continuous wattage, not on/off — machines scale with supply, no cap.
+- **Phase A — the network**: wires, switches (levers), power meters.
+  Sources: hand crank, animal/enemy crank (captured mob on a wheel),
+  water wheel (needs real water), generator. Bulbs toggle on/off.
+- **Phase B — machines**: auto-crafting table (select a recipe, it crafts
+  while powered), boosted stove (smelt speed scales with watts), hopper +
+  item tubes so materials can flow into machines.
+- **Phase C — exotics**: generator 2.0, tesla coil (wireless power in a
+  radius, zaps you if you stand too close).
+
+## Build 6.5 — The player has a body
+- 3rd-person camera toggle; full player model with a ROUND head (our
+  silhouette, not Minecraft's). Skin selection.
+- Armor: a set per ore tier, visible on the model, damage reduction.
+  Armor stand to display/store sets.
+- Jetpack: short creative-style flight in survival; recharges on a
+  powered charging pad (plugs into the grid).
+- Grappling hook: cheap-tier vertical movement.
+- Base decor: item pedestals, signs.
+
+## Build 7 — Arms race
+- Weapon table: crafted at a crafting table, requires power to operate.
+- Gun arsenal (real-model-inspired, renamed): full-auto AR, SMG, semi-auto
+  AR, handgun, heavy pistol, sniper, RPG, laser rifle, gatling, laser
+  gatling. Guns costly, ammo cheap.
+- Explosives: TNT + shaped mining charges (blast-carve spheres). RPG and
+  explosions carve real craters — CSG subtract as a weapon.
+- Raids: your power grid attracts enemies at night — more watts, bigger
+  raids. Gives guns a target and bases a reason to be defended.
+
+## Build 8 — Content & endgame
+- Bosses — incl. the Burrower, a worm that carves tunnels through the map
+  as it moves (same subtract edits the player uses).
+- Loot structures, endgame progression.
 - Music + audio expansion; options menu expansion.
 - Perf pass: worker meshing (blob) if continuous mining needs it.
 
