@@ -2,6 +2,58 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.4 — the editor completed: multi-select, copy/paste, blueprints (2026-08-22)
+
+### Multi-select (shift + right click)
+- Shift+RMB with the wrench adds/removes edits from a selection set; plain
+  RMB still single-selects. Primary selection keeps the orange wireframe +
+  gizmo arrows; every other selected edit gets a cyan wireframe.
+- Shift-dragging any gizmo arrow now moves the WHOLE selection together
+  (resize stays primary-only — multi-resize is ambiguous). Grid snap still
+  quantizes the drag steps.
+- X deletes the entire selection, back-to-front so every prefix stays
+  intact — each edit refunds against the exact world state it was made in,
+  same as single delete. Refunds are aggregated into one toast.
+- Selection indices are per-world state: cleared on world load, revalidated
+  after undo.
+
+### Copy / paste (Ctrl+C / Ctrl+V)
+- CORE gained `copySelection` / `pasteSelection`: a clipboard stores edits
+  relative to the bottom-center of the selection's AABB, in edit-list
+  order — so a paste replays the original CSG sequence (a hollowed tower
+  pastes hollow, interior holes included). No block game can do this; the
+  edit list is the superpower.
+- Ctrl+V enters paste mode with a full ghost preview of the selection
+  (green = builds, red = carves, orange = paint) anchored at the crosshair.
+  Works while holding ANY tool. Scroll rotates the whole selection in 90°
+  steps around the anchor — 90° keeps grid alignment exact, and yaw
+  composes onto each edit's own rotation. LMB stamps (repeatable), RMB or
+  Ctrl+V cancels. F-grid snaps the anchor to the lattice.
+- Survival economy: a stamp pre-checks affordability (sum of place/paint
+  costs, computed sequentially against the growing edit list), consumes
+  materials, and credits mine yields — identical to doing the ops by hand.
+  Creative stamps free. Each stamped edit lands on the undo stack.
+
+### Blueprints (N)
+- N opens the blueprint library. Save the current clipboard under a name;
+  blueprints persist in localStorage across ALL worlds (rows use the same
+  serializer as the save format). STAMP enters paste mode with that
+  blueprint; DELETE removes it. Build a house once, stamp a village.
+
+### Plumbing
+- Ctrl+C/Ctrl+V are intercepted before key-state booking (so C doesn't
+  crouch and V doesn't nudge ghost distance mid-chord); typing in the
+  blueprint name field is guarded from game keybinds.
+
+### Verification
+- 226 headless tests (10 new: clipboard order from unsorted indices,
+  bottom-center anchor, identity paste, shifted-SDF equivalence, 90°
+  offset rotation + selective rot application, blueprint row round-trip).
+- b54shot.js browser flow: shift-click multi-select with cyan secondary
+  wire, whole-selection drag-move, rotated stamp lands solid, multi-delete,
+  blueprint save/stamp round-trip through the real panel, undo revalidation.
+- Full smoke green, zero console errors.
+
 ## Build 5.3.1 — creative mode overhaul + phantom collision fix (2026-08-22)
 
 ### Phantom collision after exact removal (the big one)

@@ -197,6 +197,14 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="bluescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:480px; max-width:640px;">
+    <h2>BLUEPRINTS</h2>
+    <div class="sub" style="margin-bottom:10px;">saved across all worlds &nbsp;·&nbsp; N to close</div>
+    <div id="bluebody"></div>
+  </div>
+</div>
+
 <div id="stovescreen" class="screen hidden dim">
   <div class="panel">
     <h2>STOVE</h2>
@@ -1455,6 +1463,50 @@ function deserializeEdits(arr){
   return out;
 }
 
+// ---- selection clipboard (build 5.4) ----
+// A clipboard stores edits relative to an anchor (bottom-center of the
+// selection's AABB) in edit-list order, so a paste replays them with the
+// original CSG ordering intact.
+function copySelection(edits, indices){
+  const sorted = [...indices].sort((a, b) => a - b);
+  let box = null;
+  for (const i of sorted){
+    const e = edits[i];
+    if (!e) continue;
+    const b = editAABB(e);
+    if (!box) box = b.slice();
+    else for (let k = 0; k < 3; k++){
+      box[k] = Math.min(box[k], b[k]);
+      box[k + 3] = Math.max(box[k + 3], b[k + 3]);
+    }
+  }
+  if (!box) return null;
+  const ax = (box[0] + box[3]) / 2, ay = box[1], az = (box[2] + box[5]) / 2;
+  const items = sorted.map(i => {
+    const c = Object.assign({}, edits[i]);
+    c.x -= ax; c.y -= ay; c.z -= az;
+    return c;
+  });
+  return { items, w: box[3] - box[0], h: box[4] - box[1], d: box[5] - box[2] };
+}
+// materialize a clipboard at (px,py,pz) — where the anchor lands — rotated
+// by yawSteps * 90 degrees around the anchor. 90-degree steps keep grid
+// alignment exact for snapped builds.
+function pasteSelection(clip, px, py, pz, yawSteps){
+  const q = ((yawSteps % 4) + 4) % 4;
+  const c = [1, 0, -1, 0][q], sn = [0, 1, 0, -1][q];
+  return clip.items.map(t => {
+    const e = Object.assign({}, t);
+    const rx0 = e.x, rz0 = e.z;
+    e.x = px + rx0 * c - rz0 * sn;
+    e.z = pz + rx0 * sn + rz0 * c;
+    e.y = py + e.y;
+    if (q && (e.shape !== 0 || e.sx || e.sy || e.sz))
+      e.rot = ((e.rot || 0) + q * Math.PI / 2) % (Math.PI * 2);
+    return e;
+  });
+}
+
 // seeded PRNG (used for textures + future terrain; wired now per spec)
 function mulberry32(seed){
   let s = seed >>> 0;
@@ -1480,7 +1532,7 @@ return {
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
-  snapSpacing, snapPlace, serializeEdits, deserializeEdits, mulberry32, hashSeed,
+  snapSpacing, snapPlace, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
@@ -3921,6 +3973,7 @@ function bindInput(){
     if (!game.running || game.ui !== 'none') return;
     if (!isLocked()){ requestLock(); return; }
     if (e.button === 0){
+      if (wrenchSys.paste){ wrenchSys.commitPaste(); return; }
       if (wrenchSys.onLMB()) return;
       game.mouseL = true; game.mouseEdge = true;
     }
@@ -3935,6 +3988,8 @@ function bindInput(){
       }
     }
     if (e.button === 2){
+      if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
+      if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
       // a crafting table in reach overrides the held item's right click
       if (tableSys.onRay(3.5)){ openCraft(); AudioSys.sfx('toggle'); return; }
       const bed = bedSys.onRay(3.5);
@@ -3978,9 +4033,15 @@ function bindInput(){
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
+    const dir = e.deltaY < 0 ? 1 : -1;
+    if (wrenchSys.paste){
+      wrenchSys.paste.yaw = (wrenchSys.paste.yaw + dir + 4) % 4;
+      toast('paste rotated ' + wrenchSys.paste.yaw * 90 + '\u00b0');
+      refreshToolHUD();
+      return;
+    }
     const tool = activeTool();
     if (!tool) return;
-    const dir = e.deltaY < 0 ? 1 : -1;
     if (tool.kind === 'wrench' && game.tool.mode === 'paint'){
       const n = wrenchSys.palette.length;
       wrenchSys.palIdx = (wrenchSys.palIdx + dir + n) % n;
@@ -4008,13 +4069,26 @@ function bindInput(){
   document.addEventListener('keydown', e => {
     if (!game.running) return;
     const code = e.code;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
-    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove'){
+    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue'){
       if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
+      else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       return;
     }
     if (game.ui !== 'none') return;
+    if ((e.ctrlKey || e.metaKey) && code === 'KeyC'){
+      e.preventDefault();
+      if (wrenchSys.held()) wrenchSys.copy();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && code === 'KeyV'){
+      e.preventDefault();
+      if (wrenchSys.paste) wrenchSys.cancelPaste();
+      else wrenchSys.startPaste(game.clipboard);
+      return;
+    }
     game.keys[code] = true;
     if (code === 'KeyF'){ if (!game.fHeld){ game.fHeld = true; game.fUsedCombo = false; } e.preventDefault(); return; }
     if (code in DIGITS){
@@ -4045,6 +4119,7 @@ function bindInput(){
     if (code === 'KeyX'){ if (wrenchSys.held()) wrenchSys.deleteSel(); }
     if (code === 'KeyE'){ openInventory(); }
     if (code === 'KeyQ'){ openCraft(); }
+    if (code === 'KeyN'){ openBlueprints(); }
   });
   document.addEventListener('keyup', e => {
     game.keys[e.code] = false;
@@ -4368,7 +4443,8 @@ function applyEdit(e){
 // H hollows it, X deletes it (refunding/consuming materials), and paint
 // mode recolors it. Everything re-meshes live.
 const wrenchSys = {
-  sel: -1, drag: null, group: null, wires: null, arrows: [], hoverIdx: -1,
+  sel: -1, selSet: [], selWires: [], drag: null, group: null, wires: null, arrows: [], hoverIdx: -1,
+  paste: null, pasteGroup: null, selGeos: null, solidGeos: null, selMat: null, pasteMats: null,
   palette: [CORE.MAT.ROCK, CORE.MAT.GRASS, CORE.MAT.SAND, CORE.MAT.WOOD,
             CORE.MAT.PLANKS, CORE.MAT.STONEBRICK, CORE.MAT.SNOW,
             CORE.MAT.OBSIDIAN, CORE.MAT.GLOWSHROOM],
@@ -4411,7 +4487,25 @@ const wrenchSys = {
       this.arrows.push(a);
     }
     scene.add(this.group);
-    this.sel = -1; this.drag = null;
+    // shared resources for secondary-selection wires and the paste ghost
+    this.selGeos = { 0: this.wires[0].geometry, 1: this.wires[1].geometry, 2: this.wires[2].geometry };
+    this.solidGeos = {
+      0: new THREE.SphereGeometry(0.5, 12, 8),
+      1: new THREE.BoxGeometry(1, 1, 1),
+      2: new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1),
+    };
+    this.selMat = new THREE.LineBasicMaterial({ color: 0x35c8e8, transparent: true, opacity: 0.85, depthWrite: false });
+    this.pasteMats = {};
+    for (const [op, color] of [[0, 0xff7a5c], [1, 0x8bff9e], [2, 0xffb44d]]){
+      this.pasteMats[op] = {
+        wire: new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false }),
+        fill: new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.13, depthWrite: false }),
+      };
+    }
+    this.pasteGroup = new THREE.Group();
+    this.pasteGroup.visible = false;
+    scene.add(this.pasteGroup);
+    this.sel = -1; this.selSet = []; this.drag = null; this.paste = null;
   },
   held(){ const t = activeTool(); return !!(t && t.kind === 'wrench'); },
   edit(){ return this.sel >= 0 && this.sel < game.edits.length ? game.edits[this.sel] : null; },
@@ -4421,32 +4515,59 @@ const wrenchSys = {
     }
     return -1;
   },
-  select(){
+  select(add){
     const hit = surfaceHit();
-    if (!hit){ this.sel = -1; refreshToolHUD(); return; }
+    if (!hit){
+      if (!add){ this.sel = -1; this.selSet = []; this.syncSelWires(); }
+      refreshToolHUD(); return;
+    }
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const idx = this.editAtPoint(hit[0] + dir.x * 0.08, hit[1] + dir.y * 0.08, hit[2] + dir.z * 0.08, 0.12);
     if (idx < 0){
-      this.sel = -1;
-      toast('no build here — aim at something you placed or mined');
-    } else if (idx === this.sel){
-      this.sel = -1;
+      if (!add){
+        this.sel = -1; this.selSet = [];
+        toast('no build here — aim at something you placed or mined');
+      }
+    } else if (add){
+      if (this.sel >= 0 && !this.selSet.length) this.selSet.push(this.sel);
+      const at = this.selSet.indexOf(idx);
+      if (at >= 0){
+        this.selSet.splice(at, 1);
+        if (this.sel === idx) this.sel = this.selSet.length ? this.selSet[this.selSet.length - 1] : -1;
+        toast('removed — ' + this.selSet.length + ' selected');
+      } else {
+        this.selSet.push(idx);
+        this.sel = idx;
+        toast(this.selSet.length + ' selected — Ctrl+C copy · X delete · Shift-drag moves all');
+      }
+      AudioSys.sfx('toggle');
+    } else if (idx === this.sel && this.selSet.length <= 1){
+      this.sel = -1; this.selSet = [];
       toast('deselected');
     } else {
       this.sel = idx;
+      this.selSet = [idx];
       const e = game.edits[idx];
       toast('selected ' + (e.op === 0 ? 'mined ' : '') + CORE.SHAPE_NAME[e.shape] +
-            ' — drag arrows · Shift move · H hollow · X delete');
+            ' — drag arrows · Shift move · H hollow · X delete · shift+RMB adds more');
       AudioSys.sfx('toggle');
     }
+    this.syncSelWires();
     refreshToolHUD();
   },
   axisDirWorld(e, axis, sign){
     return CORE.rotToWorld(e, axis === 0 ? sign : 0, axis === 1 ? sign : 0, axis === 2 ? sign : 0);
   },
   frame(){
-    const on = this.held() && this.edit() && game.ui === 'none';
+    // paste ghost runs with any tool, independent of the gizmo
+    if (this.paste && game.ui === 'none' && isLocked()){
+      const a = this.pasteAnchor();
+      this.pasteGroup.visible = true;
+      this.pasteGroup.position.set(a.x, a.y, a.z);
+      this.pasteGroup.rotation.y = this.paste.yaw * Math.PI / 2;
+    } else this.pasteGroup.visible = false;
+    const on = this.held() && this.edit() && game.ui === 'none' && !this.paste;
     this.group.visible = !!on;
     if (!on){ this.hoverIdx = -1; return; }
     const e = this.edit();
@@ -4475,6 +4596,15 @@ const wrenchSys = {
       const active = i === this.hoverIdx || (this.drag && this.drag.idx === i);
       this.arrows[i].scale.setScalar(active ? 1.3 : 1);
       this.arrows[i].children[0].material.opacity = active ? 1 : 0.92;
+    }
+    for (const sw of this.selWires){
+      const t = game.edits[sw.userData.idx];
+      if (!t || sw.userData.idx === this.sel){ sw.visible = false; continue; }
+      const [thx, thy, thz] = CORE.editHalf(t);
+      sw.visible = true;
+      sw.position.set(t.x, t.y, t.z);
+      sw.scale.set(thx * 2 + 0.04, thy * 2 + 0.04, thz * 2 + 0.04);
+      sw.rotation.set(t.rx || 0, t.rot || 0, t.rz || 0);
     }
   },
   onLMB(){
@@ -4514,11 +4644,21 @@ const wrenchSys = {
   },
   applyDelta(amt){
     const e = this.edit();
-    const before = Object.assign({}, e);
     const d = this.axisDirWorld(e, this.drag.axis, this.drag.sign);
     if (game.keys['ShiftLeft'] || game.keys['ShiftRight']){
-      e.x += d[0] * amt; e.y += d[1] * amt; e.z += d[2] * amt;
+      // move — the whole selection travels together
+      const list = this.selSet.length ? this.selSet : [this.sel];
+      for (const i of list){
+        const t = game.edits[i];
+        if (!t) continue;
+        const before = Object.assign({}, t);
+        t.x += d[0] * amt; t.y += d[1] * amt; t.z += d[2] * amt;
+        game.terrain.invalidate(before);
+        game.terrain.invalidate(t);
+      }
     } else {
+      // resize — primary only (multi-resize is ambiguous)
+      const before = Object.assign({}, e);
       const key = ['sx', 'sy', 'sz'][this.drag.axis];
       const cur = e[key] || e.size;
       const next = Math.max(0.25, cur + amt);
@@ -4526,9 +4666,9 @@ const wrenchSys = {
       if (real === 0) return;
       e[key] = next;
       e.x += d[0] * real / 2; e.y += d[1] * real / 2; e.z += d[2] * real / 2;
+      game.terrain.invalidate(before);
+      game.terrain.invalidate(e);
     }
-    game.terrain.invalidate(before);
-    game.terrain.invalidate(e);
     markSave();
   },
   endDrag(){
@@ -4553,30 +4693,41 @@ const wrenchSys = {
     AudioSys.sfx('place');
   },
   deleteSel(){
-    const e = this.edit();
-    if (!e){ toast('nothing selected (X deletes the selection)'); return; }
-    const idx = this.sel;
-    const prefix = game.edits.slice(0, idx);
-    if (e.op === 1 && game.mode !== 'creative'){
-      // the prefix is exactly the world state when it was placed, so this
-      // recomputes the original cost — a full refund
-      const cost = CORE.placeCost(prefix, e, game.gen);
-      if (cost > 0){ CORE.addMat(game.slots, e.mat, cost); toast('deleted — +' + cost + ' ' + CORE.MAT_NAME[e.mat] + ' back'); }
-      else toast('deleted');
-    } else if (e.op === 0 && game.mode !== 'creative'){
-      const got = CORE.mineYield(prefix, e, game.gen);
-      for (const m in got){
-        const k = CORE.ORE_ITEM[+m];
-        if (k){ const have = CORE.countItem(game.slots, k); CORE.consumeItem(game.slots, k, Math.min(have, got[m])); }
-        else { const have = CORE.countMat(game.slots, +m); CORE.consumeMat(game.slots, +m, Math.min(have, got[m])); }
+    const list = (this.selSet.length ? [...this.selSet] : (this.sel >= 0 ? [this.sel] : []))
+      .sort((a, b) => b - a);
+    if (!list.length){ toast('nothing selected (X deletes the selection)'); return; }
+    // deleting back-to-front keeps every earlier index valid, and each
+    // edit's prefix is exactly the world state when it was made — so the
+    // recomputed cost/yield is a faithful refund
+    const back = {};
+    for (const idx of list){
+      const e = game.edits[idx];
+      if (!e) continue;
+      const prefix = game.edits.slice(0, idx);
+      if (e.op === 1 && game.mode !== 'creative'){
+        const cost = CORE.placeCost(prefix, e, game.gen);
+        if (cost > 0){
+          CORE.addMat(game.slots, e.mat, cost);
+          const n = CORE.MAT_NAME[e.mat];
+          back[n] = (back[n] || 0) + cost;
+        }
+      } else if (e.op === 0 && game.mode !== 'creative'){
+        const got = CORE.mineYield(prefix, e, game.gen);
+        for (const m in got){
+          const k = CORE.ORE_ITEM[+m];
+          if (k){ const have = CORE.countItem(game.slots, k); CORE.consumeItem(game.slots, k, Math.min(have, got[m])); }
+          else { const have = CORE.countMat(game.slots, +m); CORE.consumeMat(game.slots, +m, Math.min(have, got[m])); }
+        }
       }
-      toast('un-mined — the ground takes its material back');
-    } else {
-      toast('deleted');
+      game.edits.splice(idx, 1);
+      game.terrain.invalidate(e);
     }
-    game.edits.splice(idx, 1);
-    game.terrain.invalidate(e);
-    this.sel = -1;
+    const parts = [];
+    for (const n in back) parts.push('+' + back[n] + ' ' + n + ' back');
+    toast('deleted ' + list.length + ' edit' + (list.length > 1 ? 's' : '') +
+          (parts.length ? ' — ' + parts.join(' · ') : ''));
+    this.sel = -1; this.selSet = [];
+    this.syncSelWires();
     AudioSys.sfx('undo');
     refreshHotbar(); refreshToolHUD(); markSave();
   },
@@ -4600,6 +4751,159 @@ const wrenchSys = {
     }
     toast('painted ' + CORE.MAT_NAME[m]);
     AudioSys.sfx('paint');
+  },
+  syncSelWires(){
+    for (const w of this.selWires) this.group.remove(w);
+    this.selWires = [];
+    for (const i of this.selSet){
+      if (i === this.sel) continue;
+      const t = game.edits[i];
+      if (!t) continue;
+      const w = new THREE.LineSegments(this.selGeos[t.shape], this.selMat);
+      w.renderOrder = 7;
+      w.rotation.order = 'YXZ';
+      w.userData.idx = i;
+      this.group.add(w);
+      this.selWires.push(w);
+    }
+  },
+  validate(){
+    this.selSet = this.selSet.filter(i => i < game.edits.length);
+    if (this.sel >= game.edits.length)
+      this.sel = this.selSet.length ? this.selSet[this.selSet.length - 1] : -1;
+    this.syncSelWires();
+  },
+  clearSelection(){
+    this.sel = -1; this.selSet = [];
+    this.syncSelWires();
+    if (this.paste) this.cancelPaste();
+  },
+  copy(){
+    const list = this.selSet.length ? this.selSet : (this.sel >= 0 ? [this.sel] : []);
+    if (!list.length){ toast('nothing selected — right click edits with the wrench first'); return; }
+    game.clipboard = CORE.copySelection(game.edits, list);
+    toast('copied ' + list.length + ' edit' + (list.length > 1 ? 's' : '') +
+          ' — Ctrl+V pastes · N saves it as a blueprint');
+    AudioSys.sfx('toggle');
+  },
+  startPaste(clip){
+    if (!clip || !clip.items || !clip.items.length){
+      toast('clipboard empty — select with the wrench, then Ctrl+C');
+      return;
+    }
+    this.paste = { clip, yaw: 0 };
+    this.buildPasteGhost();
+    toast('paste: left click stamps · scroll rotates 90\u00b0 · right click cancels');
+    AudioSys.sfx('toggle');
+    refreshToolHUD();
+  },
+  cancelPaste(){
+    this.paste = null;
+    this.pasteGroup.visible = false;
+    while (this.pasteGroup.children.length) this.pasteGroup.remove(this.pasteGroup.children[0]);
+    refreshToolHUD();
+  },
+  buildPasteGhost(){
+    const g = this.pasteGroup;
+    while (g.children.length) g.remove(g.children[0]);
+    const items = this.paste.clip.items;
+    const showFill = items.length <= 64;
+    for (const t of items){
+      const mats = this.pasteMats[t.op] || this.pasteMats[1];
+      const [thx, thy, thz] = CORE.editHalf(t);
+      const w = new THREE.LineSegments(this.selGeos[t.shape], mats.wire);
+      w.position.set(t.x, t.y, t.z);
+      w.scale.set(thx * 2, thy * 2, thz * 2);
+      w.rotation.order = 'YXZ';
+      w.rotation.set(t.rx || 0, t.rot || 0, t.rz || 0);
+      w.renderOrder = 7;
+      g.add(w);
+      if (showFill){
+        const f = new THREE.Mesh(this.solidGeos[t.shape], mats.fill);
+        f.position.copy(w.position); f.scale.copy(w.scale);
+        f.rotation.order = 'YXZ'; f.rotation.copy(w.rotation);
+        f.renderOrder = 6;
+        g.add(f);
+      }
+    }
+  },
+  pasteAnchor(){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    const reach = PLAYER.reach;
+    const segBox = [
+      Math.min(o.x, o.x + dir.x * reach) - 1, Math.min(o.y, o.y + dir.y * reach) - 1, Math.min(o.z, o.z + dir.z * reach) - 1,
+      Math.max(o.x, o.x + dir.x * reach) + 1, Math.max(o.y, o.y + dir.y * reach) + 1, Math.max(o.z, o.z + dir.z * reach) + 1,
+    ];
+    const edits = nearEdits(segBox);
+    let t = 0.4, hit = -1;
+    for (let i = 0; i < 96 && t < reach; i++){
+      const d = sdfWorld(o.x + dir.x * t, o.y + dir.y * t, o.z + dir.z * t, edits);
+      if (d < 0.02){ hit = t; break; }
+      t += Math.max(0.045, d * 0.5);
+    }
+    const tt = hit >= 0 ? hit : Math.min(reach, Math.max(1.0, game.tool.dist));
+    let x = o.x + dir.x * tt, y = o.y + dir.y * tt, z = o.z + dir.z * tt;
+    if (game.snapOn){
+      const cell = CORE.GRID_SIZES[game.gridIdx];
+      x = Math.round(x / cell) * cell;
+      y = Math.round(y / cell) * cell;
+      z = Math.round(z / cell) * cell;
+    }
+    return { x, y, z };
+  },
+  commitPaste(){
+    const clip = this.paste.clip;
+    const a = this.pasteAnchor();
+    const list = CORE.pasteSelection(clip, a.x, a.y, a.z, this.paste.yaw);
+    if (game.mode !== 'creative'){
+      // affordability first (yields are not counted — conservative)
+      const tmp = game.edits.slice();
+      const need = {};
+      for (const e of list){
+        if (e.op === 1){ const c = CORE.placeCost(tmp, e, game.gen); if (c > 0) need[e.mat] = (need[e.mat] || 0) + c; }
+        else if (e.op === 2){ const c = CORE.paintCost(tmp, e, game.gen); if (c > 0) need[e.mat] = (need[e.mat] || 0) + c; }
+        tmp.push(e);
+      }
+      for (const m in need){
+        if (CORE.countMat(game.slots, +m) < need[m]){
+          toast('need ' + need[m] + ' ' + CORE.MAT_NAME[m] + ' — have ' + CORE.countMat(game.slots, +m));
+          game.orbFlash = performance.now();
+          AudioSys.sfx('deny');
+          return;
+        }
+      }
+    }
+    let spent = 0, mined = 0;
+    for (const e of list){
+      if (e.op === 0){
+        const got = CORE.mineYield(game.edits, e, game.gen);
+        applyEdit(e);
+        game.undoStack.push({ edit: e, type: 'mine', gained: game.mode === 'creative' ? {} : got });
+        if (game.mode !== 'creative'){
+          for (const m in got){
+            const k = CORE.ORE_ITEM[+m];
+            if (k) addStackItem(k, got[m]); else CORE.addMat(game.slots, +m, got[m]);
+            mined += got[m];
+          }
+        }
+      } else {
+        const c = e.op === 1 ? CORE.placeCost(game.edits, e, game.gen) : CORE.paintCost(game.edits, e, game.gen);
+        if (game.mode !== 'creative' && c > 0){ CORE.consumeMat(game.slots, e.mat, c); spent += c; }
+        applyEdit(e);
+        game.undoStack.push({ edit: e, type: e.op === 2 ? 'paint' : 'place', mat: e.mat,
+                              cost: game.mode === 'creative' ? 0 : c });
+      }
+      if (game.undoStack.length > 64) game.undoStack.shift();
+    }
+    const bits = ['stamped ' + list.length + ' edit' + (list.length > 1 ? 's' : '')];
+    if (spent) bits.push('-' + spent + ' materials');
+    if (mined) bits.push('+' + mined + ' mined back');
+    toast(bits.join(' · '));
+    AudioSys.sfx('place');
+    Particles.burst(a.x, a.y + clip.h * 0.5, a.z, Math.max(clip.w, clip.d) * 0.4, [0x8bff9e], 24, 2.0);
+    refreshHotbar(); refreshToolHUD();
   },
 };
 
@@ -4705,7 +5009,7 @@ function undoEdit(){
       CORE.addMat(game.slots, rec.mat, rec.cost);
     }
   }
-  if (wrenchSys.sel >= game.edits.length) wrenchSys.sel = -1;
+  wrenchSys.validate();
   toast('undo');
   AudioSys.sfx('undo');
   refreshHotbar(); refreshToolHUD(); markSave();
@@ -5413,18 +5717,27 @@ function refreshToolHUD(){
     html = '<div class="t1">stove ×' + it.count + '</div><div class="t2">place, then right click to cook and smelt</div>';
   } else if (it.kind === 'wrench'){
     const sel = wrenchSys.edit();
+    const nSel = wrenchSys.selSet.length;
     html = '<div class="t1">wrench' + (game.tool.mode === 'paint' ? ' — <span class="on">paint</span>' : '') + '</div>';
-    if (game.tool.mode === 'paint'){
+    if (wrenchSys.paste){
+      html += '<div class="t2 on">pasting ' + wrenchSys.paste.clip.items.length + ' edits — rotated ' + wrenchSys.paste.yaw * 90 + '°</div>';
+      html += '<div class="t2">left click stamps · scroll rotates · right click cancels</div>';
+      html += '<div class="t2">F grid ' + (game.snapOn ? '<span class="on">on · ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span>' : 'off') + '</div>';
+    } else if (game.tool.mode === 'paint'){
       html += '<div class="t2">left click paints <b>' + CORE.MAT_NAME[wrenchSys.palette[wrenchSys.palIdx]] + '</b> (scroll to change)</div>';
       html += '<div class="t2">R back to edit mode</div>';
+    } else if (nSel > 1){
+      html += '<div class="t2">selected: <b>' + nSel + ' edits</b> — shift + right click adds/removes</div>';
+      html += '<div class="t2">Shift-drag an arrow moves them all · X deletes all</div>';
+      html += '<div class="t2">Ctrl+C copy · Ctrl+V paste · N blueprints</div>';
     } else if (sel){
       html += '<div class="t2">selected: ' + (sel.op === 0 ? 'mined ' : sel.op === 2 ? 'painted ' : '') +
         CORE.SHAPE_NAME[sel.shape] + (sel.op === 1 ? ' · ' + CORE.MAT_NAME[sel.mat] : '') + '</div>';
       html += '<div class="t2">aim at an arrow + hold left click: extend/shrink · Shift = move</div>';
-      html += '<div class="t2">H hollow · X delete · R paint · F grid ' + (game.snapOn ? '<span class="on">on</span>' : 'off') + '</div>';
+      html += '<div class="t2">H hollow · X delete · R paint · Ctrl+C copy · shift+RMB multi</div>';
     } else {
-      html += '<div class="t2">right click a build (or a mined hole) to select it</div>';
-      html += '<div class="t2">R paint mode · edits follow how you built things</div>';
+      html += '<div class="t2">right click a build (or a mined hole) to select it · shift adds more</div>';
+      html += '<div class="t2">R paint mode · Ctrl+V paste · N blueprints</div>';
     }
   } else if (it.kind === 'mat'){
     html = '<div class="t1">' + CORE.MAT_NAME[it.mat] + ' ×' + it.count + '</div>' +
@@ -5616,11 +5929,90 @@ function buildCraftUI(){
   }
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen');
   game.activeStove = null;
   game.ui = 'none';
   requestLock();
   refreshHotbar(); refreshToolHUD();
+}
+function loadBlueprints(){
+  try { return JSON.parse(localStorage.getItem('strata_blueprints') || '[]'); }
+  catch (err){ return []; }
+}
+function saveBlueprintsList(list){
+  try { localStorage.setItem('strata_blueprints', JSON.stringify(list)); }
+  catch (err){ toast('blueprint save failed (storage full?)'); }
+}
+function openBlueprints(){
+  if (game.ui !== 'none') return;
+  game.ui = 'blue'; buildBlueUI(); show('bluescreen'); document.exitPointerLock();
+}
+function buildBlueUI(){
+  const body = $('bluebody'); body.innerHTML = '';
+  if (game.clipboard && game.clipboard.items.length){
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:8px; margin-bottom:12px; align-items:center;';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.placeholder = 'name this copy (' + game.clipboard.items.length + ' edits)';
+    inp.style.flex = '1';
+    const btn = document.createElement('button');
+    btn.className = 'btn small'; btn.textContent = 'SAVE CLIPBOARD';
+    btn.addEventListener('click', () => {
+      const list = loadBlueprints();
+      const name = inp.value.trim() || ('blueprint ' + (list.length + 1));
+      list.push({ name, w: game.clipboard.w, h: game.clipboard.h, d: game.clipboard.d,
+                  rows: CORE.serializeEdits(game.clipboard.items) });
+      saveBlueprintsList(list);
+      toast('saved “' + name + '”');
+      AudioSys.sfx('craft');
+      buildBlueUI();
+    });
+    row.appendChild(inp); row.appendChild(btn);
+    body.appendChild(row);
+  } else {
+    const hint = document.createElement('div');
+    hint.className = 'sub';
+    hint.style.marginBottom = '10px';
+    hint.textContent = 'nothing copied yet — select edits with the wrench, then Ctrl+C';
+    body.appendChild(hint);
+  }
+  const list = loadBlueprints();
+  if (!list.length){
+    const none = document.createElement('div');
+    none.className = 'sub';
+    none.textContent = 'no blueprints saved yet';
+    body.appendChild(none);
+    return;
+  }
+  list.forEach((bp, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:10px; align-items:center; padding:7px 0; border-top:1px solid rgba(255,255,255,0.08);';
+    const nm = document.createElement('div');
+    nm.style.flex = '1';
+    const b = document.createElement('b'); b.textContent = bp.name;
+    const sub = document.createElement('div'); sub.className = 'sub';
+    sub.textContent = bp.rows.length + ' edits · ' +
+      bp.w.toFixed(1) + ' × ' + bp.h.toFixed(1) + ' × ' + bp.d.toFixed(1) + 'm';
+    nm.appendChild(b); nm.appendChild(sub);
+    const stamp = document.createElement('button');
+    stamp.className = 'btn small'; stamp.textContent = 'STAMP';
+    stamp.addEventListener('click', () => {
+      closeOverlay();
+      wrenchSys.startPaste({ items: CORE.deserializeEdits(bp.rows), w: bp.w, h: bp.h, d: bp.d });
+    });
+    const del = document.createElement('button');
+    del.className = 'btn small'; del.textContent = 'DELETE';
+    del.addEventListener('click', () => {
+      const L = loadBlueprints();
+      L.splice(i, 1);
+      saveBlueprintsList(L);
+      toast('deleted “' + bp.name + '”');
+      buildBlueUI();
+    });
+    row.appendChild(nm); row.appendChild(stamp); row.appendChild(del);
+    body.appendChild(row);
+  });
 }
 function openPause(){
   if (game.ui !== 'none') return;
@@ -5768,6 +6160,7 @@ function startWorld(id){
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
   game.edits = CORE.deserializeEdits(data.edits || []);
+  wrenchSys.clearSelection();
   game.mode = data.mode || 'creative';   // pre-survival saves stay creative
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   if (data.dispSlot !== undefined){
