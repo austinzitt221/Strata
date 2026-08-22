@@ -162,7 +162,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <h2>OPTIONS</h2>
     <div class="optrow"><label>MOUSE SENSITIVITY</label><input type="range" id="optSens" min="20" max="300" step="5"><span class="val" id="optSensV"></span></div>
     <div class="optrow"><label>FOV</label><input type="range" id="optFov" min="60" max="110" step="1"><span class="val" id="optFovV"></span></div>
-    <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="6" step="1"><span class="val" id="optRdV"></span></div>
+    <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="32" step="1"><span class="val" id="optRdV"></span></div>
+    <div class="optrow"><label>SHADOWS</label><input type="range" id="optShad" min="0" max="1" step="1"><span class="val" id="optShadV"></span></div>
+    <div class="optrow"><label>GOD RAYS</label><input type="range" id="optRays" min="0" max="1" step="1"><span class="val" id="optRaysV"></span></div>
+    <div class="optrow"><label>FPS CAP</label><input type="range" id="optFps" min="0" max="7" step="1"><span class="val" id="optFpsV"></span></div>
     <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
@@ -1107,18 +1110,40 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   // The SDF is a global min-distance, so walls darken nearby floors
   // (contact shadows) and concave corners deepen — the depth cues a flat
   // lit face otherwise lacks.
-  const AO_T = [0.25, 0.6, 1.1, 1.8];
-  const AO_W = [1, 0.55, 0.3, 0.17];         // sums to 2.02
+  const AO_T = [0.3, 0.8, 1.6];
+  const AO_W = [1, 0.5, 0.22];               // sums to 1.72
   function aoAt(px, py, pz, n){
     let occ = 0;
-    for (let i = 0; i < 4; i++){
+    for (let i = 0; i < 3; i++){
       const hd = AO_T[i];
       const d = evalSDF(px + n[0] * hd, py + n[1] * hd, pz + n[2] * hd, aoEdits, aoLgen);
       let o = (hd - d) / hd;
       if (o > 0) occ += AO_W[i] * (o > 1 ? 1 : o);
     }
-    const ao = 1 - 0.85 * (occ / 2.02);
+    const ao = 1 - 0.85 * (occ / 1.72);
     return ao < 0.22 ? 0.22 : ao;
+  }
+  // AO per DC VERTEX (not per quad): sampled at the cell vertex, cached by
+  // cell index — corners of every quad carry their own AO, so shading
+  // interpolates smoothly instead of stepping in per-quad bands. The tap
+  // direction comes from the already-computed field grid (free), and both
+  // grid and taps are position-pure, so chunk seams still agree.
+  let vAOCache = null;
+  function vertexAO(ci){
+    if (!vAOCache){ vAOCache = new Float32Array(C * C * C); vAOCache.fill(-1); }
+    let a = vAOCache[ci];
+    if (a >= 0) return a;
+    const cx_ = ci % C - 1, cy_ = ((ci / C) | 0) % C - 1, cz_ = ((ci / (C * C)) | 0) - 1;
+    const f = (dx, dy, dz) => field[FI(cx_ + dx, cy_ + dy, cz_ + dz)];
+    let gx = (f(1,0,0) + f(1,1,0) + f(1,0,1) + f(1,1,1)) - (f(0,0,0) + f(0,1,0) + f(0,0,1) + f(0,1,1));
+    let gy = (f(0,1,0) + f(1,1,0) + f(0,1,1) + f(1,1,1)) - (f(0,0,0) + f(1,0,0) + f(0,0,1) + f(1,0,1));
+    let gz = (f(0,0,1) + f(1,0,1) + f(0,1,1) + f(1,1,1)) - (f(0,0,0) + f(1,0,0) + f(0,1,0) + f(1,1,0));
+    const L = Math.sqrt(gx * gx + gy * gy + gz * gz);
+    if (L > 1e-6){ gx /= L; gy /= L; gz /= L; } else { gx = 0; gy = 1; gz = 0; }
+    const b = ci * 3;
+    a = aoAt(verts[b], verts[b + 1], verts[b + 2], [gx, gy, gz]);
+    vAOCache[ci] = a;
+    return a;
   }
   // skylight: 1 at/above the surface, fading out by ~10m of overburden —
   // computed from the same local height grid, so it's seam-consistent
@@ -1175,13 +1200,14 @@ function meshChunk(cx, cy, cz, allEdits, gen){
           // and used to flip triangles there (see-through holes).
           const flip = SOLID(d0);
           const sv = skyAt(h.px, h.py, h.pz);
-          const av = aoAt(h.px, h.py, h.pz, g);
+          const cAO = [vertexAO(c[0]), vertexAO(c[1]), vertexAO(c[2]), vertexAO(c[3])];
           // degenerate (zero-area) triangles are kept: they cost nothing to
           // draw and dropping them un-pairs their neighbors' edges
           for (const tri of (flip ? [[0, 2, 1], [0, 3, 2]] : [[0, 1, 2], [0, 2, 3]])){
             const a0 = tri[0]*3, a1 = tri[1]*3, a2 = tri[2]*3;
             pos.push(V[a0], V[a0+1], V[a0+2], V[a1], V[a1+1], V[a1+2], V[a2], V[a2+1], V[a2+2]);
-            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); aoA.push(av); }
+            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
+            aoA.push(cAO[tri[0]], cAO[tri[1]], cAO[tri[2]]);
           }
         }
       }
@@ -1753,17 +1779,20 @@ const TERRAIN_VERT = `
 attribute float aMat;
 attribute float aSky;
 attribute float aAO;
+uniform mat4 uShadowMatrix;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
 varying float vSky;
 varying float vAO;
+varying vec4 vShadowCoord;
 void main(){
   vPos = position;              // chunk meshes live in world space
   vNrm = normal;
   vMat = aMat;
   vSky = aSky;
   vAO = aAO;
+  vShadowCoord = uShadowMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const TERRAIN_FRAG = `
@@ -1781,6 +1810,12 @@ uniform float uLampR;
 uniform float uLampSky;
 uniform vec4 uTorch[16];
 uniform float uTorchN;
+uniform sampler2D uShadowMap;
+uniform float uShadowOn;
+uniform float uShadowTexel;
+uniform float uTime;
+uniform float uUnderwater;
+varying vec4 vShadowCoord;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
@@ -1804,6 +1839,11 @@ float vnoise(vec3 p){
   return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
              mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
 }
+// three.js RGBA depth packing (shadow maps store depth this way)
+float unpackRGBAToDepth(const in vec4 v){
+  const vec4 UnpackFactors = (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0);
+  return dot(v, UnpackFactors);
+}
 void main(){
   vec3 n = normalize(vNrm);
   vec3 an = abs(n);
@@ -1819,13 +1859,37 @@ void main(){
   float diff = max(dot(n, uSunDir), 0.0);
   float upAmb = 0.85 + 0.15 * n.y;       // cheap sky-occlusion feel
   float ao = vAO;
-  // AO hits ambient fully, direct sun about half — sunlit creases keep life
-  vec3 dayLit = min(uAmbCol * upAmb * ao + uSunCol * diff * (0.55 + 0.45 * ao), vec3(1.05));
+  // ---- real sun shadows: PCF over the directional shadow map ----
+  float sunVis = 1.0;
+  if (uShadowOn > 0.5){
+    vec3 sc = vShadowCoord.xyz / vShadowCoord.w;
+    if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0){
+      float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
+      float bias = max(0.0012, 0.0045 * (1.0 - ndl));
+      float z = sc.z - bias;
+      float lit = 0.0;
+      for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++){
+          vec2 o = vec2(float(dx), float(dy)) * uShadowTexel * 1.4;
+          lit += step(z, unpackRGBAToDepth(texture2D(uShadowMap, sc.xy + o)));
+        }
+      sunVis = lit / 9.0;
+    }
+  }
+  float dayF = clamp(uLampSky / 0.85 * 1.4, 0.0, 1.0);
+  sunVis = mix(1.0, sunVis, dayF);       // no phantom shadows at night
+  // drifting cloud shade (procedural, slow, soft)
+  sunVis *= 1.0 - dayF * 0.28 *
+    smoothstep(0.58, 0.82, vnoise(vec3(vPos.x * 0.045 + uTime * 0.055, 3.7, vPos.z * 0.045 + uTime * 0.013)));
+  // shadowed ground keeps cool sky ambient; direct sun is gated by sunVis
+  vec3 ambCol = mix(uAmbCol * vec3(0.90, 0.96, 1.10), uAmbCol, sunVis);
+  vec3 dayLit = min(ambCol * upAmb * ao * (0.78 + 0.22 * sunVis) +
+                    uSunCol * diff * (0.55 + 0.45 * ao) * sunVis, vec3(1.05));
   // headlamp: its own warm light, strongest where the day light isn't
   float lampD = length(vPos - uPlayerPos);
   float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
   lamp = lamp * lamp * (3.0 - 2.0 * lamp);
-  float aoP = 0.5 + 0.5 * ao;            // point lights take half the AO
+  float aoP = 0.85 + 0.15 * ao;          // placed light fills dark creases
   vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky)) * aoP;
   // placed torches
   float tl = 0.0;
@@ -1849,7 +1913,13 @@ void main(){
   if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * dark);
   if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
   float dist = gl_FragCoord.z / gl_FragCoord.w;
-  float fog = smoothstep(uFogNear, uFogFar, dist);
+  // fog range scales with skylight: the surface sees kilometres, caves fade
+  // to black within ~80m so depth still feels enclosed. Underwater overrides
+  // with short murk.
+  float ff = mix(80.0, uFogFar, clamp(vSky * 1.2, 0.0, 1.0));
+  float fn = ff * 0.42;
+  if (uUnderwater > 0.5){ ff = 30.0; fn = 4.0; }
+  float fog = smoothstep(fn, ff, dist);
   vec3 fogC = uFogCol * max(vSky, 0.03);  // fog goes black at depth
   gl_FragColor = vec4(mix(col, fogC, fog), 1.0);
 }`;
@@ -1948,6 +2018,7 @@ class Terrain {
     g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
     g.setAttribute('aAO', new THREE.BufferAttribute(data.aos, 1));
     const mesh = new THREE.Mesh(g, this.material);
+    mesh.castShadow = true;
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
     this.scene.add(mesh);
@@ -1985,6 +2056,7 @@ class Terrain {
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, game.waterMat);
+    mesh.userData.noShadow = true;
     mesh.renderOrder = 3;
     this.scene.add(mesh);
     ch.water = mesh;
@@ -2000,7 +2072,9 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 4, vol: 70 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, shadows: 1, rays: 1, fpsCap: 0 };
+// FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
+const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
   try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
   catch { return Object.assign({}, DEFAULT_OPTS); }
@@ -2151,6 +2225,8 @@ function capsuleFree(x, y, z, edits){
 function initRenderer(){
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // raw colors end to end
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.autoUpdate = false;   // we mark needsUpdate once per frame
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.domElement.className = 'game';
@@ -2170,12 +2246,12 @@ function buildScene(){
   const scene = new THREE.Scene();
   scene.background = SKY.clone();
   game.scene = scene;
-  const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 400);
+  const cam = new THREE.PerspectiveCamera(game.opts.fov, window.innerWidth / window.innerHeight, 0.08, 2600);
   cam.rotation.order = 'YXZ';
   game.camera = cam;
 
   game.atlas = buildAtlas(game.seed);
-  const fogFar = (game.opts.rd + 1) * CORE.CHUNK_M;
+  const fogFar = 1500;
   const mat = new THREE.ShaderMaterial({
     vertexShader: TERRAIN_VERT,
     fragmentShader: TERRAIN_FRAG,
@@ -2193,10 +2269,28 @@ function buildScene(){
       uLampSky: { value: 0.85 },
       uTorch: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, -9999, 0, 1)) },
       uTorchN: { value: 0 },
+      uShadowMap: { value: null },
+      uShadowMatrix: { value: new THREE.Matrix4() },
+      uShadowOn: { value: 0 },
+      uShadowTexel: { value: 1 / 4096 },
+      uTime: { value: 0 },
+      uUnderwater: { value: 0 },
     },
     side: THREE.DoubleSide,
   });
   game.terrainMat = mat;
+  // the sun light exists to drive the shadow map — props are unlit, and the
+  // terrain samples the map manually, so its intensity stays near zero
+  const sunL = new THREE.DirectionalLight(0xffffff, 0.0001);
+  sunL.castShadow = true;
+  sunL.shadow.mapSize.set(4096, 4096);
+  sunL.shadow.camera.near = 1;
+  sunL.shadow.camera.far = 460;
+  sunL.shadow.bias = 0;                    // biased manually in the shader
+  scene.add(sunL);
+  scene.add(sunL.target);
+  game.sunLight = sunL;
+  mat.uniforms.uShadowMatrix.value = sunL.shadow.matrix;
   game.terrain = new Terrain(scene, mat, game.edits, game.gen);
   game.terrain.radius = game.opts.rd + 1;
 
@@ -2217,6 +2311,7 @@ function buildScene(){
   for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false; game.ghostSet[k].wire.visible = false;
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
+    game.ghostSet[k].fill.userData.noShadow = true; game.ghostSet[k].wire.userData.noShadow = true;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
   // water surface material — per-chunk lake meshes are built alongside
@@ -2244,6 +2339,8 @@ function buildScene(){
   stoveSys.init(scene);
   bulbSys.init(scene);
   skySys.init(scene);
+  farTerrain.init(scene);
+  godRays.init();
   wrenchSys.init(scene);
   treeSys.init(scene);
   doorSys.init(scene);
@@ -2252,6 +2349,7 @@ function buildScene(){
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
 
+  cam.userData.noShadow = true;   // first-person rig never casts
   scene.add(cam);          // camera children (viewmodel) must be in the graph
   buildViewmodel(cam);
 }
@@ -2783,7 +2881,7 @@ function updateViewmodel(dt){
 
 function buildGridViz(cell){
   if (game.gridViz){ game.scene.remove(game.gridViz); game.gridViz.geometry.dispose(); game.gridViz = null; }
-  const L = 5; // lines each way
+  const L = 5; // lines each way (grid viz never casts — flagged below)
   const pts = [];
   const ext = L * cell;
   for (let i = -L; i <= L; i++){
@@ -2795,6 +2893,7 @@ function buildGridViz(cell){
   const m = new THREE.LineBasicMaterial({ color: 0x6fd3ff, transparent: true, opacity: 0.28, depthWrite: false });
   game.gridViz = new THREE.LineSegments(g, m);
   game.gridViz.renderOrder = 4;
+  game.gridViz.userData.noShadow = true;
   game.gridVizCell = cell;
   game.scene.add(game.gridViz);
 }
@@ -3057,6 +3156,7 @@ const skySys = {
   cloudGroup: null, clouds: [], cloudMat: null,
   init(scene){
     this.dome = new THREE.Group();               // follows the camera
+    this.dome.userData.noShadow = true;          // sky never casts
     scene.add(this.dome);
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xffedb0, depthWrite: false });
     this.sun = new THREE.Mesh(new THREE.CircleGeometry(24, 20), sunMat);
@@ -3089,6 +3189,7 @@ const skySys = {
     this.dome.add(this.stars);
     // clouds: rounded blob clusters drifting in world space
     this.cloudGroup = new THREE.Group();
+    this.cloudGroup.userData.noShadow = true;    // cloud shade is procedural
     scene.add(this.cloudGroup);
     this.cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.82, depthWrite: false });
     this.clouds = [];
@@ -4517,6 +4618,7 @@ const wrenchSys = {
     this.raycaster = new THREE.Raycaster();
     this.group = new THREE.Group();
     this.group.visible = false;
+    this.group.userData.noShadow = true;
     const wireM = new THREE.LineBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.95, depthWrite: false });
     const cubeG = new THREE.BoxGeometry(1, 1, 1);
     this.wires = {
@@ -4563,6 +4665,7 @@ const wrenchSys = {
     }
     this.pasteGroup = new THREE.Group();
     this.pasteGroup.visible = false;
+    this.pasteGroup.userData.noShadow = true;
     scene.add(this.pasteGroup);
     this.sel = -1; this.selSet = []; this.drag = null; this.paste = null;
   },
@@ -6085,6 +6188,9 @@ function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
   $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
+  $('optShad').value = o.shadows; $('optRays').value = o.rays;
+  const fi = FPS_STOPS.indexOf(o.fpsCap);
+  $('optFps').value = fi < 0 ? 7 : fi;
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -6094,14 +6200,21 @@ function openOptions(from){
 function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
-  $('optRdV').textContent = $('optRd').value;
+  $('optRdV').textContent = ($('optRd').value * CORE.CHUNK_M) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
+  $('optShadV').textContent = +$('optShad').value ? 'on' : 'off';
+  $('optRaysV').textContent = +$('optRays').value ? 'on' : 'off';
+  const fc = FPS_STOPS[+$('optFps').value];
+  $('optFpsV').textContent = fc ? fc : 'MAX';
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
   game.opts.fov = +$('optFov').value;
   game.opts.rd = +$('optRd').value;
   game.opts.vol = +$('optVol').value;
+  game.opts.shadows = +$('optShad').value;
+  game.opts.rays = +$('optRays').value;
+  game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
   AudioSys.setVolume(game.opts.vol);
   saveOpts(game.opts);
   if (game.camera){
@@ -6109,11 +6222,13 @@ function applyOptions(){
   }
   if (game.terrain){
     game.terrain.radius = game.opts.rd + 1;
-    const fogFar = (game.opts.rd + 1) * CORE.CHUNK_M;
-    game.terrainMat.uniforms.uFogNear.value = fogFar * 0.55;
-    game.terrainMat.uniforms.uFogFar.value = fogFar;
+    // the surface fog now reaches the far-terrain horizon; the shader pulls
+    // it in for caves (sky-scaled) and underwater on its own
+    game.terrainMat.uniforms.uFogNear.value = 600;
+    game.terrainMat.uniforms.uFogFar.value = 1500;
     game.forceStream = true;
   }
+  if (farTerrain.mesh) farTerrain.dirty = true;
 }
 function closeOptions(){
   applyOptions();
@@ -6310,8 +6425,268 @@ function quitToTitle(){
 // ---------- main loop ----------
 let lastT = performance.now();
 let lastChunk = null;
+// ---------- far terrain: a low-res heightfield skin out to ~1.6km ----------
+// Real chunks stop at the render-distance radius; beyond that this single
+// 8m-grid mesh carries the horizon — mountains, valleys, distant water —
+// sunk 0.45m under the true surface so full-detail chunks always win the
+// depth test. Built amortized (a few rows per frame), recentered when the
+// player strays 300m from its center.
+const farTerrain = {
+  mesh: null, mat: null, geoDirty: false, dirty: true, cx: 1e9, cz: 1e9, job: null,
+  R: 1600, STEP: 8,
+  init(scene){
+    this.scene = scene;
+    this.mesh = null; this.job = null; this.dirty = true; this.cx = 1e9; this.cz = 1e9;
+    const tu = game.terrainMat.uniforms;
+    this.mat = new THREE.ShaderMaterial({
+      vertexColors: true,
+      uniforms: {
+        uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
+        uFogCol: tu.uFogCol, uPlayerPos: tu.uPlayerPos,
+        uNearCut: { value: 40 },
+      },
+      vertexShader: `
+        varying vec3 vCol; varying vec3 vN; varying vec3 vW;
+        void main(){
+          vCol = color; vN = normal; vW = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        precision highp float;
+        uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol;
+        uniform vec3 uFogCol; uniform vec3 uPlayerPos; uniform float uNearCut;
+        varying vec3 vCol; varying vec3 vN; varying vec3 vW;
+        void main(){
+          if (distance(vW.xz, uPlayerPos.xz) < uNearCut) discard;
+          vec3 n = normalize(vN);
+          float diff = max(dot(n, uSunDir), 0.0);
+          vec3 lit = uAmbCol * (0.85 + 0.15 * n.y) + uSunCol * diff;
+          vec3 col = vCol * min(lit, vec3(1.05));
+          float dist = gl_FragCoord.z / gl_FragCoord.w;
+          float fog = smoothstep(600.0, 1480.0, dist);
+          gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
+        }`,
+    });
+  },
+  update(){
+    if (!game.gen || !this.mat) return;
+    this.mat.uniforms.uNearCut.value = Math.max(24, (game.opts.rd - 1) * CORE.CHUNK_M);
+    const px = game.pos.x, pz = game.pos.z;
+    // rebuilds are cheap but not free — cap them to one every 8s so rapid
+    // teleports (or fast flight) don't starve the chunk mesher
+    const nowS = performance.now() / 1000;
+    if (!this.job && (this.dirty || Math.hypot(px - this.cx, pz - this.cz) > 300) &&
+        (this.dirty || !this.lastBuild || nowS - this.lastBuild > 8)){
+      this.dirty = false;
+      this.lastBuild = nowS;
+      const st = this.STEP;
+      this.cx = Math.round(px / st) * st;
+      this.cz = Math.round(pz / st) * st;
+      const n = Math.round(2 * this.R / st);
+      this.job = { n, row: 0, h: new Float32Array((n + 1) * (n + 1)),
+                   col: new Float32Array((n + 1) * (n + 1) * 3) };
+    }
+    if (this.job) this.stepJob();
+  },
+  stepJob(){
+    const j = this.job, st = this.STEP, n = j.n;
+    const x0 = this.cx - this.R, z0 = this.cz - this.R;
+    const gen = game.gen, sea = gen.seaLevel != null ? gen.seaLevel : -1e9;
+    const rows = 5;
+    for (let r = 0; r < rows && j.row <= n; r++, j.row++){
+      const z = z0 + j.row * st;
+      for (let i = 0; i <= n; i++){
+        const x = x0 + i * st;
+        let h = gen.height(x, z);
+        const k = j.row * (n + 1) + i;
+        if (h < sea){
+          j.h[k] = sea - 0.25;
+          j.col[k*3] = 0.14; j.col[k*3+1] = 0.35; j.col[k*3+2] = 0.58;
+        } else {
+          j.h[k] = h - 0.45;                       // sink under real chunks
+          const m = gen.mat(x, h - 0.4, z) || 1;
+          const c = MAT_COLOR[m] != null ? MAT_COLOR[m] : 0x777777;
+          const vary = 0.92 + 0.13 * (((x * 7 + z * 13) & 15) / 15);
+          j.col[k*3]   = ((c >> 16 & 255) / 255) * vary;
+          j.col[k*3+1] = ((c >> 8 & 255) / 255) * vary;
+          j.col[k*3+2] = ((c & 255) / 255) * vary;
+        }
+      }
+    }
+    if (j.row <= n) return;
+    // rows complete: assemble the mesh
+    const N1 = n + 1;
+    const pos = new Float32Array(N1 * N1 * 3);
+    const nrm = new Float32Array(N1 * N1 * 3);
+    for (let r = 0; r <= n; r++){
+      for (let i = 0; i <= n; i++){
+        const k = r * N1 + i;
+        pos[k*3] = x0 + i * st; pos[k*3+1] = j.h[k]; pos[k*3+2] = z0 + r * st;
+        const hl = j.h[r * N1 + Math.max(0, i - 1)], hr = j.h[r * N1 + Math.min(n, i + 1)];
+        const hd = j.h[Math.max(0, r - 1) * N1 + i], hu = j.h[Math.min(n, r + 1) * N1 + i];
+        const nx = hl - hr, nz = hd - hu, ny = 2 * st;
+        const L = Math.hypot(nx, ny, nz) || 1;
+        nrm[k*3] = nx / L; nrm[k*3+1] = ny / L; nrm[k*3+2] = nz / L;
+      }
+    }
+    const idx = new Uint32Array(n * n * 6);
+    let q = 0;
+    for (let r = 0; r < n; r++)
+      for (let i = 0; i < n; i++){
+        const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
+        idx[q++] = a; idx[q++] = c; idx[q++] = b;
+        idx[q++] = b; idx[q++] = c; idx[q++] = d;
+      }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(j.col, 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    if (this.mesh){ this.scene.remove(this.mesh); this.mesh.geometry.dispose(); }
+    this.mesh = new THREE.Mesh(g, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.userData.noShadow = true;
+    this.scene.add(this.mesh);
+    this.job = null;
+  },
+};
+
+// ---------- god rays: screen-space light shafts from the sun ----------
+// Occlusion buffer (bright sun disc, world silhouetted black) radially
+// blurred toward the sun's screen position, added over the frame.
+const godRays = {
+  occRT: null, black: null, sunScene: null, sunMesh: null,
+  quadScene: null, quadCam: null, quadMat: null, pending: false,
+  init(){
+    if (!this.occRT){
+      this.occRT = new THREE.WebGLRenderTarget(384, 216);
+      this.black = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      this.sunScene = new THREE.Scene();
+      this.sunMesh = new THREE.Mesh(new THREE.CircleGeometry(30, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
+      this.sunScene.add(this.sunMesh);
+      this.quadCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      this.quadScene = new THREE.Scene();
+      this.quadMat = new THREE.ShaderMaterial({
+        uniforms: {
+          tOcc: { value: this.occRT.texture },
+          uSunPos: { value: new THREE.Vector2(0.5, 0.5) },
+          uStrength: { value: 0 },
+        },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+        fragmentShader: `
+          uniform sampler2D tOcc; uniform vec2 uSunPos; uniform float uStrength;
+          varying vec2 vUv;
+          void main(){
+            vec2 d = (uSunPos - vUv) / 46.0;
+            vec2 uv = vUv;
+            float acc = 0.0, w = 1.0, tot = 0.0;
+            for (int i = 0; i < 46; i++){
+              uv += d;
+              acc += texture2D(tOcc, uv).r * w;
+              tot += w;
+              w *= 0.955;
+            }
+            float ray = acc / tot;
+            gl_FragColor = vec4(vec3(1.0, 0.93, 0.72) * ray * uStrength, 1.0);
+          }`,
+        blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, transparent: true,
+      });
+      this.quadScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.quadMat));
+    }
+  },
+  prepass(){
+    this.pending = false;
+    if (!game.opts.rays || !this.occRT || game.dayF < 0.06 || game.underwater) return;
+    const sd = game.terrainMat.uniforms.uSunDir.value;
+    const sunW = new THREE.Vector3().copy(game.camera.position).addScaledVector(sd, 300);
+    const pr = sunW.clone().project(game.camera);
+    if (pr.z > 1 || Math.abs(pr.x) > 1.5 || Math.abs(pr.y) > 1.5) return;
+    this.sunMesh.position.copy(sunW);
+    this.sunMesh.quaternion.copy(game.camera.quaternion);
+    const r = game.renderer;
+    const su = r.shadowMap.needsUpdate;
+    r.shadowMap.needsUpdate = false;               // no shadow work in the prepass
+    r.setRenderTarget(this.occRT);
+    r.setClearColor(0x000000, 1);
+    r.clear(true, true);
+    r.render(this.sunScene, game.camera);
+    // silhouette the world: hide overlays (they share the noShadow flag),
+    // paint everything else black over the sun disc
+    const hidden = [];
+    game.scene.traverse(o => {
+      if (o.userData && o.userData.noShadow && o.visible){ o.visible = false; hidden.push(o); }
+    });
+    const bg = game.scene.background;
+    game.scene.background = null;
+    game.scene.overrideMaterial = this.black;
+    const ac = r.autoClear;
+    r.autoClear = false;
+    r.render(game.scene, game.camera);
+    r.autoClear = ac;
+    game.scene.overrideMaterial = null;
+    game.scene.background = bg;
+    for (const o of hidden) o.visible = true;
+    r.setRenderTarget(null);
+    r.shadowMap.needsUpdate = su;
+    this.quadMat.uniforms.uSunPos.value.set(pr.x * 0.5 + 0.5, pr.y * 0.5 + 0.5);
+    this.quadMat.uniforms.uStrength.value = 0.5 * game.dayF;
+    this.pending = true;
+  },
+  composite(){
+    if (!this.pending) return;
+    const r = game.renderer;
+    const ac = r.autoClear;
+    r.autoClear = false;
+    r.render(this.quadScene, this.quadCam);
+    r.autoClear = ac;
+  },
+};
+
+// mark every world mesh a shadow caster, skipping flagged subtrees
+// (ghost previews, sky, clouds, water, the first-person rig, gizmos)
+function markCasters(node){
+  if (node.userData && node.userData.noShadow) return;
+  if (node.isMesh && !node.castShadow) node.castShadow = true;
+  for (const ch of node.children) markCasters(ch);
+}
+let castMarkT = 0;
+function updateSunShadow(dt){
+  const L = game.sunLight;
+  if (!L || !game.terrainMat) return;
+  const u = game.terrainMat.uniforms;
+  u.uTime.value += dt;
+  const on = game.opts.shadows !== 0;
+  L.castShadow = on;
+  if (!on){ u.uShadowOn.value = 0; return; }
+  castMarkT -= dt;
+  if (castMarkT <= 0){ castMarkT = 1.0; markCasters(game.scene); }
+  const sd = u.uSunDir.value;                       // unit vector toward the sun
+  const sr = Math.min(220, Math.max(70, (game.opts.rd + 3) * CORE.CHUNK_M));
+  const cam = L.shadow.camera;
+  if (cam.right !== sr){
+    cam.left = -sr; cam.right = sr; cam.top = sr; cam.bottom = -sr;
+    cam.updateProjectionMatrix();
+  }
+  // snap the anchor to shadow texels so edges don't shimmer while walking
+  const texel = (2 * sr) / L.shadow.mapSize.width;
+  const ax = Math.round(game.pos.x / texel) * texel;
+  const ay = Math.round(game.pos.y / texel) * texel;
+  const az = Math.round(game.pos.z / texel) * texel;
+  L.position.set(ax + sd.x * 220, ay + sd.y * 220, az + sd.z * 220);
+  L.target.position.set(ax, ay, az);
+  L.target.updateMatrixWorld();
+  game.renderer.shadowMap.needsUpdate = true;
+  u.uShadowTexel.value = 1 / L.shadow.mapSize.width;
+  if (L.shadow.map){
+    u.uShadowMap.value = L.shadow.map.texture;
+    u.uShadowOn.value = 1;
+  }
+}
 function frame(now){
   requestAnimationFrame(frame);
+  if (game.opts.fpsCap > 0 && now - (game.lastFrameT || 0) < 1000 / game.opts.fpsCap - 0.5) return;
+  game.lastFrameT = now;
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   if (!game.running || !game.scene){ return; }
@@ -6344,6 +6719,8 @@ function frame(now){
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
   updateDayNight(dt);
   skySys.update(dt);
+  updateSunShadow(dt);
+  farTerrain.update();
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
@@ -6397,8 +6774,10 @@ function frame(now){
     if (game.underwater){
       game.scene.background.setRGB(0.07, 0.2, 0.34).multiplyScalar(Math.max(skyF, 0.35));
       game.terrainMat.uniforms.uFogCol.value.copy(game.scene.background);
+      game.terrainMat.uniforms.uUnderwater.value = 1;
     } else {
       game.terrainMat.uniforms.uFogCol.value.copy(game.skyNow || SKY);
+      game.terrainMat.uniforms.uUnderwater.value = 0;
     }
     const home = beaconSys.nearest() || [0, 0, 0];
     const dist = Math.hypot(home[0] - game.pos.x, home[2] - game.pos.z);
@@ -6417,7 +6796,9 @@ function frame(now){
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
 
+  godRays.prepass();
   game.renderer.render(game.scene, game.camera);
+  godRays.composite();
 
   game.fpsAcc += dt; game.fpsN++;
   if (game.fpsAcc >= 0.5){
@@ -6453,7 +6834,7 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps']) $(id).addEventListener('input', syncOptLabels);
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
 
