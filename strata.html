@@ -866,6 +866,12 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   }
   // chunk-local gen: exact at sample columns, bilinear between (seam-safe)
   const lgen = gen.makeLocal(box[0], box[2], box[3], box[5]);
+  // AO taps reach ~1.4m past the surface, so they get their own wider local
+  // gen (lattice-aligned, never edge-clamped) and a wider position-culled
+  // edit set — both are pure functions of world position, so neighboring
+  // chunks bake identical AO along their shared seam
+  const aoLgen = gen.makeLocal(box[0] - 2, box[2] - 2, box[3] + 2, box[5] + 2);
+  const aoEdits = cullEdits(allEdits, box, 2.5);
 
   const S = N + 2;                       // samples -1..N per axis
   const field = new Float32Array(S * S * S);
@@ -1095,7 +1101,25 @@ function meshChunk(cx, cy, cz, allEdits, gen){
         if (cellVertex(x, y, z)) hasVert[CI(x, y, z)] = 1;
 
   // emit quads for owned sign-change edges
-  const pos = [], nrm = [], mat = [], sky = [];
+  const pos = [], nrm = [], mat = [], sky = [], aoA = [];
+  // SDF ambient occlusion, baked per quad: march along the normal and
+  // compare the free space the field grants against the march distance.
+  // The SDF is a global min-distance, so walls darken nearby floors
+  // (contact shadows) and concave corners deepen — the depth cues a flat
+  // lit face otherwise lacks.
+  const AO_T = [0.25, 0.6, 1.1, 1.8];
+  const AO_W = [1, 0.55, 0.3, 0.17];         // sums to 2.02
+  function aoAt(px, py, pz, n){
+    let occ = 0;
+    for (let i = 0; i < 4; i++){
+      const hd = AO_T[i];
+      const d = evalSDF(px + n[0] * hd, py + n[1] * hd, pz + n[2] * hd, aoEdits, aoLgen);
+      let o = (hd - d) / hd;
+      if (o > 0) occ += AO_W[i] * (o > 1 ? 1 : o);
+    }
+    const ao = 1 - 0.85 * (occ / 2.02);
+    return ao < 0.22 ? 0.22 : ao;
+  }
   // skylight: 1 at/above the surface, fading out by ~10m of overburden —
   // computed from the same local height grid, so it's seam-consistent
   function skyAt(px, py, pz){
@@ -1151,12 +1175,13 @@ function meshChunk(cx, cy, cz, allEdits, gen){
           // and used to flip triangles there (see-through holes).
           const flip = SOLID(d0);
           const sv = skyAt(h.px, h.py, h.pz);
+          const av = aoAt(h.px, h.py, h.pz, g);
           // degenerate (zero-area) triangles are kept: they cost nothing to
           // draw and dropping them un-pairs their neighbors' edges
           for (const tri of (flip ? [[0, 2, 1], [0, 3, 2]] : [[0, 1, 2], [0, 2, 3]])){
             const a0 = tri[0]*3, a1 = tri[1]*3, a2 = tri[2]*3;
             pos.push(V[a0], V[a0+1], V[a0+2], V[a1], V[a1+1], V[a1+2], V[a2], V[a2+1], V[a2+2]);
-            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
+            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); aoA.push(av); }
           }
         }
       }
@@ -1168,6 +1193,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     normals: new Float32Array(nrm),
     mats: new Float32Array(mat),
     skys: new Float32Array(sky),
+    aos: new Float32Array(aoA),
   };
 }
 
@@ -1726,15 +1752,18 @@ function tileCanvas(matId, seed){
 const TERRAIN_VERT = `
 attribute float aMat;
 attribute float aSky;
+attribute float aAO;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
 varying float vSky;
+varying float vAO;
 void main(){
   vPos = position;              // chunk meshes live in world space
   vNrm = normal;
   vMat = aMat;
   vSky = aSky;
+  vAO = aAO;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
 const TERRAIN_FRAG = `
@@ -1756,6 +1785,25 @@ varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
 varying float vSky;
+varying float vAO;
+// large-scale world-anchored luminance variation: gives big single-material
+// faces landmarks that slide with parallax instead of a uniform sheet.
+// Lattice is wrapped mod 64 before hashing so sin() stays precise far from
+// the origin; corner hashes stay consistent across the wrap, so no seams.
+float hash3(vec3 p){
+  p = mod(p, 64.0);
+  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+float vnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash3(i),                  b = hash3(i + vec3(1, 0, 0));
+  float c = hash3(i + vec3(0, 1, 0)),  d = hash3(i + vec3(1, 1, 0));
+  float e = hash3(i + vec3(0, 0, 1)),  g = hash3(i + vec3(1, 0, 1));
+  float h = hash3(i + vec3(0, 1, 1)),  k = hash3(i + vec3(1, 1, 1));
+  return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
+             mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
+}
 void main(){
   vec3 n = normalize(vNrm);
   vec3 an = abs(n);
@@ -1770,12 +1818,15 @@ void main(){
   vec4 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy));
   float diff = max(dot(n, uSunDir), 0.0);
   float upAmb = 0.85 + 0.15 * n.y;       // cheap sky-occlusion feel
-  vec3 dayLit = min(uAmbCol * upAmb + uSunCol * diff, vec3(1.05));
+  float ao = vAO;
+  // AO hits ambient fully, direct sun about half — sunlit creases keep life
+  vec3 dayLit = min(uAmbCol * upAmb * ao + uSunCol * diff * (0.55 + 0.45 * ao), vec3(1.05));
   // headlamp: its own warm light, strongest where the day light isn't
   float lampD = length(vPos - uPlayerPos);
   float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
   lamp = lamp * lamp * (3.0 - 2.0 * lamp);
-  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky));
+  float aoP = 0.5 + 0.5 * ao;            // point lights take half the AO
+  vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky)) * aoP;
   // placed torches
   float tl = 0.0;
   for (int i = 0; i < 16; i++){
@@ -1784,8 +1835,15 @@ void main(){
     float t = clamp(1.0 - td / uTorch[i].w, 0.0, 1.0);
     tl = max(tl, t * t * (3.0 - 2.0 * t));
   }
-  vec3 torchLit = vec3(1.0, 0.72, 0.42) * (0.9 * tl);
-  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + torchLit + vec3(0.02), vec3(1.05));
+  vec3 torchLit = vec3(1.0, 0.72, 0.42) * (0.9 * tl) * aoP;
+  vec3 col = tex.rgb * min(dayLit * vSky + lampLit + torchLit + vec3(0.02 * ao + 0.005), vec3(1.05));
+  // world-anchored luminance variation (~3m scale, ±5%)
+  col *= 0.95 + 0.10 * vnoise(vPos * 0.33);
+  // near-field falloff: surfaces inside ~5m pick up a soft radial gradient
+  // that grows as you close in — a continuous "you are approaching" cue a
+  // uniformly lit face never gives
+  float nearGlow = clamp(1.0 - lampD / 5.5, 0.0, 1.0);
+  col *= 1.0 + 0.10 * nearGlow * nearGlow;
   // ores shimmer faintly in the dark so veins catch the eye
   float dark = 1.0 - min(vSky, 1.0) * (uLampSky / 0.85);
   if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * dark);
@@ -1888,6 +1946,7 @@ class Terrain {
     g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mats, 1));
     g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
+    g.setAttribute('aAO', new THREE.BufferAttribute(data.aos, 1));
     const mesh = new THREE.Mesh(g, this.material);
     mesh.frustumCulled = true;
     g.computeBoundingSphere();

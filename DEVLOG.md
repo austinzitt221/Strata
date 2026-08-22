@@ -2,6 +2,50 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.4.1 — depth cues: SDF ambient occlusion + shading gradients (2026-08-22)
+
+Playtest report (second tester): approaching a cube face head-on felt like a
+2D square scaling up, not a surface getting closer — motion sickness. Root
+cause confirmed by screenshot: lighting was `ambient + sun·diffuse`, both
+constant across a face, so a wall filled the screen as one perfectly uniform
+sheet. Zero depth gradients of any kind.
+
+Three fixes, all shading:
+
+### Baked SDF ambient occlusion (the big one)
+The world IS a distance field, so real AO is nearly free: at mesh time,
+each quad marches 4 taps along its normal (0.25–1.8m) and compares the free
+space `evalSDF` grants against the march distance. Because the SDF is a
+global min-distance, this also darkens floors near walls and wall bases near
+floors — contact shadows for free, which grounds every placed cube instead
+of leaving it pasted onto the scene. Baked to an `aAO` vertex attribute
+(same path as the `aSky` bake); AO multiplies ambient fully, direct sun
+~half, point lights (lamp/torch) half. Seam-consistency: taps use a wider
+lattice-aligned local gen (never edge-clamped) and a position-culled edit
+set, so neighboring chunks bake identical AO at the boundary.
+
+### World-anchored luminance variation
+Value noise at ~3m scale (±5%) multiplied into the final color. Big
+single-material faces get gentle landmarks that slide with parallax instead
+of reading as one flat poster. The hash lattice wraps mod 64 so sin() stays
+precise far from the origin without seams.
+
+### Near-field radial gradient
+Fragments inside ~5.5m get a soft brightness lift that peaks at the player
+(+10%, quadratic falloff). Head-on approach now produces a continuously
+growing radial hotspot — a "you are getting closer" signal that pure
+texture scaling never provides.
+
+Deferred: true sun shadow-mapping (needs manual shadow sampling in the
+custom shader — revisit if AO isn't enough in playtest).
+
+### Verification
+- 232 headless tests (6 new: aos attribute shape, flat ground unoccluded,
+  contact shadow at a cube base, bright ground away from it, mined-interior
+  corner darkening, deterministic bake).
+- Before/after screenshot sequences head-on and at an angle.
+- Full smoke green (incl. cave entries, night, purity), zero console errors.
+
 ## Build 5.4 — the editor completed: multi-select, copy/paste, blueprints (2026-08-22)
 
 ### Multi-select (shift + right click)
