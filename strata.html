@@ -288,12 +288,12 @@ const N = 16;                 // cells per chunk edge
 const CHUNK_M = N * VOX;      // chunk edge in meters (8)
 const SURFACE_Y = 0.01;       // base rock plane (off-grid to avoid exact-zero samples)
 const BEDROCK_Y = -63.99;     // everything below is permanently solid
-const CY_MIN = -8, CY_MAX = 5; // vertical chunk range: y in [-64, +48) meters
+const CY_MIN = -8, CY_MAX = 13; // vertical chunk range: y in [-64, +112) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14 };
-const NMAT = 14;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17 };
+const NMAT = 17;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -371,6 +371,8 @@ const ORE_TYPES = [
   { mat: MAT.COAL,       yMin: -34,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
 ];
 const VEIN_CELL = 4;
+const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic'];
+const REGION = 520;            // macro-region cell edge (m)
 function makeGen(seed){
   seed = seed >>> 0;
   const sH = hashInt(seed ^ 0x68e31da4), sR = hashInt(seed ^ 0xb5297a4d);
@@ -379,24 +381,145 @@ function makeGen(seed){
   const sV = hashInt(seed ^ 0x2545f491), sW = hashInt(seed ^ 0x3c6ef372);
   const sE = hashInt(seed ^ 0xdaa66d2b), sM = hashInt(seed ^ 0x14057b7f);
   const sU = hashInt(seed ^ 0x27d4eb2f), sU2 = hashInt(seed ^ 0x165667b1);
+  const sRg = hashInt(seed ^ 0x5bd1e995), sWp = hashInt(seed ^ 0xcc9e2d51);
 
   const seaLevel = -1.5;   // global water table: valleys and caves below flood
-  function biome(x, z){ return fbm2(sB, x * 0.0045, z * 0.0045, 2); }
-  function height(x, z){
-    const b = biome(x, z);
-    const base = fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5;
-    const hillW = sstep(0.32, 0.52, b);
-    const mtnW = sstep(0.56, 0.78, b);
-    const amp = 2.5 + 7 * hillW + 5 * mtnW;
-    let h = base * 2 * amp;
-    if (mtnW > 0){
-      const r = 1 - Math.abs(2 * fbm2(sR, x * 0.011, z * 0.011, 3) - 1);
-      h += mtnW * r * r * 24;
+  // ---- macro-regions: warped Voronoi cells (~520m), each committed to one
+  // of 8 terrain archetypes. Height blends between the two nearest region
+  // sites near borders; everything discrete (surface mats, trees, decor,
+  // water-vs-lava) reads the nearest site only.
+  const regionCache = new Map();
+  function regionCell(cx, cz){
+    const key = cx + ',' + cz;
+    let R = regionCache.get(key);
+    if (R !== undefined) return R;
+    const h0 = hashInt(sRg ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    const arch = hashInt(h0 ^ 7) % 8;
+    R = {
+      sx: (cx + 0.18 + (hashInt(h0 ^ 1) / 4294967296) * 0.64) * REGION,
+      sz: (cz + 0.18 + (hashInt(h0 ^ 3) / 4294967296) * 0.64) * REGION,
+      arch, lm: null,
+    };
+    // landmarks: at most one set-piece per region, kept >= 132m inside the
+    // cell so its whole footprint stays in this cell (lookups stay O(1) and
+    // heightRange can enumerate exactly the cells a chunk overlaps)
+    if (hashInt(h0 ^ 11) / 4294967296 < 0.45){
+      const pick = hashInt(h0 ^ 23) / 4294967296;
+      let lm = null;
+      if (arch === 7)      lm = { type: 'volcano', r: 110, crR: 17, coneH: 60, crD: 30 };
+      else if (arch === 2 || arch === 6){ if (pick < 0.6) lm = { type: 'monolith', r: 7.5, h: 44 }; }
+      else if (arch === 3) lm = pick < 0.5 ? { type: 'sinkhole', r: 26, d: 46 }
+                                           : { type: 'monolith', r: 7.5, h: 44 };
+      else lm = pick < 0.38 ? { type: 'sinkhole', r: 26, d: 46 }
+             : pick < 0.72 ? { type: 'craterlake', r: 55 }
+             : { type: 'monolith', r: 7.5, h: 44 };
+      if (lm){
+        lm.x = cx * REGION + 132 + (hashInt(h0 ^ 13) / 4294967296) * (REGION - 264);
+        lm.z = cz * REGION + 132 + (hashInt(h0 ^ 17) / 4294967296) * (REGION - 264);
+        const base = archH(arch, lm.x, lm.z);
+        lm.peak = lm.type === 'volcano' ? base + lm.coneH + 8
+                : lm.type === 'monolith' ? base + lm.h + 8
+                : lm.type === 'craterlake' ? Math.max(base, seaLevel + 5) + 6
+                : base + 6;
+        lm.floor = lm.type === 'sinkhole' ? base - lm.d - 6
+                 : lm.type === 'craterlake' ? seaLevel - 12
+                 : base - 6;
+        // sinkholes on dry land are dry shafts into the deep; ones whose
+        // surroundings already sit below sea flood like any other basin
+        if (lm.type === 'sinkhole') lm.dry = base > seaLevel + 0.5;
+        R.lm = lm;
+      }
     }
-    return Math.max(-6, Math.min(30, h));
+    regionCache.set(key, R);
+    return R;
   }
-  function isDesert(x, z){
-    return fbm2(sD, x * 0.004 + 37.7, z * 0.004, 2) > 0.62 && biome(x, z) < 0.45;
+  function regionQuery(x, z){
+    // domain warp wobbles the borders so cells never read as straight lines
+    const wx = x + (fbm2(sWp, x * 0.0032, z * 0.0032, 2) - 0.5) * 156;
+    const wz = z + (fbm2(sWp, x * 0.0032 + 71.3, z * 0.0032 + 29.7, 2) - 0.5) * 156;
+    const cx = Math.floor(wx / REGION), cz = Math.floor(wz / REGION);
+    let d1 = 1e18, d2 = 1e18, s1 = null, s2 = null;
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const S = regionCell(cx + dx, cz + dz);
+      const ddx = wx - S.sx, ddz = wz - S.sz, d = ddx * ddx + ddz * ddz;
+      if (d < d1){ d2 = d1; s2 = s1; d1 = d; s1 = S; }
+      else if (d < d2){ d2 = d; s2 = S; }
+    }
+    // nearest-site weight: 0.5 exactly on the border -> 1 well inside
+    const w = 0.5 + 0.5 * Math.min(1, (Math.sqrt(d2) - Math.sqrt(d1)) / 90);
+    return { a: s1, b: s2 || s1, w };
+  }
+  function archAt(x, z){ return regionQuery(x, z).a.arch; }
+  function lmAt(x, z){
+    return regionCell(Math.floor(x / REGION), Math.floor(z / REGION)).lm;
+  }
+  // per-archetype heightfields (sea level is -1.5)
+  function archH(a, x, z){
+    switch (a){
+      case 0:   // plains: gentle meadow swells
+        return 1.6 + (fbm2(sH, x * 0.015, z * 0.015, 3) - 0.5) * 8;
+      case 1:   // hills: big rolling waves
+        return 4 + (fbm2(sH, x * 0.011, z * 0.011, 3) - 0.5) * 26;
+      case 2: { // sharp ranges: ridged noise, knife crests
+        const r = 1 - Math.abs(2 * fbm2(sR, x * 0.008, z * 0.008, 3) - 1);
+        return 6 + (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 10 + r * r * r * 54;
+      }
+      case 3: { // mesa badlands: stepped plateaus cut by slot canyons
+        const n = fbm2(sH, x * 0.0085, z * 0.0085, 3);
+        const t = n * 5.2, st = Math.floor(t);
+        const h = -2 + (st + sstep(0.72, 0.94, t - st)) * 7;
+        const cy = 1 - Math.abs(2 * fbm2(sR, x * 0.005, z * 0.005, 2) - 1);
+        return h - sstep(0.84, 0.96, cy) * (h + 6);
+      }
+      case 4:   // dunes: wind-stretched sand waves
+        return 2.2 + (fbm2(sH, x * 0.024, z * 0.008, 3) - 0.5) * 10
+                   + (fbm2(sR, x * 0.005, z * 0.005, 2) - 0.5) * 6;
+      case 5:   // swamp: near-sea flats pocked with pools
+        return -1.1 + (fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5) * 5.5;
+      case 6: { // glacier: high ice sheet split by crevasses
+        const c = 1 - Math.abs(2 * fbm2(sR, x * 0.021, z * 0.021, 2) - 1);
+        return 11 + (fbm2(sH, x * 0.01, z * 0.01, 3) - 0.5) * 18 - sstep(0.88, 0.97, c) * 9;
+      }
+      default:  // 7 volcanic: rough basalt fields
+        return 2.6 + (fbm2(sH, x * 0.018, z * 0.018, 3) - 0.5) * 13;
+    }
+  }
+  function lmApply(L, x, z, h){
+    const d = Math.hypot(x - L.x, z - L.z);
+    if (d >= L.r) return h;
+    const u = d / L.r;
+    if (L.type === 'volcano'){
+      h += Math.pow(1 - u, 1.45) * L.coneH;
+      if (d < L.crR){ const c = d / L.crR; h -= (1 - c * c) * L.crD; }
+      return h;
+    }
+    if (L.type === 'monolith') return h + sstep(1, 0.45, u) * L.h;
+    if (L.type === 'sinkhole') return h - sstep(1, 0.55, u) * L.d;
+    // crater lake: blend toward a bowl-below-sea ringed by a raised rim
+    const w = 1 - sstep(0.78, 1, u);
+    const target = (seaLevel - 6) + sstep(0.3, 0.78, u) * 10.5;
+    return h + (target - h) * w;
+  }
+  function height(x, z){
+    const q = regionQuery(x, z);
+    const aa = q.a.arch, ab = q.b.arch;
+    let h = (aa === ab || q.w > 0.999)
+      ? archH(aa, x, z)
+      : archH(aa, x, z) * q.w + archH(ab, x, z) * (1 - q.w);
+    const L = lmAt(x, z);
+    if (L) h = lmApply(L, x, z, h);
+    return Math.max(-45, Math.min(95, h));
+  }
+  function isDesert(x, z){ return archAt(x, z) === 4; }
+  // where does standing water exist? Below sea level, except volcanic ground
+  // (those pools are lava) and dry sinkhole shafts
+  function wetAt(x, z, h){
+    if (h === undefined) h = height(x, z);
+    if (h >= seaLevel) return false;
+    const L = lmAt(x, z);
+    if (L && L.type === 'sinkhole' && L.dry &&
+        Math.hypot(x - L.x, z - L.z) < L.r) return false;
+    return archAt(x, z) !== 7;
   }
   // Caves = union of two carve systems, each unique by position:
   //  - spaghetti tunnels (intersection band of two 3D noises) whose width
@@ -542,10 +665,21 @@ function makeGen(seed){
     if (ore) return ore;
     const h = height(x, z);
     if (y > h - 0.9){
+      const a = archAt(x, z);
+      if (a === 7){                              // volcanic fields
+        const L = lmAt(x, z);
+        if (L && L.type === 'volcano' && y > h - 1.5 &&
+            Math.hypot(x - L.x, z - L.z) < L.crR * 0.8) return MAT.LAVA;
+        if (h < seaLevel + 0.4 && y > h - 1.2) return MAT.LAVA;  // molten pools
+        if (h < seaLevel + 1.5) return MAT.OBSIDIAN;             // chilled shores
+        return MAT.BASALT;
+      }
+      if (a === 6) return MAT.SNOW;              // glacier: ice to the water line
+      if (a === 4) return MAT.SAND;              // dunes
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
-      if (isDesert(x, z)) return MAT.SAND;
-      if (h >= 13.5) return MAT.SNOW;            // snow-capped peaks
-      if (h < 12) return MAT.GRASS;
+      if (a === 3) return h < 6 ? MAT.SAND : MAT.ROCK;  // badlands
+      if (h >= 26) return MAT.SNOW;              // snow-capped peaks
+      if (h < 20) return MAT.GRASS;
       return MAT.ROCK;                           // bare rock band below the caps
     }
     return MAT.ROCK;
@@ -564,6 +698,16 @@ function makeGen(seed){
         const R = ruinInCell(cx, cz);
         if (R && R.x + R.r + 2 > x0 && R.x - R.r - 2 < x1 && R.z + R.r + 2 > z0 && R.z - R.r - 2 < z1){
           mx = Math.max(mx, R.base + R.wallH);
+        }
+      }
+    // landmark set-pieces tower over (or dive under) their archetype's
+    // terrain; a quick-reject that missed them would skip whole spires
+    for (let cx = Math.floor(x0 / REGION); cx <= Math.floor(x1 / REGION); cx++)
+      for (let cz = Math.floor(z0 / REGION); cz <= Math.floor(z1 / REGION); cz++){
+        const L = regionCell(cx, cz).lm;
+        if (L && L.x + L.r > x0 && L.x - L.r < x1 && L.z + L.r > z0 && L.z - L.r < z1){
+          if (L.peak > mx) mx = L.peak;
+          if (L.floor < mn) mn = L.floor;
         }
       }
     return [mn - 4, mx + 4];
@@ -588,7 +732,7 @@ function makeGen(seed){
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
     return {
-      height: lh, heightRange, mat, caves: true, seaLevel, ruinInCell,
+      height: lh, heightRange, mat, caves: true, seaLevel, ruinInCell, wetAt, archAt, lmAt,
       sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z),
       makeLocal,
     };
@@ -603,12 +747,13 @@ function makeGen(seed){
     const x = cx * DECOR_CELL + 0.4 + (hashInt(h0 ^ 5) / 4294967296) * (DECOR_CELL - 0.8);
     const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
     const h = height(x, z);
-    if (h < seaLevel + 0.6 || h > 11) return null;      // no beaches, no snowline
-    if (biome(x, z) > 0.6) return null;                 // bare mountain rock
+    if (h < seaLevel + 0.6 || h > 19) return null;      // no beaches, no snowline
+    const arch = archAt(x, z);
+    if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
                   Math.abs(height(x, z + 1.2) - height(x, z - 1.2));
     if (slope > 1.5) return null;
-    const desert = isDesert(x, z);
+    const desert = arch === 3 || arch === 4;            // badlands + dunes stay sparse
     const r1 = hashInt(h0 ^ 13) / 4294967296;
     if (desert && r1 > 0.3) return null;                // deserts stay sparse
     let type = 'tuft';
@@ -627,21 +772,23 @@ function makeGen(seed){
     if (h0 / 4294967296 > 0.52) return null;   // denser: beaches/water now exclude many cells
     const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
     const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
-    if (biome(x, z) > 0.55 || isDesert(x, z)) return null;
+    const a = archAt(x, z);
+    if (a !== 0 && a !== 1 && a !== 5) return null;  // trees: plains, hills, swamp
     const h = height(x, z);
-    if (h < seaLevel + 1.8 || h > 12) return null;   // no trees on beaches or underwater
+    if (h < seaLevel + 1.8 || h > 18) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, seed, seaLevel, ruinInCell };
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt };
 }
 const TREE_CELL = 11;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
   seaLevel: null, ruinInCell: () => null,
+  wetAt: () => false, archAt: () => 0, lmAt: () => null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
   sdf: (x, y, z) => y - SURFACE_Y,
@@ -1379,7 +1526,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -1766,6 +1913,38 @@ function makeTileDrawers(){
         ctx.fillStyle = '#3c3c42'; ctx.fillRect(x + 1, y + 1, 1, 1);
       }
     },
+    [CORE.MAT.BASALT](ctx, rng){
+      speckle(ctx, rng, '#3c3f45', '#30333a', '#4a4e56', 0.3, 0.18);
+      // columnar seams
+      for (const x of [3, 8, 13]){
+        ctx.fillStyle = '#282b31';
+        ctx.fillRect(x, 0, 1, 16);
+      }
+      for (let i = 0; i < 4; i++){
+        const y = (rng()*15)|0, x = (rng()*15)|0;
+        ctx.fillStyle = '#565b64'; ctx.fillRect(x, y, 2, 1);
+      }
+    },
+    [CORE.MAT.LAVA](ctx, rng){
+      speckle(ctx, rng, '#e8641e', '#c2440f', '#ff8f3a', 0.34, 0.26);
+      for (let i = 0; i < 5; i++){
+        let x = (rng()*16)|0, y = (rng()*16)|0;
+        ctx.fillStyle = '#ffd23b';
+        for (let t = 0; t < 6; t++){ ctx.fillRect(x&15, y&15, 1, 1); x += rng()<0.6?1:0; y += rng()<0.4?1:-0; }
+      }
+      for (let i = 0; i < 4; i++){
+        ctx.fillStyle = '#7c260a';
+        ctx.fillRect((rng()*14)|0, (rng()*14)|0, 2, 2);
+      }
+    },
+    [CORE.MAT.CRYSTAL](ctx, rng){
+      speckle(ctx, rng, '#3f7f88', '#2e5f68', '#54a3ad', 0.3, 0.2);
+      for (let i = 0; i < 6; i++){
+        const x = 1 + (rng()*13)|0, y = 1 + (rng()*12)|0;
+        ctx.fillStyle = '#a9f2f6'; ctx.fillRect(x, y, 1, 3);
+        ctx.fillStyle = '#d9ffff'; ctx.fillRect(x, y, 1, 1);
+      }
+    },
     [CORE.MAT.GLOWSHROOM](ctx, rng){
       speckle(ctx, rng, '#7b4fa0', '#5d3a7e', '#9a6bc4', 0.3, 0.2);
       for (let i = 0; i < 6; i++){
@@ -1941,6 +2120,8 @@ void main(){
   float dark = 1.0 - min(vSky, 1.0) * (uLampSky / 0.85);
   if (m >= 2.0 && m <= 5.0) col = max(col, tex.rgb * 0.42 * dark);
   if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
+  if (m == 15.0) col = max(col, tex.rgb * 1.2);                          // lava is its own light
+  if (m == 16.0) col = max(col, tex.rgb * 0.8 * (0.4 + 0.6 * dark));    // crystal shimmers
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   // fog range scales with skylight: the surface sees kilometres, caves fade
   // to black within ~80m so depth still feels enclosed. Underwater overrides
@@ -2072,8 +2253,10 @@ class Terrain {
       for (let i = 0; i < M; i++){
         const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
         const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
-        if (Math.min(a, b, c, d) >= sea) continue;    // dry cell
+        const hm = Math.min(a, b, c, d);
+        if (hm >= sea) continue;                      // dry cell
         const xa = x0 + i, xb = x0 + i + 1, za = z0 + j, zb = z0 + j + 1;
+        if (this.gen.wetAt && !this.gen.wetAt(xa + 0.5, za + 0.5, hm)) continue;
         pos.push(xa, sea, za, xa, sea, zb, xb, sea, zb,
                  xa, sea, za, xb, sea, zb, xb, sea, za);
         uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
@@ -2203,7 +2386,8 @@ function propSDF(x, y, z){
 // water occupies air below sea level over lake columns (ground below sea)
 function inWater(x, y, z){
   const sea = game.gen.seaLevel;
-  return sea != null && y < sea && game.gen.height(x, z) < sea;
+  if (sea == null || y >= sea) return false;
+  return game.gen.wetAt ? game.gen.wetAt(x, z) : game.gen.height(x, z) < sea;
 }
 function sdfWorld(x, y, z, edits){
   let d = CORE.evalSDF(x, y, z, edits, game.gen);
@@ -2385,7 +2569,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -4734,6 +4918,20 @@ function updatePlayer(dt){
     if (impact > 11) damagePlayer(Math.round((impact - 11) * 5), 0, 0);
   }
 
+  // lava burns: standing on (or wading through) molten ground ticks damage
+  if (game.mode === 'survival'){
+    game.lavaAcc = (game.lavaAcc || 0) + dt;
+    if (game.lavaAcc > 0.4){
+      game.lavaAcc = 0;
+      const lbox = [game.pos.x - 1, game.pos.y - 1, game.pos.z - 1, game.pos.x + 1, game.pos.y + 1, game.pos.z + 1];
+      const led = nearEdits(lbox);
+      if (CORE.materialAt(game.pos.x, game.pos.y - 0.2, game.pos.z, led, game.gen) === CORE.MAT.LAVA ||
+          CORE.materialAt(game.pos.x, game.pos.y + 0.1, game.pos.z, led, game.gen) === CORE.MAT.LAVA){
+        damagePlayer(6, 0, 0);
+      }
+    }
+  }
+
   // never fall through bedrock even at low fps
   if (game.pos.y < CORE.BEDROCK_Y + 0.2){ game.pos.y = CORE.BEDROCK_Y + 0.2; if (game.vel.y < 0) game.vel.y = 0; }
 
@@ -6947,7 +7145,8 @@ const farTerrain = {
           float m = floor(vMat + 0.5);
           float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
           float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
-          vec3 col = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
+          vec3 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
+          vec3 col = tex;
           float diff = max(dot(n, uSunDir), 0.0);
           float sunVis = 1.0;
           if (uShadowOn > 0.5){
@@ -6971,6 +7170,8 @@ const farTerrain = {
           vec3 lit = ambCol * (0.85 + 0.15 * n.y) + uSunCol * diff * sunVis;
           col = col * min(lit, vec3(1.05));
           col *= 0.95 + 0.10 * vnoise(vW * 0.33);
+          if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
+          if (m == 16.0) col = max(col, tex * 0.55);  // crystal
           float dist = gl_FragCoord.z / gl_FragCoord.w;
           float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
           gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
@@ -7071,7 +7272,7 @@ const farTerrain = {
         const h = gen.height(x, z);
         // lakebeds render as land (the real seabed does too); a translucent
         // water surface mesh goes on top, so the composite matches reality
-        j.wet[kk] = h < sea ? 1 : 0;
+        j.wet[kk] = h < sea && (!gen.wetAt || gen.wetAt(x, z, h)) ? 1 : 0;
         j.h[kk] = h - Lk.sink;
         j.m[kk] = (gen.mat(x, h - 0.1, z) || 1) - 1;   // sample shallow, like the mesher
       }

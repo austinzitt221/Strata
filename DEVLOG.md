@@ -2,6 +2,66 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6 Phase A — World Gen 2.0: macro-regions & landmarks (2026-08-23)
+
+The whole surface generator is new. **Old worlds keep their edits but the
+terrain under them shifts** — the heightfield formula changed, so existing
+saves will see ground move relative to their builds. (Seed + edit list still
+round-trip exactly; it's the base world that's different.)
+
+### Macro-regions
+`biome()`/`isDesert()` are gone. The world is now warped-Voronoi cells
+(~520m, `REGION`), each committed to one of 8 archetypes: plains, hills,
+sharp ranges (ridged, snow-capped, to ~60m), mesa badlands (stepped
+plateaus cut by slot canyons that drop below sea into rivers), dunes
+(anisotropic sand waves with oasis pools), swamp (near-sea flats pocked
+with water), glacier (high ice sheet split by crevasses), volcanic (black
+basalt fields). Height blends between the two nearest sites over ~90m at
+borders; everything discrete (mats, trees, decor, water-vs-lava) reads the
+nearest site. Borders are domain-warped ±~80m so they never read straight.
+
+### Landmarks
+Up to one set-piece per region, kept ≥132m inside its cell so lookups stay
+O(1) and fully heightfield-expressible so the LOD rings carry them at 4km:
+- **Volcano** (volcanic only): 110m-radius cone +60m with a crater bowl —
+  the crater floor is exposed LAVA, and low spots in the basalt fields pool
+  lava instead of water.
+- **Sinkhole**: 26m-radius, ~46m-deep shaft. Dry when its surroundings are
+  above sea (a hole to the deep — phase C will wire these into the cave
+  network); floods into a cenote if the basin was already below sea.
+- **Monolith**: 44m rock spire.
+- **Crater lake**: 55m ring — raised grass rim, water bowl below sea.
+`heightRange` enumerates overlapped region cells and folds in `lm.peak` /
+`lm.floor`, so chunk quick-rejects can't skip a spire or a pit.
+
+### New materials + rules
+BASALT(15), LAVA(16), CRYSTAL(17) with tiles, hardness, colors, and shader
+glow (lava is its own light, crystal shimmers in the dark — terrain AND the
+LOD ring shader). Volcanic surface: basalt, obsidian shore band at the
+water line, lava pools. Glacier: snow to the water line. Standing on/in
+lava in survival ticks ~6 damage per 0.4s.
+
+### The wet question
+Water used to be "h < sea". Now `gen.wetAt(x,z[,h])` decides — false on
+volcanic ground and in dry sinkhole shafts — and all three water consumers
+(chunk water mesher, LOD water overlay flag, swim check) route through it.
+
+### Plumbing
+- CY_MAX 5→13: chunks now reach +112m (heights clamp to [-45, 95]).
+- Snowline 13.5→26, grass to 20, tree/decor gating by archetype
+  (trees: plains/hills/swamp; decor skips ranges/glacier/volcanic; badlands
+  + dunes get sparse dry tufts).
+- Region cells cached; region query ≈ 2 warp fbm2 + 9 cached cell lookups
+  + 1–2 archetype fbm stacks. Meshing budget absorbs it (smoke test clean).
+
+Verified: 262 headless tests (new section: region variety ≥6/8 archetypes,
+determinism, clamp, all 4 landmark types + shape promises, crater lava,
+wetAt rules, heightRange-sees-landmarks, glacier/volcanic surface mats),
+full Playwright smoke suite green, and a 15-screenshot matrix: region
+overview, volcano air/rim/crater/profile, sinkhole, monolith-on-glacier,
+crater lake ring, ranges, mesa, dunes, glacier crevasses. Lava damage
+verified in a live survival session.
+
 ## Build 5.6.1 — the hands act the part (2026-08-23)
 
 Playtest notes on the fists: functionality perfect, visuals wrong. Reworked
