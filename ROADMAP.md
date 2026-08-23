@@ -109,6 +109,10 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
   — a real reason to run wires down a mine shaft.
 - **Phase C — exotics**: generator 2.0, tesla coil (wireless power in a
   radius, zaps you if you stand too close).
+- **Camera drone**: photo mode for survival, with a body — a buildable or
+  buyable drone you charge on the grid, keep in your inventory, and hold to
+  pilot. Range-limited; your body stays standing while the drone flies.
+  Under the hood it's the existing photo mode with a new shell and rules.
 
 ## Build 7.5 — The player has a body
 - 3rd-person camera toggle; full player model with a ROUND head (our

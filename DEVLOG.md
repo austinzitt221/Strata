@@ -2,6 +2,36 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.6.1 — the hands act the part (2026-08-23)
+
+Playtest notes on the fists: functionality perfect, visuals wrong. Reworked
+the whole first-person hand rig as a small state machine (mock quality on
+purpose — the full player model in 7.5 will redo these with a body):
+
+- **Fists down = empty screen.** No hands at rest in collect mode.
+- **Gather (plants)**: ONE hand sweeps out and down toward the ground in a
+  scoop, then withdraws (~0.5s sine arc).
+- **Animal pickup**: TWO hands reach forward together, then blend upward
+  into an overhead HOLD — look up and both hands are in the air under your
+  passenger's belly. Grab→hold is one continuous motion (the blend runs on
+  the same timer that starts at pickup).
+- **Fists up (fight)**: proper mirrored boxing guard — the left arm was a
+  second right arm angled identically; now both forearms rise angled toward
+  each other, knuckles in. Jab animation thrusts the right fist. Arms are
+  scaled longer (1.6× in the forearm axis) so the sleeve cutoff stays off
+  screen.
+- Sign lesson learned by screenshot: the arm model points down -z, so
+  positive rotation.x raises the hand tip — the first pass had every pose
+  upside down (hands drooping in the guard, scoop reaching for the sky).
+
+Roadmap addition (build 7): the **camera drone** — survival photo mode with
+a body. Buildable/buyable, grid-charged, held to pilot, range-limited; your
+body stays standing while the drone flies. Same photo-mode core, new shell.
+
+Verified with a pose screenshot matrix (idle-empty / guard / scoop mid-frame
+/ grab reach / overhead hold looking up) plus the full 5.6 browser flow and
+238 headless tests.
+
 ## Build 5.6 — hands & a living surface (2026-08-23)
 
 ### Surface decor

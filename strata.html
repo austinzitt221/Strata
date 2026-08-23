@@ -2832,12 +2832,13 @@ function buildViewmodel(cam){
   // fists: what you hold when you hold nothing — right arm relaxed low,
   // both raised in a guard when fists are up (pose driven per frame)
   const fists = new THREE.Group();
-  const fistR = poseArm(buildArm());
+  const fistR = buildArm();
+  fistR.scale.set(1.15, 1.15, 1.6);              // longer so no cutoff shows
   const fistL = buildArm();
-  fistL.scale.x = -1;
+  fistL.scale.set(-1.15, 1.15, 1.6);             // mirrored left
   fistL.visible = false;
   fists.add(fistR); fists.add(fistL);
-  fists.userData = { R: fistR, L: fistL, t: 0 };
+  fists.userData = { R: fistR, L: fistL };
   vm.add(fists);
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
@@ -2875,18 +2876,38 @@ function updateViewmodel(dt){
   v.bob += dt * Math.min(speed, 10) * 1.6;
   v.root.position.y = -0.26 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
   if (!kind){
-    const f = v.fists.userData;
-    const up = game.fistsUp ? 1 : 0;
-    f.t += (up - f.t) * Math.min(1, dt * 9);
-    const punch = Math.max(0, 1 - (performance.now() - (game.punchT || 0)) / 220);
-    const jab = Math.sin(punch * Math.PI);         // out and back
-    f.R.position.set(0.07, -0.3 + f.t * 0.17, 0.14 - f.t * 0.1 - jab * 0.34);
-    f.R.rotation.set(0.7 - f.t * 0.6 - jab * 0.35, -0.18, 0.05);
-    f.L.visible = f.t > 0.05;
-    // the vm group is yawed 0.42, which pushes -x children behind the
-    // camera — bias them forward so the left fist stays on screen
-    f.L.position.set(-1.0 + f.t * 0.15, -0.38 + f.t * 0.22, -0.72 - f.t * 0.06);
-    f.L.rotation.set(0.7 - f.t * 0.6, 0.35, -0.08);
+    const f = v.fists.userData, R = f.R, L = f.L;
+    const tNow = performance.now();
+    const jab = Math.sin(Math.max(0, 1 - (tNow - (game.punchT || 0)) / 220) * Math.PI);
+    const gather = Math.max(0, 1 - (tNow - (game.gatherT || 0)) / 500);
+    const carrying = !!game.carried;
+    const grab = carrying ? Math.min(1, (tNow - (game.grabT || 0)) / 450) : 0;
+    // fists down = empty screen; hands only appear to fight, scoop, or hold
+    v.fists.visible = game.fistsUp || carrying || gather > 0;
+    if (!v.fists.visible) return;
+    if (carrying){
+      // two-hand grab reaching forward, blending up into an overhead hold —
+      // look up and both hands are in the air under your passenger
+      const b = grab;
+      R.visible = L.visible = true;
+      R.position.set(0.42 - b * 0.04, -0.55 + b * 1.15, -0.55 + b * 0.05);
+      R.rotation.set(-0.2 + b * 1.75, -0.2, -0.12);
+      L.position.set(-0.72 + b * 0.06, -0.55 + b * 1.15, -0.8 + b * 0.07);
+      L.rotation.set(-0.2 + b * 1.75, 0.2, 0.12);
+    } else if (gather > 0 && !game.fistsUp){
+      // one hand scoops down toward the ground and comes back
+      const pr = Math.sin((1 - gather) * Math.PI);
+      R.visible = true; L.visible = false;
+      R.position.set(0.12 - pr * 0.06, -0.6 + pr * 0.05, 0.1 - pr * 0.95);
+      R.rotation.set(-0.25 - pr * 0.5, -0.3, 0.05);
+    } else {
+      // boxing guard: forearms up, fists angled toward each other
+      R.visible = L.visible = true;
+      R.position.set(0.32 - jab * 0.1, -0.26, -0.32 - jab * 0.55);
+      R.rotation.set(1.0 - jab * 0.5, -0.55, 0.15);
+      L.position.set(-0.52, -0.28, -0.72);
+      L.rotation.set(1.0, 0.55, -0.15);
+    }
     return;
   }
   if (kind === 'mat'){
@@ -5510,7 +5531,7 @@ function tryAction(dt, now){
       if (d){
         const kind = d.type === 'flower' ? 'flower' : d.type === 'shrub' ? 'shrub' : 'tuft';
         decorSys.remove(d);
-        game.punchT = now;
+        game.gatherT = now;
         addStackItem(kind, 1);
         toast('+1 ' + itemLabel({ kind }));
         Particles.burst(d.x, d.y + 0.3, d.z, 0.3, [0x57a63f, 0x3f8c2f], 8, 1.4);
@@ -5523,7 +5544,7 @@ function tryAction(dt, now){
         if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
         ent.carried = true;
         game.carried = ent;
-        game.punchT = now;
+        game.grabT = now;
         toast('picked up the ' + ent.type + ' — left click to throw');
         AudioSys.sfx('toggle');
       }
