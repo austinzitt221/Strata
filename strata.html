@@ -18,6 +18,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:#0b0a10;}
 body{font-family:"Courier New",ui-monospace,monospace; color:var(--ui-text); font-size:14px;}
 canvas.game{display:block; image-rendering:pixelated;}
 .hidden{display:none !important;}
+body.photo #hud{display:none !important;}
 
 /* ---------- generic panel ---------- */
 .screen{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:40;}
@@ -592,6 +593,33 @@ function makeGen(seed){
       makeLocal,
     };
   }
+  // surface decor: up to one tuft/flower/shrub per 3m lattice cell on
+  // friendly ground — dense enough that plains read alive, deterministic
+  // per seed so it never changes between visits
+  const sDe = hashInt(seed ^ 0x3dc0de11);
+  function decorAt(cx, cz){
+    const h0 = hashInt(sDe ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    if (h0 / 4294967296 > 0.58) return null;
+    const x = cx * DECOR_CELL + 0.4 + (hashInt(h0 ^ 5) / 4294967296) * (DECOR_CELL - 0.8);
+    const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
+    const h = height(x, z);
+    if (h < seaLevel + 0.6 || h > 11) return null;      // no beaches, no snowline
+    if (biome(x, z) > 0.6) return null;                 // bare mountain rock
+    const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
+                  Math.abs(height(x, z + 1.2) - height(x, z - 1.2));
+    if (slope > 1.5) return null;
+    const desert = isDesert(x, z);
+    const r1 = hashInt(h0 ^ 13) / 4294967296;
+    if (desert && r1 > 0.3) return null;                // deserts stay sparse
+    let type = 'tuft';
+    if (!desert){
+      if (r1 > 0.94) type = 'shrub';
+      else if (r1 > 0.80) type = 'flower';
+    }
+    const scl = 0.8 + (hashInt(h0 ^ 21) / 4294967296) * 0.5;
+    const vc = hashInt(h0 ^ 33) % 4;
+    return { x, z, y: h, type, s: scl, vc, dry: desert, key: cx + ',' + cz };
+  }
   // trees: one candidate per 11m lattice cell, on gentle grassy ground
   const sT = hashInt(seed ^ 0x71f68b1c);
   function treeAt(cx, cz){
@@ -607,9 +635,10 @@ function makeGen(seed){
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, caves: true, seed, seaLevel, ruinInCell };
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, seed, seaLevel, ruinInCell };
 }
 const TREE_CELL = 11;
+const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
   seaLevel: null, ruinInCell: () => null,
@@ -1239,7 +1268,7 @@ function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
-  'diamond', 'bulb', 'stove'];
+  'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
 const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond' };
@@ -1588,7 +1617,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL,
+  makeGun, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -2343,6 +2372,7 @@ function buildScene(){
   godRays.init();
   wrenchSys.init(scene);
   treeSys.init(scene);
+  decorSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
 
@@ -2799,13 +2829,23 @@ function buildViewmodel(cam){
     return t;
   });
 
+  // fists: what you hold when you hold nothing — right arm relaxed low,
+  // both raised in a guard when fists are up (pose driven per frame)
+  const fists = new THREE.Group();
+  const fistR = poseArm(buildArm());
+  const fistL = buildArm();
+  fistL.scale.x = -1;
+  fistL.visible = false;
+  fists.add(fistR); fists.add(fistL);
+  fists.userData = { R: fistR, L: fistL, t: 0 };
+  vm.add(fists);
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
   vm.scale.setScalar(0.5);
   vm.rotation.y = 0.42;                // tips angle inward so the business end reads
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube,
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists,
               bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
@@ -2829,11 +2869,26 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
+  v.fists.visible = kind === null;
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
   v.bob += dt * Math.min(speed, 10) * 1.6;
   v.root.position.y = -0.26 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
-  if (!kind) return;
+  if (!kind){
+    const f = v.fists.userData;
+    const up = game.fistsUp ? 1 : 0;
+    f.t += (up - f.t) * Math.min(1, dt * 9);
+    const punch = Math.max(0, 1 - (performance.now() - (game.punchT || 0)) / 220);
+    const jab = Math.sin(punch * Math.PI);         // out and back
+    f.R.position.set(0.07, -0.3 + f.t * 0.17, 0.14 - f.t * 0.1 - jab * 0.34);
+    f.R.rotation.set(0.7 - f.t * 0.6 - jab * 0.35, -0.18, 0.05);
+    f.L.visible = f.t > 0.05;
+    // the vm group is yawed 0.42, which pushes -x children behind the
+    // camera — bias them forward so the left fist stays on screen
+    f.L.position.set(-1.0 + f.t * 0.15, -0.38 + f.t * 0.22, -0.72 - f.t * 0.06);
+    f.L.rotation.set(0.7 - f.t * 0.6, 0.35, -0.08);
+    return;
+  }
   if (kind === 'mat'){
     v.matCube.userData.item.userData.mesh.material = vmMatMaterial(it.mat);
     return;
@@ -3079,7 +3134,7 @@ const SUN_BASE = new THREE.Color(0.42, 0.40, 0.36);
 const AMB_DAY = new THREE.Color(0.62, 0.63, 0.68);
 const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
 function updateDayNight(dt){
-  if (game.ui === 'none') game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
+  if (game.ui === 'none' && !game.photo) game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
   const phase = game.timeOfDay * Math.PI * 2;
   const sunH = Math.sin(phase);
   const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
@@ -3554,6 +3609,180 @@ const torchSys = {
   },
 };
 // ---------- trees ----------
+// ---------- surface decor: grass tufts, flowers, shrubs ----------
+// Instanced cross-quad billboards, one InstancedMesh per look. Placement is
+// deterministic (gen.decorAt per 3m cell); picked-up cells go in a removed
+// set, hand-placed decor in a placed list — both saved with the world.
+const decorSys = {
+  group: null, meshes: null, lastCell: null, pending: false, dirty: false,
+  CAP: 3200,
+  VARIANTS: [
+    { id: 'tuft',    w: 0.75, h: 0.55 },
+    { id: 'tuftdry', w: 0.7,  h: 0.45 },
+    { id: 'flower0', w: 0.5,  h: 0.7 },
+    { id: 'flower1', w: 0.5,  h: 0.7 },
+    { id: 'flower2', w: 0.5,  h: 0.7 },
+    { id: 'flower3', w: 0.5,  h: 0.7 },
+    { id: 'shrub',   w: 1.5,  h: 1.15 },
+  ],
+  texFor(id){
+    return PixTex.make('decor_' + id, (c, w, h, rng) => {
+      c.clearRect(0, 0, 16, 16);
+      const blades = (col1, col2) => {
+        for (let i = 0; i < 9; i++){
+          const x = 1 + ((rng() * 14) | 0), hh = 5 + ((rng() * 9) | 0);
+          c.fillStyle = rng() < 0.5 ? col1 : col2;
+          c.fillRect(x, 16 - hh, 1, hh);
+        }
+      };
+      if (id === 'tuft') blades('#3f8c2f', '#57a63f');
+      else if (id === 'tuftdry') blades('#a89552', '#c2ad66');
+      else if (id.startsWith('flower')){
+        blades('#3f8c2f', '#57a63f');
+        const petals = ['#e04848', '#f0d040', '#b060e0', '#f0f0f0'][+id.slice(6)];
+        const cx = 4 + ((rng() * 8) | 0);
+        c.fillStyle = '#3f8c2f'; c.fillRect(cx, 6, 1, 10);
+        c.fillStyle = petals;
+        c.fillRect(cx - 1, 3, 3, 3); c.fillRect(cx, 2, 1, 1); c.fillRect(cx, 6, 1, 1);
+        c.fillRect(cx - 2, 4, 1, 1); c.fillRect(cx + 2, 4, 1, 1);
+        c.fillStyle = '#f7e06a'; c.fillRect(cx, 4, 1, 1);
+      } else {              // shrub
+        c.fillStyle = '#59391c'; c.fillRect(7, 10, 2, 6);
+        const rng2 = CORE.mulberry32(31);
+        c.fillStyle = '#2f6b24'; c.fillRect(2, 3, 12, 9);
+        for (let i = 0; i < 30; i++){
+          c.fillStyle = ['#3e7d2e', '#57a63f', '#25541c'][(rng2() * 3) | 0];
+          c.fillRect(2 + ((rng2() * 12) | 0), 2 + ((rng2() * 10) | 0), 1 + ((rng2() * 2) | 0), 1);
+        }
+        c.clearRect(2, 3, 2, 2); c.clearRect(12, 3, 2, 2);
+        c.clearRect(2, 10, 1, 2); c.clearRect(13, 10, 1, 2);
+      }
+    });
+  },
+  crossGeo(w, h){
+    // two crossed quads, unindexed, pivot at the base
+    const g = new THREE.BufferGeometry();
+    const x = w / 2;
+    const pos = [], uv = [];
+    for (const [ax, az, bx, bz] of [[-x, 0, x, 0], [0, -x, 0, x]]){
+      pos.push(ax, 0, az, bx, 0, bz, bx, h, bz,  ax, 0, az, bx, h, bz, ax, h, az);
+      uv.push(0, 0, 1, 0, 1, 1,  0, 0, 1, 1, 0, 1);
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    return g;
+  },
+  init(scene){
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;      // tiny; skip the shadow pass
+    scene.add(this.group);
+    this.lastCell = null; this.pending = false;
+    this.meshes = {};
+    for (const v of this.VARIANTS){
+      const m = new THREE.InstancedMesh(this.crossGeo(v.w, v.h),
+        new THREE.MeshBasicMaterial({ map: this.texFor(v.id), alphaTest: 0.5,
+                                      side: THREE.DoubleSide }), this.CAP);
+      m.count = 0;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;      // instance bounds != geometry bounds
+      m.userData.noShadow = true;
+      this.group.add(m);
+      this.meshes[v.id] = m;
+    }
+  },
+  variantOf(d){
+    if (d.type === 'flower') return 'flower' + (d.vc & 3);
+    if (d.type === 'shrub') return 'shrub';
+    return d.dry ? 'tuftdry' : 'tuft';
+  },
+  entries(){
+    // generated decor within a readable radius + everything hand-placed
+    const out = [];
+    if (!game.gen || !game.gen.decorAt || !game.decorRemovedSet) return out;
+    const C = CORE.DECOR_CELL;
+    const cc = [Math.floor(game.pos.x / C), Math.floor(game.pos.z / C)];
+    const R = Math.ceil(Math.min((game.opts.rd + 1) * CORE.CHUNK_M, 90) / C);
+    let waiting = false;
+    for (let dz = -R; dz <= R; dz++){
+      for (let dx = -R; dx <= R; dx++){
+        const k = (cc[0] + dx) + ',' + (cc[1] + dz);
+        if (game.decorRemovedSet.has(k)) continue;
+        const d = game.gen.decorAt(cc[0] + dx, cc[1] + dz);
+        if (!d) continue;
+        const gk = Math.floor(d.x / CORE.CHUNK_M) + ',' + Math.floor(d.y / CORE.CHUNK_M) + ',' + Math.floor(d.z / CORE.CHUNK_M);
+        const gch = game.terrain.chunks.get(gk);
+        if (!gch || (!gch.mesh && game.terrain.dirty.has(gk))){ waiting = true; continue; }
+        out.push(d);
+      }
+    }
+    for (const d of game.decorPlaced) out.push(d);
+    this.pending = waiting;
+    return out;
+  },
+  refresh(){
+    if (!this.group || !this.meshes) return;
+    const C = CORE.DECOR_CELL;
+    const key = Math.floor(game.pos.x / C) + ',' + Math.floor(game.pos.z / C);
+    if (key === this.lastCell && !this.pending && !this.dirty) return;
+    this.lastCell = key; this.dirty = false;
+    const list = this.entries();
+    const counts = {};
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    for (const d of list){
+      const id = this.variantOf(d);
+      const m = this.meshes[id];
+      const i = counts[id] || 0;
+      if (i >= this.CAP) continue;
+      Q.setFromAxisAngle(up, (CORE.hashSeed(d.key || 'p') % 628) / 100);
+      S.setScalar(d.s || 1);
+      M.compose(new THREE.Vector3(d.x, d.y - 0.03, d.z), Q, S);
+      m.setMatrixAt(i, M);
+      counts[id] = i + 1;
+    }
+    for (const v of this.VARIANTS){
+      const m = this.meshes[v.id];
+      m.count = counts[v.id] || 0;
+      m.instanceMatrix.needsUpdate = true;
+    }
+  },
+  // nearest decor to the crosshair ray, for fists-down pickup
+  pickOnRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    const list = this.entries();
+    let best = null, bestT = maxDist;
+    for (const d of list){
+      const vx = d.x - o.x, vy = d.y + 0.35 - o.y, vz = d.z - o.z;
+      const t = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (t < 0 || t > bestT) continue;
+      const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
+      if (Math.hypot(px, py, pz) < 0.65){ best = d; bestT = t; }
+    }
+    return best;
+  },
+  remove(d){
+    if (d.placed){
+      const i = game.decorPlaced.indexOf(d);
+      if (i >= 0) game.decorPlaced.splice(i, 1);
+    } else {
+      game.decorRemovedSet.add(d.key);
+    }
+    this.dirty = true;
+    this.refresh();
+    markSave();
+  },
+  place(type, x, y, z){
+    game.decorPlaced.push({ x, z, y, type, s: 0.9 + Math.random() * 0.3,
+                            vc: (Math.random() * 4) | 0, dry: false,
+                            key: 'p' + ((Math.random() * 1e9) | 0), placed: true });
+    this.dirty = true;
+    this.refresh();
+    markSave();
+  },
+};
+
 const treeSys = {
   group: null, visible: new Map(), lastCell: null, mats: null,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); this.visible.clear(); this.lastCell = null; },
@@ -3952,6 +4181,7 @@ function spawnEntity(type, x, y, z){
   return e;
 }
 function killEntity(e, byPlayer){
+  if (game.carried === e) game.carried = null;
   const i = game.entities.indexOf(e);
   if (i >= 0) game.entities.splice(i, 1);
   if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
@@ -4020,6 +4250,16 @@ function updateEntities(dt, now){
   for (let i = game.entities.length - 1; i >= 0; i--){
     const e = game.entities[i];
     const def = ENT_DEF[e.type];
+    if (e.carried){
+      // riding overhead, slightly forward so you can see your passenger
+      e.x = game.pos.x - Math.sin(game.yaw) * 0.35;
+      e.z = game.pos.z - Math.cos(game.yaw) * 0.35;
+      e.y = game.pos.y + 2.3;
+      e.vx = 0; e.vy = 0; e.vz = 0;
+      if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
+      if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
+      continue;
+    }
     const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
     if (pd > 70){                                  // too far — despawn
       if (e.mesh){ game.scene.remove(e.mesh); }
@@ -4123,6 +4363,13 @@ function bindInput(){
   const cv = () => game.renderer.domElement;
   document.addEventListener('mousemove', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
+    if (game.photo){
+      const ps = game.opts.sens / 100 * 0.0022;
+      game.photo.yaw -= e.movementX * ps;
+      game.photo.pitch = Math.max(-Math.PI/2 + 0.001,
+        Math.min(Math.PI/2 - 0.001, game.photo.pitch - e.movementY * ps));
+      return;
+    }
     if (wrenchSys.drag){ wrenchSys.dragMove(e.movementX, e.movementY); return; }
     const s = game.opts.sens / 100 * 0.0022;
     game.yaw -= e.movementX * s;
@@ -4186,6 +4433,13 @@ function bindInput(){
         toast(CORE.SHAPE_NAME[game.tool.shape]);
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
+        return;
+      }
+      if (!tool && !selectedItem()){
+        game.fistsUp = !game.fistsUp;
+        toast(game.fistsUp ? 'fists up — left click jabs' : 'fists down — left click gathers');
+        AudioSys.sfx('toggle');
+        refreshToolHUD();
       }
     }
   });
@@ -4194,6 +4448,11 @@ function bindInput(){
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
     const dir = e.deltaY < 0 ? 1 : -1;
+    if (game.photo){
+      game.photo.speed = Math.min(60, Math.max(1, game.photo.speed * (dir > 0 ? 1.25 : 0.8)));
+      toast('camera speed ' + game.photo.speed.toFixed(0));
+      return;
+    }
     if (wrenchSys.paste){
       wrenchSys.paste.yaw = (wrenchSys.paste.yaw + dir + 4) % 4;
       toast('paste rotated ' + wrenchSys.paste.yaw * 90 + '\u00b0');
@@ -4277,9 +4536,19 @@ function bindInput(){
     }
     if (code === 'KeyH'){ if (wrenchSys.held()) wrenchSys.hollow(); }
     if (code === 'KeyX'){ if (wrenchSys.held()) wrenchSys.deleteSel(); }
-    if (code === 'KeyE'){ openInventory(); }
-    if (code === 'KeyQ'){ openCraft(); }
-    if (code === 'KeyN'){ openBlueprints(); }
+    if (code === 'KeyE'){ if (!game.photo) openInventory(); }
+    if (code === 'KeyQ'){ if (!game.photo) openCraft(); }
+    if (code === 'KeyN'){ if (!game.photo) openBlueprints(); }
+    if (code === 'KeyP'){
+      if (game.photo){ exitPhoto(); }
+      else if (game.mode === 'creative') enterPhoto();
+      else toast('photo mode is creative-only');
+    }
+    if (game.photo){
+      if (code === 'Comma'){ game.timeOfDay = (game.timeOfDay - 0.02 + 1) % 1; updateDayNight(0); }
+      if (code === 'Period'){ game.timeOfDay = (game.timeOfDay + 0.02) % 1; updateDayNight(0); }
+      if (code === 'F2'){ e.preventDefault(); game.shotReq = true; }
+    }
   });
   document.addEventListener('keyup', e => {
     game.keys[e.code] = false;
@@ -4481,6 +4750,8 @@ function activeTool(){
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
   if (it.kind === 'bulb') return { kind: 'bulb', tier: 0, item: it };
+  if (it.kind === 'tuft' || it.kind === 'flower' || it.kind === 'shrub')
+    return { kind: 'decor', decorType: it.kind, tier: 0, item: it };
   if (it.kind === 'wrench') return { kind: 'wrench', tier: 0 };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
@@ -4729,7 +5000,7 @@ const wrenchSys = {
       this.pasteGroup.position.set(a.x, a.y, a.z);
       this.pasteGroup.rotation.y = this.paste.yaw * Math.PI / 2;
     } else this.pasteGroup.visible = false;
-    const on = this.held() && this.edit() && game.ui === 'none' && !this.paste;
+    const on = this.held() && this.edit() && game.ui === 'none' && !this.paste && !game.photo;
     this.group.visible = !!on;
     if (!on){ this.hoverIdx = -1; return; }
     const e = this.edit();
@@ -4770,7 +5041,7 @@ const wrenchSys = {
     }
   },
   onLMB(){
-    if (!this.held() || game.ui !== 'none' || !isLocked()) return false;
+    if (!this.held() || game.ui !== 'none' || !isLocked() || game.photo) return false;
     if (game.tool.mode === 'paint'){ this.paintClick(); return true; }
     if (!this.edit()) return true;               // wrench never mines/places
     if (this.hoverIdx >= 0){
@@ -5209,6 +5480,56 @@ function tryAction(dt, now){
   const tool = activeTool();
   const edge = game.mouseEdge; game.mouseEdge = false;
   game.actProgress = 0;
+  // empty hands: the fists are the tool
+  if (!tool && !selectedItem() && game.ui === 'none' && isLocked()){
+    game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0);
+    // carrying an animal: LMB throws it, whatever the stance
+    if (game.carried){
+      if (edge){
+        const e = game.carried;
+        e.carried = false; game.carried = null;
+        const dir = new THREE.Vector3();
+        game.camera.getWorldDirection(dir);
+        e.vx = dir.x * 9; e.vy = Math.max(3.5, dir.y * 9 + 3.2); e.vz = dir.z * 9;
+        game.punchT = now;
+        toast('yeet');
+        AudioSys.sfx('toggle');
+      }
+      return;
+    }
+    if (game.fistsUp){
+      if (edge || (game.mouseL && now - game.lastMelee > 340)){
+        game.lastMelee = now; game.punchT = now;
+        AudioSys.burst({ dur: 0.05, freq: 900, gain: 0.05 });
+        const ent = entityOnRay(2.6);
+        if (ent) hurtEntity(ent, 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
+      }
+    } else if (edge){
+      // fists down: gather — decor first, then a friendly animal
+      const d = decorSys.pickOnRay(3.4);
+      if (d){
+        const kind = d.type === 'flower' ? 'flower' : d.type === 'shrub' ? 'shrub' : 'tuft';
+        decorSys.remove(d);
+        game.punchT = now;
+        addStackItem(kind, 1);
+        toast('+1 ' + itemLabel({ kind }));
+        Particles.burst(d.x, d.y + 0.3, d.z, 0.3, [0x57a63f, 0x3f8c2f], 8, 1.4);
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD();
+        return;
+      }
+      const ent = entityOnRay(2.6);
+      if (ent){
+        if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
+        ent.carried = true;
+        game.carried = ent;
+        game.punchT = now;
+        toast('picked up the ' + ent.type + ' — left click to throw');
+        AudioSys.sfx('toggle');
+      }
+    }
+    return;
+  }
   if (!tool || game.ui !== 'none' || !isLocked()){
     game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return;
   }
@@ -5238,6 +5559,19 @@ function tryAction(dt, now){
       if (game.mode !== 'creative') tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       doorSys.placeAt(gd);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  if (tool.kind === 'decor'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no ground in reach'); return; }
+      if (game.mode !== 'creative') tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      decorSys.place(tool.decorType, hit[0], hit[1], hit[2]);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -5435,7 +5769,8 @@ function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
-       'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
+       'tuft', 'flower', 'shrub'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -5523,6 +5858,26 @@ function itemIconURL(it){
     c.fillStyle = '#ff8830'; c.fillRect(6, 10, 4, 2);           // fire
     c.fillStyle = '#ffdd66'; c.fillRect(7, 11, 2, 1);
     c.fillStyle = '#3a3a40'; c.fillRect(5, 5, 6, 1);            // vent
+  } else if (it.kind === 'tuft'){
+    c.fillStyle = '#3f8c2f';
+    for (const [x, hh] of [[3, 8], [6, 11], [9, 9], [12, 7], [5, 6], [10, 12]])
+      c.fillRect(x, 16 - hh, 1, hh);
+    c.fillStyle = '#57a63f';
+    for (const [x, hh] of [[4, 10], [8, 7], [11, 10], [13, 9]])
+      c.fillRect(x, 16 - hh, 1, hh);
+  } else if (it.kind === 'flower'){
+    c.fillStyle = '#3f8c2f'; c.fillRect(7, 7, 2, 9);
+    c.fillStyle = '#e04848';
+    c.fillRect(5, 3, 6, 4); c.fillRect(7, 1, 2, 2); c.fillRect(7, 7, 2, 2);
+    c.fillRect(3, 4, 2, 2); c.fillRect(11, 4, 2, 2);
+    c.fillStyle = '#f7e06a'; c.fillRect(7, 4, 2, 2);
+  } else if (it.kind === 'shrub'){
+    c.fillStyle = '#59391c'; c.fillRect(7, 11, 2, 5);
+    c.fillStyle = '#2f6b24'; c.fillRect(2, 3, 12, 9);
+    c.fillStyle = '#57a63f';
+    c.fillRect(4, 4, 2, 2); c.fillRect(9, 6, 2, 2); c.fillRect(6, 9, 3, 1);
+    c.fillStyle = '#25541c';
+    c.fillRect(11, 4, 2, 2); c.fillRect(3, 8, 2, 2);
   } else if (it.kind === 'wool'){
     c.fillStyle = '#f2f0e8'; c.fillRect(3, 4, 10, 9);
     c.fillStyle = '#fbfaf5'; c.fillRect(2, 6, 3, 5); c.fillRect(11, 5, 3, 5); c.fillRect(5, 3, 6, 3);
@@ -5584,6 +5939,9 @@ function itemLabel(it){
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
+  if (it.kind === 'tuft') return 'grass tuft';
+  if (it.kind === 'flower') return 'flower';
+  if (it.kind === 'shrub') return 'shrub';
   if (it.kind === 'bed') return 'bed';
   if (it.kind === 'meat') return 'meat';
   if (it.kind === 'cookedmeat') return 'cooked meat';
@@ -5661,7 +6019,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
-                   'ironingot', 'rubyingot', 'diamond'])
+                   'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
   return out;
 }
@@ -5821,7 +6179,12 @@ function refreshToolHUD(){
   const el = $('toolinfo');
   let html = '';
   if (!it){
-    html = '<span class="t2">empty hand</span>';
+    html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
+      (game.carried
+        ? '<div class="t2">carrying a ' + game.carried.type + ' — left click to throw</div>'
+        : game.fistsUp
+          ? '<div class="t2">left click jabs · right click lowers fists</div>'
+          : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
     const name = tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
@@ -6317,6 +6680,8 @@ function saveNow(){
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     removedTrees: [...(game.removedTreeSet || [])],
+    removedDecor: [...(game.decorRemovedSet || [])],
+    placedDecor: game.decorPlaced || [],
     entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
@@ -6364,6 +6729,8 @@ function startWorld(id){
   game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.removedTreeSet = new Set(data.removedTrees || []);
+  game.decorRemovedSet = new Set(data.removedDecor || []);
+  game.decorPlaced = data.placedDecor || [];
   game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
@@ -6398,6 +6765,8 @@ function startWorld(id){
   doorSys.rebuild();
   tableSys.rebuild();
   treeSys.refresh();
+  decorSys.lastCell = null;
+  decorSys.refresh();
   game.cacheMarker = null;
   updateCacheMarker();
   $('statbars').classList.toggle('hidden', game.mode !== 'survival');
@@ -6859,6 +7228,62 @@ const godRays = {
   },
 };
 
+// ---------- photo mode: detached fly camera, frozen player ----------
+function enterPhoto(){
+  if (game.ui !== 'none') return;
+  game.photo = {
+    pos: game.camera.position.clone(),
+    yaw: game.yaw, pitch: game.pitch, speed: 10,
+  };
+  document.body.classList.add('photo');
+  if (game.vm) game.vm.root.visible = false;
+  for (const k of [0, 1, 2]){
+    game.ghostSet[k].fill.visible = false;
+    game.ghostSet[k].wire.visible = false;
+  }
+  if (game.gridViz) game.gridViz.visible = false;
+  toast('photo mode — WASD fly · scroll speed · , . time of day · F2 snapshot · P exit');
+}
+function exitPhoto(){
+  game.photo = null;
+  document.body.classList.remove('photo');
+  if (game.vm) game.vm.root.visible = true;
+  refreshToolHUD();
+}
+function updatePhoto(dt){
+  const ph = game.photo;
+  const k = game.keys;
+  const sp = ph.speed * (k['ShiftLeft'] || k['ShiftRight'] ? 2.5 : 1);
+  const fx = -Math.sin(ph.yaw) * Math.cos(ph.pitch), fy = Math.sin(ph.pitch), fz = -Math.cos(ph.yaw) * Math.cos(ph.pitch);
+  const rx = Math.cos(ph.yaw), rz = -Math.sin(ph.yaw);
+  let mx = 0, my = 0, mz = 0;
+  if (k['KeyW']){ mx += fx; my += fy; mz += fz; }
+  if (k['KeyS']){ mx -= fx; my -= fy; mz -= fz; }
+  if (k['KeyD']){ mx += rx; mz += rz; }
+  if (k['KeyA']){ mx -= rx; mz -= rz; }
+  if (k['Space']) my += 1;
+  if (k['KeyC']) my -= 1;
+  const L = Math.hypot(mx, my, mz);
+  if (L > 0.01){
+    ph.pos.x += mx / L * sp * dt;
+    ph.pos.y += my / L * sp * dt;
+    ph.pos.z += mz / L * sp * dt;
+  }
+  game.camera.position.copy(ph.pos);
+  game.camera.rotation.set(ph.pitch, ph.yaw, 0);
+}
+function saveSnapshot(){
+  game.renderer.domElement.toBlob(blob => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'strata-' + Date.now() + '.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast('snapshot saved');
+  });
+}
+
 // mark every world mesh a shadow caster, skipping flagged subtrees
 // (ghost previews, sky, clouds, water, the first-person rig, gizmos)
 function markCasters(node){
@@ -6907,7 +7332,9 @@ function frame(now){
   lastT = now;
   if (!game.running || !game.scene){ return; }
 
-  if (game.ui === 'none'){
+  if (game.photo){
+    updatePhoto(dt);
+  } else if (game.ui === 'none'){
     updatePlayer(dt);
     updateGhostDist(dt);
     updateGhost();
@@ -6923,10 +7350,15 @@ function frame(now){
     lastChunk = ck; game.forceStream = false;
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
     treeSys.refresh();
-  } else if (treeSys.pending){
-    // trees held back until their ground meshed — retry as chunks land
+    decorSys.refresh();
+  } else if (treeSys.pending || decorSys.pending){
+    // trees/decor held back until their ground meshed — retry as chunks land
     game.treeRetryT = (game.treeRetryT || 0) + dt;
-    if (game.treeRetryT > 0.3){ game.treeRetryT = 0; treeSys.refresh(); }
+    if (game.treeRetryT > 0.3){
+      game.treeRetryT = 0;
+      if (treeSys.pending) treeSys.refresh();
+      if (decorSys.pending){ decorSys.lastCell = null; decorSys.refresh(); }
+    }
   }
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
@@ -7015,6 +7447,7 @@ function frame(now){
   godRays.prepass();
   game.renderer.render(game.scene, game.camera);
   godRays.composite();
+  if (game.shotReq){ game.shotReq = false; saveSnapshot(); }
 
   game.fpsAcc += dt; game.fpsN++;
   if (game.fpsAcc >= 0.5){
@@ -7066,7 +7499,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
-  treeSys, doorSys, tableSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
+  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
 </script>
 </body>
 </html>

@@ -2,6 +2,47 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 5.6 — hands & a living surface (2026-08-23)
+
+### Surface decor
+The ground grows things now: grass tufts (green, or dry in deserts), four
+flower colors, and shrubs — up to one per 3m lattice cell, deterministic
+per seed (`gen.decorAt`), gated by biome, slope, snowline and waterline.
+Rendered as instanced cross-quad pixel billboards (7 InstancedMeshes total,
+one per look — `frustumCulled = false`, the classic instancing trap, caught
+by screenshot when a fully-populated meadow rendered bare). Streams with
+chunks and waits for meshed ground like trees do. Picked-up cells and
+hand-placed decor persist in the save.
+
+### Fists
+Empty hand shows real fists. Right click toggles the stance:
+- **Fists up**: both arms raised in a guard; left click jabs (3 dmg, short
+  reach, punch animation).
+- **Fists down**: left click gathers — plants become inventory items
+  (placeable anywhere later; catalog + icons + HUD included), and friendly
+  animals get scooped up. A carried animal rides overhead (slightly
+  forward, facing your way) and left click yeets it along your aim.
+  Lurkers refuse: "it would eat your face."
+The left fist needed a forward bias — the viewmodel group is yawed 0.42,
+which pushed -x children behind the camera plane.
+
+### Photo mode (creative)
+P toggles: HUD and viewmodel vanish, the player freezes in place, and a
+detached fly camera takes over (WASD/Space/C, Shift boost, scroll = speed).
+Comma/Period scrub the time of day (auto-advance pauses so the light holds
+still), F2 downloads a PNG snapshot straight from the canvas.
+
+### Verification
+- 238 headless tests (6 new: decorAt determinism, density over a 720m
+  square, tuft>flower>shrub skew, waterline/cell containment).
+- b56shot.js: decor instancing + meadow screenshot, fists viewmodel +
+  toggle, gather → item → place-back round trip, punch (hp 20→17), carry
+  overhead + throw, photo mode enter/scrub/fly/exit.
+- Playwright quirk documented: the first page.mouse action fires a huge
+  movementX delta that spins the camera — tests park the mouse at center
+  before aiming.
+- Full smoke green, zero console errors.
+
 ## Build 5.5.2 — LOD water matches real water (2026-08-22)
 
 Playtest: LOD water was a flat darker blue — with geometry now seamless,

@@ -67,7 +67,7 @@ horizon to ~1.6km, render distance to 256m full detail, FPS cap slider.
 cells, 4km horizon), triplanar-textured + shadowed like real terrain, with a
 chunk-coverage mask so the LOD always meets loaded geometry exactly.
 
-## Build 5.6 — Hands & a living surface
+## Build 5.6 — Hands & a living surface (DONE)
 - Surface decor: grass tufts, flowers, shrubs scattered by biome.
 - Empty hand = fists. RMB toggles fists up/down. Fists up: LMB punch
   (small damage). Fists down: LMB picks up decor — and animals; carry
