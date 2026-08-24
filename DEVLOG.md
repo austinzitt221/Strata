@@ -2,6 +2,35 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6 Phase D — wayfinding (2026-08-24) — BUILD 6 COMPLETE
+
+- **M — the auto-map.** A surface survey with explored-fog: 16m cells mark
+  as you walk (or fly low over) ground with less than 3m of rock over your
+  head — go underground and NOTHING marks, so caves stay unmapped and
+  scary. Cells render colored by their surface (materials, water depth,
+  NW-light hillshade), with beacons (cyan), beds (red), your death cache
+  (white), a yaw-tracking player arrow, north, and a scale note. Colors are
+  computed from the generator on demand and cached; the explored set is
+  persisted per world (~2km span on screen at 5px per cell).
+- **Depth readout.** The nav bar appends "↓Nm" whenever you're more than
+  3m under the surface — you always know how deep you are.
+- **Rope anchor.** Craftable (2 wool + 1 stick → 2, no station): aim at a
+  ledge, click, and the rope drops until it finds a floor (up to 60m).
+  Ladder rules while touching it: space climbs, C slides down, hanging
+  holds (grabbing one mid-fall arrests the fall — no damage). Fists-down
+  LMB picks it back up. Persisted per world, no shadow casting.
+
+Verified: 286 headless tests + full smoke suite green, plus a dedicated
+browser pass — rope place/drop-length/climb/arrest/pickup, depth readout,
+caves-don't-map, explored growth on the surface, the map screen render,
+and an autosave→reload round-trip of explored cells + ropes.
+
+That closes **Build 6 — World Gen 2.0**: macro-region biomes and landmark
+set-pieces (A), the -250 deep world with strata and enriched ore bands (B),
+the connected cave-network labyrinth with underground biomes (C), and
+wayfinding (D). Existing worlds keep their edits but sit on shifted
+terrain (see phase A note).
+
 ## Build 6 Phase C — the cave network (2026-08-24)
 
 Caves are now a GRAPH, not just noise. Per 160m cell (`CAVE_CELL`), a

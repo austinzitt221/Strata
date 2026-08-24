@@ -181,6 +181,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="mapscreen" class="screen hidden dim">
+  <div class="panel">
+    <h2>MAP</h2>
+    <div class="sub" style="margin-bottom:8px;">surface survey — explored on foot · caves stay unmapped · M to close</div>
+    <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
+  </div>
+</div>
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
   <div class="panel hidden" id="catalogpanel">
@@ -1630,7 +1637,7 @@ function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed',
+const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -1814,6 +1821,7 @@ const RECIPES = [];
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
   RECIPES.push({ kind: 'matout', matOut: MAT.STONEBRICK, yields: 4, costs: [{ mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { item: 'coal', n: 2 }] });
+  RECIPES.push({ kind: 'rope', yields: 2, costs: [{ item: 'wool', n: 2 }, { item: 'stick', n: 1 }] });
   RECIPES.push({ kind: 'bulb', yields: 2, costs: [{ mat: MAT.GLOWSHROOM, n: 4 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
   // station. Tier costs: iron/ruby pay in smelted INGOTS, diamond in gems;
@@ -4028,6 +4036,59 @@ const bulbSys = {
 };
 
 // ---------- torches ----------
+// ---- rope anchors: placeable rope that drops to the floor; ladder rules
+const ropeSys = {
+  group: null, matA: null, matL: null,
+  rebuild(){
+    if (this.group) game.scene.remove(this.group);
+    if (!this.matA){
+      this.matA = new THREE.MeshLambertMaterial({ color: 0x8a8a94 });
+      this.matL = new THREE.MeshLambertMaterial({ color: 0x9a7444 });
+    }
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    for (const r of game.ropes || []){
+      const [x, y, z, len] = r;
+      const anchor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.36), this.matA);
+      anchor.position.set(x, y + 0.05, z);
+      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 5), this.matL);
+      line.position.set(x, y - len / 2, z);
+      this.group.add(anchor, line);
+    }
+    game.scene.add(this.group);
+  },
+  add(x, y, z, len){
+    (game.ropes = game.ropes || []).push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2), +len.toFixed(1)]);
+    this.rebuild(); markSave();
+  },
+  removeAt(i){ game.ropes.splice(i, 1); this.rebuild(); markSave(); },
+  // rope line near the crosshair ray (fists-down pickup)
+  onRay(maxDist){
+    if (!game.ropes || !game.ropes.length) return -1;
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    for (let i = 0; i < game.ropes.length; i++){
+      const [x, y, z, len] = game.ropes[i];
+      for (let t = 0.4; t < maxDist; t += 0.3){
+        const py = o.y + dir.y * t;
+        if (py < y - len - 0.3 || py > y + 0.4) continue;
+        if (Math.hypot(o.x + dir.x * t - x, o.z + dir.z * t - z) < 0.5) return i;
+      }
+    }
+    return -1;
+  },
+  // is this body position hanging on a rope?
+  nearest(x, y, z){
+    if (!game.ropes || !game.ropes.length) return null;
+    for (const r of game.ropes){
+      if (y > r[1] + 0.3 || y < r[1] - r[3] - 0.5) continue;
+      if (Math.hypot(x - r[0], z - r[2]) < 0.85) return r;
+    }
+    return null;
+  },
+};
+
 const torchSys = {
   group: null,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
@@ -4975,10 +5036,11 @@ function bindInput(){
     const code = e.code;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
-    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue'){
+    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map'){
       if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
+      else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
       return;
     }
     if (game.ui !== 'none') return;
@@ -5024,6 +5086,7 @@ function bindInput(){
     if (code === 'KeyE'){ if (!game.photo) openInventory(); }
     if (code === 'KeyQ'){ if (!game.photo) openCraft(); }
     if (code === 'KeyN'){ if (!game.photo) openBlueprints(); }
+    if (code === 'KeyM'){ if (!game.photo) openMap(); }
     if (code === 'KeyP'){
       if (game.photo){ exitPhoto(); }
       else if (game.mode === 'creative') enterPhoto();
@@ -5142,6 +5205,16 @@ function updatePlayer(dt){
     if (canMove && k['Space']) ty = 3.4;             // swim up (enough to climb out)
     else if (canMove && k['KeyC']) ty = -3.6;        // dive
     game.vel.y += (ty - game.vel.y) * Math.min(1, 6 * dt);
+  } else if (ropeSys.nearest(game.pos.x, game.pos.y + playerHeight() * 0.5, game.pos.z)){
+    // hanging on a rope: ladder rules — space climbs, C slides down,
+    // otherwise hold position (no gravity, no fall damage on grab)
+    const sp = PLAYER.walk * 0.5;
+    game.vel.x += (mx * sp - game.vel.x) * Math.min(1, 10 * dt);
+    game.vel.z += (mz * sp - game.vel.z) * Math.min(1, 10 * dt);
+    let ty = 0;
+    if (canMove && k['Space']) ty = 3.2;
+    else if (canMove && k['KeyC']) ty = -3.6;
+    game.vel.y += (ty - game.vel.y) * Math.min(1, 12 * dt);
   } else {
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1);
     // snappy ground control, mild air control
@@ -5243,6 +5316,7 @@ function activeTool(){
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
+  if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
@@ -6004,7 +6078,17 @@ function tryAction(dt, now){
         if (ent) hurtEntity(ent, 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
       }
     } else if (edge){
-      // fists down: gather — decor first, then a friendly animal
+      // fists down: gather — ropes first, then decor, then a friendly animal
+      const ri = ropeSys.onRay(3.4);
+      if (ri >= 0){
+        ropeSys.removeAt(ri);
+        game.gatherT = now;
+        addStackItem('rope', 1);
+        toast('+1 rope anchor');
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD();
+        return;
+      }
       const d = decorSys.pickOnRay(3.4);
       if (d){
         const kind = d.type === 'flower' ? 'flower' : d.type === 'shrub' ? 'shrub' : 'tuft';
@@ -6119,6 +6203,23 @@ function tryAction(dt, now){
       const le = nearEdits([hit[0]-1, hit[1]-1, hit[2]-1, hit[0]+1, hit[1]+1, hit[2]+1]);
       const n = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], le, 0.15, game.gen) : [0, 1, 0];
       bulbSys.add(hit[0], hit[1], hit[2], n[0], n[1], n[2]);
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  // rope anchor: place at the aimed surface; the rope drops to the floor
+  if (tool.kind === 'rope'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no surface in reach'); return; }
+      let len = 1.5;
+      const eds = nearEdits([hit[0] - 2, hit[1] - 62, hit[2] - 2, hit[0] + 2, hit[1] + 2, hit[2] + 2]);
+      while (len < 60 && CORE.evalSDF(hit[0], hit[1] - len - 0.4, hit[2], eds, game.gen) > 0) len += 0.5;
+      if (game.mode !== 'creative') tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      ropeSys.add(hit[0], hit[1], hit[2], len);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -6269,7 +6370,7 @@ function itemIconURL(it){
   const key = it.kind === 'mat' ? 'm' + it.mat
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
-       'tuft', 'flower', 'shrub'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'tuft', 'flower', 'shrub', 'rope'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -6285,6 +6386,16 @@ function itemIconURL(it){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
+  } else if (it.kind === 'rope'){
+    // coiled rope with a hanging tail and a metal anchor hook
+    c.fillStyle = '#8a8a94'; c.fillRect(6, 1, 4, 2);
+    c.fillStyle = '#a37c47';
+    c.fillRect(4, 4, 8, 2); c.fillRect(3, 6, 10, 3); c.fillRect(4, 9, 8, 2);
+    c.fillStyle = '#8a6237';
+    c.fillRect(5, 5, 6, 1); c.fillRect(4, 7, 8, 1); c.fillRect(5, 10, 6, 1);
+    c.fillStyle = '#6b4a26'; c.fillRect(7, 6, 2, 2);
+    c.fillStyle = '#a37c47'; c.fillRect(7, 11, 2, 4);
+    c.fillStyle = '#8a6237'; c.fillRect(7, 12, 1, 3);
   } else if (it.kind === 'stick'){
     // diagonal wooden stick with a knot
     c.fillStyle = '#8a6237';
@@ -6435,6 +6546,7 @@ function itemLabel(it){
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
   if (it.kind === 'gun') return 'blaster';
   if (it.kind === 'torch') return 'torches';
+  if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
@@ -6517,7 +6629,7 @@ function catalogEntries(){
   out.push(CORE.makeGun());
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
-                   'beacon', 'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
+                   'beacon', 'rope', 'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
   return out;
@@ -6718,6 +6830,8 @@ function refreshToolHUD(){
     html = '<div class="t1">crafting table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q for full crafting</div>';
   } else if (it.kind === 'torch'){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
+  } else if (it.kind === 'rope'){
+    html = '<div class="t1">rope anchor ×' + it.count + '</div><div class="t2">left click a ledge — the rope drops to the floor · space/C to climb</div>';
   } else if (it.kind === 'stick'){
     html = '<div class="t1">sticks ×' + it.count + '</div><div class="t2">crafting material — torches, doors, swords (Q)</div>';
   } else if (it.kind === 'beacon'){
@@ -6952,8 +7066,86 @@ function buildCraftUI(){
     list.appendChild(row);
   }
 }
+// ---------- surface auto-map ----------
+// Explored-fog survey of ground you've actually walked (or flown low over)
+// on the SURFACE — depth > 3m marks nothing, so caves stay unmapped and
+// scary. 16m cells, persisted per world.
+const MAP_CELL = 16;
+function markExplored(){
+  const mcx = Math.floor(game.pos.x / MAP_CELL), mcz = Math.floor(game.pos.z / MAP_CELL);
+  const ex = game.explored || (game.explored = new Set());
+  const before = ex.size;
+  for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++)
+    if (dx * dx + dz * dz <= 10) ex.add((mcx + dx) + ',' + (mcz + dz));
+  if (ex.size !== before) markSave();
+}
+function mapCellColor(cx, cz){
+  const cache = game.mapColCache || (game.mapColCache = new Map());
+  const key = cx + ',' + cz;
+  let col = cache.get(key);
+  if (col) return col;
+  const g = game.gen;
+  const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
+  const h = g.height(x, z);
+  const wet = g.wetAt ? g.wetAt(x, z, h) : (g.seaLevel != null && h < g.seaLevel);
+  let r, gc, b;
+  if (wet){
+    const deep = Math.min(1, ((g.seaLevel || 0) - h) / 12);
+    r = 46 - 20 * deep; gc = 96 - 34 * deep; b = 150 - 40 * deep;
+  } else {
+    const m = g.mat(x, h - 0.2, z) || 1;
+    const c0 = MAT_COLOR[m] || 0x7d7d84;
+    // hillshade: light from the northwest + altitude lift
+    const hn = g.height(x - MAP_CELL, z - MAP_CELL);
+    const sh = Math.max(-0.28, Math.min(0.28, (h - hn) * 0.03));
+    const lift = 0.78 + Math.max(0, Math.min(0.3, h / 160)) + sh;
+    r = ((c0 >> 16) & 255) * lift; gc = ((c0 >> 8) & 255) * lift; b = (c0 & 255) * lift;
+  }
+  col = 'rgb(' + (r | 0) + ',' + (gc | 0) + ',' + (b | 0) + ')';
+  if (cache.size > 60000) cache.clear();
+  cache.set(key, col);
+  return col;
+}
+function drawMap(){
+  const cv = $('mapcanvas'), c = cv.getContext('2d');
+  const W = cv.width, H = cv.height, px = 5;   // 5px per 16m cell -> ~2km span
+  c.fillStyle = '#0a0910'; c.fillRect(0, 0, W, H);
+  const pcx = game.pos.x / MAP_CELL, pcz = game.pos.z / MAP_CELL;
+  const toSX = cx => Math.round(W / 2 + (cx + 0.5 - pcx) * px);
+  const toSY = cz => Math.round(H / 2 + (cz + 0.5 - pcz) * px);
+  const half = Math.ceil(W / 2 / px) + 1;
+  for (const key of game.explored || []){
+    const i = key.indexOf(',');
+    const cx = +key.slice(0, i), cz = +key.slice(i + 1);
+    if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
+    c.fillStyle = mapCellColor(cx, cz);
+    c.fillRect(toSX(cx) - (px >> 1) - 1, toSY(cz) - (px >> 1) - 1, px, px);
+  }
+  const mark = (x, z, col, s) => {
+    const sx = W / 2 + (x / MAP_CELL - pcx) * px, sy = H / 2 + (z / MAP_CELL - pcz) * px;
+    if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) return;
+    c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
+  };
+  for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
+  for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
+  if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
+  // player arrow
+  c.save();
+  c.translate(W / 2, H / 2);
+  c.rotate(-game.yaw);
+  c.fillStyle = '#ffd76a';
+  c.beginPath(); c.moveTo(0, -8); c.lineTo(5, 6); c.lineTo(-5, 6); c.closePath(); c.fill();
+  c.restore();
+  c.fillStyle = 'rgba(232,240,248,0.85)';
+  c.font = '14px monospace';
+  c.fillText('N', W / 2 - 4, 18);
+  c.fillText(Math.round(W / px * MAP_CELL / 1000 * 10) / 10 + 'km across', W - 110, H - 10);
+}
+function openMap(){
+  game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
+}
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen');
   game.activeStove = null;
   game.ui = 'none';
   requestLock();
@@ -7178,6 +7370,8 @@ function saveNow(){
     bulbs: game.bulbs,
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
+    ropes: game.ropes || [],
+    explored: [...(game.explored || [])],
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
@@ -7227,6 +7421,9 @@ function startWorld(id){
   game.breath = 100; game.underwater = false;
   game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
+  game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
+  game.explored = new Set(data.explored || []);
+  game.mapColCache = new Map();
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.decorRemovedSet = new Set(data.removedDecor || []);
   game.decorPlaced = data.placedDecor || [];
@@ -7257,6 +7454,7 @@ function startWorld(id){
   buildScene();
   game.terrain.edits = game.edits;
   torchSys.rebuild();
+  ropeSys.rebuild();
   beaconSys.rebuild();
   bedSys.rebuild();
   stoveSys.rebuild();
@@ -7920,6 +8118,7 @@ function frame(now){
     game.navT = 0;
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
+    if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
     // the sky itself goes black as you descend — caves feel enclosed and
     // not-yet-meshed frontier chunks never flash bright blue in the dark
     const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
@@ -7939,6 +8138,7 @@ function frame(now){
     $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
     $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';
     let posTxt = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
+    if (depth > 3) posTxt += ' · \u2193' + Math.round(depth) + 'm';
     if (game.deathCache){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
