@@ -105,9 +105,11 @@ survive only on the drill and paint mode.
 
 ## Build 7 — Electricity (analog power, not redstone)
 Power is continuous wattage, not on/off — machines scale with supply, no cap.
-- **Phase A — the network**: wires, switches (levers), power meters.
-  Sources: hand crank, animal/enemy crank (captured mob on a wheel),
-  water wheel (needs real water), generator. Bulbs toggle on/off.
+- **Phase A — the network (DONE)**: wires, switches (levers), live power
+  meters. Sources: hand crank, water wheel (needs real water), coal
+  generator. Wired bulbs live and die by their circuit; powered stoves
+  smelt up to 3×. Camera drone shipped early (45m tether, battery,
+  charges near a surplus grid). Still to come: animal/enemy crank.
 - **Phase B — machines**: auto-crafting table (select a recipe, it crafts
   while powered), boosted stove (smelt speed scales with watts), hopper +
   item tubes so materials can flow into machines. Powered elevator platform

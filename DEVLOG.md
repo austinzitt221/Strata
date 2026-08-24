@@ -2,6 +2,57 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7 Phase A — electricity: the grid is live (2026-08-24)
+
+First: two 6.5 playtest fixes. The dispenser preview's texture no longer
+swims while you walk with snap off (the triplanar now samples relative to
+the shape's own anchor when free-placing; snapped keeps world anchoring,
+which was already still), and the preview is ~30% more transparent.
+
+Then the build: **analog power**. Wattage is continuous, not on/off —
+sources sum, consumers share, machines scale with supply, no cap.
+
+- **The graph.** Powered props are nodes, wires are edges. Each connected
+  component sums its sources and splits them across its demand; the ratio
+  (supply/demand, capped at 1) is what every consumer feels. An OFF lever
+  breaks every wire touching it — inline switches, exactly like the spec.
+- **Sources**: the *hand crank* (right click winds a spring, ~20W while
+  wound — juice you make with your arms), the *water wheel* (place it IN
+  water, ~15W forever — it knows if it's dry and says so), and the
+  *generator* (feed it coal by right-clicking with coal held, ~40W while
+  burning, ember-glow mouth). Sources only drain while something draws.
+- **Consumers**: *bulbs* wired into a circuit now live and die by it —
+  their light AND glass dim when the juice stops (standalone bulbs stay
+  always-on, nothing old breaks). *Stoves* wired to power smelt up to 3×
+  faster, scaling with their share of the watts — the first machine.
+- **The meter** is a real prop with a live canvas screen: watts on top,
+  load below, per circuit. The first debugging tool for your grid.
+- **Wires**: craft from iron, click terminal → terminal (power props,
+  bulbs AND stoves all have terminals); a pale live preview strand sags
+  from your first click to wherever you're aiming — build 6.5 rules.
+  Right click cancels. Fists pick wires and props back up, refunding
+  attached wires. Everything persists (bulbs and stoves got durable
+  terminal ids; old saves mint them on load).
+- **The camera drone** (pulled forward from the 7 backlog because it was
+  too good to wait): craft it at a station (iron + ruby + diamond), right
+  click to launch. It's the photo-mode core with a body and rules —
+  45m tether to where you're standing, battery drains in flight, dies →
+  auto-lands. It charges at ~4.5%/s while in your inventory NEAR a powered
+  circuit with spare watts — the first reason to build a grid at basecamp.
+  Works in survival. No time-scrub (that stays photo-mode magic).
+
+Still in the build-7 backlog for after this playtest, per the roadmap
+rule: auto-crafting table, hopper + item tubes, the powered elevator,
+animal crank, tesla coil, generator 2.0.
+
+Verified: synchronous graph tests (no-fuel dark → fueled lit @40W/5W →
+lever-off cut while the meter still reads the source side → crank+gen
+summing to 60W → stove boost 1.0 → standalone bulb unaffected), a full
+browser pass (wire tool two-click flow with live preview, drone
+launch/tether-clamp/drain/land/charge-near-surplus, fists wire pickup
+with refund, save round-trip of nodes+wires+ids), 286 headless tests and
+the smoke suite green.
+
 ## Build 6.5 — what you see is what you place (2026-08-24)
 
 Playtest note: placing anything (the rope especially) was blind — no
