@@ -1638,6 +1638,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
+  'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -1822,6 +1823,14 @@ const RECIPES = [];
   RECIPES.push({ kind: 'matout', matOut: MAT.STONEBRICK, yields: 4, costs: [{ mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'rope', yields: 2, costs: [{ item: 'wool', n: 2 }, { item: 'stick', n: 1 }] });
+  // the grid: analog power, phase A
+  RECIPES.push({ kind: 'wire', yields: 6, costs: [{ item: 'ironingot', n: 2 }] });
+  RECIPES.push({ kind: 'lever', yields: 2, costs: [{ mat: MAT.ROCK, n: 2 }, { item: 'stick', n: 1 }] });
+  RECIPES.push({ kind: 'crank', yields: 1, station: true, costs: [{ mat: MAT.PLANKS, n: 4 }, { item: 'ironingot', n: 2 }] });
+  RECIPES.push({ kind: 'wheel', yields: 1, station: true, costs: [{ mat: MAT.PLANKS, n: 8 }, { item: 'ironingot', n: 4 }] });
+  RECIPES.push({ kind: 'gen', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.ROCK, n: 4 }] });
+  RECIPES.push({ kind: 'meter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
+  RECIPES.push({ kind: 'drone', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 2 }, { item: 'diamond', n: 1 }] });
   RECIPES.push({ kind: 'bulb', yields: 2, costs: [{ mat: MAT.GLOWSHROOM, n: 4 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
   // station. Tier costs: iron/ruby pay in smelted INGOTS, diamond in gems;
@@ -1882,6 +1891,7 @@ function craft(slots, r, free){
                   : r.kind === 'disp' ? makeDispenser(r.tier)
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
+                  : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
                   : makeGun();
   }
   return 'ok';
@@ -2819,7 +2829,7 @@ function buildScene(){
   // the terrain triplanar (same axis pick, same 1m fract), so what floats in
   // front of you is what the click bakes into the world
   game.ghostSolidMat = new THREE.ShaderMaterial({
-    uniforms: { uTex: { value: null }, uOpacity: { value: 0.85 } },
+    uniforms: { uTex: { value: null }, uOpacity: { value: 0.6 }, uAnchor: { value: new THREE.Vector3() } },
     vertexShader: `
       varying vec3 vW; varying vec3 vN;
       void main(){
@@ -2829,11 +2839,12 @@ function buildScene(){
       }`,
     fragmentShader: `
       precision highp float;
-      uniform sampler2D uTex; uniform float uOpacity;
+      uniform sampler2D uTex; uniform float uOpacity; uniform vec3 uAnchor;
       varying vec3 vW; varying vec3 vN;
       void main(){
         vec3 an = abs(vN);
-        vec2 uv = (an.y >= an.x && an.y >= an.z) ? vW.xz : (an.x >= an.z) ? vW.zy : vW.xy;
+        vec3 rel = vW - uAnchor;
+        vec2 uv = (an.y >= an.x && an.y >= an.z) ? rel.xz : (an.x >= an.z) ? rel.zy : rel.xy;
         vec3 col = texture2D(uTex, fract(uv)).rgb;
         float lit = 0.68 + 0.32 * max(vN.y, 0.0);
         gl_FragColor = vec4(col * lit, uOpacity);
@@ -2886,6 +2897,8 @@ function buildScene(){
   doorSys.init(scene);
   tableSys.init(scene);
   placePreview.init(scene);
+  pnodeSys.init(scene);
+  wireSys.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -3965,7 +3978,7 @@ const stoveSys = {
     return g;
   },
   add(x, y, z, yaw){
-    game.stoves.push({ x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0 });
+    game.stoves.push({ x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0, id: game.pSeq++ });
     this.rebuild(); markSave();
   },
   removeNear(x, y, z, r){
@@ -4015,7 +4028,7 @@ const stoveSys = {
         st.burn = ops;
         changed = true;
       }
-      st.prog += dt;
+      st.prog += dt * (1 + 2 * powerSys.stoveBoost(st));   // watts triple the burn
       if (st.prog >= CORE.SMELT_T){
         st.prog = 0;
         st.burn--;
@@ -4046,8 +4059,10 @@ const bulbSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
+    this.items = [];
     for (const b of game.bulbs){
       const g = this.model();
+      this.items.push({ b, g });
       g.position.set(b[0], b[1], b[2]);
       // tilt the whole bulb so its base sits on the surface it was placed on
       const n = new THREE.Vector3(b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]).normalize();
@@ -4074,10 +4089,29 @@ const bulbSys = {
     const fil = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.05), this.mats.fil);
     fil.position.y = 0.33;
     g.add(screw); g.add(neck); g.add(globe); g.add(fil);
+    g.userData.globe = globe; g.userData.fil = fil;
     return g;
   },
+  // wired bulbs go dark glass when their circuit has no juice
+  applyPower(){
+    if (!this.items) return;
+    if (!this.matsOff){
+      this.matsOff = {
+        glass: new THREE.MeshBasicMaterial({ color: 0x4b4b54, transparent: true, opacity: 0.85 }),
+        fil: new THREE.MeshBasicMaterial({ color: 0x6a6255 }),
+      };
+    }
+    for (const it of this.items){
+      const lit = powerSys.bulbLight(it.b[6]) > 0.02;
+      const gm = lit ? this.mats.glass : this.matsOff.glass;
+      if (it.g.userData.globe.material !== gm){
+        it.g.userData.globe.material = gm;
+        it.g.userData.fil.material = lit ? this.mats.fil : this.matsOff.fil;
+      }
+    }
+  },
   add(x, y, z, nx, ny, nz){
-    game.bulbs.push([x, y, z, nx == null ? 0 : nx, ny == null ? 1 : ny, nz == null ? 0 : nz]);
+    game.bulbs.push([x, y, z, nx == null ? 0 : nx, ny == null ? 1 : ny, nz == null ? 0 : nz, game.pSeq++]);
     this.rebuild(); markSave();
   },
   removeNear(x, y, z, r){
@@ -4156,6 +4190,444 @@ const ropeSys = {
   },
 };
 
+// ---------- the grid: analog power (build 7 phase A) ----------
+// Power is continuous wattage, not on/off. Sources and consumers are NODES;
+// wires are edges; an OFF lever breaks every wire touching it. Each
+// connected component sums its sources and shares them across its demand —
+// machines scale with supply, no cap.
+const pnodeSys = {
+  group: null, items: [], mats: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); this.items = []; },
+  ensureMats(){
+    if (!this.mats){
+      this.mats = {
+        steel: pixMat(PROP_TEX.steel), wood: pixMat(PROP_TEX.planksV),
+        bark: pixMat(PROP_TEX.bark, null, 1, 2),
+        copper: new THREE.MeshBasicMaterial({ color: 0xb5793a }),
+        dark: new THREE.MeshBasicMaterial({ color: 0x2c2c31 }),
+        knob: new THREE.MeshBasicMaterial({ color: 0xd84a63 }),
+        ember: pixMat(PROP_TEX.ember),
+      };
+    }
+    return this.mats;
+  },
+  model(t){
+    const M = this.ensureMats();
+    const g = new THREE.Group();
+    if (t === 'lever'){
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.32), M.steel);
+      base.position.y = 0.08;
+      const arm = new THREE.Group();
+      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.5, 0.07), M.bark);
+      stick.position.y = 0.25;
+      const knob = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.13), M.knob);
+      knob.position.y = 0.5;
+      arm.add(stick, knob);
+      arm.position.y = 0.14;
+      arm.rotation.z = 0.7;
+      g.add(base, arm);
+      g.userData.arm = arm;
+    } else if (t === 'crank'){
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), M.steel);
+      post.position.y = 0.45;
+      const handle = new THREE.Group();
+      const spoke = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.07, 0.07), M.bark);
+      spoke.position.x = 0.18;
+      const grip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.24, 0.09), M.wood);
+      grip.position.set(0.38, 0.1, 0);
+      handle.add(spoke, grip);
+      handle.position.y = 0.92;
+      g.add(post, handle);
+      g.userData.handle = handle;
+    } else if (t === 'wheel'){
+      for (const s of [-0.42, 0.42]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.15, 0.14), M.wood);
+        post.position.set(0, 0.57, s);
+        g.add(post);
+      }
+      const wheel = new THREE.Group();
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.36, 6), M.steel);
+      hub.rotation.x = Math.PI / 2;
+      wheel.add(hub);
+      for (let i = 0; i < 8; i++){
+        const a = i * Math.PI / 4;
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.85, 0.3), M.wood);
+        p.position.set(Math.cos(a) * 0.62, Math.sin(a) * 0.62, 0);
+        p.rotation.z = a + Math.PI / 2;
+        wheel.add(p);
+      }
+      wheel.position.y = 1.15;
+      g.add(wheel);
+      g.userData.wheel = wheel;
+    } else if (t === 'gen'){
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 0.72), M.steel);
+      body.position.y = 0.4;
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.44, 6), M.dark);
+      pipe.position.set(0.3, 1.0, 0.2);
+      const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.3, 0.06), M.dark);
+      mouth.position.set(0, 0.34, -0.38);
+      const vent = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.05), M.dark);
+      vent.position.set(0, 0.66, -0.37);
+      g.add(body, pipe, mouth, vent);
+      g.userData.mouth = mouth;
+    } else if (t === 'meter'){
+      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.05, 0.1), M.steel);
+      pole.position.y = 0.52;
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.4, 0.1), M.dark);
+      panel.position.y = 1.2;
+      const cv = document.createElement('canvas');
+      cv.width = 64; cv.height = 32;
+      const tex = new THREE.CanvasTexture(cv);
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.32),
+        new THREE.MeshBasicMaterial({ map: tex }));
+      screen.position.set(0, 1.2, -0.055);
+      screen.rotation.y = Math.PI;
+      g.add(pole, panel, screen);
+      g.userData.meter = { cv, tex };
+      this.drawMeter(g.userData.meter, null);
+    }
+    return g;
+  },
+  drawMeter(m, v){
+    const c = m.cv.getContext('2d');
+    c.fillStyle = '#0d1a12'; c.fillRect(0, 0, 64, 32);
+    c.fillStyle = '#57e88a'; c.font = 'bold 14px monospace'; c.textAlign = 'center';
+    c.fillText(v ? Math.round(v.w) + 'W' : '--', 32, 14);
+    c.fillStyle = '#2f7a4d'; c.font = '9px monospace';
+    c.fillText(v ? 'load ' + Math.round(v.d) + 'W' : 'no grid', 32, 27);
+    m.tex.needsUpdate = true;
+  },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    this.items = [];
+    for (const n of game.pnodes || []){
+      const g = this.model(n.t);
+      g.position.set(n.x, n.y, n.z);
+      g.rotation.y = n.yaw || 0;
+      if (n.t === 'lever' && g.userData.arm) g.userData.arm.rotation.z = n.on ? -0.7 : 0.7;
+      this.group.add(g);
+      this.items.push({ n, g });
+    }
+    wireSys.rebuild();
+  },
+  add(t, x, y, z, yaw){
+    const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
+    if (t === 'lever') n.on = true;
+    if (t === 'crank') n.wound = 0;
+    if (t === 'gen') n.burn = 0;
+    game.pnodes.push(n);
+    this.rebuild(); markSave();
+  },
+  byId(id){ return (game.pnodes || []).find(n => n.id === id); },
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const n of game.pnodes || []){
+      const vx = n.x - o.x, vy = n.y + 0.7 - o.y, vz = n.z - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.abs(py) < 0.9 && Math.hypot(px, pz) < 0.7){ best = n; bestT = tt; }
+    }
+    return best;
+  },
+  removeNode(n){
+    const nid = 'n' + n.id;
+    let w = 0;
+    game.wires = game.wires.filter(wr => {
+      if (wr.a === nid || wr.b === nid){ w++; return false; }
+      return true;
+    });
+    if (w) addStackItem('wire', w);
+    game.pnodes.splice(game.pnodes.indexOf(n), 1);
+    this.rebuild(); markSave();
+    return w;
+  },
+  // world position of a wire terminal: n<id> node, b<id> bulb, s<id> stove
+  terminal(id){
+    const k = id[0], num = +id.slice(1);
+    if (k === 'n'){
+      const n = this.byId(num);
+      if (!n) return null;
+      const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42 }[n.t] || 1;
+      return [n.x, n.y + dy, n.z];
+    }
+    if (k === 'b'){
+      const b = (game.bulbs || []).find(b => b[6] === num);
+      if (!b) return null;
+      return [b[0] + (b[3] || 0) * 0.42, b[1] + (b[4] == null ? 1 : b[4]) * 0.42, b[2] + (b[5] || 0) * 0.42];
+    }
+    if (k === 's'){
+      const st = (game.stoves || []).find(s => s.id === num);
+      if (!st) return null;
+      return [st.x, st.y + 1.12, st.z];
+    }
+    return null;
+  },
+  // every wireable terminal in the world (id + position)
+  allTerminals(){
+    const out = [];
+    for (const n of game.pnodes || []){
+      const p = this.terminal('n' + n.id);
+      if (p) out.push({ id: 'n' + n.id, p });
+    }
+    for (const b of game.bulbs || []){
+      if (b[6] == null) continue;
+      const p = this.terminal('b' + b[6]);
+      if (p) out.push({ id: 'b' + b[6], p });
+    }
+    for (const st of game.stoves || []){
+      if (st.id == null) continue;
+      const p = this.terminal('s' + st.id);
+      if (p) out.push({ id: 's' + st.id, p });
+    }
+    return out;
+  },
+  terminalOnRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const t of this.allTerminals()){
+      const vx = t.p[0] - o.x, vy = t.p[1] - o.y, vz = t.p[2] - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.hypot(px, py, pz) < 0.85){ best = t; bestT = tt; }
+    }
+    return best;
+  },
+  // spin wheels/cranks, glow generator mouths, refresh meter screens
+  animate(dt){
+    const M = this.mats;
+    for (const it of this.items){
+      const n = it.n, ud = it.g.userData;
+      if (n.t === 'wheel' && ud.wheel && powerSys.activeSrc.has(n.id))
+        ud.wheel.rotation.z -= dt * 1.4;
+      if (n.t === 'crank' && ud.handle && (n.wound || 0) > 0 && powerSys.activeSrc.has(n.id))
+        ud.handle.rotation.y += dt * 5;
+      if (n.t === 'gen' && ud.mouth && M){
+        const want = (n.burn || 0) > 0 ? M.ember : M.dark;
+        if (ud.mouth.material !== want) ud.mouth.material = want;
+      }
+      if (n.t === 'meter' && ud.meter && powerSys.meterDirty){
+        this.drawMeter(ud.meter, powerSys.meterMap.get('n' + n.id) || null);
+      }
+    }
+    powerSys.meterDirty = false;
+  },
+};
+
+const wireSys = {
+  group: null, preview: null, mat: null, pMat: null, pCache: null,
+  init(scene){
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    scene.add(this.group);
+    this.mat = new THREE.MeshBasicMaterial({ color: 0x8f5a24 });
+    this.pMat = new THREE.MeshBasicMaterial({ color: 0x9adcff, transparent: true, opacity: 0.7, depthWrite: false });
+    this.preview = new THREE.Group();
+    this.preview.userData.noShadow = true;
+    this.preview.visible = false;
+    scene.add(this.preview);
+    this.pCache = null;
+  },
+  curve(a, b){
+    const pts = [];
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const sag = Math.min(1.1, L * 0.1);
+    for (let i = 0; i <= 6; i++){
+      const t = i / 6;
+      pts.push([a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t - Math.sin(t * Math.PI) * sag,
+                a[2] + (b[2] - a[2]) * t]);
+    }
+    return pts;
+  },
+  seg(a, b, r, mat, group){
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 0.01) return;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 4), mat);
+    m.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(dx / len, dy / len, dz / len));
+    group.add(m);
+  },
+  strand(a, b, r, mat, group){
+    const pts = this.curve(a, b);
+    for (let i = 0; i + 1 < pts.length; i++) this.seg(pts[i], pts[i + 1], r, mat, group);
+    return pts[3];
+  },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length){
+      const c = this.group.children.pop();
+      if (c.geometry) c.geometry.dispose();
+    }
+    // drop wires whose endpoints vanished (prop removed)
+    game.wires = (game.wires || []).filter(w => pnodeSys.terminal(w.a) && pnodeSys.terminal(w.b));
+    for (const w of game.wires){
+      w.mid = this.strand(pnodeSys.terminal(w.a), pnodeSys.terminal(w.b), 0.028, this.mat, this.group);
+    }
+  },
+  onRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = -1, bestT = maxDist;
+    for (let i = 0; i < (game.wires || []).length; i++){
+      const m = game.wires[i].mid;
+      if (!m) continue;
+      const vx = m[0] - o.x, vy = m[1] - o.y, vz = m[2] - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.hypot(px, py, pz) < 0.7){ best = i; bestT = tt; }
+    }
+    return best;
+  },
+  // live preview strand from the pending terminal to the aim point
+  updatePreview(){
+    const tool = activeTool();
+    const wiring = tool && tool.kind === 'wire' && game.ui === 'none' && isLocked();
+    if (!wiring && game.wirePending){ game.wirePending = null; refreshToolHUD(); }
+    if (!wiring || !game.wirePending){ this.preview.visible = false; this.pCache = null; return; }
+    const A = pnodeSys.terminal(game.wirePending);
+    if (!A){ game.wirePending = null; this.preview.visible = false; return; }
+    const t2 = pnodeSys.terminalOnRay(5.5);
+    let B = t2 && t2.id !== game.wirePending ? t2.p : null;
+    if (!B){
+      const hit = surfaceHit();
+      if (hit) B = hit;
+      else {
+        const dir = new THREE.Vector3();
+        game.camera.getWorldDirection(dir);
+        const o = game.camera.position;
+        B = [o.x + dir.x * 3, o.y + dir.y * 3, o.z + dir.z * 3];
+      }
+    }
+    const key = B.map(v => Math.round(v * 8)).join(',');
+    if (this.pCache !== key){
+      this.pCache = key;
+      while (this.preview.children.length){
+        const c = this.preview.children.pop();
+        if (c.geometry) c.geometry.dispose();
+      }
+      this.strand(A, B, 0.03, this.pMat, this.preview);
+    }
+    this.preview.visible = true;
+  },
+};
+
+const powerSys = {
+  accT: 0, meterMap: new Map(), bulbMap: new Map(), stoveMap: new Map(),
+  wiredBulbs: new Set(), activeSrc: new Set(), surplus: [], meterDirty: false,
+  evaluate(dt){
+    const parent = new Map();
+    const find = x => {
+      let r = x;
+      while (parent.get(r) !== r) r = parent.get(r);
+      let c = x;
+      while (parent.get(c) !== c){ const nx = parent.get(c); parent.set(c, r); c = nx; }
+      return r;
+    };
+    const seed = id => { if (!parent.has(id)) parent.set(id, id); };
+    const offLever = id => {
+      if (id[0] !== 'n') return false;
+      const n = pnodeSys.byId(+id.slice(1));
+      return !!(n && n.t === 'lever' && !n.on);
+    };
+    this.wiredBulbs = new Set();
+    for (const w of game.wires || []){
+      if (w.a[0] === 'b') this.wiredBulbs.add(w.a);
+      if (w.b[0] === 'b') this.wiredBulbs.add(w.b);
+      seed(w.a); seed(w.b);
+      if (offLever(w.a) || offLever(w.b)) continue;   // an off lever cuts its wires
+      const ra = find(w.a), rb = find(w.b);
+      if (ra !== rb) parent.set(ra, rb);
+    }
+    const comps = new Map();
+    const compOf = id => {
+      const r = find(id);
+      let c = comps.get(r);
+      if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], terms: [] }; comps.set(r, c); }
+      return c;
+    };
+    for (const id of parent.keys()){
+      const c = compOf(id);
+      const tp = pnodeSys.terminal(id);
+      if (tp) c.terms.push(tp);
+      if (id[0] === 'n'){
+        const n = pnodeSys.byId(+id.slice(1));
+        if (!n) continue;
+        if (n.t === 'crank' && (n.wound || 0) > 0){ c.w += 20; c.srcs.push(n); }
+        else if (n.t === 'wheel' && inWater(n.x, n.y + 0.6, n.z)){ c.w += 15; c.srcs.push(n); }
+        else if (n.t === 'gen' && (n.burn || 0) > 0){ c.w += 40; c.srcs.push(n); }
+      } else if (id[0] === 'b'){
+        c.d += 5; c.bulbs.push(id);
+      } else if (id[0] === 's'){
+        const st = (game.stoves || []).find(s => 's' + s.id === id);
+        if (st && st.in && CORE.SMELTS[st.in.kind] && st.burn > 0){ c.d += 30; c.stoves.push(id); }
+      }
+    }
+    this.bulbMap.clear(); this.stoveMap.clear(); this.meterMap.clear();
+    this.activeSrc.clear(); this.surplus = [];
+    for (const c of comps.values()){
+      const ratio = c.d > 0 ? Math.min(1, c.w / c.d) : (c.w > 0 ? 1 : 0);
+      for (const b of c.bulbs) this.bulbMap.set(b, ratio);
+      for (const s of c.stoves) this.stoveMap.set(s, ratio);
+      if (c.d > 0 && c.w > 0){
+        // sources drain only while something draws
+        for (const n of c.srcs){
+          this.activeSrc.add(n.id);
+          if (n.t === 'crank') n.wound = Math.max(0, (n.wound || 0) - dt);
+          if (n.t === 'gen') n.burn = Math.max(0, (n.burn || 0) - dt);
+        }
+      }
+      if (c.w > c.d + 2) this.surplus.push(...c.terms);
+    }
+    for (const id of parent.keys()){
+      if (id[0] === 'n'){
+        const n = pnodeSys.byId(+id.slice(1));
+        if (n && n.t === 'meter'){
+          const c = compOf(id);
+          this.meterMap.set(id, { w: c.w, d: c.d });
+        }
+      }
+    }
+    this.meterDirty = true;
+  },
+  // wired bulbs live and die by their circuit; standalone bulbs stay lit
+  bulbLight(id){
+    if (id == null || !this.wiredBulbs.has('b' + id)) return 1;
+    return this.bulbMap.get('b' + id) || 0;
+  },
+  stoveBoost(st){
+    if (st.id == null) return 0;
+    return this.stoveMap.get('s' + st.id) || 0;
+  },
+  surplusNear(x, y, z, r){
+    for (const t of this.surplus)
+      if (Math.hypot(t[0] - x, t[1] - y, t[2] - z) < r) return true;
+    return false;
+  },
+  update(dt){
+    this.accT += dt;
+    if (this.accT > 0.25){
+      this.evaluate(this.accT);
+      this.accT = 0;
+      bulbSys.applyPower();
+    }
+    pnodeSys.animate(dt);
+    wireSys.updatePreview();
+  },
+};
+
 const torchSys = {
   group: null,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
@@ -4214,7 +4686,9 @@ const torchSys = {
       const bx = b[0] + (b[3] || 0) * 0.36, by = b[1] + (b[4] == null ? 1 : b[4]) * 0.36,
             bz = b[2] + (b[5] || 0) * 0.36;
       const d = Math.hypot(bx-game.pos.x, by-game.pos.y, bz-game.pos.z);
-      if (d < 70) near.push([d, [bx, by - 0.36, bz], 0.36, 19.6]);   // double torch reach
+      const pw = powerSys.bulbLight(b[6]);   // wired bulbs follow their circuit
+      if (pw <= 0.02) continue;
+      if (d < 70) near.push([d, [bx, by - 0.36, bz], 0.36, 19.6 * pw]);   // double torch reach
     }
     near.sort((a, b) => a[0] - b[0]);
     const n = Math.min(16, near.length);
@@ -4694,7 +5168,7 @@ const tableSys = {
 // keeps its wireframe — a hole has no body to show.)
 const placePreview = {
   root: null, vkey: null, ropeT: 0, ropeLen: 2, lastHit: null,
-  KINDS: ['torch', 'bulb', 'table', 'beacon', 'bed', 'stove', 'rope', 'decor'],
+  KINDS: ['torch', 'bulb', 'table', 'beacon', 'bed', 'stove', 'rope', 'decor', 'pnode'],
   init(scene){
     this.root = new THREE.Group();
     this.root.visible = false;
@@ -4727,6 +5201,7 @@ const placePreview = {
     else if (kind === 'bed') g = bedSys.model();
     else if (kind === 'stove') g = stoveSys.model();
     else if (kind === 'rope') g = ropeSys.model(this.ropeLen);
+    else if (kind === 'pnode') g = pnodeSys.model(vkey.split('|')[1]);
     else if (kind === 'door'){
       const p = vkey.split('|');
       g = doorSys.model(+p[1], +p[2]);
@@ -4754,6 +5229,7 @@ const placePreview = {
     if (!hit){ this.hide(); return; }
     let vkey = tool.kind;
     if (tool.kind === 'decor') vkey += '|' + tool.decorType;
+    if (tool.kind === 'pnode') vkey += '|' + tool.ptype;
     if (tool.kind === 'rope'){
       // live drop length: same probe the click runs, throttled to hit moves
       if (!this.lastHit || now - this.ropeT > 350 ||
@@ -4767,7 +5243,7 @@ const placePreview = {
       vkey += '|' + this.ropeLen;
     }
     let yaw = 0;
-    if (tool.kind === 'stove') yaw = Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2);
+    if (tool.kind === 'stove' || tool.kind === 'pnode') yaw = Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2);
     else if (tool.kind === 'bed') yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2);
     this.showAt(tool.kind, vkey, hit[0], hit[1], hit[2], yaw);
     if (tool.kind === 'bulb'){
@@ -5123,6 +5599,14 @@ function bindInput(){
       }
     }
     if (e.button === 2){
+      if (game.photo){ if (game.photo.drone) exitPhoto(); return; }
+      const wtool = activeTool();
+      if (wtool && wtool.kind === 'wire' && game.wirePending){
+        game.wirePending = null;
+        toast('wire cancelled');
+        refreshToolHUD();
+        return;
+      }
       if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
       if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
       // a crafting table in reach overrides the held item's right click
@@ -5131,6 +5615,46 @@ function bindInput(){
       if (bed){ bedSys.sleep(bed); return; }
       const stv = stoveSys.onRay(3.5);
       if (stv){ openStove(stv); AudioSys.sfx('toggle'); return; }
+      const pn = pnodeSys.onRay(3.2);
+      if (pn){
+        if (pn.t === 'lever'){
+          pn.on = !pn.on;
+          pnodeSys.rebuild();
+          AudioSys.sfx('toggle'); markSave();
+          toast('lever ' + (pn.on ? 'ON' : 'OFF'));
+          return;
+        }
+        if (pn.t === 'crank'){
+          pn.wound = Math.min(40, (pn.wound || 0) + 8);
+          AudioSys.sfx('toggle'); markSave();
+          toast('cranked — ' + Math.round(pn.wound) + 's of spring');
+          return;
+        }
+        if (pn.t === 'gen'){
+          const fit = selectedItem();
+          if (fit && fit.kind === 'coal' && (pn.burn || 0) < 120){
+            fit.count--;
+            if (fit.count <= 0) game.slots[game.hotSel] = null;
+            pn.burn = (pn.burn || 0) + 30;
+            AudioSys.sfx('place'); markSave();
+            refreshHotbar(); refreshToolHUD();
+            toast('generator fueled — ' + Math.round(pn.burn) + 's');
+          } else {
+            toast('generator: ' + Math.round(pn.burn || 0) + 's fuel — right click holding coal to feed');
+          }
+          return;
+        }
+        if (pn.t === 'wheel'){
+          toast(inWater(pn.x, pn.y + 0.6, pn.z) ? 'water wheel: turning, ~15W' : 'water wheel: dry — place it IN water');
+          return;
+        }
+      }
+      const selDrone = selectedItem();
+      if (selDrone && selDrone.kind === 'drone'){
+        if ((selDrone.charge || 0) < 5) toast('drone battery too low — charge it near a powered grid with spare watts');
+        else enterPhoto(selDrone);
+        return;
+      }
       const selIt = selectedItem();
       if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
@@ -5275,8 +5799,10 @@ function bindInput(){
       else toast('photo mode is creative-only');
     }
     if (game.photo){
-      if (code === 'Comma'){ game.timeOfDay = (game.timeOfDay - 0.02 + 1) % 1; updateDayNight(0); }
-      if (code === 'Period'){ game.timeOfDay = (game.timeOfDay + 0.02) % 1; updateDayNight(0); }
+      if (!game.photo.drone){
+        if (code === 'Comma'){ game.timeOfDay = (game.timeOfDay - 0.02 + 1) % 1; updateDayNight(0); }
+        if (code === 'Period'){ game.timeOfDay = (game.timeOfDay + 0.02) % 1; updateDayNight(0); }
+      }
       if (code === 'F2'){ e.preventDefault(); game.shotReq = true; }
     }
   });
@@ -5499,6 +6025,10 @@ function activeTool(){
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
+  if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
+  if (it.kind === 'lever' || it.kind === 'crank' || it.kind === 'wheel' || it.kind === 'gen' || it.kind === 'meter')
+    return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
+  if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
@@ -5607,7 +6137,11 @@ function updateGhost(){
     }
     game.ghostSolidMat.uniforms.uTex.value = tex;
     // charging feedback: the shape solidifies as the action completes
-    game.ghostSolidMat.uniforms.uOpacity.value = 0.85 + game.actProgress * 0.15;
+    game.ghostSolidMat.uniforms.uOpacity.value = 0.6 + game.actProgress * 0.3;
+    // free placement: pin the texture to the shape so it doesn't swim as you
+    // walk; snapped: keep the world anchor (grid steps hold it still anyway)
+    if (game.snapOn) game.ghostSolidMat.uniforms.uAnchor.value.set(0, 0, 0);
+    else game.ghostSolidMat.uniforms.uAnchor.value.set(p.x, p.y, p.z);
     gm.visible = true;
     gm.position.set(p.x, p.y, p.z);
     gm.scale.setScalar(eff);
@@ -6279,7 +6813,28 @@ function tryAction(dt, now){
         if (ent) hurtEntity(ent, 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
       }
     } else if (edge){
-      // fists down: gather — ropes first, then decor, then a friendly animal
+      // fists down: gather — wires, power props, ropes, decor, then animals
+      const wi = wireSys.onRay(3.4);
+      if (wi >= 0){
+        game.wires.splice(wi, 1);
+        addStackItem('wire', 1);
+        game.gatherT = now;
+        wireSys.rebuild(); markSave();
+        toast('+1 wire');
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD();
+        return;
+      }
+      const pn2 = pnodeSys.onRay(3.0);
+      if (pn2){
+        const refunded = pnodeSys.removeNode(pn2);
+        addStackItem(pn2.t, 1);
+        game.gatherT = now;
+        toast('+1 ' + itemLabel({ kind: pn2.t }) + (refunded ? ' (+' + refunded + ' wire)' : ''));
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD();
+        return;
+      }
       const ri = ropeSys.onRay(3.4);
       if (ri >= 0){
         ropeSys.removeAt(ri);
@@ -6407,6 +6962,57 @@ function tryAction(dt, now){
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
+    return;
+  }
+  // power props: place facing the player, like stoves
+  if (tool.kind === 'pnode'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no ground in reach'); return; }
+      if (game.mode !== 'creative') tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      pnodeSys.add(tool.ptype, hit[0], hit[1], hit[2],
+        Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2));
+      AudioSys.sfx('place');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  // wire: two clicks — terminal to terminal
+  if (tool.kind === 'wire'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const t = pnodeSys.terminalOnRay(4.5);
+      if (!t){ toast('aim at a terminal (power prop, bulb or stove)'); return; }
+      if (game.wirePending == null){
+        game.wirePending = t.id;
+        AudioSys.sfx('toggle');
+        toast('wire started — click another terminal (right click cancels)');
+      } else if (game.wirePending === t.id){
+        game.wirePending = null;
+        toast('wire cancelled');
+      } else {
+        const dup = game.wires.some(w => (w.a === game.wirePending && w.b === t.id) ||
+                                         (w.b === game.wirePending && w.a === t.id));
+        if (dup){ toast('already connected'); return; }
+        game.wires.push({ a: game.wirePending, b: t.id });
+        game.wirePending = null;
+        if (game.mode !== 'creative'){
+          tool.item.count--;
+          if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+        }
+        wireSys.rebuild(); markSave();
+        AudioSys.sfx('place');
+        refreshHotbar();
+      }
+      refreshToolHUD();
+    }
+    return;
+  }
+  // drone: launches on RIGHT click; left click does nothing
+  if (tool.kind === 'drone'){
+    AudioSys.setHum(false, 0, 0);
     return;
   }
   // rope anchor: place at the aimed surface; the rope drops to the floor
@@ -6571,7 +7177,8 @@ function itemIconURL(it){
   const key = it.kind === 'mat' ? 'm' + it.mat
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
-       'tuft', 'flower', 'shrub', 'rope'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
+       'meter', 'drone'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -6587,6 +7194,51 @@ function itemIconURL(it){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
+  } else if (it.kind === 'wire'){
+    // copper coil with two loose ends
+    c.fillStyle = '#b5793a';
+    c.fillRect(4, 4, 8, 2); c.fillRect(3, 6, 10, 4); c.fillRect(4, 10, 8, 2);
+    c.fillStyle = '#8f5a24';
+    c.fillRect(5, 5, 6, 1); c.fillRect(4, 8, 8, 1); c.fillRect(5, 11, 6, 1);
+    c.fillStyle = '#d89a55'; c.fillRect(2, 2, 3, 2); c.fillRect(11, 12, 3, 2);
+  } else if (it.kind === 'lever'){
+    c.fillStyle = '#6a6a71'; c.fillRect(4, 10, 8, 4);
+    c.fillStyle = '#4a4a50'; c.fillRect(4, 13, 8, 1);
+    c.fillStyle = '#8a6237';
+    for (let i = 0; i < 7; i++) c.fillRect(7 + i * 0.7 | 0, 10 - i, 2, 2);
+    c.fillStyle = '#d84a63'; c.fillRect(12, 3, 3, 3);
+  } else if (it.kind === 'crank'){
+    c.fillStyle = '#8a8a94'; c.fillRect(6, 8, 4, 7);
+    c.fillStyle = '#5f5f66'; c.fillRect(6, 14, 4, 1);
+    c.fillStyle = '#b5793a'; c.fillRect(7, 4, 2, 5);
+    c.fillStyle = '#8a6237'; c.fillRect(7, 2, 7, 2); c.fillRect(12, 4, 2, 3);
+  } else if (it.kind === 'wheel'){
+    c.fillStyle = '#8a6237';
+    c.fillRect(7, 1, 2, 14); c.fillRect(1, 7, 14, 2);
+    c.fillRect(3, 3, 2, 2); c.fillRect(11, 3, 2, 2); c.fillRect(3, 11, 2, 2); c.fillRect(11, 11, 2, 2);
+    c.fillStyle = '#a37c47';
+    c.fillRect(2, 6, 1, 4); c.fillRect(13, 6, 1, 4); c.fillRect(6, 2, 4, 1); c.fillRect(6, 13, 4, 1);
+    c.fillStyle = '#5f5f66'; c.fillRect(6, 6, 4, 4);
+  } else if (it.kind === 'gen'){
+    c.fillStyle = '#5f5f66'; c.fillRect(2, 6, 12, 8);
+    c.fillStyle = '#44444a'; c.fillRect(2, 12, 12, 2);
+    c.fillStyle = '#8a8a94'; c.fillRect(10, 3, 2, 3);
+    c.fillStyle = '#ffb347'; c.fillRect(4, 8, 3, 3);
+    c.fillStyle = '#ffe08a'; c.fillRect(5, 9, 1, 1);
+    c.fillStyle = '#2c2c31'; c.fillRect(9, 8, 3, 4);
+  } else if (it.kind === 'meter'){
+    c.fillStyle = '#44444a'; c.fillRect(3, 3, 10, 8);
+    c.fillStyle = '#0d1a12'; c.fillRect(4, 4, 8, 6);
+    c.fillStyle = '#57e88a'; c.fillRect(5, 8, 1, 1); c.fillRect(7, 6, 1, 3); c.fillRect(9, 5, 1, 4);
+    c.fillStyle = '#8a8a94'; c.fillRect(7, 11, 2, 4);
+  } else if (it.kind === 'drone'){
+    c.fillStyle = '#3c3a44'; c.fillRect(6, 7, 4, 3);
+    c.fillStyle = '#59c8d8'; c.fillRect(7, 8, 2, 1);
+    c.fillStyle = '#5f5f66';
+    c.fillRect(3, 5, 2, 1); c.fillRect(11, 5, 2, 1); c.fillRect(3, 11, 2, 1); c.fillRect(11, 11, 2, 1);
+    c.fillRect(5, 6, 2, 1); c.fillRect(9, 6, 2, 1); c.fillRect(5, 10, 2, 1); c.fillRect(9, 10, 2, 1);
+    c.fillStyle = '#8a8a94';
+    c.fillRect(2, 4, 4, 1); c.fillRect(10, 4, 4, 1); c.fillRect(2, 12, 4, 1); c.fillRect(10, 12, 4, 1);
   } else if (it.kind === 'rope'){
     // coiled rope with a hanging tail and a metal anchor hook
     c.fillStyle = '#8a8a94'; c.fillRect(6, 1, 4, 2);
@@ -6748,6 +7400,13 @@ function itemLabel(it){
   if (it.kind === 'gun') return 'blaster';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
+  if (it.kind === 'wire') return 'wire';
+  if (it.kind === 'lever') return 'lever';
+  if (it.kind === 'crank') return 'hand crank';
+  if (it.kind === 'wheel') return 'water wheel';
+  if (it.kind === 'gen') return 'generator';
+  if (it.kind === 'meter') return 'power meter';
+  if (it.kind === 'drone') return 'camera drone';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
@@ -6830,9 +7489,11 @@ function catalogEntries(){
   out.push(CORE.makeGun());
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
-                   'beacon', 'rope', 'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
+                   'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
+                   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
+  out.push({ kind: 'drone', charge: 100 });
   return out;
 }
 function buildCatalogUI(){
@@ -7033,6 +7694,18 @@ function refreshToolHUD(){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
   } else if (it.kind === 'rope'){
     html = '<div class="t1">rope anchor ×' + it.count + '</div><div class="t2">left click a ledge — the rope drops to the floor · space/C to climb</div>';
+  } else if (it.kind === 'wire'){
+    html = '<div class="t1">wire ×' + it.count + '</div>' +
+           '<div class="t2">' + (game.wirePending ? 'click a second terminal to connect · right click cancels'
+                                                  : 'click a terminal (source, lever, meter, bulb, stove) to start a wire') + '</div>';
+  } else if (it.kind === 'lever' || it.kind === 'crank' || it.kind === 'wheel' || it.kind === 'gen' || it.kind === 'meter'){
+    const tip = { lever: 'inline switch — right click to flip', crank: 'right click to wind · ~20W while wound',
+                  wheel: 'place IN water · ~15W', gen: 'right click with coal to fuel · ~40W',
+                  meter: 'shows its circuit\'s watts' }[it.kind];
+    html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">left click to place · ' + tip + '</div>';
+  } else if (it.kind === 'drone'){
+    html = '<div class="t1">camera drone · ' + Math.round(it.charge || 0) + '%</div>' +
+           '<div class="t2">right click to launch (45m range) · charges near a powered grid with spare watts</div>';
   } else if (it.kind === 'stick'){
     html = '<div class="t1">sticks ×' + it.count + '</div><div class="t2">crafting material — torches, doors, swords (Q)</div>';
   } else if (it.kind === 'beacon'){
@@ -7567,11 +8240,14 @@ function saveNow(){
     beacons: game.beacons,
     beds: game.beds,
     spawnPoint: game.spawnPoint,
-    stoves: game.stoves.map(st => [st.x, st.y, st.z, st.yaw || 0, st.in, st.fuel, st.out, st.burn, st.prog]),
+    stoves: game.stoves.map(st => [st.x, st.y, st.z, st.yaw || 0, st.in, st.fuel, st.out, st.burn, st.prog, st.id]),
     bulbs: game.bulbs,
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     ropes: game.ropes || [],
+    pnodes: game.pnodes || [],
+    wires: (game.wires || []).map(w => ({ a: w.a, b: w.b })),
+    pSeq: game.pSeq || 1,
     explored: [...(game.explored || [])],
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
@@ -7616,13 +8292,20 @@ function startWorld(id){
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
   game.spawnPoint = data.spawnPoint || null;
   game.stoves = (data.stoves || []).map(r => ({ x: r[0], y: r[1], z: r[2], yaw: r[3] || 0,
-    in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0 }));
-  game.bulbs = (data.bulbs || []).map(b => [b[0], b[1], b[2], b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]]);
+    in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0, id: r[9] }));
+  game.bulbs = (data.bulbs || []).map(b => [b[0], b[1], b[2], b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5], b[6]]);
   game.activeStove = null;
   game.breath = 100; game.underwater = false;
   game.doors = (data.doors || []).map(d => ({ x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }));
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
+  game.pSeq = data.pSeq || 1;
+  game.pnodes = (data.pnodes || []).map(n => ({ ...n }));
+  game.wires = (data.wires || []).map(w => ({ a: w.a, b: w.b }));
+  game.wirePending = null;
+  // old saves: bulbs and stoves predate terminal ids — mint them now
+  for (const b of game.bulbs) if (b[6] == null) b[6] = game.pSeq++;
+  for (const st of game.stoves) if (st.id == null) st.id = game.pSeq++;
   game.explored = new Set(data.explored || []);
   game.mapColCache = new Map();
   game.removedTreeSet = new Set(data.removedTrees || []);
@@ -7656,6 +8339,7 @@ function startWorld(id){
   game.terrain.edits = game.edits;
   torchSys.rebuild();
   ropeSys.rebuild();
+  pnodeSys.rebuild();
   beaconSys.rebuild();
   bedSys.rebuild();
   stoveSys.rebuild();
@@ -8130,11 +8814,13 @@ const godRays = {
 };
 
 // ---------- photo mode: detached fly camera, frozen player ----------
-function enterPhoto(){
+function enterPhoto(drone){
   if (game.ui !== 'none') return;
   game.photo = {
     pos: game.camera.position.clone(),
-    yaw: game.yaw, pitch: game.pitch, speed: 10,
+    yaw: game.yaw, pitch: game.pitch, speed: drone ? 8 : 10,
+    drone: drone || null,
+    home: drone ? { x: game.camera.position.x, y: game.camera.position.y, z: game.camera.position.z } : null,
   };
   document.body.classList.add('photo');
   if (game.vm) game.vm.root.visible = false;
@@ -8145,9 +8831,12 @@ function enterPhoto(){
   }
   placePreview.hide();
   if (game.gridViz) game.gridViz.visible = false;
-  toast('photo mode — WASD fly · scroll speed · , . time of day · F2 snapshot · P exit');
+  toast(drone
+    ? 'drone up · ' + Math.round(drone.charge) + '% — WASD fly · 45m range · F2 snapshot · right click or P to land'
+    : 'photo mode — WASD fly · scroll speed · , . time of day · F2 snapshot · P exit');
 }
 function exitPhoto(){
+  if (game.photo && game.photo.drone) toast('drone landed · ' + Math.round(game.photo.drone.charge) + '% charge');
   game.photo = null;
   document.body.classList.remove('photo');
   if (game.vm) game.vm.root.visible = true;
@@ -8171,6 +8860,19 @@ function updatePhoto(dt){
     ph.pos.x += mx / L * sp * dt;
     ph.pos.y += my / L * sp * dt;
     ph.pos.z += mz / L * sp * dt;
+  }
+  if (ph.drone){
+    // tethered to the pilot: 45m radius, battery drains while airborne
+    const H = ph.home;
+    const dx = ph.pos.x - H.x, dy = ph.pos.y - H.y, dz = ph.pos.z - H.z;
+    const d = Math.hypot(dx, dy, dz);
+    if (d > 45){
+      const s = 45 / d;
+      ph.pos.set(H.x + dx * s, H.y + dy * s, H.z + dz * s);
+    }
+    ph.drone.charge = Math.max(0, ph.drone.charge - dt * 1.1);
+    if (ph.drone.charge <= 0){ exitPhoto(); toast('drone battery dead'); return; }
+    if (ph.drone.charge < 15 && !ph.warned){ ph.warned = true; toast('drone battery low'); }
   }
   game.camera.position.copy(ph.pos);
   game.camera.rotation.set(ph.pitch, ph.yaw, 0);
@@ -8279,6 +8981,7 @@ function frame(now){
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
+  powerSys.update(dt);
   wrenchSys.frame();
   updateSurvival(dt);
   // embers off nearby placed torches
@@ -8323,6 +9026,15 @@ function frame(now){
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
     if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
+    // drone batteries charge near a powered circuit with watts to spare
+    if (powerSys.surplus.length && powerSys.surplusNear(game.pos.x, game.pos.y + 1, game.pos.z, 6)){
+      for (const s of game.slots){
+        if (s && s.kind === 'drone' && (s.charge || 0) < 100){
+          s.charge = Math.min(100, (s.charge || 0) + 0.9);   // ~4.5%/s beside the grid
+          markSave();
+        }
+      }
+    }
     // the sky itself goes black as you descend — caves feel enclosed and
     // not-yet-meshed frontier chunks never flash bright blue in the dark
     const skyF = Math.min(1, Math.max(0.02, 1 - (depth - 2) / 8));
@@ -8408,7 +9120,8 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
-  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview };
+  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
+  pnodeSys, wireSys, powerSys, bulbSys, stoveSys };
 </script>
 </body>
 </html>
