@@ -216,6 +216,18 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="crafterscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:540px;">
+    <h2>AUTO-CRAFTER</h2>
+    <div class="sub" id="crafterstatus">&nbsp;</div>
+    <div class="invlabel">BUFFER — feed it by right-clicking the machine with a stack (or by tube) · click a stack to take it</div>
+    <div class="invgrid" id="crafterbuf"></div>
+    <div class="invlabel">RECIPE — click to select</div>
+    <div id="crafterlist" style="max-height:300px; overflow:auto;"></div>
+    <div class="sub" style="margin-top:10px;">E to close</div>
+  </div>
+</div>
+
 <div id="stovescreen" class="screen hidden dim">
   <div class="panel">
     <h2>STOVE</h2>
@@ -1639,6 +1651,7 @@ function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -1831,6 +1844,14 @@ const RECIPES = [];
   RECIPES.push({ kind: 'gen', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'meter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
   RECIPES.push({ kind: 'drone', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 2 }, { item: 'diamond', n: 1 }] });
+  // phase B machines + phase C exotics
+  RECIPES.push({ kind: 'tube', yields: 4, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.ROCK, n: 2 }] });
+  RECIPES.push({ kind: 'hopper', yields: 1, station: true, costs: [{ item: 'ironingot', n: 5 }] });
+  RECIPES.push({ kind: 'elev', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { mat: MAT.PLANKS, n: 6 }] });
+  RECIPES.push({ kind: 'acrank', yields: 1, station: true, costs: [{ item: 'ironingot', n: 4 }, { mat: MAT.PLANKS, n: 6 }, { item: 'stick', n: 2 }] });
+  RECIPES.push({ kind: 'crafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 8 }, { item: 'rubyingot', n: 2 }] });
+  RECIPES.push({ kind: 'gen2', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 8 }, { item: 'ironingot', n: 8 }] });
+  RECIPES.push({ kind: 'tesla', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 4 }, { mat: MAT.CRYSTAL, n: 6 }, { item: 'ironingot', n: 4 }] });
   RECIPES.push({ kind: 'bulb', yields: 2, costs: [{ mat: MAT.GLOWSHROOM, n: 4 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
   // station. Tier costs: iron/ruby pay in smelted INGOTS, diamond in gems;
@@ -4286,6 +4307,87 @@ const pnodeSys = {
       g.add(pole, panel, screen);
       g.userData.meter = { cv, tex };
       this.drawMeter(g.userData.meter, null);
+    } else if (t === 'elev'){
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 1.8), M.dark);
+      base.position.y = 0.05;
+      g.add(base);
+      for (const [sx, sz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]){
+        const stub = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.3, 0.14), M.steel);
+        stub.position.set(sx, 0.15, sz);
+        g.add(stub);
+      }
+      const plat = new THREE.Group();
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.14, 1.7), M.steel);
+      const trim = new THREE.Mesh(new THREE.BoxGeometry(1.74, 0.05, 1.74), M.copper);
+      trim.position.y = -0.09;
+      plat.add(deck, trim);
+      plat.position.y = 0.12;
+      g.add(plat);
+      g.userData.plat = plat;
+    } else if (t === 'acrank'){
+      for (const s of [-0.5, 0.5]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.3, 0.14), M.wood);
+        post.position.set(0, 0.65, s);
+        g.add(post);
+      }
+      const wheel = new THREE.Group();
+      for (let i = 0; i < 8; i++){
+        const a = i * Math.PI / 4;
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.62, 0.7), M.wood);
+        p.position.set(Math.cos(a) * 0.55, Math.sin(a) * 0.55, 0);
+        p.rotation.z = a + Math.PI / 2;
+        wheel.add(p);
+      }
+      wheel.position.y = 0.85;
+      g.add(wheel);
+      g.userData.wheel = wheel;
+    } else if (t === 'tesla'){
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.3, 0.7), M.steel);
+      base.position.y = 0.15;
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.12, 1.2, 6), M.copper);
+      rod.position.y = 0.9;
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0x2b4b4e }));
+      orb.position.y = 1.7;
+      g.add(base, rod, orb);
+      g.userData.orb = orb;
+    } else if (t === 'gen2'){
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.95, 0.9), M.steel);
+      body.position.y = 0.48;
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.27, 0.1, 0.92),
+        new THREE.MeshBasicMaterial({ color: 0xc22a45 }));
+      stripe.position.y = 0.9;
+      const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 6), M.dark);
+      p1.position.set(0.4, 1.2, 0.25);
+      const p2 = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.4, 6), M.dark);
+      p2.position.set(0.1, 1.15, 0.25);
+      const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.34, 0.06), M.dark);
+      mouth.position.set(0, 0.38, -0.47);
+      g.add(body, stripe, p1, p2, mouth);
+      g.userData.mouth = mouth;
+    } else if (t === 'hopper'){
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 1.0), M.steel);
+      top.position.y = 0.95;
+      const midB = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.3, 0.66), M.steel);
+      midB.position.y = 0.65;
+      const spout = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.4, 0.34), M.dark);
+      spout.position.y = 0.3;
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.06, 1.06), M.copper);
+      rim.position.y = 1.12;
+      g.add(top, midB, spout, rim);
+    } else if (t === 'crafter'){
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.95, 1.05), M.wood);
+      body.position.y = 0.48;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.1), M.steel);
+      top.position.y = 1.0;
+      const orb = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26),
+        new THREE.MeshBasicMaterial({ color: 0x59c8d8 }));
+      orb.position.y = 1.2;
+      orb.rotation.y = Math.PI / 4;
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.06), M.dark);
+      face.position.set(0, 0.55, -0.54);
+      g.add(body, top, orb, face);
+      g.userData.orb = orb;
     }
     return g;
   },
@@ -4307,10 +4409,19 @@ const pnodeSys = {
       g.position.set(n.x, n.y, n.z);
       g.rotation.y = n.yaw || 0;
       if (n.t === 'lever' && g.userData.arm) g.userData.arm.rotation.z = n.on ? -0.7 : 0.7;
+      if (n.t === 'elev' && g.userData.plat) g.userData.plat.position.y = 0.12 + (n.py || 0);
+      if (n.t === 'acrank' && n.animal){
+        const am = entMesh(n.animal);
+        const ag = am.g || am;
+        ag.scale.setScalar(0.55);
+        ag.position.set(0, 0.35, 0);
+        g.add(ag);
+      }
       this.group.add(g);
       this.items.push({ n, g });
     }
     wireSys.rebuild();
+    rebuildSolidProps();
   },
   add(t, x, y, z, yaw){
     const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
@@ -4353,7 +4464,8 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42 }[n.t] || 1;
+      const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3 }[n.t] || 1;
       return [n.x, n.y + dy, n.z];
     }
     if (k === 'b'){
@@ -4410,10 +4522,16 @@ const pnodeSys = {
         ud.wheel.rotation.z -= dt * 1.4;
       if (n.t === 'crank' && ud.handle && (n.wound || 0) > 0 && powerSys.activeSrc.has(n.id))
         ud.handle.rotation.y += dt * 5;
-      if (n.t === 'gen' && ud.mouth && M){
+      if ((n.t === 'gen' || n.t === 'gen2') && ud.mouth && M){
         const want = (n.burn || 0) > 0 ? M.ember : M.dark;
         if (ud.mouth.material !== want) ud.mouth.material = want;
       }
+      if (n.t === 'acrank' && ud.wheel && n.animal && powerSys.activeSrc.has(n.id))
+        ud.wheel.rotation.z -= dt * 2.2;
+      if (n.t === 'tesla' && ud.orb)
+        ud.orb.material.color.set(powerSys.isHotTesla(n) ? 0x7fe8e8 : 0x2b4b4e);
+      if (n.t === 'crafter' && ud.orb && powerSys.crafterBusy && powerSys.crafterBusy.has(n.id))
+        ud.orb.rotation.y += dt * 3;
       if (n.t === 'meter' && ud.meter && powerSys.meterDirty){
         this.drawMeter(ud.meter, powerSys.meterMap.get('n' + n.id) || null);
       }
@@ -4474,6 +4592,30 @@ const wireSys = {
     for (const w of game.wires){
       w.mid = this.strand(pnodeSys.terminal(w.a), pnodeSys.terminal(w.b), 0.028, this.mat, this.group);
     }
+    // item tubes: rigid straight pipes
+    if (!this.tubeMat) this.tubeMat = new THREE.MeshBasicMaterial({ color: 0x8a8a94 });
+    game.tubes = (game.tubes || []).filter(t => pnodeSys.terminal(t.a) && pnodeSys.terminal(t.b));
+    for (const t of game.tubes){
+      const A = pnodeSys.terminal(t.a), B = pnodeSys.terminal(t.b);
+      this.seg(A, B, 0.07, this.tubeMat, this.group);
+      t.mid = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, (A[2] + B[2]) / 2];
+    }
+  },
+  tubeOnRay(maxDist){
+    const dir = new THREE.Vector3();
+    game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = -1, bestT = maxDist;
+    for (let i = 0; i < (game.tubes || []).length; i++){
+      const m = game.tubes[i].mid;
+      if (!m) continue;
+      const vx = m[0] - o.x, vy = m[1] - o.y, vz = m[2] - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.hypot(px, py, pz) < 0.7){ best = i; bestT = tt; }
+    }
+    return best;
   },
   onRay(maxDist){
     const dir = new THREE.Vector3();
@@ -4491,16 +4633,24 @@ const wireSys = {
     }
     return best;
   },
-  // live preview strand from the pending terminal to the aim point
+  // live preview from the pending terminal to the aim point — sagging
+  // copper for wires, a rigid pipe for tubes
   updatePreview(){
     const tool = activeTool();
-    const wiring = tool && tool.kind === 'wire' && game.ui === 'none' && isLocked();
-    if (!wiring && game.wirePending){ game.wirePending = null; refreshToolHUD(); }
-    if (!wiring || !game.wirePending){ this.preview.visible = false; this.pCache = null; return; }
-    const A = pnodeSys.terminal(game.wirePending);
-    if (!A){ game.wirePending = null; this.preview.visible = false; return; }
+    const kind = tool && (tool.kind === 'wire' || tool.kind === 'tube') &&
+                 game.ui === 'none' && isLocked() ? tool.kind : null;
+    if (kind !== 'wire' && game.wirePending){ game.wirePending = null; refreshToolHUD(); }
+    if (kind !== 'tube' && game.tubePending){ game.tubePending = null; refreshToolHUD(); }
+    const pending = kind === 'wire' ? game.wirePending : kind === 'tube' ? game.tubePending : null;
+    if (!pending){ this.preview.visible = false; this.pCache = null; return; }
+    const A = pnodeSys.terminal(pending);
+    if (!A){
+      if (kind === 'wire') game.wirePending = null; else game.tubePending = null;
+      this.preview.visible = false;
+      return;
+    }
     const t2 = pnodeSys.terminalOnRay(5.5);
-    let B = t2 && t2.id !== game.wirePending ? t2.p : null;
+    let B = t2 && t2.id !== pending ? t2.p : null;
     if (!B){
       const hit = surfaceHit();
       if (hit) B = hit;
@@ -4511,14 +4661,15 @@ const wireSys = {
         B = [o.x + dir.x * 3, o.y + dir.y * 3, o.z + dir.z * 3];
       }
     }
-    const key = B.map(v => Math.round(v * 8)).join(',');
+    const key = kind + B.map(v => Math.round(v * 8)).join(',');
     if (this.pCache !== key){
       this.pCache = key;
       while (this.preview.children.length){
         const c = this.preview.children.pop();
         if (c.geometry) c.geometry.dispose();
       }
-      this.strand(A, B, 0.03, this.pMat, this.preview);
+      if (kind === 'wire') this.strand(A, B, 0.03, this.pMat, this.preview);
+      else this.seg(A, B, 0.075, this.pMat, this.preview);
     }
     this.preview.visible = true;
   },
@@ -4527,78 +4678,125 @@ const wireSys = {
 const powerSys = {
   accT: 0, meterMap: new Map(), bulbMap: new Map(), stoveMap: new Map(),
   wiredBulbs: new Set(), activeSrc: new Set(), surplus: [], meterDirty: false,
+  // does this crafter want power right now?
+  crafterWants(n){
+    return n.recipe != null && n.inv && CORE.RECIPES[n.recipe] &&
+           CORE.canCraft(n.inv, CORE.RECIPES[n.recipe]);
+  },
+  isHotTesla(n){
+    return (this.hotTeslas || []).some(t => t[3] === n.id);
+  },
   evaluate(dt){
-    const parent = new Map();
-    const find = x => {
-      let r = x;
-      while (parent.get(r) !== r) r = parent.get(r);
-      let c = x;
-      while (parent.get(c) !== c){ const nx = parent.get(c); parent.set(c, r); c = nx; }
-      return r;
-    };
-    const seed = id => { if (!parent.has(id)) parent.set(id, id); };
     const offLever = id => {
       if (id[0] !== 'n') return false;
       const n = pnodeSys.byId(+id.slice(1));
       return !!(n && n.t === 'lever' && !n.on);
     };
     this.wiredBulbs = new Set();
+    const baseEdges = [];
     for (const w of game.wires || []){
       if (w.a[0] === 'b') this.wiredBulbs.add(w.a);
       if (w.b[0] === 'b') this.wiredBulbs.add(w.b);
-      seed(w.a); seed(w.b);
-      if (offLever(w.a) || offLever(w.b)) continue;   // an off lever cuts its wires
-      const ra = find(w.a), rb = find(w.b);
-      if (ra !== rb) parent.set(ra, rb);
+      baseEdges.push([w.a, w.b]);
     }
-    const comps = new Map();
-    const compOf = id => {
-      const r = find(id);
-      let c = comps.get(r);
-      if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], terms: [] }; comps.set(r, c); }
-      return c;
-    };
-    for (const id of parent.keys()){
-      const c = compOf(id);
-      const tp = pnodeSys.terminal(id);
-      if (tp) c.terms.push(tp);
-      if (id[0] === 'n'){
-        const n = pnodeSys.byId(+id.slice(1));
-        if (!n) continue;
-        if (n.t === 'crank' && (n.wound || 0) > 0){ c.w += 20; c.srcs.push(n); }
-        else if (n.t === 'wheel' && inWater(n.x, n.y + 0.6, n.z)){ c.w += 15; c.srcs.push(n); }
-        else if (n.t === 'gen' && (n.burn || 0) > 0){ c.w += 40; c.srcs.push(n); }
-      } else if (id[0] === 'b'){
-        c.d += 5; c.bulbs.push(id);
-      } else if (id[0] === 's'){
-        const st = (game.stoves || []).find(s => 's' + s.id === id);
-        if (st && st.in && CORE.SMELTS[st.in.kind] && st.burn > 0){ c.d += 30; c.stoves.push(id); }
+    const virt = [];
+    let parent, comps, find;
+    const build = () => {
+      parent = new Map();
+      find = x => {
+        let r = x;
+        while (parent.get(r) !== r) r = parent.get(r);
+        let c = x;
+        while (parent.get(c) !== c){ const nx = parent.get(c); parent.set(c, r); c = nx; }
+        return r;
+      };
+      const seed = id => { if (!parent.has(id)) parent.set(id, id); };
+      for (const [a, b] of baseEdges.concat(virt)){
+        seed(a); seed(b);
+        if (offLever(a) || offLever(b)) continue;   // an off lever cuts its wires
+        const ra = find(a), rb = find(b);
+        if (ra !== rb) parent.set(ra, rb);
       }
+      comps = new Map();
+      for (const id of parent.keys()){
+        const r = find(id);
+        let c = comps.get(r);
+        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [] }; comps.set(r, c); }
+        const tp = pnodeSys.terminal(id);
+        if (tp) c.terms.push(tp);
+        if (id[0] === 'n'){
+          const n = pnodeSys.byId(+id.slice(1));
+          if (!n) continue;
+          if (n.t === 'crank' && (n.wound || 0) > 0){ c.w += 20; c.srcs.push(n); }
+          else if (n.t === 'wheel' && inWater(n.x, n.y + 0.6, n.z)){ c.w += 15; c.srcs.push(n); }
+          else if (n.t === 'gen' && (n.burn || 0) > 0){ c.w += 40; c.srcs.push(n); }
+          else if (n.t === 'gen2' && (n.burn || 0) > 0){ c.w += 100; c.srcs.push(n); }
+          else if (n.t === 'acrank' && n.animal){ c.w += 10; c.srcs.push(n); }
+          else if (n.t === 'elev'){ if (n.riderDir) c.d += 25; c.elevs.push(n); }
+          else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
+          else if (n.t === 'tesla') c.teslas.push(n);
+          else if (n.t === 'meter') c.meters.push(id);
+        } else if (id[0] === 'b'){
+          c.d += 5; c.bulbs.push(id);
+        } else if (id[0] === 's'){
+          const st = (game.stoves || []).find(s => 's' + s.id === id);
+          if (st && st.in && CORE.SMELTS[st.in.kind] && st.burn > 0){ c.d += 30; c.stoves.push(id); }
+        }
+      }
+    };
+    build();
+    // tesla coils bridge power WIRELESSLY: a coil on a live circuit reaches
+    // every terminal within 8m; chained coils relay (a few passes settle it)
+    for (let pass = 0; pass < 3; pass++){
+      let grew = false;
+      const all = pnodeSys.allTerminals();
+      for (const c of comps.values()){
+        if (c.w <= 0) continue;
+        for (const t of c.teslas){
+          for (const o of all){
+            if (o.id === 'n' + t.id) continue;
+            if (parent.has(o.id) && find(o.id) === find('n' + t.id)) continue;
+            const dx = o.p[0] - t.x, dy = o.p[1] - (t.y + 1.7), dz = o.p[2] - t.z;
+            if (dx * dx + dy * dy + dz * dz < 64){
+              virt.push(['n' + t.id, o.id]);
+              grew = true;
+            }
+          }
+        }
+      }
+      if (!grew) break;
+      build();
+    }
+    // a bulb reached wirelessly behaves like a wired one
+    for (const [a, b] of virt){
+      if (a[0] === 'b') this.wiredBulbs.add(a);
+      if (b[0] === 'b') this.wiredBulbs.add(b);
     }
     this.bulbMap.clear(); this.stoveMap.clear(); this.meterMap.clear();
-    this.activeSrc.clear(); this.surplus = [];
+    this.elevMap = this.elevMap || new Map(); this.elevMap.clear();
+    this.crafterMap = this.crafterMap || new Map(); this.crafterMap.clear();
+    this.crafterBusy = this.crafterBusy || new Set(); this.crafterBusy.clear();
+    this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
     for (const c of comps.values()){
       const ratio = c.d > 0 ? Math.min(1, c.w / c.d) : (c.w > 0 ? 1 : 0);
       for (const b of c.bulbs) this.bulbMap.set(b, ratio);
       for (const s of c.stoves) this.stoveMap.set(s, ratio);
+      for (const n of c.elevs) this.elevMap.set(n.id, c.w > 0 ? ratio : 0);
+      for (const n of c.crafters){
+        this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
+        if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
+      }
+      if (c.w > 0) for (const t of c.teslas) this.hotTeslas.push([t.x, t.y + 1.7, t.z, t.id]);
       if (c.d > 0 && c.w > 0){
         // sources drain only while something draws
         for (const n of c.srcs){
           this.activeSrc.add(n.id);
           if (n.t === 'crank') n.wound = Math.max(0, (n.wound || 0) - dt);
-          if (n.t === 'gen') n.burn = Math.max(0, (n.burn || 0) - dt);
+          if (n.t === 'gen' || n.t === 'gen2') n.burn = Math.max(0, (n.burn || 0) - dt);
         }
       }
       if (c.w > c.d + 2) this.surplus.push(...c.terms);
-    }
-    for (const id of parent.keys()){
-      if (id[0] === 'n'){
-        const n = pnodeSys.byId(+id.slice(1));
-        if (n && n.t === 'meter'){
-          const c = compOf(id);
-          this.meterMap.set(id, { w: c.w, d: c.d });
-        }
-      }
+      for (const mid of c.meters) this.meterMap.set(mid, { w: c.w, d: c.d });
     }
     this.meterDirty = true;
   },
@@ -4625,6 +4823,134 @@ const powerSys = {
     }
     pnodeSys.animate(dt);
     wireSys.updatePreview();
+    let onElev = null;
+    for (const n of game.pnodes || []){
+      if (n.t === 'elev'){ if (this.elevTick(n, dt)) onElev = n; }
+      else if (n.t === 'crafter') this.crafterTick(n, dt);
+    }
+    game.onElev = onElev;
+    this.tubeT = (this.tubeT || 0) + dt;
+    if (this.tubeT > 2){ this.tubeT = 0; this.tubeTick(); }
+    this.zapT = (this.zapT || 0) + dt;
+    if (this.zapT > 0.5){
+      this.zapT = 0;
+      if (game.mode === 'survival' && this.hotTeslas){
+        for (const t of this.hotTeslas){
+          if (Math.hypot(t[0] - game.pos.x, t[1] - (game.pos.y + 1), t[2] - game.pos.z) < 2.8){
+            damagePlayer(4, (game.pos.x - t[0]) * 2, (game.pos.z - t[2]) * 2);
+            Particles.burst(t[0], t[1], t[2], 0.4, [0x7fe8e8, 0xd5ffff], 14, 3.2);
+            AudioSys.burst({ dur: 0.06, freq: 2400, gain: 0.06 });
+            break;
+          }
+        }
+      }
+    }
+  },
+  // ride logic: stand on the platform, space rises, C descends; the whole
+  // thing only moves while its circuit has watts, at ratio-scaled speed
+  elevTick(n, dt){
+    const entry = pnodeSys.items.find(it => it.n === n);
+    const plat = entry && entry.g.userData.plat;
+    const top = n.y + 0.21 + (n.py || 0);
+    const riding = !game.fly && !game.photo &&
+      Math.abs(game.pos.x - n.x) < 0.95 && Math.abs(game.pos.z - n.z) < 0.95 &&
+      game.pos.y > top - 0.5 && game.pos.y < top + 0.6;
+    const k = game.keys || {};
+    const canMove = game.ui === 'none' && isLocked();
+    const ratio = this.elevMap ? (this.elevMap.get(n.id) || 0) : 0;
+    const dir = riding && canMove && ratio > 0 ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
+    n.riderDir = riding && canMove ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
+    if (dir){
+      let dy = dir * 2.4 * ratio * dt;
+      const ny = Math.max(-60, Math.min(60, (n.py || 0) + dy));
+      dy = ny - (n.py || 0);
+      // don't drive the platform (or the rider's head) into solid ground
+      const probeY = dir > 0 ? top + dy + 2.05 : n.y + 0.02 + ny;
+      const eds = nearEdits([n.x - 1, probeY - 1, n.z - 1, n.x + 1, probeY + 1, n.z + 1]);
+      if (CORE.evalSDF(n.x, probeY, n.z, eds, game.gen) < 0.2) dy = 0;
+      if (dy){
+        n.py = (n.py || 0) + dy;
+        game.pos.y += dy;
+        game.vel.y = 0;
+        markSave();
+      }
+    }
+    if (plat) plat.position.y = 0.12 + (n.py || 0);
+    if (game.solidProps)
+      for (const p of game.solidProps)
+        if (p.elevId === n.id) p.y = n.y + 0.12 + (n.py || 0);
+    // glued riders never clip through a moving deck
+    if (riding && game.vel.y <= 0 && game.pos.y < top){
+      game.pos.y = top;
+      game.vel.y = 0;
+      game.grounded = true;
+    }
+    return riding && ratio > 0;
+  },
+  crafterTick(n, dt){
+    if (!this.crafterWants(n)){ n.craftT = 0; return; }
+    const ratio = this.crafterMap ? (this.crafterMap.get(n.id) || 0) : 0;
+    if (ratio <= 0){ n.craftT = 0; return; }
+    n.craftT = (n.craftT || 0) + dt * ratio;
+    if (n.craftT >= 4){
+      n.craftT = 0;
+      const res = CORE.craft(n.inv, CORE.RECIPES[n.recipe], false);
+      if (res === 'ok'){
+        markSave();
+        if (game.ui === 'crafter' && game.activeCrafter === n) refreshCrafterUI();
+      }
+    }
+  },
+  // hoppers push one item every couple of seconds down each tube
+  tubeNode(id){ return id[0] === 'n' ? pnodeSys.byId(+id.slice(1)) : null; },
+  tubeStove(id){ return id[0] === 's' ? (game.stoves || []).find(s => 's' + s.id === id) : null; },
+  invGive(inv, kind, mat){
+    for (const t of inv)
+      if (t && t.count != null && t.kind === kind && (kind !== 'mat' || t.mat === mat)){ t.count++; return true; }
+    for (let i = 0; i < inv.length; i++)
+      if (!inv[i]){ inv[i] = kind === 'mat' ? { kind: 'mat', mat, count: 1 } : { kind, count: 1 }; return true; }
+    return false;
+  },
+  give(dst, s){
+    if (dst.t === 'hopper' || dst.t === 'crafter')
+      return this.invGive(dst.inv || (dst.inv = new Array(24).fill(null)), s.kind, s.mat);
+    // a stove: smeltables to INPUT, burnables to FUEL
+    if (dst.in !== undefined){
+      if (s.kind !== 'mat' && CORE.SMELTS[s.kind]){
+        if (!dst.in){ dst.in = { kind: s.kind, count: 1 }; return true; }
+        if (dst.in.kind === s.kind){ dst.in.count++; return true; }
+        return false;
+      }
+      const probe = s.kind === 'mat' ? { kind: 'mat', mat: s.mat, count: 1 } : { kind: s.kind, count: 1 };
+      if (CORE.fuelOps(probe)){
+        if (!dst.fuel){ dst.fuel = probe; return true; }
+        if (dst.fuel.kind === probe.kind && (probe.kind !== 'mat' || dst.fuel.mat === probe.mat)){ dst.fuel.count++; return true; }
+      }
+      return false;
+    }
+    return false;
+  },
+  tubeTick(){
+    for (const tb of game.tubes || []){
+      const na = this.tubeNode(tb.a), nb = this.tubeNode(tb.b);
+      let src = null, dstId = null;
+      if (na && na.t === 'hopper'){ src = na; dstId = tb.b; }
+      else if (nb && nb.t === 'hopper'){ src = nb; dstId = tb.a; }
+      if (!src || !src.inv) continue;
+      const dst = this.tubeNode(dstId) || this.tubeStove(dstId);
+      if (!dst) continue;
+      for (let i = 0; i < src.inv.length; i++){
+        const s = src.inv[i];
+        if (!s || s.count == null) continue;
+        if (this.give(dst, s)){
+          s.count--;
+          if (s.count <= 0) src.inv[i] = null;
+          markSave();
+          if (game.ui === 'crafter') refreshCrafterUI();
+          break;
+        }
+      }
+    }
   },
 };
 
@@ -5280,6 +5606,18 @@ function rebuildSolidProps(){
   for (const st of game.stoves){
     props.push({ t: 'box', yaw: st.yaw || 0, x: st.x, y: st.y + 0.5, z: st.z, hx: 0.5, hy: 0.52, hz: 0.5 });
   }
+  for (const n of game.pnodes || []){
+    if (n.t === 'elev')
+      props.push({ t: 'box', yaw: 0, x: n.x, y: n.y + 0.12 + (n.py || 0), z: n.z, hx: 0.85, hy: 0.1, hz: 0.85, elevId: n.id });
+    else if (n.t === 'gen')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.5, hy: 0.42, hz: 0.36 });
+    else if (n.t === 'gen2')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.48, z: n.z, hx: 0.63, hy: 0.5, hz: 0.45 });
+    else if (n.t === 'hopper')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.6, z: n.z, hx: 0.5, hy: 0.55, hz: 0.5 });
+    else if (n.t === 'crafter')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.5, z: n.z, hx: 0.53, hy: 0.52, hz: 0.53 });
+  }
   game.solidProps = props;
 }
 
@@ -5607,6 +5945,12 @@ function bindInput(){
         refreshToolHUD();
         return;
       }
+      if (wtool && wtool.kind === 'tube' && game.tubePending){
+        game.tubePending = null;
+        toast('tube cancelled');
+        refreshToolHUD();
+        return;
+      }
       if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
       if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
       // a crafting table in reach overrides the held item's right click
@@ -5630,18 +5974,78 @@ function bindInput(){
           toast('cranked — ' + Math.round(pn.wound) + 's of spring');
           return;
         }
-        if (pn.t === 'gen'){
+        if (pn.t === 'gen' || pn.t === 'gen2'){
+          const cap = pn.t === 'gen2' ? 240 : 120, addF = pn.t === 'gen2' ? 60 : 30;
           const fit = selectedItem();
-          if (fit && fit.kind === 'coal' && (pn.burn || 0) < 120){
+          if (fit && fit.kind === 'coal' && (pn.burn || 0) < cap){
             fit.count--;
             if (fit.count <= 0) game.slots[game.hotSel] = null;
-            pn.burn = (pn.burn || 0) + 30;
+            pn.burn = (pn.burn || 0) + addF;
             AudioSys.sfx('place'); markSave();
             refreshHotbar(); refreshToolHUD();
-            toast('generator fueled — ' + Math.round(pn.burn) + 's');
+            toast(itemLabel({ kind: pn.t }) + ' fueled — ' + Math.round(pn.burn) + 's');
           } else {
-            toast('generator: ' + Math.round(pn.burn || 0) + 's fuel — right click holding coal to feed');
+            toast(itemLabel({ kind: pn.t }) + ': ' + Math.round(pn.burn || 0) + 's fuel — right click holding coal to feed');
           }
+          return;
+        }
+        if (pn.t === 'acrank'){
+          if (pn.animal){
+            spawnEntity(pn.animal, pn.x + 1.4, pn.y + 0.6, pn.z);
+            toast('released the ' + pn.animal);
+            pn.animal = null;
+            pnodeSys.rebuild(); markSave();
+          } else if (game.carried){
+            const e = game.carried;
+            e.carried = false; game.carried = null;
+            const ei = game.entities.indexOf(e);
+            if (ei >= 0) game.entities.splice(ei, 1);
+            if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+            pn.animal = e.type;
+            pnodeSys.rebuild(); markSave();
+            AudioSys.sfx('toggle');
+            toast('the ' + pn.animal + ' walks the wheel — ~10W, forever');
+          } else {
+            toast('carry an animal here (fists down, left click it) and right click to install');
+          }
+          return;
+        }
+        if (pn.t === 'hopper' || pn.t === 'crafter'){
+          const held = selectedItem();
+          const depositable = held && held.count != null &&
+            !['drill', 'disp', 'sword', 'wrench', 'gun', 'drone'].includes(held.kind);
+          if (depositable){
+            const inv = pn.inv || (pn.inv = new Array(24).fill(null));
+            let ok = false;
+            for (const t of inv)
+              if (t && t.count != null && t.kind === held.kind && (held.kind !== 'mat' || t.mat === held.mat)){
+                t.count += held.count; ok = true; break;
+              }
+            if (!ok) for (let i2 = 0; i2 < inv.length; i2++)
+              if (!inv[i2]){ inv[i2] = held; ok = true; break; }
+            if (ok){
+              game.slots[game.hotSel] = null;
+              markSave(); AudioSys.sfx('place');
+              refreshHotbar(); refreshToolHUD();
+              toast('deposited into the ' + itemLabel({ kind: pn.t }));
+              if (game.ui === 'crafter') refreshCrafterUI();
+            } else toast('it is full');
+            return;
+          }
+          if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
+          const nIt = (pn.inv || []).filter(Boolean).length;
+          toast('hopper: ' + (nIt ? nIt + ' stack' + (nIt > 1 ? 's' : '') + ' inside'
+                                  : 'empty') + ' — right click holding a stack to deposit');
+          return;
+        }
+        if (pn.t === 'elev'){
+          toast('wire it to power, stand on the platform — space rises, C descends');
+          return;
+        }
+        if (pn.t === 'tesla'){
+          toast(window.__api && powerSys.isHotTesla(pn)
+            ? 'humming — wireless power within 8m · stand clear'
+            : 'dead coil — connect it to a live circuit');
           return;
         }
         if (pn.t === 'wheel'){
@@ -5742,8 +6146,8 @@ function bindInput(){
     const code = e.code;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
-    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map'){
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove')) closeOverlay();
+    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter'){
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
@@ -5930,7 +6334,7 @@ function updatePlayer(dt){
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
     game.vel.y -= PLAYER.gravity * dt;
-    if (canMove && k['Space'] && game.grounded){ game.vel.y = PLAYER.jump; game.grounded = false; }
+    if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
     if (game.vel.y < -40) game.vel.y = -40;
   }
 
@@ -6026,8 +6430,9 @@ function activeTool(){
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (it.kind === 'lever' || it.kind === 'crank' || it.kind === 'wheel' || it.kind === 'gen' || it.kind === 'meter')
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
+  if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
@@ -6825,6 +7230,17 @@ function tryAction(dt, now){
         refreshHotbar(); refreshToolHUD();
         return;
       }
+      const ti = wireSys.tubeOnRay(3.4);
+      if (ti >= 0){
+        game.tubes.splice(ti, 1);
+        addStackItem('tube', 1);
+        game.gatherT = now;
+        wireSys.rebuild(); markSave();
+        toast('+1 item tube');
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD();
+        return;
+      }
       const pn2 = pnodeSys.onRay(3.0);
       if (pn2){
         const refunded = pnodeSys.removeNode(pn2);
@@ -7010,6 +7426,45 @@ function tryAction(dt, now){
     }
     return;
   }
+  // item tube: hopper -> machine, two clicks like wires
+  if (tool.kind === 'tube'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const t = pnodeSys.terminalOnRay(4.5);
+      if (!t){ toast('aim at a terminal'); return; }
+      const nodeOf = id => id[0] === 'n' ? pnodeSys.byId(+id.slice(1)) : null;
+      const isHop = id => { const n = nodeOf(id); return !!(n && n.t === 'hopper'); };
+      const tubeOk = id => isHop(id) || id[0] === 's' ||
+        (nodeOf(id) && nodeOf(id).t === 'crafter');
+      if (game.tubePending == null){
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers, stoves and auto-crafters'); return; }
+        game.tubePending = t.id;
+        AudioSys.sfx('toggle');
+        toast('tube started — click the machine it feeds');
+      } else if (game.tubePending === t.id){
+        game.tubePending = null;
+        toast('tube cancelled');
+      } else {
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers, stoves and auto-crafters'); return; }
+        if (!isHop(game.tubePending) && !isHop(t.id)){ toast('one end must be a hopper'); return; }
+        game.tubes = game.tubes || [];
+        const dup = game.tubes.some(w => (w.a === game.tubePending && w.b === t.id) ||
+                                         (w.b === game.tubePending && w.a === t.id));
+        if (dup){ toast('already connected'); return; }
+        game.tubes.push({ a: game.tubePending, b: t.id });
+        game.tubePending = null;
+        if (game.mode !== 'creative'){
+          tool.item.count--;
+          if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+        }
+        wireSys.rebuild(); markSave();
+        AudioSys.sfx('place');
+        refreshHotbar();
+      }
+      refreshToolHUD();
+    }
+    return;
+  }
   // drone: launches on RIGHT click; left click does nothing
   if (tool.kind === 'drone'){
     AudioSys.setHum(false, 0, 0);
@@ -7178,7 +7633,8 @@ function itemIconURL(it){
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
-       'meter', 'drone'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
+       'crafter'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -7194,6 +7650,49 @@ function itemIconURL(it){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(7, 3, 2, 2);
+  } else if (it.kind === 'tube'){
+    c.fillStyle = '#8a8a94'; c.fillRect(2, 6, 12, 4);
+    c.fillStyle = '#b8b8c2'; c.fillRect(2, 6, 12, 1);
+    c.fillStyle = '#5f5f66'; c.fillRect(2, 9, 12, 1);
+    c.fillStyle = '#6a6a71'; c.fillRect(4, 5, 2, 6); c.fillRect(10, 5, 2, 6);
+  } else if (it.kind === 'hopper'){
+    c.fillStyle = '#6a6a71'; c.fillRect(2, 3, 12, 3);
+    c.fillStyle = '#5f5f66'; c.fillRect(4, 6, 8, 3);
+    c.fillStyle = '#54545a'; c.fillRect(6, 9, 4, 3);
+    c.fillStyle = '#44444a'; c.fillRect(7, 12, 2, 3);
+  } else if (it.kind === 'elev'){
+    c.fillStyle = '#8a8a94'; c.fillRect(2, 7, 12, 2);
+    c.fillStyle = '#b8b8c2'; c.fillRect(2, 7, 12, 1);
+    c.fillStyle = '#5f5f66'; c.fillRect(3, 9, 2, 5); c.fillRect(11, 9, 2, 5);
+    c.fillStyle = '#ffd76a';
+    c.fillRect(7, 1, 2, 4); c.fillRect(5, 3, 2, 2); c.fillRect(9, 3, 2, 2);
+  } else if (it.kind === 'acrank'){
+    c.fillStyle = '#8a6237';
+    c.fillRect(1, 3, 2, 12); c.fillRect(13, 3, 2, 12);
+    c.fillStyle = '#a37c47';
+    c.fillRect(4, 3, 8, 2); c.fillRect(4, 11, 8, 2); c.fillRect(3, 5, 2, 6); c.fillRect(11, 5, 2, 6);
+    c.fillStyle = '#c8a24b'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#241b12'; c.fillRect(7, 7, 1, 1);
+  } else if (it.kind === 'tesla'){
+    c.fillStyle = '#6a6a71'; c.fillRect(5, 12, 6, 3);
+    c.fillStyle = '#8a8a94'; c.fillRect(7, 6, 2, 6);
+    c.fillStyle = '#7fe8e8'; c.fillRect(5, 2, 6, 5);
+    c.fillStyle = '#d5ffff'; c.fillRect(6, 3, 2, 2);
+    c.fillStyle = '#aef7f7'; c.fillRect(2, 1, 2, 1); c.fillRect(12, 4, 2, 1); c.fillRect(3, 7, 1, 2);
+  } else if (it.kind === 'gen2'){
+    c.fillStyle = '#5f5f66'; c.fillRect(1, 5, 14, 9);
+    c.fillStyle = '#44444a'; c.fillRect(1, 12, 14, 2);
+    c.fillStyle = '#c22a45'; c.fillRect(1, 5, 14, 1);
+    c.fillStyle = '#8a8a94'; c.fillRect(10, 2, 2, 3); c.fillRect(4, 2, 2, 3);
+    c.fillStyle = '#ffb347'; c.fillRect(3, 8, 4, 3);
+    c.fillStyle = '#ffe08a'; c.fillRect(4, 9, 2, 1);
+    c.fillStyle = '#2c2c31'; c.fillRect(9, 8, 4, 4);
+  } else if (it.kind === 'crafter'){
+    c.fillStyle = '#8a6237'; c.fillRect(2, 4, 12, 10);
+    c.fillStyle = '#a37c47'; c.fillRect(2, 4, 12, 2);
+    c.fillStyle = '#3c3a44'; c.fillRect(4, 7, 8, 5);
+    c.fillStyle = '#59c8d8'; c.fillRect(5, 8, 2, 2); c.fillRect(8, 9, 3, 2);
+    c.fillStyle = '#ffd76a'; c.fillRect(11, 5, 2, 1);
   } else if (it.kind === 'wire'){
     // copper coil with two loose ends
     c.fillStyle = '#b5793a';
@@ -7407,6 +7906,13 @@ function itemLabel(it){
   if (it.kind === 'gen') return 'generator';
   if (it.kind === 'meter') return 'power meter';
   if (it.kind === 'drone') return 'camera drone';
+  if (it.kind === 'tube') return 'item tube';
+  if (it.kind === 'hopper') return 'hopper';
+  if (it.kind === 'elev') return 'elevator platform';
+  if (it.kind === 'acrank') return 'animal crank';
+  if (it.kind === 'tesla') return 'tesla coil';
+  if (it.kind === 'gen2') return 'generator mk2';
+  if (it.kind === 'crafter') return 'auto-crafter';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
@@ -7490,6 +7996,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -7529,6 +8036,88 @@ function refreshInvUI(){
 }
 
 // ---------- stove screen: 3 stove slots above the usual inventory ----------
+function openCrafter(n){
+  game.activeCrafter = n;
+  if (!n.inv) n.inv = new Array(24).fill(null);
+  game.ui = 'crafter';
+  refreshCrafterUI();
+  show('crafterscreen');
+  document.exitPointerLock();
+}
+function refreshCrafterUI(){
+  const n = game.activeCrafter;
+  if (!n) return;
+  const buf = $('crafterbuf');
+  buf.innerHTML = '';
+  for (let i = 0; i < n.inv.length; i++){
+    const d = document.createElement('div');
+    d.className = 'slot';
+    const it = n.inv[i];
+    if (it){
+      const img = document.createElement('img');
+      img.src = itemIconURL(it);
+      d.appendChild(img);
+      if (it.count != null){
+        const ct = document.createElement('span');
+        ct.className = 'count';
+        ct.textContent = it.count;
+        d.appendChild(ct);
+      }
+      d.title = itemLabel(it) + ' — click to take';
+      d.addEventListener('click', () => {
+        let ok = false;
+        if (it.count != null){
+          for (const s of game.slots)
+            if (s && s.count != null && s.kind === it.kind && (it.kind !== 'mat' || s.mat === it.mat)){
+              s.count += it.count; ok = true; break;
+            }
+        }
+        if (!ok) for (let j = 0; j < 40; j++) if (!game.slots[j]){ game.slots[j] = it; ok = true; break; }
+        if (!ok){ toast('inventory full'); return; }
+        n.inv[i] = null;
+        markSave(); refreshHotbar(); refreshCrafterUI();
+      });
+    }
+    buf.appendChild(d);
+  }
+  const list = $('crafterlist');
+  list.innerHTML = '';
+  CORE.RECIPES.forEach((r, idx) => {
+    const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
+               : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
+               : r.kind === 'gun' ? CORE.makeGun()
+               : r.kind === 'sword' ? CORE.makeSword(r.tier)
+               : r.kind === 'matout' ? CORE.makeStack(r.matOut, r.yields)
+               : { kind: r.kind, count: r.yields || 1 };
+    const row = document.createElement('div');
+    row.className = 'craftrow';
+    if (n.recipe === idx) row.style.outline = '2px solid #59c8d8';
+    const img = document.createElement('img');
+    img.src = itemIconURL(item);
+    row.appendChild(img);
+    const nm = document.createElement('div');
+    nm.className = 'cname';
+    nm.textContent = itemLabel(item) + ((r.yields || 1) > 1 ? ' ×' + r.yields : '');
+    row.appendChild(nm);
+    const cost = document.createElement('div');
+    cost.className = 'ccost' + (CORE.canCraft(n.inv, r) ? ' ok' : '');
+    cost.textContent = r.costs.map(c => c.item
+      ? c.n + ' ' + c.item + ' (' + CORE.countItem(n.inv, c.item) + ')'
+      : c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(n.inv, c.mat) + ')').join(' + ');
+    row.appendChild(cost);
+    row.addEventListener('click', () => {
+      n.recipe = n.recipe === idx ? null : idx;
+      n.craftT = 0;
+      markSave(); refreshCrafterUI();
+    });
+    list.appendChild(row);
+  });
+  const ratio = powerSys.crafterMap ? (powerSys.crafterMap.get(n.id) || 0) : 0;
+  $('crafterstatus').textContent =
+    n.recipe == null ? 'pick a recipe — it crafts every 4s while powered and fed'
+    : ratio > 0 ? 'crafting at ' + Math.round(ratio * 100) + '% power — ' + Math.round((n.craftT || 0) / 4 * 100) + '% of this cycle'
+    : 'recipe set — no power: wire this machine into a live circuit';
+}
 function openStove(st){
   game.activeStove = st;
   game.ui = 'stove'; buildStoveUI(); show('stovescreen'); document.exitPointerLock();
@@ -7698,10 +8287,20 @@ function refreshToolHUD(){
     html = '<div class="t1">wire ×' + it.count + '</div>' +
            '<div class="t2">' + (game.wirePending ? 'click a second terminal to connect · right click cancels'
                                                   : 'click a terminal (source, lever, meter, bulb, stove) to start a wire') + '</div>';
-  } else if (it.kind === 'lever' || it.kind === 'crank' || it.kind === 'wheel' || it.kind === 'gen' || it.kind === 'meter'){
+  } else if (it.kind === 'tube'){
+    html = '<div class="t1">item tube ×' + it.count + '</div>' +
+           '<div class="t2">' + (game.tubePending ? 'click the machine it feeds · right click cancels'
+                                                  : 'click a hopper, then a stove / auto-crafter / hopper') + '</div>';
+  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter'].includes(it.kind)){
     const tip = { lever: 'inline switch — right click to flip', crank: 'right click to wind · ~20W while wound',
                   wheel: 'place IN water · ~15W', gen: 'right click with coal to fuel · ~40W',
-                  meter: 'shows its circuit\'s watts' }[it.kind];
+                  meter: 'shows its circuit\'s watts',
+                  hopper: 'right click with a stack to deposit · tubes feed machines from it',
+                  elev: 'wire it up, stand on it — space rises, C descends · faster with more watts',
+                  acrank: 'carry an animal to it and right click · ~10W forever',
+                  tesla: 'wireless power in 8m · zaps anyone within arm\'s reach',
+                  gen2: '~100W · right click with coal — burns long and hot',
+                  crafter: 'wire + feed it, right click to pick a recipe · crafts while powered' }[it.kind];
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">left click to place · ' + tip + '</div>';
   } else if (it.kind === 'drone'){
     html = '<div class="t1">camera drone · ' + Math.round(it.charge || 0) + '%</div>' +
@@ -8019,7 +8618,8 @@ function openMap(){
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen');
+  game.activeCrafter = null;
   game.activeStove = null;
   game.ui = 'none';
   requestLock();
@@ -8247,6 +8847,7 @@ function saveNow(){
     ropes: game.ropes || [],
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b })),
+    tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
     pSeq: game.pSeq || 1,
     explored: [...(game.explored || [])],
     removedTrees: [...(game.removedTreeSet || [])],
@@ -8302,7 +8903,10 @@ function startWorld(id){
   game.pSeq = data.pSeq || 1;
   game.pnodes = (data.pnodes || []).map(n => ({ ...n }));
   game.wires = (data.wires || []).map(w => ({ a: w.a, b: w.b }));
+  game.tubes = (data.tubes || []).map(t => ({ a: t.a, b: t.b }));
   game.wirePending = null;
+  game.tubePending = null;
+  game.onElev = null;
   // old saves: bulbs and stoves predate terminal ids — mint them now
   for (const b of game.bulbs) if (b[6] == null) b[6] = game.pSeq++;
   for (const st of game.stoves) if (st.id == null) st.id = game.pSeq++;
