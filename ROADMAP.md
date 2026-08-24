@@ -74,7 +74,7 @@ chunk-coverage mask so the LOD always meets loaded geometry exactly.
   them overhead, LMB throws.
 - Photo mode (creative): free camera + time-of-day slider.
 
-## Build 6 — World Gen 2.0 (the world gets deep and different)
+## Build 6 — World Gen 2.0 (DONE)
 Playtest verdict: at 4km visibility the terrain pattern visibly loops, and
 caves die out before they get interesting. This build jumps the queue —
 villages, raids, and bosses all need a world worth putting them in.

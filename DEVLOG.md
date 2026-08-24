@@ -2,6 +2,176 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6 Phase D — wayfinding (2026-08-24) — BUILD 6 COMPLETE
+
+- **M — the auto-map.** A surface survey with explored-fog: 16m cells mark
+  as you walk (or fly low over) ground with less than 3m of rock over your
+  head — go underground and NOTHING marks, so caves stay unmapped and
+  scary. Cells render colored by their surface (materials, water depth,
+  NW-light hillshade), with beacons (cyan), beds (red), your death cache
+  (white), a yaw-tracking player arrow, north, and a scale note. Colors are
+  computed from the generator on demand and cached; the explored set is
+  persisted per world (~2km span on screen at 5px per cell).
+- **Depth readout.** The nav bar appends "↓Nm" whenever you're more than
+  3m under the surface — you always know how deep you are.
+- **Rope anchor.** Craftable (2 wool + 1 stick → 2, no station): aim at a
+  ledge, click, and the rope drops until it finds a floor (up to 60m).
+  Ladder rules while touching it: space climbs, C slides down, hanging
+  holds (grabbing one mid-fall arrests the fall — no damage). Fists-down
+  LMB picks it back up. Persisted per world, no shadow casting.
+
+Verified: 286 headless tests + full smoke suite green, plus a dedicated
+browser pass — rope place/drop-length/climb/arrest/pickup, depth readout,
+caves-don't-map, explored growth on the surface, the map screen render,
+and an autosave→reload round-trip of explored cells + ropes.
+
+That closes **Build 6 — World Gen 2.0**: macro-region biomes and landmark
+set-pieces (A), the -250 deep world with strata and enriched ore bands (B),
+the connected cave-network labyrinth with underground biomes (C), and
+wayfinding (D). Existing worlds keep their edits but sit on shifted
+terrain (see phase A note).
+
+## Build 6 Phase C — the cave network (2026-08-24)
+
+Caves are now a GRAPH, not just noise. Per 160m cell (`CAVE_CELL`), a
+deterministic generator lays out:
+
+- **Chambers** (nodes): 2-4 per cell, sphere pockets r 5-13 with ~9% blown
+  up to cathedral size (r 14-20). Chamber 0 stays shallow (-16..-54) to
+  anchor breaches; the rest spread down to ~-220 — INTO the sealed deep
+  zone, which is how the deep world opens up.
+- **Tunnels** (edges): winding 3-segment capsule chains (jittered
+  waypoints, r 2.3-3.4) — a chain through the cell's chambers, a 45%-chance
+  branch loop, and **guaranteed cross-cell links** east and south to the
+  neighbors' first chamber. The whole underworld is one connected labyrinth:
+  every cell holds >200m of tunnel and links onward (tested), so you can
+  genuinely get lost.
+- **Breaches**: half the cells crack the surface open above their shallow
+  chamber (skipped underwater) — network entrances on top of the old
+  noise-cave mouths.
+
+The primitives are exact capsule/sphere distances (the collider can trust
+the field), stored per cell with AABBs. `makeLocal` prefilters the list per
+chunk footprint so meshing only pays for primitives it can see;
+`gatherPrims` serves collision queries from a per-cell 3×3 merged cache;
+`caveInBox` lets both deep-zone quick-rejects (meshChunk + stream-in skip)
+yield exactly where the network digs. Noise caves above -84 remain as
+filler.
+
+**Underground biomes** (chamber-flagged by depth): glowshroom forests
+(above -62), crystal caverns (-62..-165, CRYSTAL walls that shimmer in the
+dark), lava galleries (below -165, glowing LAVA floors — contact damage
+already works), and flooded galleries (still water up to the chamber
+midline: rendered by remeshWater as per-chamber pools, swimmable via a
+floodedAt hook in inWater).
+
+Verified: 286 headless tests (determinism, ≥2 chambers + >200m tunnel +
+cross-links per cell, all chambers carved open, deep chambers mesh through
+the quick-rejects, all four biomes spawn with correct wall materials,
+breach mouths open, flooded water level) — plus the smoke suite green and
+an underground screenshot pass: cathedral-scale crystal cavern, glowshroom
+forest, lava-floored gallery, flooded gallery with its water plane and a
+tunnel exit. Note for playtests: black wall patches at low render distance
+are dark (non-glowing) rock beyond the headlamp — bring torches.
+
+## Build 6 Phase B — the deep world (2026-08-24)
+
+Bedrock drops from -64 to **-250**; the chunk column is now 46 chunks tall
+(-256..+112m).
+
+- **Sealed deep zone**: noise caves pinch closed from -68 and are provably
+  sealed by -84. Below `gen.caveFloorY` (-86) the world is solid rock until
+  phase C's cave network moves in — which is what makes the depth *cheap*:
+  an untouched deep chunk can be rejected without sampling (~1µs vs ~13ms
+  for a real chunk, measured).
+- **Strata**: basalt takes over below a noisy ~-80 boundary; deep mining
+  reads visually different from surface rock.
+- **Ore bands stretched and enriched**: iron to -80, coal to -60, ruby
+  -20..-140, obsidian -60..-190, diamond -110..-248. Vein radius swells up
+  to 1.6× toward the bottom — deeper really is richer.
+- **Queue hygiene** (the real work of this phase): provably-empty chunks
+  (solid deep zone, sky far above the column) are no longer enqueued at
+  stream-in — they used to sit in the dirty queue behind 10ms+ real chunks
+  and stall the per-frame mesh budget (8.1k queued → 2.1k, same real
+  workload as 5.6.1). They stay in the chunk map so `invalidate()` re-dirties
+  them the moment an edit reaches them; a conservative edit y-envelope
+  (recomputed whenever `invalidate` runs, since wrench moves mutate edits in
+  place) keeps the skip sound for saved deep builds. `heightRange` is also
+  memoized per footprint — every chunk in a 46-chunk column asks for the
+  same rect.
+- **Streaming follows you down**: chunk streaming (and the nearest-first
+  sort center) only re-triggered on *horizontal* border crossings — descend
+  160m in one column and the mesher kept prioritizing the surface from a
+  stale center (latent since forever, fatal at 46-chunk columns). The
+  crossing key now includes the vertical chunk.
+
+Verified: 270 headless tests (new deep-world section: sealed zone has zero
+air probes, caves live above the seal, basalt strata, deep chunk reject +
+edited-deep-chunk meshing, diamond present in its band), full smoke suite
+green, and a live browser dig: a 170m shaft from the surface to -158,
+standing at the bottom inside meshed basalt walls with an obsidian vein in
+view, headlamp lighting it.
+
+## Build 6 Phase A — World Gen 2.0: macro-regions & landmarks (2026-08-23)
+
+The whole surface generator is new. **Old worlds keep their edits but the
+terrain under them shifts** — the heightfield formula changed, so existing
+saves will see ground move relative to their builds. (Seed + edit list still
+round-trip exactly; it's the base world that's different.)
+
+### Macro-regions
+`biome()`/`isDesert()` are gone. The world is now warped-Voronoi cells
+(~520m, `REGION`), each committed to one of 8 archetypes: plains, hills,
+sharp ranges (ridged, snow-capped, to ~60m), mesa badlands (stepped
+plateaus cut by slot canyons that drop below sea into rivers), dunes
+(anisotropic sand waves with oasis pools), swamp (near-sea flats pocked
+with water), glacier (high ice sheet split by crevasses), volcanic (black
+basalt fields). Height blends between the two nearest sites over ~90m at
+borders; everything discrete (mats, trees, decor, water-vs-lava) reads the
+nearest site. Borders are domain-warped ±~80m so they never read straight.
+
+### Landmarks
+Up to one set-piece per region, kept ≥132m inside its cell so lookups stay
+O(1) and fully heightfield-expressible so the LOD rings carry them at 4km:
+- **Volcano** (volcanic only): 110m-radius cone +60m with a crater bowl —
+  the crater floor is exposed LAVA, and low spots in the basalt fields pool
+  lava instead of water.
+- **Sinkhole**: 26m-radius, ~46m-deep shaft. Dry when its surroundings are
+  above sea (a hole to the deep — phase C will wire these into the cave
+  network); floods into a cenote if the basin was already below sea.
+- **Monolith**: 44m rock spire.
+- **Crater lake**: 55m ring — raised grass rim, water bowl below sea.
+`heightRange` enumerates overlapped region cells and folds in `lm.peak` /
+`lm.floor`, so chunk quick-rejects can't skip a spire or a pit.
+
+### New materials + rules
+BASALT(15), LAVA(16), CRYSTAL(17) with tiles, hardness, colors, and shader
+glow (lava is its own light, crystal shimmers in the dark — terrain AND the
+LOD ring shader). Volcanic surface: basalt, obsidian shore band at the
+water line, lava pools. Glacier: snow to the water line. Standing on/in
+lava in survival ticks ~6 damage per 0.4s.
+
+### The wet question
+Water used to be "h < sea". Now `gen.wetAt(x,z[,h])` decides — false on
+volcanic ground and in dry sinkhole shafts — and all three water consumers
+(chunk water mesher, LOD water overlay flag, swim check) route through it.
+
+### Plumbing
+- CY_MAX 5→13: chunks now reach +112m (heights clamp to [-45, 95]).
+- Snowline 13.5→26, grass to 20, tree/decor gating by archetype
+  (trees: plains/hills/swamp; decor skips ranges/glacier/volcanic; badlands
+  + dunes get sparse dry tufts).
+- Region cells cached; region query ≈ 2 warp fbm2 + 9 cached cell lookups
+  + 1–2 archetype fbm stacks. Meshing budget absorbs it (smoke test clean).
+
+Verified: 262 headless tests (new section: region variety ≥6/8 archetypes,
+determinism, clamp, all 4 landmark types + shape promises, crater lava,
+wetAt rules, heightRange-sees-landmarks, glacier/volcanic surface mats),
+full Playwright smoke suite green, and a 15-screenshot matrix: region
+overview, volcano air/rim/crater/profile, sinkhole, monolith-on-glacier,
+crater lake ring, ranges, mesa, dunes, glacier crevasses. Lava damage
+verified in a live survival session.
+
 ## Build 5.6.1 — the hands act the part (2026-08-23)
 
 Playtest notes on the fists: functionality perfect, visuals wrong. Reworked
