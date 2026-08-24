@@ -98,6 +98,11 @@ villages, raids, and bosses all need a world worth putting them in.
 - **Wayfinding**: surface auto-map screen (explored-fog); caves stay
   unmapped and scary. Depth readout. Rope anchor for early descent.
 
+## Build 6.5 — what you see is what you place (DONE)
+Real-time real-model previews for every placeable (props, plants, rope,
+door) and a solid world-tiled material preview for the dispenser. Outlines
+survive only on the drill and paint mode.
+
 ## Build 7 — Electricity (analog power, not redstone)
 Power is continuous wattage, not on/off — machines scale with supply, no cap.
 - **Phase A — the network**: wires, switches (levers), power meters.

@@ -2815,6 +2815,44 @@ function buildScene(){
     game.ghostSet[k].fill.userData.noShadow = true; game.ghostSet[k].wire.userData.noShadow = true;
     scene.add(game.ghostSet[k].fill); scene.add(game.ghostSet[k].wire);
   }
+  // dispenser preview v2: the REAL loaded material, world-tiled exactly like
+  // the terrain triplanar (same axis pick, same 1m fract), so what floats in
+  // front of you is what the click bakes into the world
+  game.ghostSolidMat = new THREE.ShaderMaterial({
+    uniforms: { uTex: { value: null }, uOpacity: { value: 0.85 } },
+    vertexShader: `
+      varying vec3 vW; varying vec3 vN;
+      void main(){
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vW = wp.xyz; vN = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: `
+      precision highp float;
+      uniform sampler2D uTex; uniform float uOpacity;
+      varying vec3 vW; varying vec3 vN;
+      void main(){
+        vec3 an = abs(vN);
+        vec2 uv = (an.y >= an.x && an.y >= an.z) ? vW.xz : (an.x >= an.z) ? vW.zy : vW.xy;
+        vec3 col = texture2D(uTex, fract(uv)).rgb;
+        float lit = 0.68 + 0.32 * max(vN.y, 0.0);
+        gl_FragColor = vec4(col * lit, uOpacity);
+      }`,
+    transparent: true, depthWrite: false,
+  });
+  game.ghostSolid = {
+    0: new THREE.Mesh(sphereG, game.ghostSolidMat),
+    1: new THREE.Mesh(cubeG, game.ghostSolidMat),
+    2: new THREE.Mesh(cylG, game.ghostSolidMat),
+  };
+  for (const k of [0, 1, 2]){
+    game.ghostSolid[k].visible = false;
+    game.ghostSolid[k].renderOrder = 5;
+    game.ghostSolid[k].userData.noShadow = true;
+    game.ghostSolid[k].rotation.order = 'YXZ';
+    scene.add(game.ghostSolid[k]);
+  }
+  game.ghostTexCache = new Map();
   // water surface material — per-chunk lake meshes are built alongside
   // terrain chunks (Terrain.remesh), so water only ever appears where
   // meshed ground actually dips below sea level: no phantom ocean beyond
@@ -2847,6 +2885,7 @@ function buildScene(){
   decorSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
+  placePreview.init(scene);
 
   // snap-grid visualization (rebuilt when cell size changes)
   game.gridViz = null; game.gridVizCell = 0;
@@ -3654,6 +3693,13 @@ const beaconSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const b of game.beacons){
+      const g = this.model();
+      g.position.set(b[0], b[1], b[2]);
+      this.group.add(g);
+    }
+  },
+  model(){
     if (!this.mats){
       this.mats = {
         base: pixMat(PROP_TEX.steel),
@@ -3661,18 +3707,15 @@ const beaconSys = {
         gem: pixMat(PROP_TEX.energy, 0x9fe8ff),
       };
     }
-    for (const b of game.beacons){
-      const g = new THREE.Group();
-      const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.7), this.mats.base);
-      base.position.y = 0.17;
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.5, 0.24), this.mats.pillar);
-      pillar.position.y = 1.05;
-      const gem = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), this.mats.gem);
-      gem.position.y = 1.95; gem.rotation.y = Math.PI / 4; gem.rotation.z = Math.PI / 4;
-      g.add(base); g.add(pillar); g.add(gem);
-      g.position.set(b[0], b[1], b[2]);
-      this.group.add(g);
-    }
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.7), this.mats.base);
+    base.position.y = 0.17;
+    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.24, 1.5, 0.24), this.mats.pillar);
+    pillar.position.y = 1.05;
+    const gem = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), this.mats.gem);
+    gem.position.y = 1.95; gem.rotation.y = Math.PI / 4; gem.rotation.z = Math.PI / 4;
+    g.add(base); g.add(pillar); g.add(gem);
+    return g;
   },
   add(x, y, z){ game.beacons.push([x, y, z]); this.rebuild(); markSave(); toast('home beacon set'); },
   removeNear(x, y, z, r){
@@ -3793,35 +3836,39 @@ const bedSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const b of game.beds){
+      const g = this.model();
+      g.position.set(b[0], b[1], b[2]);
+      g.rotation.y = b[3] || 0;
+      this.group.add(g);
+    }
+    rebuildSolidProps();
+  },
+  model(){
     if (!this.mats){
       this.mats = {
         frame: pixMat(PROP_TEX.planksV), leg: pixMat(PROP_TEX.bark),
         wool: pixMat(PROP_TEX.wool), blanket: pixMat(PROP_TEX.blanket),
       };
     }
-    for (const b of game.beds){
-      const g = new THREE.Group();
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 2.0), this.mats.frame);
-      frame.position.set(0, 0.25, 0);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.12), this.mats.frame);
-      head.position.set(0, 0.35, -0.94);
-      const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 1.86), this.mats.wool);
-      mattress.position.set(0, 0.43, 0);
-      const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.1, 1.2), this.mats.blanket);
-      blanket.position.set(0, 0.47, 0.34);
-      const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.4), this.mats.wool);
-      pillow.position.set(0, 0.53, -0.66);
-      for (const [lx, lz] of [[-0.48, -0.9], [0.48, -0.9], [-0.48, 0.9], [0.48, 0.9]]){
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), this.mats.leg);
-        leg.position.set(lx, 0.15, lz);
-        g.add(leg);
-      }
-      g.add(frame); g.add(head); g.add(mattress); g.add(blanket); g.add(pillow);
-      g.position.set(b[0], b[1], b[2]);
-      g.rotation.y = b[3] || 0;
-      this.group.add(g);
+    const g = new THREE.Group();
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 2.0), this.mats.frame);
+    frame.position.set(0, 0.25, 0);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.5, 0.12), this.mats.frame);
+    head.position.set(0, 0.35, -0.94);
+    const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.14, 1.86), this.mats.wool);
+    mattress.position.set(0, 0.43, 0);
+    const blanket = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.1, 1.2), this.mats.blanket);
+    blanket.position.set(0, 0.47, 0.34);
+    const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.12, 0.4), this.mats.wool);
+    pillow.position.set(0, 0.53, -0.66);
+    for (const [lx, lz] of [[-0.48, -0.9], [0.48, -0.9], [-0.48, 0.9], [0.48, 0.9]]){
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.3, 0.12), this.mats.leg);
+      leg.position.set(lx, 0.15, lz);
+      g.add(leg);
     }
-    rebuildSolidProps();
+    g.add(frame); g.add(head); g.add(mattress); g.add(blanket); g.add(pillow);
+    return g;
   },
   add(x, y, z, yaw){ game.beds.push([x, y, z, yaw]); this.rebuild(); markSave(); },
   removeNear(x, y, z, r){
@@ -3892,24 +3939,30 @@ const stoveSys = {
     this.meshes = [];
     const M = this.ensureMats();
     for (const st of game.stoves){
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95), M.stone);
-      body.position.y = 0.48;
-      const top = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), M.top);
-      top.position.y = 1.0;
-      const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), M.stone);
-      chimney.position.set(0.25, 1.25, 0.25);
-      const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.38, 0.06), M.mouthCold);
-      mouth.position.set(0, 0.4, -0.46);
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 0.1), M.top);
-      lip.position.set(0, 0.16, -0.46);
-      g.add(body); g.add(top); g.add(chimney); g.add(mouth); g.add(lip);
+      const g = this.model();
       g.position.set(st.x, st.y, st.z);
       g.rotation.y = st.yaw || 0;
       this.group.add(g);
-      this.meshes.push({ st, mouth });
+      this.meshes.push({ st, mouth: g.userData.mouth });
     }
     rebuildSolidProps();
+  },
+  model(){
+    const M = this.ensureMats();
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95), M.stone);
+    body.position.y = 0.48;
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), M.top);
+    top.position.y = 1.0;
+    const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.5, 0.24), M.stone);
+    chimney.position.set(0.25, 1.25, 0.25);
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.38, 0.06), M.mouthCold);
+    mouth.position.set(0, 0.4, -0.46);
+    const lip = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 0.1), M.top);
+    lip.position.set(0, 0.16, -0.46);
+    g.add(body); g.add(top); g.add(chimney); g.add(mouth); g.add(lip);
+    g.userData.mouth = mouth;
+    return g;
   },
   add(x, y, z, yaw){
     game.stoves.push({ x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0 });
@@ -3993,6 +4046,16 @@ const bulbSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const b of game.bulbs){
+      const g = this.model();
+      g.position.set(b[0], b[1], b[2]);
+      // tilt the whole bulb so its base sits on the surface it was placed on
+      const n = new THREE.Vector3(b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]).normalize();
+      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
+      this.group.add(g);
+    }
+  },
+  model(){
     if (!this.mats){
       this.mats = {
         glass: new THREE.MeshBasicMaterial({ color: 0xfff2c0, transparent: true, opacity: 0.92 }),
@@ -4000,24 +4063,18 @@ const bulbSys = {
         base: pixMat(PROP_TEX.steelLight, null, 2, 1),
       };
     }
-    for (const b of game.bulbs){
-      const g = new THREE.Group();
-      // real bulb shape: screw base, neck, glass globe, filament
-      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.14, 8), this.mats.base);
-      screw.position.y = 0.07;
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.1, 8), this.mats.glass);
-      neck.position.y = 0.18;
-      const globe = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), this.mats.glass);
-      globe.position.y = 0.36;
-      const fil = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.05), this.mats.fil);
-      fil.position.y = 0.33;
-      g.add(screw); g.add(neck); g.add(globe); g.add(fil);
-      g.position.set(b[0], b[1], b[2]);
-      // tilt the whole bulb so its base sits on the surface it was placed on
-      const n = new THREE.Vector3(b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5]).normalize();
-      g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), n);
-      this.group.add(g);
-    }
+    const g = new THREE.Group();
+    // real bulb shape: screw base, neck, glass globe, filament
+    const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.14, 8), this.mats.base);
+    screw.position.y = 0.07;
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.075, 0.1, 8), this.mats.glass);
+    neck.position.y = 0.18;
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), this.mats.glass);
+    globe.position.y = 0.36;
+    const fil = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.07, 0.05), this.mats.fil);
+    fil.position.y = 0.33;
+    g.add(screw); g.add(neck); g.add(globe); g.add(fil);
+    return g;
   },
   add(x, y, z, nx, ny, nz){
     game.bulbs.push([x, y, z, nx == null ? 0 : nx, ny == null ? 1 : ny, nz == null ? 0 : nz]);
@@ -4048,14 +4105,24 @@ const ropeSys = {
     this.group = new THREE.Group();
     this.group.userData.noShadow = true;
     for (const r of game.ropes || []){
-      const [x, y, z, len] = r;
-      const anchor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.36), this.matA);
-      anchor.position.set(x, y + 0.05, z);
-      const line = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 5), this.matL);
-      line.position.set(x, y - len / 2, z);
-      this.group.add(anchor, line);
+      const g = this.model(r[3]);
+      g.position.set(r[0], r[1], r[2]);
+      this.group.add(g);
     }
     game.scene.add(this.group);
+  },
+  model(len){
+    if (!this.matA){
+      this.matA = new THREE.MeshLambertMaterial({ color: 0x8a8a94 });
+      this.matL = new THREE.MeshLambertMaterial({ color: 0x9a7444 });
+    }
+    const g = new THREE.Group();
+    const anchor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.36), this.matA);
+    anchor.position.y = 0.05;
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 5), this.matL);
+    line.position.y = -len / 2;
+    g.add(anchor, line);
+    return g;
   },
   add(x, y, z, len){
     (game.ropes = game.ropes || []).push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2), +len.toFixed(1)]);
@@ -4098,19 +4165,23 @@ const torchSys = {
       const c = this.group.children.pop();
       this.group.remove(c);
     }
-    if (!this.mats){
-      this.mats = { bark: pixMat(PROP_TEX.bark, null, 1, 2), ember: pixMat(PROP_TEX.ember) };
-    }
     for (const t of game.torches){
-      const g = new THREE.Group();
-      const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), this.mats.bark);
-      stick.position.y = 0.21;
-      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.14), this.mats.ember);
-      tip.position.y = 0.47;
-      g.add(stick); g.add(tip);
+      const g = this.model();
       g.position.set(t[0], t[1], t[2]);
       this.group.add(g);
     }
+  },
+  model(){
+    if (!this.mats){
+      this.mats = { bark: pixMat(PROP_TEX.bark, null, 1, 2), ember: pixMat(PROP_TEX.ember) };
+    }
+    const g = new THREE.Group();
+    const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), this.mats.bark);
+    stick.position.y = 0.21;
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.14), this.mats.ember);
+    tip.position.y = 0.47;
+    g.add(stick); g.add(tip);
+    return g;
   },
   add(x, y, z){ game.torches.push([x, y, z]); this.rebuild(); markSave(); },
   // remove torches near a point; returns how many were popped
@@ -4240,6 +4311,16 @@ const decorSys = {
     if (d.type === 'flower') return 'flower' + (d.vc & 3);
     if (d.type === 'shrub') return 'shrub';
     return d.dry ? 'tuftdry' : 'tuft';
+  },
+  // one plain (non-instanced) plant, for the placement preview
+  model(type){
+    const id = type === 'flower' ? 'flower0' : type === 'shrub' ? 'shrub' : 'tuft';
+    const v = this.VARIANTS.find(v => v.id === id);
+    const m = new THREE.Mesh(this.crossGeo(v.w, v.h),
+      new THREE.MeshBasicMaterial({ map: this.texFor(v.id), alphaTest: 0.5, side: THREE.DoubleSide }));
+    const g = new THREE.Group();
+    g.add(m);
+    return g;
   },
   entries(){
     // generated decor within a readable radius + everything hand-placed
@@ -4491,22 +4572,25 @@ const doorSys = {
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     for (const d of game.doors){
-      const w = d.w || 1.2, h = d.h || 2.2;
-      const g = new THREE.Group();
-      if (!this.mats){
-        this.mats = { panel: pixMat(PROP_TEX.planksV, null, 1, 2),
-                      handle: pixMat(PROP_TEX.woodEnd, 0xd8c485) };
-      }
-      const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), this.mats.panel);
-      panel.position.set(w * 0.5, h * 0.5, 0); // hinge at the group origin
-      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), this.mats.handle);
-      handle.position.set(w * 0.85, h * 0.48, 0);
-      g.add(panel); g.add(handle);
+      const g = this.model(d.w || 1.2, d.h || 2.2);
       g.position.set(d.x, d.y, d.z);
       g.rotation.y = d.yaw + (d.open ? Math.PI / 2 : 0);
       this.group.add(g);
     }
     rebuildSolidProps();
+  },
+  model(w, h){
+    if (!this.mats){
+      this.mats = { panel: pixMat(PROP_TEX.planksV, null, 1, 2),
+                    handle: pixMat(PROP_TEX.woodEnd, 0xd8c485) };
+    }
+    const g = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.12), this.mats.panel);
+    panel.position.set(w * 0.5, h * 0.5, 0); // hinge at the group origin
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.2), this.mats.handle);
+    handle.position.set(w * 0.85, h * 0.48, 0);
+    g.add(panel); g.add(handle);
+    return g;
   },
   // place from the ghost: gd = {x, y, z (base center), yaw, w, h}
   placeAt(gd){
@@ -4549,28 +4633,32 @@ const tableSys = {
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
-    if (!this.mats){
-      this.mats = { top: pixMat(PROP_TEX.tableTop), side: pixMat(PROP_TEX.planksV),
-                    leg: pixMat(PROP_TEX.bark, null, 1, 2), tool: pixMat(PROP_TEX.energy, 0x59c8d8) };
-    }
     for (const t of game.tables){
-      const g = new THREE.Group();
-      // top: tableTop texture up, plank sides
-      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1),
-        [this.mats.side, this.mats.side, this.mats.top, this.mats.side, this.mats.side, this.mats.side]);
-      top.position.y = 0.85;
-      for (const [sx, sz] of [[-0.45,-0.45],[0.45,-0.45],[-0.45,0.45],[0.45,0.45]]){
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), this.mats.leg);
-        leg.position.set(sx, 0.42, sz);
-        g.add(leg);
-      }
-      const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), this.mats.tool);
-      tools.position.set(0.2, 0.98, -0.15);
-      g.add(top); g.add(tools);
+      const g = this.model();
       g.position.set(t[0], t[1], t[2]);
       this.group.add(g);
     }
     rebuildSolidProps();
+  },
+  model(){
+    if (!this.mats){
+      this.mats = { top: pixMat(PROP_TEX.tableTop), side: pixMat(PROP_TEX.planksV),
+                    leg: pixMat(PROP_TEX.bark, null, 1, 2), tool: pixMat(PROP_TEX.energy, 0x59c8d8) };
+    }
+    const g = new THREE.Group();
+    // top: tableTop texture up, plank sides
+    const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1),
+      [this.mats.side, this.mats.side, this.mats.top, this.mats.side, this.mats.side, this.mats.side]);
+    top.position.y = 0.85;
+    for (const [sx, sz] of [[-0.45,-0.45],[0.45,-0.45],[-0.45,0.45],[0.45,0.45]]){
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), this.mats.leg);
+      leg.position.set(sx, 0.42, sz);
+      g.add(leg);
+    }
+    const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), this.mats.tool);
+    tools.position.set(0.2, 0.98, -0.15);
+    g.add(top); g.add(tools);
+    return g;
   },
   add(x, y, z){ game.tables.push([x, y, z]); this.rebuild(); markSave(); },
   onRay(maxDist){
@@ -4598,6 +4686,100 @@ const tableSys = {
     return n;
   },
 };
+// ---------- placement preview ----------
+// Whatever placeable you hold renders FOR REAL at the spot it would land —
+// the actual model, translucent, posed exactly as the click would pose it.
+// No more guessing from a wireframe box. (Dispenser shapes get the same
+// treatment with a world-tiled material preview in updateGhost; the drill
+// keeps its wireframe — a hole has no body to show.)
+const placePreview = {
+  root: null, vkey: null, ropeT: 0, ropeLen: 2, lastHit: null,
+  KINDS: ['torch', 'bulb', 'table', 'beacon', 'bed', 'stove', 'rope', 'decor'],
+  init(scene){
+    this.root = new THREE.Group();
+    this.root.visible = false;
+    this.root.userData.noShadow = true;
+    this.vkey = null;
+    scene.add(this.root);
+  },
+  // clone materials so the shared prop mats stay untouched
+  ghostify(g){
+    g.traverse(o => {
+      if (o.isMesh){
+        o.material = Array.isArray(o.material) ? o.material.map(m => m.clone()) : o.material.clone();
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]){
+          m.transparent = true;
+          m.opacity = Math.min(m.opacity ?? 1, 1) * 0.55;
+          m.depthWrite = false;
+        }
+        o.renderOrder = 5;
+      }
+    });
+    return g;
+  },
+  build(kind, vkey){
+    while (this.root.children.length) this.root.remove(this.root.children[0]);
+    let g = null;
+    if (kind === 'torch') g = torchSys.model();
+    else if (kind === 'bulb') g = bulbSys.model();
+    else if (kind === 'table') g = tableSys.model();
+    else if (kind === 'beacon') g = beaconSys.model();
+    else if (kind === 'bed') g = bedSys.model();
+    else if (kind === 'stove') g = stoveSys.model();
+    else if (kind === 'rope') g = ropeSys.model(this.ropeLen);
+    else if (kind === 'door'){
+      const p = vkey.split('|');
+      g = doorSys.model(+p[1], +p[2]);
+    } else if (kind === 'decor'){
+      g = decorSys.model(vkey.split('|')[1]);
+    }
+    if (g) this.root.add(this.ghostify(g));
+    this.vkey = vkey;
+  },
+  showAt(kind, vkey, x, y, z, yaw){
+    if (vkey !== this.vkey) this.build(kind, vkey);
+    this.root.quaternion.identity();
+    this.root.rotation.set(0, yaw || 0, 0);
+    this.root.position.set(x, y, z);
+    this.root.visible = true;
+  },
+  hide(){ if (this.root) this.root.visible = false; },
+  update(now){
+    const tool = activeTool();
+    if (tool && tool.kind === 'door') return;   // updateGhost owns the door pose
+    const on = tool && this.KINDS.includes(tool.kind) &&
+               game.ui === 'none' && isLocked() && !game.photo;
+    if (!on){ this.hide(); return; }
+    const hit = surfaceHit();
+    if (!hit){ this.hide(); return; }
+    let vkey = tool.kind;
+    if (tool.kind === 'decor') vkey += '|' + tool.decorType;
+    if (tool.kind === 'rope'){
+      // live drop length: same probe the click runs, throttled to hit moves
+      if (!this.lastHit || now - this.ropeT > 350 ||
+          Math.hypot(hit[0] - this.lastHit[0], hit[1] - this.lastHit[1], hit[2] - this.lastHit[2]) > 0.25){
+        this.ropeT = now; this.lastHit = hit.slice();
+        let len = 1.5;
+        const eds = nearEdits([hit[0] - 2, hit[1] - 62, hit[2] - 2, hit[0] + 2, hit[1] + 2, hit[2] + 2]);
+        while (len < 60 && CORE.evalSDF(hit[0], hit[1] - len - 0.4, hit[2], eds, game.gen) > 0) len += 0.5;
+        this.ropeLen = len;
+      }
+      vkey += '|' + this.ropeLen;
+    }
+    let yaw = 0;
+    if (tool.kind === 'stove') yaw = Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2);
+    else if (tool.kind === 'bed') yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2);
+    this.showAt(tool.kind, vkey, hit[0], hit[1], hit[2], yaw);
+    if (tool.kind === 'bulb'){
+      // stand on the surface like the placed bulb will
+      const le = nearEdits([hit[0] - 1, hit[1] - 1, hit[2] - 1, hit[0] + 1, hit[1] + 1, hit[2] + 1]);
+      const n = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], le, 0.15, game.gen) : [0, 1, 0];
+      this.root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(n[0], n[1], n[2]).normalize());
+    }
+  },
+};
+
 function nearTable(){
   for (const t of game.tables){
     if (Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z) < 4) return true;
@@ -5367,6 +5549,7 @@ function updateGhost(){
   for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
+    if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
   if (game.gridViz) game.gridViz.visible = false;
   // held door: skinny door-shaped ghost with grid + side alignment
@@ -5392,13 +5575,11 @@ function updateGhost(){
         yaw = Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2) + game.tool.doorSide * (Math.PI / 2);
       }
       game.ghostDoor = { x: bx, y: by, z: bz, yaw, w, h: hgt };
-      const gs = game.ghostSet[1];
-      gs.fill.material.color.set(0x8bff9e);
-      gs.fill.visible = true; gs.wire.visible = true;
-      gs.fill.position.set(bx, by + hgt * 0.5, bz); gs.wire.position.set(bx, by + hgt * 0.5, bz);
-      gs.fill.scale.set(w, hgt, 0.13); gs.wire.scale.set(w, hgt, 0.13);
-      gs.fill.rotation.y = yaw; gs.wire.rotation.y = yaw;
-      gs.fill.material.opacity = 0.22;
+      // preview = the REAL door model at the exact hinge pose placeAt uses
+      placePreview.showAt('door', 'door|' + w + '|' + hgt,
+        bx - Math.cos(yaw) * w * 0.5, by, bz + Math.sin(yaw) * w * 0.5, yaw);
+    } else {
+      placePreview.hide();
     }
     game.ghostPos = null;
     return;
@@ -5409,19 +5590,39 @@ function updateGhost(){
   game.ghostEff = eff;
   const p = ghostPlacement(eff);
   game.ghostPos = p;
-  const gs = game.ghostSet[game.tool.shape];
   const paint = tool.kind === 'disp' && game.tool.mode === 'paint';
-  gs.fill.material.color.set(paint ? 0xffb44d : tool.kind === 'disp' ? 0x8bff9e : 0x6fd3ff);
-  gs.fill.visible = true; gs.wire.visible = true;
-  gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
-  gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
   const rot = editRot(game.tool.shape);
   const grx = game.tool.shape !== 0 ? game.tool.rx || 0 : 0;
   const grz = game.tool.shape !== 0 ? game.tool.rz || 0 : 0;
-  gs.fill.rotation.order = 'YXZ'; gs.wire.rotation.order = 'YXZ';
-  gs.fill.rotation.set(grx, rot, grz); gs.wire.rotation.set(grx, rot, grz);
-  // charging feedback: the shape visibly "fills in" as the action completes
-  gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
+  if (tool.kind === 'disp' && !paint){
+    // build preview: the real material, solid, world-tiled — not an outline
+    const gm = game.ghostSolid[game.tool.shape];
+    let tex = game.ghostTexCache.get(tool.mat);
+    if (!tex){
+      tex = new THREE.CanvasTexture(tileCanvas(tool.mat, game.seed || 1));
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.NearestFilter;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      game.ghostTexCache.set(tool.mat, tex);
+    }
+    game.ghostSolidMat.uniforms.uTex.value = tex;
+    // charging feedback: the shape solidifies as the action completes
+    game.ghostSolidMat.uniforms.uOpacity.value = 0.85 + game.actProgress * 0.15;
+    gm.visible = true;
+    gm.position.set(p.x, p.y, p.z);
+    gm.scale.setScalar(eff);
+    gm.rotation.set(grx, rot, grz);
+  } else {
+    const gs = game.ghostSet[game.tool.shape];
+    gs.fill.material.color.set(paint ? 0xffb44d : 0x6fd3ff);
+    gs.fill.visible = true; gs.wire.visible = true;
+    gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
+    gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
+    gs.fill.rotation.order = 'YXZ'; gs.wire.rotation.order = 'YXZ';
+    gs.fill.rotation.set(grx, rot, grz); gs.wire.rotation.set(grx, rot, grz);
+    // charging feedback: the shape visibly "fills in" as the action completes
+    gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
+  }
 
   if (game.snapOn){
     // visualize the actual placement lattice (spacing = shape size when the
@@ -7940,7 +8141,9 @@ function enterPhoto(){
   for (const k of [0, 1, 2]){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
+    if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
+  placePreview.hide();
   if (game.gridViz) game.gridViz.visible = false;
   toast('photo mode — WASD fly · scroll speed · , . time of day · F2 snapshot · P exit');
 }
@@ -8038,6 +8241,7 @@ function frame(now){
     updatePlayer(dt);
     updateGhostDist(dt);
     updateGhost();
+    placePreview.update(now);
     tryAction(dt, now);
   }
   updateViewmodel(dt);
@@ -8204,7 +8408,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
-  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit };
+  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview };
 </script>
 </body>
 </html>

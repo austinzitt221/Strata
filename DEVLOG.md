@@ -2,6 +2,41 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6.5 — what you see is what you place (2026-08-24)
+
+Playtest note: placing anything (the rope especially) was blind — no
+preview of where it would land. And the wireframe ghost on the dispenser
+told you the shape but not the THING. Both fixed; outlines are gone
+everywhere except the drill.
+
+- **Every placeable renders for real at its landing spot.** Torch, bulb,
+  bed, stove, crafting table, beacon, rope, door, and plants all show
+  their actual model — translucent, live-tracking your aim — posed exactly
+  as the click will pose them: the bed and stove snap-yaw with your facing,
+  the bulb stands on the surface normal (walls and ceilings included), the
+  door shows the real panel at the hinge pose (grid + side alignment
+  intact), and the rope probes its true drop length in real time so you
+  see the whole line before you commit.
+- **Engineering**: each prop system's per-instance construction was
+  factored into a `model()` factory used by BOTH the world rebuild and the
+  preview, so preview and placed object can never drift apart. A single
+  `placePreview` system clones materials (originals untouched), rebuilds
+  only when the held thing changes, and hides in menus/photo mode.
+- **The dispenser shows the material, not an outline.** Holding a material
+  stack now floats a SOLID cube/sphere/cylinder textured with the loaded
+  material — world-tiled by the same triplanar rule as the terrain shader
+  (same axis pick, same 1m fract), so the preview's texture lines up with
+  what the click bakes in. Size, per-axis rotation and grid snap all read
+  live on the real shape; it solidifies slightly as the charge completes.
+  Paint mode keeps its orange wireframe, and the **drill keeps its
+  wireframe** — a hole has no body to show.
+
+Verified: pose-parity test (bed preview yaw/position exactly equals the
+placed bed; dispenser preview position/rotation/material exactly equals
+the resulting edit), a 12-screenshot matrix across every placeable
+(including bulb-on-wall orientation and the drill still wireframed), 286
+headless tests and the full smoke suite green.
+
 ## Build 6 Phase D — wayfinding (2026-08-24) — BUILD 6 COMPLETE
 
 - **M — the auto-map.** A surface survey with explored-fog: 16m cells mark
