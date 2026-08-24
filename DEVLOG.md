@@ -2,6 +2,44 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6 Phase B — the deep world (2026-08-24)
+
+Bedrock drops from -64 to **-250**; the chunk column is now 46 chunks tall
+(-256..+112m).
+
+- **Sealed deep zone**: noise caves pinch closed from -68 and are provably
+  sealed by -84. Below `gen.caveFloorY` (-86) the world is solid rock until
+  phase C's cave network moves in — which is what makes the depth *cheap*:
+  an untouched deep chunk can be rejected without sampling (~1µs vs ~13ms
+  for a real chunk, measured).
+- **Strata**: basalt takes over below a noisy ~-80 boundary; deep mining
+  reads visually different from surface rock.
+- **Ore bands stretched and enriched**: iron to -80, coal to -60, ruby
+  -20..-140, obsidian -60..-190, diamond -110..-248. Vein radius swells up
+  to 1.6× toward the bottom — deeper really is richer.
+- **Queue hygiene** (the real work of this phase): provably-empty chunks
+  (solid deep zone, sky far above the column) are no longer enqueued at
+  stream-in — they used to sit in the dirty queue behind 10ms+ real chunks
+  and stall the per-frame mesh budget (8.1k queued → 2.1k, same real
+  workload as 5.6.1). They stay in the chunk map so `invalidate()` re-dirties
+  them the moment an edit reaches them; a conservative edit y-envelope
+  (recomputed whenever `invalidate` runs, since wrench moves mutate edits in
+  place) keeps the skip sound for saved deep builds. `heightRange` is also
+  memoized per footprint — every chunk in a 46-chunk column asks for the
+  same rect.
+- **Streaming follows you down**: chunk streaming (and the nearest-first
+  sort center) only re-triggered on *horizontal* border crossings — descend
+  160m in one column and the mesher kept prioritizing the surface from a
+  stale center (latent since forever, fatal at 46-chunk columns). The
+  crossing key now includes the vertical chunk.
+
+Verified: 270 headless tests (new deep-world section: sealed zone has zero
+air probes, caves live above the seal, basalt strata, deep chunk reject +
+edited-deep-chunk meshing, diamond present in its band), full smoke suite
+green, and a live browser dig: a 170m shaft from the surface to -158,
+standing at the bottom inside meshed basalt walls with an obsidian vein in
+view, headlamp lighting it.
+
 ## Build 6 Phase A — World Gen 2.0: macro-regions & landmarks (2026-08-23)
 
 The whole surface generator is new. **Old worlds keep their edits but the

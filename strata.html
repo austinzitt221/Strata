@@ -287,8 +287,8 @@ const VOX = 0.5;              // voxel edge in meters
 const N = 16;                 // cells per chunk edge
 const CHUNK_M = N * VOX;      // chunk edge in meters (8)
 const SURFACE_Y = 0.01;       // base rock plane (off-grid to avoid exact-zero samples)
-const BEDROCK_Y = -63.99;     // everything below is permanently solid
-const CY_MIN = -8, CY_MAX = 13; // vertical chunk range: y in [-64, +112) meters
+const BEDROCK_Y = -249.99;    // everything below is permanently solid
+const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) meters
 
 // materials (0 = air / none)
 const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17 };
@@ -363,12 +363,12 @@ function fbm2(seed, x, z, oct){
 // Everything derives deterministically from the seed; the same interface with
 // a flat plane (FLAT_GEN) is the default so build-1 behavior and tests hold.
 const ORE_TYPES = [
-  { mat: MAT.IRON,       yMin: -30,   yMax: -4,   p: 0.50, rMin: 0.8, rMax: 1.5 },
-  { mat: MAT.RUBY,       yMin: -45,   yMax: -16,  p: 0.38, rMin: 0.7, rMax: 1.3 },
-  { mat: MAT.OBSIDIAN,   yMin: -58,   yMax: -30,  p: 0.34, rMin: 0.7, rMax: 1.3 },
-  { mat: MAT.DIAMOND,    yMin: -63.5, yMax: -46,  p: 0.28, rMin: 0.6, rMax: 1.1 },
+  { mat: MAT.IRON,       yMin: -80,   yMax: -4,   p: 0.50, rMin: 0.8, rMax: 1.5 },
+  { mat: MAT.RUBY,       yMin: -140,  yMax: -20,  p: 0.40, rMin: 0.7, rMax: 1.4 },
+  { mat: MAT.OBSIDIAN,   yMin: -190,  yMax: -60,  p: 0.36, rMin: 0.7, rMax: 1.4 },
+  { mat: MAT.DIAMOND,    yMin: -248,  yMax: -110, p: 0.32, rMin: 0.6, rMax: 1.3 },
   { mat: MAT.GLOWSHROOM, yMin: -20,   yMax: -1,   p: 0.48, rMin: 0.5, rMax: 0.9 },
-  { mat: MAT.COAL,       yMin: -34,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
+  { mat: MAT.COAL,       yMin: -60,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
 ];
 const VEIN_CELL = 4;
 const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic'];
@@ -542,6 +542,9 @@ function makeGen(seed){
       // taper to sub-player width right where you'd climb in
       mouth = Math.max(ent, 0.45) * Math.max(0, 1 - depth / 5) * 0.09;
     }
+    // the deep zone: noise caves pinch closed below -68 and are fully sealed
+    // by -84 — chunks under caveFloorY are provably solid (cheap mesh skip)
+    if (y < -68) fade += (-68 - Math.max(y, -84)) * 0.09;
     const nA = noise3(sA, x * 0.045, y * 0.055, z * 0.045);
     const nB = noise3(sC, x * 0.045 + 53.1, y * 0.055, z * 0.045 + 11.7);
     const width = noise3(sW, x * 0.012, y * 0.012, z * 0.012);
@@ -652,7 +655,9 @@ function makeGen(seed){
       if (oy < t.yMin || oy > t.yMax) continue;
       const ox = gx * VEIN_CELL + (hashInt(h0 ^ 1) / 4294967296) * VEIN_CELL;
       const oz = gz * VEIN_CELL + (hashInt(h0 ^ 3) / 4294967296) * VEIN_CELL;
-      const r = t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin);
+      // richer lower: vein radius swells up to 1.6x toward the bottom
+      const r = (t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin)) *
+                (1 + Math.min(0.6, Math.max(0, (-oy - 60) / 300)));
       const ddx = x - ox, ddy = (y - oy) * 1.4, ddz = z - oz; // flattened veins
       if (ddx*ddx + ddy*ddy + ddz*ddz < r * r) return t.mat;
     }
@@ -682,9 +687,21 @@ function makeGen(seed){
       if (h < 20) return MAT.GRASS;
       return MAT.ROCK;                           // bare rock band below the caps
     }
+    // deep strata: basalt takes over below ~-80 (noisy boundary)
+    if (y < -76 - noise2(sD, x * 0.05, z * 0.05) * 8) return MAT.BASALT;
     return MAT.ROCK;
   }
+  const hrCache = new Map();
   function heightRange(x0, z0, x1, z1){
+    const hrKey = x0 + ',' + z0 + ',' + x1 + ',' + z1;
+    const hrHit = hrCache.get(hrKey);
+    if (hrHit) return hrHit;
+    const hrOut = heightRangeCalc(x0, z0, x1, z1);
+    if (hrCache.size > 8000) hrCache.clear();
+    hrCache.set(hrKey, hrOut);
+    return hrOut;
+  }
+  function heightRangeCalc(x0, z0, x1, z1){
     let mn = Infinity, mx = -Infinity;
     for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++){
       const h = height(x0 + (x1 - x0) * i / 4, z0 + (z1 - z0) * j / 4);
@@ -732,7 +749,7 @@ function makeGen(seed){
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
     return {
-      height: lh, heightRange, mat, caves: true, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+      height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt,
       sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z),
       makeLocal,
     };
@@ -781,7 +798,7 @@ function makeGen(seed){
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt };
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt };
 }
 const TREE_CELL = 11;
 const DECOR_CELL = 3;
@@ -1039,6 +1056,9 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   // quick reject on untouched chunks: pure air above the terrain, and (when
   // the gen has no caves) pure solid below it
   if (edits.length === 0){
+    // deep solid zone: noise caves pinch out above caveFloorY, so an
+    // untouched chunk entirely below it holds no surface — skip sampling
+    if (gen.caveFloorY != null && box[4] < gen.caveFloorY) return null;
     const hr = gen.heightRange(box[0], box[2], box[3], box[5]);
     if (box[1] > hr[1] + 0.5) return null;
     if (!gen.caves && box[4] < hr[0] - 0.5) return null;
@@ -2171,18 +2191,51 @@ class Terrain {
         this.dirty.delete(key);
       }
     }
-    // queue new chunks
+    // queue new chunks — but keep provably-empty ones (solid deep zone,
+    // sky far above the column) out of the dirty queue entirely: meshChunk
+    // would reject them in microseconds, yet in the queue they sit behind
+    // real 10ms+ chunks and stall the per-frame budget. They stay in the
+    // chunks map so invalidate() can still dirty them when an edit arrives.
+    const M = CORE.CHUNK_M;
+    const floorY = this.gen.caveFloorY != null ? this.gen.caveFloorY : -1e9;
+    const seaCy = this.gen.seaLevel != null ? Math.floor(this.gen.seaLevel / M) : null;
     for (const key of want){
       if (!this.chunks.has(key)){
         this.chunks.set(key, { mesh: null });
         const [cx, cy, cz] = key.split(',').map(Number);
+        if (cy !== seaCy){   // sea-band chunks always process (water mesh)
+          const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
+          if (topY < floorY && topY < this.editMinY() - 1) continue;
+          const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
+                                          cx * M + M + 0.5, cz * M + M + 0.5);
+          if (botY > hr[1] + 0.5 && botY > this.editMaxY() + 1) continue;
+        }
         this.dirty.set(key, [cx, cy, cz]);
       }
     }
   }
 
+  // conservative vertical envelope of all edits (full size covers any
+  // rotation). Cached; invalidate() forces a recompute since wrench moves
+  // mutate edits without changing the list length.
+  editEnvelope(){
+    if (this._envN !== this.edits.length){
+      let lo = 1e9, hi = -1e9;
+      for (const e of this.edits){
+        const s = Math.max(e.size, e.sx || 0, e.sy || 0, e.sz || 0);
+        if (e.y - s < lo) lo = e.y - s;
+        if (e.y + s > hi) hi = e.y + s;
+      }
+      this._envN = this.edits.length; this._envLo = lo; this._envHi = hi;
+    }
+    return [this._envLo, this._envHi];
+  }
+  editMinY(){ return this.editEnvelope()[0]; }
+  editMaxY(){ return this.editEnvelope()[1]; }
+
   // mark chunks overlapping an edit AABB dirty
   invalidate(e){
+    this._envN = -1;   // edit list changed or an edit moved: envelope stale
     const box = CORE.editAABB(e);
     const pad = CORE.VOX * 2;
     const x0 = Math.floor((box[0] - pad) / CORE.CHUNK_M), x1 = Math.floor((box[3] + pad) / CORE.CHUNK_M);
@@ -7565,9 +7618,12 @@ function frame(now){
   updateViewmodel(dt);
   updateChargeBar();
 
-  // stream chunks when crossing chunk borders (or forced)
+  // stream chunks when crossing chunk borders (or forced). The vertical
+  // chunk is part of the key: the deep world is 46 chunks tall, and the
+  // nearest-first mesh order must follow the player DOWN a shaft, not keep
+  // prioritizing the surface from a stale center
   const cc = game.terrain.chunkOfWorld(game.pos.x, game.pos.z);
-  const ck = cc[0] + ',' + cc[1];
+  const ck = cc[0] + ',' + cc[1] + ',' + Math.floor(game.pos.y / CORE.CHUNK_M);
   if (ck !== lastChunk || game.forceStream){
     lastChunk = ck; game.forceStream = false;
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
