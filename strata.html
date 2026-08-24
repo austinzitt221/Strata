@@ -373,6 +373,7 @@ const ORE_TYPES = [
 const VEIN_CELL = 4;
 const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic'];
 const REGION = 520;            // macro-region cell edge (m)
+const CAVE_CELL = 160;         // cave-network graph cell edge (m)
 function makeGen(seed){
   seed = seed >>> 0;
   const sH = hashInt(seed ^ 0x68e31da4), sR = hashInt(seed ^ 0xb5297a4d);
@@ -382,6 +383,7 @@ function makeGen(seed){
   const sE = hashInt(seed ^ 0xdaa66d2b), sM = hashInt(seed ^ 0x14057b7f);
   const sU = hashInt(seed ^ 0x27d4eb2f), sU2 = hashInt(seed ^ 0x165667b1);
   const sRg = hashInt(seed ^ 0x5bd1e995), sWp = hashInt(seed ^ 0xcc9e2d51);
+  const sN = hashInt(seed ^ 0x8f1bbcdc), sX = hashInt(seed ^ 0x5a8279f9);
 
   const seaLevel = -1.5;   // global water table: valleys and caves below flood
   // ---- macro-regions: warped Voronoi cells (~520m), each committed to one
@@ -558,6 +560,178 @@ function makeGen(seed){
     // old 4x scale a 2m tunnel read as ~0.3m and no cave was enterable)
     return Math.min(tunnel * 22, room * 34);
   }
+  // ---- cave NETWORK: a deterministic graph per 160m cell. Chambers are
+  // nodes (spheres, pocket to cathedral), tunnels are edges (winding capsule
+  // chains). Every cell links east and south to its neighbors' first
+  // chamber, so the whole underworld is ONE connected labyrinth — guaranteed
+  // length, intersections and branches; the noise caves above -84 are just
+  // filler around it. Chambers reach into the sealed deep zone (that's what
+  // opens it), and caveInBox lets the mesher find them there cheaply.
+  const chamberCache = new Map();
+  function chamberList(cx, cz){
+    const key = cx + ',' + cz;
+    let out = chamberCache.get(key);
+    if (out) return out;
+    const h0 = hashInt(sN ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    const n = 2 + (hashInt(h0 ^ 0x77) % 3);
+    out = [];
+    for (let i = 0; i < n; i++){
+      const r1 = k => hashInt(h0 ^ (i * 131 + k)) / 4294967296;
+      const x = cx * CAVE_CELL + 20 + r1(1) * (CAVE_CELL - 40);
+      const z = cz * CAVE_CELL + 20 + r1(2) * (CAVE_CELL - 40);
+      let r = 5 + r1(3) * 8;
+      if (r1(4) < 0.09) r = 14 + r1(5) * 6;            // cathedral cavern
+      // chamber 0 stays shallow (it anchors breaches); the rest spread deep
+      let y = i === 0 ? -16 - r1(6) * 38 : -16 - r1(6) * 204;
+      y = Math.min(y, height(x, z) - r - 5);
+      y = Math.max(y, BEDROCK_Y + r + 8);
+      // underground biome flag by depth band
+      const rb = r1(9);
+      let biome = 0;                                    // 0 plain
+      if (y > -62){ if (rb < 0.40) biome = 1; else if (rb > 0.85) biome = 4; }
+      else if (y > -165){ if (rb < 0.45) biome = 2; else if (rb > 0.85) biome = 4; }
+      else if (rb < 0.55) biome = 3;                    // 1 shroom 2 crystal 3 lava 4 flooded
+      out.push({ x, y, z, r, biome });
+    }
+    chamberCache.set(key, out);
+    return out;
+  }
+  const netCache = new Map();
+  function caveNetCell(cx, cz){
+    const key = cx + ',' + cz;
+    let R = netCache.get(key);
+    if (R) return R;
+    const h0 = hashInt(sN ^ 0x1234567 ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    const rnd = k => hashInt(h0 ^ k) / 4294967296;
+    const chs = chamberList(cx, cz);
+    const prims = [];
+    for (const c of chs)
+      prims.push({ t: 0, cx: c.x, cy: c.y, cz: c.z, r: c.r,
+                   x0: c.x - c.r - 1, y0: c.y - c.r - 1, z0: c.z - c.r - 1,
+                   x1: c.x + c.r + 1, y1: c.y + c.r + 1, z1: c.z + c.r + 1 });
+    const cap = (ax, ay, az, bx, by, bz, r) => prims.push({
+      t: 1, ax, ay, az, bx, by, bz, r,
+      x0: Math.min(ax, bx) - r - 1, y0: Math.min(ay, by) - r - 1, z0: Math.min(az, bz) - r - 1,
+      x1: Math.max(ax, bx) + r + 1, y1: Math.max(ay, by) + r + 1, z1: Math.max(az, bz) + r + 1 });
+    const tun = (A, B, base) => {
+      let px = A.x, py = A.y, pz = A.z;
+      for (let s = 1; s <= 3; s++){
+        const t = s / 3;
+        let qx = A.x + (B.x - A.x) * t, qy = A.y + (B.y - A.y) * t, qz = A.z + (B.z - A.z) * t;
+        if (s < 3){
+          qx += (rnd(base + s * 3) - 0.5) * 34;
+          qy += (rnd(base + s * 3 + 1) - 0.5) * 14;
+          qz += (rnd(base + s * 3 + 2) - 0.5) * 34;
+          qy = Math.max(BEDROCK_Y + 6, Math.min(qy, height(qx, qz) - 7));
+        }
+        cap(px, py, pz, qx, qy, qz, 2.3 + rnd(base + s * 3 + 7) * 1.1);
+        px = qx; py = qy; pz = qz;
+      }
+    };
+    for (let i = 0; i + 1 < chs.length; i++) tun(chs[i], chs[i + 1], 100 + i * 40);
+    if (chs.length > 2 && rnd(9) < 0.45) tun(chs[0], chs[chs.length - 1], 500);
+    // guaranteed cross-cell links: east + south neighbors' first chamber
+    tun(chs[0], chamberList(cx + 1, cz)[0], 600);
+    tun(chs[chs.length - 1], chamberList(cx, cz + 1)[0], 700);
+    // breach: the shallow chamber climbs out and cracks the surface open
+    let breach = null;
+    if (rnd(11) < 0.5){
+      const c = chs[0];
+      const bx = c.x + (rnd(13) - 0.5) * 26, bz = c.z + (rnd(15) - 0.5) * 26;
+      const hB = height(bx, bz);
+      if (hB > seaLevel + 0.5){
+        const mx = (c.x + bx) / 2 + (rnd(17) - 0.5) * 12;
+        const mz = (c.z + bz) / 2 + (rnd(19) - 0.5) * 12;
+        const my = (c.y + hB) / 2;
+        cap(c.x, c.y, c.z, mx, my, mz, 2.5);
+        cap(mx, my, mz, bx, hB + 1.4, bz, 2.4);
+        breach = { x: bx, y: hB, z: bz };
+      }
+    }
+    R = { prims, chambers: chs, breach };
+    netCache.set(key, R);
+    return R;
+  }
+  // merged 3x3 primitive list around a point's cell (cached per cell)
+  const gatherCache = new Map();
+  function gatherPrims(x, z){
+    const cx = Math.floor(x / CAVE_CELL), cz = Math.floor(z / CAVE_CELL);
+    const key = cx + ',' + cz;
+    let a = gatherCache.get(key);
+    if (!a){
+      a = [];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++)
+        a.push(...caveNetCell(cx + dx, cz + dz).prims);
+      if (gatherCache.size > 600) gatherCache.clear();
+      gatherCache.set(key, a);
+    }
+    return a;
+  }
+  // primitives whose AABB touches a footprint rect (for chunk-local gens)
+  function gatherBox(x0, z0, x1, z1){
+    const out = [];
+    const c0x = Math.floor((x0 - CAVE_CELL) / CAVE_CELL), c1x = Math.floor((x1 + CAVE_CELL) / CAVE_CELL);
+    const c0z = Math.floor((z0 - CAVE_CELL) / CAVE_CELL), c1z = Math.floor((z1 + CAVE_CELL) / CAVE_CELL);
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++)
+      for (const p of caveNetCell(cx, cz).prims)
+        if (p.x1 >= x0 && p.x0 <= x1 && p.z1 >= z0 && p.z0 <= z1) out.push(p);
+    return out;
+  }
+  // does any network primitive touch this world-space box? (mesh quick-
+  // reject in the deep zone must not skip network chambers)
+  function caveInBox(box){
+    const c0x = Math.floor((box[0] - CAVE_CELL) / CAVE_CELL), c1x = Math.floor((box[3] + CAVE_CELL) / CAVE_CELL);
+    const c0z = Math.floor((box[2] - CAVE_CELL) / CAVE_CELL), c1z = Math.floor((box[5] + CAVE_CELL) / CAVE_CELL);
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++)
+      for (const p of caveNetCell(cx, cz).prims)
+        if (p.x1 >= box[0] && p.x0 <= box[3] && p.y1 >= box[1] && p.y0 <= box[4] &&
+            p.z1 >= box[2] && p.z0 <= box[5]) return true;
+    return false;
+  }
+  // signed distance to the network's carved space (true meters — capsule
+  // and sphere distances are exact, so the collider can trust the field)
+  function primCarve(x, y, z, prims){
+    let m = 1e9;
+    for (let i = 0; i < prims.length; i++){
+      const p = prims[i];
+      if (x < p.x0 || x > p.x1 || y < p.y0 || y > p.y1 || z < p.z0 || z > p.z1) continue;
+      let d;
+      if (p.t === 0){
+        const dx = x - p.cx, dy = y - p.cy, dz = z - p.cz;
+        d = Math.sqrt(dx * dx + dy * dy + dz * dz) - p.r;
+      } else {
+        const dx = p.bx - p.ax, dy = p.by - p.ay, dz = p.bz - p.az;
+        const px = x - p.ax, py = y - p.ay, pz = z - p.az;
+        let t = (px * dx + py * dy + pz * dz) / (dx * dx + dy * dy + dz * dz);
+        t = t < 0 ? 0 : t > 1 ? 1 : t;
+        const qx = px - dx * t, qy = py - dy * t, qz = pz - dz * t;
+        d = Math.sqrt(qx * qx + qy * qy + qz * qz) - p.r;
+      }
+      if (d < m) m = d;
+    }
+    return m;
+  }
+  // nearest biome-flagged chamber whose shell reaches this point
+  function chamberAt(x, y, z){
+    const ccx = Math.floor(x / CAVE_CELL), ccz = Math.floor(z / CAVE_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const chs = chamberList(ccx + dx, ccz + dz);
+      for (let i = 0; i < chs.length; i++){
+        const c = chs[i];
+        if (!c.biome) continue;
+        const ddx = x - c.x, ddy = y - c.y, ddz = z - c.z;
+        const rr = c.r + 1.7;
+        if (ddx * ddx + ddy * ddy + ddz * ddz < rr * rr) return c;
+      }
+    }
+    return null;
+  }
+  // flooded galleries hold still water up to their midline
+  function floodedAt(x, y, z){
+    if (y > -6) return false;
+    const c = chamberAt(x, y, z);
+    return !!(c && c.biome === 4 && y < c.y);
+  }
   // ---- ruins: broken stonebrick shells with an ore pillar, one candidate
   // per 72m lattice cell. Solid geometry lives in the GENERATOR (union with
   // the terrain field), so seams, collision and mining all just work.
@@ -624,25 +798,33 @@ function makeGen(seed){
     }
     return MAT.STONEBRICK;
   }
-  function sdfFromH(h, x, y, z){
+  function sdfFromH(h, x, y, z, prims){
     let d = (y - h) * 0.65;
-    if (d > 2.5){
+    const net = prims && prims.length;
+    if (!net){
+      if (d > 2.5){
+        const rs = ruinSDF(x, y, z);
+        return rs < d ? rs : d;
+      }
+      if (d > 0.05){
+        // Above the heightfield the naive answer is "surface d below you" —
+        // but over a cave mouth that surface is carved away, and returning d
+        // builds an invisible floor the collider bounces on. Near entrance
+        // zones, keep taking max with the carve so the air over a hole knows
+        // the nearest solid is the rim, not the missing ground.
+        if (entranceMask(x, z) < 0.15) return Math.min(d, ruinSDF(x, y, z));
+      }
+    } else if (d > 8){
+      // well above any breach mouth flare: plain air
       const rs = ruinSDF(x, y, z);
       return rs < d ? rs : d;
     }
-    if (d > 0.05){
-      // Above the heightfield the naive answer is "surface d below you" —
-      // but over a cave mouth that surface is carved away, and returning d
-      // builds an invisible floor the collider bounces on. Near entrance
-      // zones, keep taking max with the carve so the air over a hole knows
-      // the nearest solid is the rim, not the missing ground.
-      if (entranceMask(x, z) < 0.15) return Math.min(d, ruinSDF(x, y, z));
-    }
     d = Math.max(d, -caveCarve(x, y, z, h));
+    if (net) d = Math.max(d, -primCarve(x, y, z, prims));
     const rs = ruinSDF(x, y, z);
     return rs < d ? rs : d;
   }
-  function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
+  function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z, gatherPrims(x, z)); }
   function oreAt(x, y, z){
     if (y > -1 || y < BEDROCK_Y) return 0;
     const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
@@ -668,6 +850,15 @@ function makeGen(seed){
     if (rm) return rm;
     const ore = oreAt(x, y, z);
     if (ore) return ore;
+    if (y < -6){
+      const ch = chamberAt(x, y, z);
+      if (ch){
+        if (ch.biome === 3 && y < ch.y - ch.r * 0.5) return MAT.LAVA;   // lava gallery floor
+        if (ch.biome === 2 && noise3(sX, x * 0.9, y * 0.9, z * 0.9) > 0.5) return MAT.CRYSTAL;
+        if (ch.biome === 1 && noise3(sX, x * 1.1, y * 1.1, z * 1.1) > 0.55) return MAT.GLOWSHROOM;
+        if (ch.biome === 4 && y < ch.y - ch.r * 0.5) return MAT.SAND;   // flooded gallery bed
+      }
+    }
     const h = height(x, z);
     if (y > h - 0.9){
       const a = archAt(x, z);
@@ -734,6 +925,7 @@ function makeGen(seed){
   // chunks interpolate from the same shared columns, so seams stay watertight.
   function makeLocal(x0, z0, x1, z1){
     x0 -= 2 * VOX; z0 -= 2 * VOX; x1 += 2 * VOX; z1 += 2 * VOX; // hermite margin
+    const lPrims = gatherBox(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
     const nx = Math.round((x1 - x0) / VOX) + 1, nz = Math.round((z1 - z0) / VOX) + 1;
     const grid = new Float32Array(nx * nz);
     for (let j = 0; j < nz; j++)
@@ -750,7 +942,8 @@ function makeGen(seed){
     }
     return {
       height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-      sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z),
+      caveInBox, floodedAt, chamberAt, caveNetCell,
+      sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z, lPrims),
       makeLocal,
     };
   }
@@ -798,7 +991,8 @@ function makeGen(seed){
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt };
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+           caveInBox, floodedAt, chamberAt, caveNetCell };
 }
 const TREE_CELL = 11;
 const DECOR_CELL = 3;
@@ -806,6 +1000,7 @@ const FLAT_GEN = {
   treeAt: () => null,
   seaLevel: null, ruinInCell: () => null,
   wetAt: () => false, archAt: () => 0, lmAt: () => null,
+  caveInBox: () => false, floodedAt: () => false, chamberAt: () => null, caveNetCell: null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
   sdf: (x, y, z) => y - SURFACE_Y,
@@ -1057,8 +1252,10 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   // the gen has no caves) pure solid below it
   if (edits.length === 0){
     // deep solid zone: noise caves pinch out above caveFloorY, so an
-    // untouched chunk entirely below it holds no surface — skip sampling
-    if (gen.caveFloorY != null && box[4] < gen.caveFloorY) return null;
+    // untouched chunk entirely below it holds no surface — skip sampling,
+    // unless the cave NETWORK digs through this box
+    if (gen.caveFloorY != null && box[4] < gen.caveFloorY &&
+        !(gen.caveInBox && gen.caveInBox(box))) return null;
     const hr = gen.heightRange(box[0], box[2], box[3], box[5]);
     if (box[1] > hr[1] + 0.5) return null;
     if (!gen.caves && box[4] < hr[0] - 0.5) return null;
@@ -1773,7 +1970,7 @@ function hashSeed(str){
 }
 
 return {
-  VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX,
+  VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
   SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits,
@@ -2205,7 +2402,9 @@ class Terrain {
         const [cx, cy, cz] = key.split(',').map(Number);
         if (cy !== seaCy){   // sea-band chunks always process (water mesh)
           const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
-          if (topY < floorY && topY < this.editMinY() - 1) continue;
+          if (topY < floorY && topY < this.editMinY() - 1 &&
+              !(this.gen.caveInBox && this.gen.caveInBox(
+                [cx * M - 0.5, botY, cz * M - 0.5, cx * M + M + 0.5, topY, cz * M + M + 0.5]))) continue;
           const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
                                           cx * M + M + 0.5, cz * M + M + 0.5);
           if (botY > hr[1] + 0.5 && botY > this.editMaxY() + 1) continue;
@@ -2293,28 +2492,54 @@ class Terrain {
   // containing the sea plane, so a footprint gets exactly one water mesh.
   remeshWater(ch, cx, cy, cz){
     const sea = this.gen.seaLevel, M = CORE.CHUNK_M;
-    if (sea == null || cy !== Math.floor(sea / M)) return;
+    const seaCy = sea != null ? Math.floor(sea / M) : null;
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     if (!game.waterMat) return;
     const x0 = cx * M, z0 = cz * M;
-    const hs = [];                                    // 9x9 corner heights
-    for (let j = 0; j <= M; j++)
-      for (let i = 0; i <= M; i++)
-        hs.push(this.gen.height(x0 + i, z0 + j));
     const pos = [], uv = [];
-    for (let j = 0; j < M; j++)
-      for (let i = 0; i < M; i++){
-        const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
-        const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
-        const hm = Math.min(a, b, c, d);
-        if (hm >= sea) continue;                      // dry cell
-        const xa = x0 + i, xb = x0 + i + 1, za = z0 + j, zb = z0 + j + 1;
-        if (this.gen.wetAt && !this.gen.wetAt(xa + 0.5, za + 0.5, hm)) continue;
-        pos.push(xa, sea, za, xa, sea, zb, xb, sea, zb,
-                 xa, sea, za, xb, sea, zb, xb, sea, za);
-        uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
-                xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+    const quad = (xa, za, xb, zb, wy) => {
+      pos.push(xa, wy, za, xa, wy, zb, xb, wy, zb,
+               xa, wy, za, xb, wy, zb, xb, wy, za);
+      uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
+              xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+    };
+    if (cy === seaCy){
+      const hs = [];                                  // 9x9 corner heights
+      for (let j = 0; j <= M; j++)
+        for (let i = 0; i <= M; i++)
+          hs.push(this.gen.height(x0 + i, z0 + j));
+      for (let j = 0; j < M; j++)
+        for (let i = 0; i < M; i++){
+          const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
+          const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
+          const hm = Math.min(a, b, c, d);
+          if (hm >= sea) continue;                    // dry cell
+          if (this.gen.wetAt && !this.gen.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) continue;
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, sea);
+        }
+    }
+    // flooded galleries: still water at each flooded chamber's midline,
+    // over footprint cells where that height is open (carved) space
+    if (this.gen.caveNetCell){
+      const CC = CORE.CAVE_CELL, y0 = cy * M, y1 = y0 + M;
+      const c0x = Math.floor((x0 - CC) / CC), c1x = Math.floor((x0 + M + CC) / CC);
+      const c0z = Math.floor((z0 - CC) / CC), c1z = Math.floor((z0 + M + CC) / CC);
+      for (let ccz = c0z; ccz <= c1z; ccz++) for (let ccx = c0x; ccx <= c1x; ccx++){
+        for (const c of this.gen.caveNetCell(ccx, ccz).chambers){
+          if (c.biome !== 4 || c.y < y0 || c.y >= y1) continue;
+          if (c.x + c.r < x0 || c.x - c.r > x0 + M || c.z + c.r < z0 || c.z - c.r > z0 + M) continue;
+          const wy = c.y - 0.05;
+          for (let j = 0; j < M; j++)
+            for (let i = 0; i < M; i++){
+              const wx = x0 + i + 0.5, wz = z0 + j + 0.5;
+              const ddx = wx - c.x, ddz = wz - c.z;
+              if (ddx * ddx + ddz * ddz > c.r * c.r) continue;
+              if (this.gen.sdf(wx, wy - 0.25, wz) <= 0.05) continue;  // wall, not pool
+              quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, wy);
+            }
+        }
       }
+    }
     if (!pos.length) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
@@ -2438,9 +2663,11 @@ function propSDF(x, y, z){
 }
 // water occupies air below sea level over lake columns (ground below sea)
 function inWater(x, y, z){
-  const sea = game.gen.seaLevel;
+  const g = game.gen;
+  if (g.floodedAt && g.floodedAt(x, y, z)) return true;   // flooded galleries
+  const sea = g.seaLevel;
   if (sea == null || y >= sea) return false;
-  return game.gen.wetAt ? game.gen.wetAt(x, z) : game.gen.height(x, z) < sea;
+  return g.wetAt ? g.wetAt(x, z) : g.height(x, z) < sea;
 }
 function sdfWorld(x, y, z, edits){
   let d = CORE.evalSDF(x, y, z, edits, game.gen);

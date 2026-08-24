@@ -2,6 +2,49 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 6 Phase C — the cave network (2026-08-24)
+
+Caves are now a GRAPH, not just noise. Per 160m cell (`CAVE_CELL`), a
+deterministic generator lays out:
+
+- **Chambers** (nodes): 2-4 per cell, sphere pockets r 5-13 with ~9% blown
+  up to cathedral size (r 14-20). Chamber 0 stays shallow (-16..-54) to
+  anchor breaches; the rest spread down to ~-220 — INTO the sealed deep
+  zone, which is how the deep world opens up.
+- **Tunnels** (edges): winding 3-segment capsule chains (jittered
+  waypoints, r 2.3-3.4) — a chain through the cell's chambers, a 45%-chance
+  branch loop, and **guaranteed cross-cell links** east and south to the
+  neighbors' first chamber. The whole underworld is one connected labyrinth:
+  every cell holds >200m of tunnel and links onward (tested), so you can
+  genuinely get lost.
+- **Breaches**: half the cells crack the surface open above their shallow
+  chamber (skipped underwater) — network entrances on top of the old
+  noise-cave mouths.
+
+The primitives are exact capsule/sphere distances (the collider can trust
+the field), stored per cell with AABBs. `makeLocal` prefilters the list per
+chunk footprint so meshing only pays for primitives it can see;
+`gatherPrims` serves collision queries from a per-cell 3×3 merged cache;
+`caveInBox` lets both deep-zone quick-rejects (meshChunk + stream-in skip)
+yield exactly where the network digs. Noise caves above -84 remain as
+filler.
+
+**Underground biomes** (chamber-flagged by depth): glowshroom forests
+(above -62), crystal caverns (-62..-165, CRYSTAL walls that shimmer in the
+dark), lava galleries (below -165, glowing LAVA floors — contact damage
+already works), and flooded galleries (still water up to the chamber
+midline: rendered by remeshWater as per-chamber pools, swimmable via a
+floodedAt hook in inWater).
+
+Verified: 286 headless tests (determinism, ≥2 chambers + >200m tunnel +
+cross-links per cell, all chambers carved open, deep chambers mesh through
+the quick-rejects, all four biomes spawn with correct wall materials,
+breach mouths open, flooded water level) — plus the smoke suite green and
+an underground screenshot pass: cathedral-scale crystal cavern, glowshroom
+forest, lava-floored gallery, flooded gallery with its water plane and a
+tunnel exit. Note for playtests: black wall patches at low render distance
+are dark (non-glowing) rock beyond the headlamp — bring torches.
+
 ## Build 6 Phase B — the deep world (2026-08-24)
 
 Bedrock drops from -64 to **-250**; the chunk column is now 46 chunks tall
