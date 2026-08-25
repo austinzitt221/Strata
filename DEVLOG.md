@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7.5 — the player has a body (2026-08-25)
+
+You exist now. Four phases, one build.
+
+- **The body.** Full player model with a ROUND head — sphere dome, hair
+  cap, real eyes and a mouth, our silhouette, not Minecraft's. Pixel-art
+  skin from the same speckle language as everything else. It walks (legs
+  and arms swing with your actual speed), crouches (whole upper body
+  drops, legs fold), tucks its legs mid-air, holds whatever item you're
+  holding as its icon in the right hand, and its head follows your
+  pitch. **F5** toggles third person: the camera backs off along the
+  view ray and the SDF pulls it in so it never clips through terrain —
+  and every interaction ray (mining, placing, wiring, wrench, fists)
+  now compensates for the pull-back, so aiming works identically in
+  both views. Five skins (miner, ranger, ember, midnight, gilded) in
+  Options. Photo mode and the drone finally show your body standing
+  where you left it.
+- **Armor.** Helmet, chestplate and boots for every ore tier — stone to
+  diamond, 15 craftable pieces. A new armor row in the inventory
+  (helmet · chestplate · boots · back); shift-click any piece to wear
+  it, swaps included. Each piece blocks a cut of incoming damage by
+  tier, capped at 60% for a full diamond set — verified: 50 damage hit
+  for 20. Worn armor renders on the body in its tier color. The **armor
+  stand** (4 sticks + 3 planks) opens like any machine, takes exactly a
+  helmet/plate/boots, and DISPLAYS whatever it holds on its wooden
+  frame.
+- **Jetpack** (10 iron + 4 ruby, worn in the back slot): hold SPACE in
+  the air for short creative-style flight in survival — real thrust,
+  exhaust embers, a live fuel readout in the corner, ~11 seconds of
+  burn from full. It recharges on the **charging pad** (6 iron + 2
+  ruby): wire the pad into your grid and stand on it — 20W draw, only
+  while someone with a hungry jetpack is actually standing there, in
+  the best analog-grid tradition. 10%→100% verified against a coal
+  generator.
+- **Grappling hook** (2 iron + 2 wool — cheap-tier vertical movement):
+  left click any surface within 34m and it reels you in at 16 m/s;
+  click again to let go, or ride it to the wall.
+- **Base decor:** the **pedestal** (6 stonebrick) displays one item of
+  your choosing — its menu is a single proud slot; the **sign** (2
+  sticks + 2 planks) opens a little editor — four lines, sixteen
+  characters, rendered onto the board in pixel type.
+
+Everything rides the existing rails: all seven new items place with
+real-model previews, rotate with the scroll wheel, get picked up by
+fists, selected/moved/deleted by the wrench, and their state (worn
+armor, jetpack fuel, stand contents, pedestal item, sign text) saves
+inside the records that already existed.
+
+Verified in-browser: F5 round-trip with viewmodel/body swap, skin
+switching, the 60% damage cap, stand dressing with non-armor refused,
+jetpack thrust draining fuel mid-air with the HUD live, pad charging
+10→100 and idling when you step off, an 18.5m grapple pull, pedestal
+display + sign text round-tripping through save/load, plus 286
+headless tests and the smoke/7.1/7.2 suites all green.
+
 ## Build 7.2 — rotate everything, sized chests, the wrench owns the world (2026-08-25)
 
 Quick-build from playtesting notes; the wrench half turned out to be the

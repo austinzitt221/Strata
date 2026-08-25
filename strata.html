@@ -63,6 +63,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
 .mstack{display:flex; flex-direction:column; gap:16px; align-items:center; max-height:96vh; overflow:auto; padding:8px;}
+#jetbox{position:absolute; right:14px; bottom:118px; background:rgba(10,10,16,0.55); color:#9fe8ff;
+  font:12px monospace; padding:5px 9px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
 #navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
 #navarrow{display:inline-block; color:var(--accent); font-size:13px;}
 
@@ -118,7 +120,17 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
-  <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
+  <div id="signscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:380px;">
+    <h2>SIGN</h2>
+    <div class="sub">up to 4 lines, 16 characters each</div>
+    <textarea id="signtext" rows="4" style="width:100%; font:14px monospace; background:#141420; color:#e8e8f0;
+      border:1px solid rgba(255,255,255,0.2); border-radius:4px; padding:8px; resize:none;"></textarea>
+    <button class="btn" id="btnSignSave" style="margin-top:10px;">DONE</button>
+  </div>
+</div>
+<div id="jetbox" class="hidden">jetpack</div>
+<div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
   <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
 </div>
@@ -169,6 +181,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>GOD RAYS</label><input type="range" id="optRays" min="0" max="1" step="1"><span class="val" id="optRaysV"></span></div>
     <div class="optrow"><label>FPS CAP</label><input type="range" id="optFps" min="0" max="7" step="1"><span class="val" id="optFpsV"></span></div>
     <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
+    <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
 </div>
@@ -200,6 +213,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <h2>INVENTORY</h2>
     <div class="invlabel">DISPENSER SLOT</div>
     <div class="invgrid" style="grid-template-columns:52px;" id="invdisp"></div>
+    <div class="invlabel">ARMOR — helmet · chestplate · boots · back</div>
+    <div class="invgrid" style="grid-template-columns:52px 52px 52px 52px;" id="invarmor"></div>
     <div class="invlabel">STORAGE</div>
     <div class="invgrid" id="invmain"></div>
     <div class="invlabel">HOTBAR</div>
@@ -1690,7 +1705,7 @@ function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -1909,6 +1924,17 @@ const RECIPES = [];
     RECIPES.push({ kind: 'drill', tier: t, station: true, costs: [tierCost(t, 24)] });
     RECIPES.push({ kind: 'disp',  tier: t, station: true, costs: [tierCost(t, 18)] });
   }
+  for (let t = 0; t <= 4; t++){
+    RECIPES.push({ kind: 'helm',  tier: t, station: true, costs: [tierCost(t, 5)] });
+    RECIPES.push({ kind: 'plate', tier: t, station: true, costs: [tierCost(t, 8)] });
+    RECIPES.push({ kind: 'boots', tier: t, station: true, costs: [tierCost(t, 4)] });
+  }
+  RECIPES.push({ kind: 'astand', yields: 1, costs: [{ item: 'stick', n: 4 }, { mat: MAT.PLANKS, n: 3 }] });
+  RECIPES.push({ kind: 'jetpack', station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 4 }] });
+  RECIPES.push({ kind: 'pad', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 2 }] });
+  RECIPES.push({ kind: 'grapple', station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'wool', n: 2 }] });
+  RECIPES.push({ kind: 'ped', yields: 1, costs: [{ mat: MAT.STONEBRICK, n: 6 }] });
+  RECIPES.push({ kind: 'sign', yields: 2, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
@@ -1953,6 +1979,10 @@ function craft(slots, r, free){
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
                   : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
+                  : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
+                  : r.kind === 'grapple' ? { kind: 'grapple' }
+                  : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
+                    ? { kind: r.kind, tier: r.tier }
                   : makeGun();
   }
   return 'ok';
@@ -2641,7 +2671,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, shadows: 1, rays: 1, fpsCap: 0 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, shadows: 1, rays: 1, fpsCap: 0, skin: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -2669,6 +2699,7 @@ const game = {
   edits: [],
   renderer: null, scene: null, camera: null, terrain: null, atlas: null,
   opts: loadOpts(),
+  camView: 0,
   // player
   pos: new THREE.Vector3(0, 3, 0),   // feet
   vel: new THREE.Vector3(),
@@ -2680,6 +2711,7 @@ const game = {
   fHeld: false, fUsedCombo: false,
   // tools/ui state
   slots: [], hotSel: 0,
+  armor: { head: null, chest: null, feet: null, back: null },
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -2963,6 +2995,7 @@ function buildScene(){
   doorSys.init(scene);
   tableSys.init(scene);
   placePreview.init(scene);
+  playerBody.init(scene);
   pnodeSys.init(scene);
   wireSys.init(scene);
 
@@ -3110,6 +3143,193 @@ const PROP_TEX = {
 
 // ---- first-person arm: Minecraft proportions, blue sleeve + skin hand ----
 // axis: -z is forward (toward the world), the fist ends at z ~ -0.30
+// ---------- the player's body: a full model for 3rd person & photo mode ----------
+// Round head — our silhouette, not Minecraft's. Five procedural pixel skins.
+const PLAYER_SKINS = [
+  { name: 'miner',    skin: ['#ecd2b7', '#dfbd9c', '#f6e2cc'], top: ['#3d6fa8', '#335f92', '#4a80bd'], leg: ['#4a4e5a', '#3e424d', '#585d6b'], hair: '#4a3120', eye: '#2e5db0' },
+  { name: 'ranger',   skin: ['#d9b18c', '#c89d77', '#e8c4a2'], top: ['#3f7d46', '#356b3b', '#4c9355'], leg: ['#5a4632', '#4c3a28', '#6b5540'], hair: '#2c1f12', eye: '#3a7d44' },
+  { name: 'ember',    skin: ['#f0d6b8', '#e2c29e', '#f8e6cf'], top: ['#b03a3a', '#9c3030', '#c24848'], leg: ['#2f2f38', '#26262e', '#3a3a45'], hair: '#8c2f12', eye: '#c26a1c' },
+  { name: 'midnight', skin: ['#c9a582', '#b8926e', '#d8b795'], top: ['#2f2f4a', '#27273e', '#3a3a5c'], leg: ['#1e1e28', '#17171f', '#282834'], hair: '#14141c', eye: '#8a5fd8' },
+  { name: 'gilded',   skin: ['#ecd2b7', '#dfbd9c', '#f6e2cc'], top: ['#c9a13c', '#b08a30', '#dcb54e'], leg: ['#6b5540', '#5a4632', '#7d654c'], hair: '#e8e0d0', eye: '#3f8c2f' },
+];
+const playerBody = {
+  root: null, legL: null, legR: null, armL: null, armR: null, upper: null,
+  head: null, torso: null, phase: 0, itemPlane: null, itemKind: null,
+  skinIdx: -1, icons: new Map(),
+  init(scene){
+    this.root = new THREE.Group();
+    this.root.visible = false;
+    scene.add(this.root);
+    this.build(game.opts.skin || 0);
+  },
+  build(idx){
+    this.skinIdx = idx;
+    const S = PLAYER_SKINS[idx] || PLAYER_SKINS[0];
+    while (this.root.children.length) this.root.remove(this.root.children[0]);
+    const mat = (id, pal, extra) => new THREE.MeshBasicMaterial({
+      map: PixTex.make('pb' + idx + '_' + id, (c, w, h, rng) => {
+        pxSpeckle(c, rng, pal[0], pal[1], pal[2], 26);
+        if (extra) extra(c, rng);
+      }),
+    });
+    const skinM = mat('skin', S.skin);
+    const topM = mat('top', S.top, c => {
+      c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(7, 0, 1, 16);    // zip line
+      c.fillRect(2, 3, 3, 2);                                        // chest pocket
+    });
+    const legM = mat('leg', S.leg, c => {
+      c.fillStyle = '#2b2119'; c.fillRect(0, 13, 16, 3);             // boots
+      c.fillStyle = '#584434'; c.fillRect(0, 12, 16, 1);
+    });
+    const sleeveM = mat('sleeve', S.top, c => {
+      c.fillStyle = S.skin[0]; c.fillRect(0, 13, 16, 3);             // bare hands
+    });
+    const mkLeg = (x) => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.8, 0.2), legM);
+      m.position.y = -0.4;
+      g.add(m);
+      g.position.set(x, 0.8, 0);
+      this.root.add(g);
+      return g;
+    };
+    this.legL = mkLeg(-0.1); this.legR = mkLeg(0.1);
+    // everything above the hips drops together when crouching
+    this.upper = new THREE.Group();
+    this.root.add(this.upper);
+    this.torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.6, 0.26), topM);
+    this.torso.position.y = 1.1;
+    this.upper.add(this.torso);
+    const mkArm = (x) => {
+      const g = new THREE.Group();
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.62, 0.18), sleeveM);
+      m.position.y = -0.26;
+      g.add(m);
+      g.position.set(x, 1.36, 0);
+      this.upper.add(g);
+      return g;
+    };
+    this.armL = mkArm(-0.31); this.armR = mkArm(0.31);
+    // the ROUND head (faces -Z, same as the camera's forward at yaw 0)
+    this.head = new THREE.Group();
+    this.head.position.y = 1.42;
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), skinM);
+    dome.position.y = 0.25;
+    const hair = new THREE.Mesh(
+      new THREE.SphereGeometry(0.29, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      new THREE.MeshBasicMaterial({ color: S.hair }));
+    hair.position.y = 0.26; hair.rotation.x = 0.35;                  // tips back, face stays clear
+    const eyeM = new THREE.MeshBasicMaterial({ color: S.eye });
+    const whiteM = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    for (const sx of [-1, 1]){
+      const wq = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.07, 0.03), whiteM);
+      wq.position.set(sx * 0.1, 0.29, -0.235);
+      const pq = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.06, 0.03), eyeM);
+      pq.position.set(sx * 0.085, 0.285, -0.245);
+      this.head.add(wq, pq);
+    }
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.028, 0.03),
+      new THREE.MeshBasicMaterial({ color: 0x8a5a48 }));
+    mouth.position.set(0, 0.14, -0.245);
+    this.head.add(dome, hair, mouth);
+    this.upper.add(this.head);
+    // held item drawn as its inventory icon in the right hand
+    this.itemPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3),
+      new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide }));
+    this.itemPlane.position.set(0, -0.56, -0.2);
+    this.itemPlane.visible = false;
+    this.armR.add(this.itemPlane);
+    this.itemKind = null;
+  },
+  applySkin(idx){
+    if (!this.root || idx === this.skinIdx) return;
+    this.build(idx);
+  },
+  iconMat(it){
+    const key = it.kind + ':' + (it.mat != null ? it.mat : it.tier != null ? it.tier : '');
+    if (!this.icons.has(key)){
+      const tex = new THREE.TextureLoader().load(itemIconURL(it));
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      this.icons.set(key, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+    }
+    return this.icons.get(key);
+  },
+  dressBody(){
+    for (const m of this.armorMeshes || []) if (m.parent) m.parent.remove(m);
+    this.armorMeshes = [];
+    const A = game.armor || {};
+    const col = t => new THREE.MeshBasicMaterial({ color: new THREE.Color(TIER_COL[t] || '#8a8a92') });
+    if (A.head){
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.305, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), col(A.head.tier));
+      m.position.y = 0.26; m.rotation.x = 0.3;
+      this.head.add(m); this.armorMeshes.push(m);
+    }
+    if (A.chest){
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.62, 0.3), col(A.chest.tier));
+      m.position.y = 1.1;
+      this.upper.add(m); this.armorMeshes.push(m);
+    }
+    if (A.feet){
+      for (const leg of [this.legL, this.legR]){
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.32, 0.26), col(A.feet.tier));
+        m.position.set(0, -0.65, -0.02);
+        leg.add(m); this.armorMeshes.push(m);
+      }
+    }
+    if (A.back && A.back.kind === 'jetpack'){
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.46, 0.2),
+        new THREE.MeshBasicMaterial({ color: 0x3a3f4c }));
+      pack.position.set(0, 1.12, 0.24);
+      this.upper.add(pack); this.armorMeshes.push(pack);
+      for (const sx of [-0.1, 0.1]){
+        const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.14, 8),
+          new THREE.MeshBasicMaterial({ color: 0xd84a63 }));
+        noz.position.set(sx, 0.85, 0.24);
+        this.upper.add(noz); this.armorMeshes.push(noz);
+      }
+    }
+  },
+  update(dt){
+    if (!this.root) return;
+    const show = game.running && (game.camView === 1 || !!game.photo);
+    this.root.visible = show;
+    if (!show) return;
+    const A = game.armor || {};
+    const sig = (A.head ? A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
+    if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
+    this.root.position.set(game.pos.x, game.pos.y, game.pos.z);
+    this.root.rotation.y = game.yaw;
+    const speed = Math.hypot(game.vel.x, game.vel.z);
+    this.phase += dt * Math.min(10, Math.max(speed, 0.001)) * 2.0;
+    const swing = game.fly ? 0.12 : Math.min(1, speed / 5) * 0.75;
+    const s = Math.sin(this.phase);
+    if (game.crouch){
+      this.upper.position.y = -0.42;
+      this.legL.rotation.x = 0.85 + s * swing * 0.3;
+      this.legR.rotation.x = 0.6 - s * swing * 0.3;
+    } else if (!game.grounded && !game.fly && !game.swim){
+      this.upper.position.y = 0;
+      this.legL.rotation.x = 0.35; this.legR.rotation.x = -0.2;      // airborne tuck
+    } else {
+      this.upper.position.y = 0;
+      this.legL.rotation.x = s * swing;
+      this.legR.rotation.x = -s * swing;
+    }
+    this.armL.rotation.x = -s * swing * 0.8;
+    this.armR.rotation.x = s * swing * 0.8;
+    this.head.rotation.x = Math.max(-1.1, Math.min(1.1, game.pitch * 0.85));
+    const it = selectedItem();
+    const key = it ? it.kind + ':' + (it.mat != null ? it.mat : it.tier != null ? it.tier : '') : null;
+    if (key !== this.itemKind){
+      this.itemKind = key;
+      this.itemPlane.visible = !!it;
+      if (it) this.itemPlane.material = this.iconMat(it);
+    }
+    // holding something: right arm carries it slightly forward
+    if (it) this.armR.rotation.x = Math.min(this.armR.rotation.x, -0.35);
+  },
+};
+
 function buildArm(){
   const arm = new THREE.Group();
   const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.175, 0.46), pixMat(PROP_TEX.sleeve, null, 1, 2));
@@ -3481,6 +3701,8 @@ function buildViewmodel(cam){
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
+  v.root.visible = !game.photo && game.camView !== 1;
+  if (!v.root.visible) return;
   const it = selectedItem();
   const tool = activeTool();
   const kind = tool ? tool.kind : (it ? it.kind : null);
@@ -3498,7 +3720,8 @@ function updateViewmodel(dt){
   v.wrench.visible = kind === 'wrench';
   v.wireRig.visible = kind === 'wire';
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
-                        'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove'];
+                        'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'grapple', 'jetpack',
+                        'helm', 'plate', 'boots', 'astand', 'pad'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -4003,6 +4226,7 @@ const bedSys = {
     return n;
   },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -4108,6 +4332,7 @@ const stoveSys = {
     return n;
   },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -4273,6 +4498,7 @@ const ropeSys = {
   removeAt(i){ game.ropes.splice(i, 1); this.rebuild(); markSave(); },
   // rope line near the crosshair ray (fists-down pickup)
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     if (!game.ropes || !game.ropes.length) return -1;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
@@ -4475,6 +4701,39 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, orb, face);
       g.userData.orb = orb;
+    } else if (t === 'ped'){
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), M.steel);
+      base.position.y = 0.06;
+      const col = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.75, 0.36), pixMat(PROP_TEX.steelLight));
+      col.position.y = 0.5;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), M.steel);
+      top.position.y = 0.92;
+      g.add(base, col, top);
+    } else if (t === 'sign'){
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), M.bark);
+      post.position.y = 0.55;
+      const board = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.62, 0.07), M.wood);
+      board.position.y = 1.25;
+      g.add(post, board);
+      g.userData.board = board;
+    } else if (t === 'pad'){
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.1, 1.0), M.steel);
+      plate.position.y = 0.05;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.05, 0.8), pixMat(PROP_TEX.energy, 0x59c8d8));
+      top.position.y = 0.12;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.34, 0.14), M.steel);
+      post.position.set(0.4, 0.24, 0.4);
+      g.add(plate, top, post);
+    } else if (t === 'astand'){
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.1, 0.6), M.wood);
+      base.position.y = 0.05;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, 0.12), M.bark);
+      post.position.y = 0.8;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.1, 0.12), M.bark);
+      bar.position.y = 1.28;
+      const knob = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.18), M.wood);
+      knob.position.y = 1.62;
+      g.add(base, post, bar, knob);
     } else if (t === 'chest'){
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.7), M.wood);
       body.position.y = 0.31;
@@ -4526,6 +4785,31 @@ const pnodeSys = {
             .setFromAxisAngle(new THREE.Vector3(0, 1, 0), n.rot));
       }
       if (n.t === 'chest' && n.sc) g.scale.setScalar(n.sc);
+      if (n.t === 'astand') this.dressStand(g, n.inv);
+      if (n.t === 'ped' && n.inv && n.inv[0]){
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42),
+          playerBody.iconMat(n.inv[0]));
+        m.position.y = 1.22;
+        m.rotation.y = Math.PI / 4;
+        g.add(m);
+        const m2 = m.clone(); m2.rotation.y = -Math.PI / 4; g.add(m2);
+      }
+      if (n.t === 'sign' && n.text){
+        const cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 64;
+        const c2 = cv.getContext('2d');
+        c2.fillStyle = '#8a6237'; c2.fillRect(0, 0, 128, 64);
+        c2.fillStyle = '#2b1c0c'; c2.font = 'bold 13px monospace'; c2.textAlign = 'center';
+        const lines = String(n.text).split('\n').slice(0, 4);
+        lines.forEach((ln, i) => c2.fillText(ln.slice(0, 16), 64, 18 + i * 14));
+        const tex = new THREE.CanvasTexture(cv);
+        tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+        const face = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.56),
+          new THREE.MeshBasicMaterial({ map: tex }));
+        face.position.set(0, 1.25, -0.04);
+        face.rotation.y = Math.PI;
+        g.add(face);
+      }
       if (n.t === 'acrank' && n.animal){
         const am = entMesh(n.animal);
         const ag = am.g || am;
@@ -4539,6 +4823,28 @@ const pnodeSys = {
     wireSys.rebuild();
     rebuildSolidProps();
   },
+  // hang whatever armor the stand holds on its frame
+  dressStand(g, inv){
+    const pieces = (inv || []).filter(Boolean);
+    for (const p of pieces){
+      const col = new THREE.MeshBasicMaterial({ color: new THREE.Color(TIER_COL[p.tier] || '#8a8a92') });
+      if (p.kind === 'helm'){
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.6), col);
+        m.position.y = 1.66;
+        g.add(m);
+      } else if (p.kind === 'plate'){
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.24), col);
+        m.position.y = 1.05;
+        g.add(m);
+      } else if (p.kind === 'boots'){
+        for (const s of [-0.14, 0.14]){
+          const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.24), col);
+          m.position.set(s, 0.22, -0.03);
+          g.add(m);
+        }
+      }
+    }
+  },
   add(t, x, y, z, yaw, extra){
     const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
     if (t === 'lever') n.on = true;
@@ -4551,6 +4857,7 @@ const pnodeSys = {
   },
   byId(id){ return (game.pnodes || []).find(n => n.id === id); },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -4585,10 +4892,11 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, chest: 0.9 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, chest: 0.9, pad: 0.45 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
     }
     if (k === 'b'){
@@ -4623,6 +4931,7 @@ const pnodeSys = {
     return out;
   },
   terminalOnRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -4790,6 +5099,7 @@ const wireSys = {
     return best;
   },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -4900,7 +5210,7 @@ const powerSys = {
       for (const id of parent.keys()){
         const r = find(id);
         let c = comps.get(r);
-        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [] }; comps.set(r, c); }
+        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [], pads: [] }; comps.set(r, c); }
         const tp = pnodeSys.terminal(id);
         if (tp) c.terms.push(tp);
         if (id[0] === 'n'){
@@ -4913,6 +5223,7 @@ const powerSys = {
           else if (n.t === 'acrank' && n.animal){ c.w += 10; c.srcs.push(n); }
           else if (n.t === 'elev'){ if (n.riderDir) c.d += 25; c.elevs.push(n); }
           else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
+          else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
         } else if (id[0] === 'b'){
@@ -4961,6 +5272,10 @@ const powerSys = {
       for (const b of c.bulbs) this.bulbMap.set(b, ratio);
       for (const s of c.stoves) this.stoveMap.set(s, ratio);
       for (const n of c.elevs) this.elevMap.set(n.id, c.w > 0 ? ratio : 0);
+      for (const n of c.pads){
+        this.padMap = this.padMap || new Map();
+        this.padMap.set(n.id, c.w > 0 ? ratio : 0);
+      }
       for (const n of c.crafters){
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
@@ -5002,6 +5317,22 @@ const powerSys = {
       if (Math.hypot(t[0] - x, t[1] - y, t[2] - z) < r) return true;
     return false;
   },
+  // standing on the pad with a less-than-full jetpack on your back
+  padWants(n){
+    const jp = game.armor && game.armor.back;
+    if (!jp || jp.kind !== 'jetpack' || (jp.fuel || 0) >= 100) return false;
+    return Math.abs(game.pos.x - n.x) < 0.8 && Math.abs(game.pos.z - n.z) < 0.8 &&
+           game.pos.y > n.y - 0.3 && game.pos.y < n.y + 1.6;
+  },
+  padTick(n, dt){
+    if (!this.padWants(n)) return;
+    const ratio = this.padMap ? (this.padMap.get(n.id) || 0) : 0;
+    if (ratio <= 0) return;
+    const jp = game.armor.back;
+    jp.fuel = Math.min(100, (jp.fuel || 0) + 30 * ratio * dt);
+    if (Math.random() < 6 * dt)
+      Particles.burst(n.x, n.y + 0.3, n.z, 0.3, [0x59c8d8, 0x9fe8ff], 2, 1.0);
+  },
   update(dt){
     this.accT += dt;
     if (this.accT > 0.25){
@@ -5015,6 +5346,7 @@ const powerSys = {
     for (const n of game.pnodes || []){
       if (n.t === 'elev'){ if (this.elevTick(n, dt)) onElev = n; }
       else if (n.t === 'crafter') this.crafterTick(n, dt);
+      else if (n.t === 'pad') this.padTick(n, dt);
     }
     game.onElev = onElev;
     this.tubeT = (this.tubeT || 0) + dt;
@@ -5369,6 +5701,7 @@ const decorSys = {
   },
   // nearest decor to the crosshair ray, for fists-down pickup
   pickOnRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -5523,6 +5856,7 @@ const treeSys = {
   },
   // ray vs trunk cylinders; returns visible-tree key
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -5604,6 +5938,7 @@ const doorSys = {
     return n;
   },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -5657,6 +5992,7 @@ const tableSys = {
   },
   add(x, y, z, yaw){ game.tables.push(yaw ? [x, y, z, yaw] : [x, y, z]); this.rebuild(); markSave(); },
   onRay(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -5842,6 +6178,12 @@ function rebuildSolidProps(){
       const cs = n.sc || 1;
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4 * cs, z: n.z, hx: 0.5 * cs, hy: 0.4 * cs, hz: 0.38 * cs });
     }
+    else if (n.t === 'astand')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.85, z: n.z, hx: 0.3, hy: 0.85, hz: 0.3 });
+    else if (n.t === 'pad')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.06, z: n.z, hx: 0.5, hy: 0.07, hz: 0.5 });
+    else if (n.t === 'ped')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.48, z: n.z, hx: 0.28, hy: 0.5, hz: 0.28 });
   }
   game.solidProps = props;
 }
@@ -6266,12 +6608,23 @@ function bindInput(){
           return;
         }
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
-        if (pn.t === 'hopper' || pn.t === 'chest'){
+        if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped'){
           openMachine(pn); AudioSys.sfx('toggle');
+          return;
+        }
+        if (pn.t === 'sign'){
+          openSign(pn); AudioSys.sfx('toggle');
           return;
         }
         if (pn.t === 'elev'){
           toast('wire it to power, stand on the platform — space rises, C descends');
+          return;
+        }
+        if (pn.t === 'pad'){
+          const jp = game.armor && game.armor.back;
+          toast(!jp ? 'charging pad: wire it to power, stand on it wearing a jetpack'
+                    : 'jetpack ' + Math.round(jp.fuel || 0) + '% — ' +
+                      (powerSys.padMap && powerSys.padMap.get(pn.id) > 0 ? 'charging' : 'no power'));
           return;
         }
         if (pn.t === 'tesla'){
@@ -6393,7 +6746,8 @@ function bindInput(){
     const code = e.code;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
-    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont'){
+    if (game.ui === 'sign'){ return; }               // the textarea owns the keys
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont'){
       if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -6422,6 +6776,13 @@ function bindInput(){
       } else {
         game.hotSel = DIGITS[code]; refreshHotbar(); refreshToolHUD();
       }
+      return;
+    }
+    if (code === 'F5'){
+      e.preventDefault();
+      game.camView = game.camView ? 0 : 1;
+      toast(game.camView ? 'third person — F5 to go back' : 'first person');
+      AudioSys.sfx('toggle');
       return;
     }
     if (code === 'KeyZ' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); undoEdit(); return; }
@@ -6581,6 +6942,15 @@ function updatePlayer(dt){
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
     game.vel.y -= PLAYER.gravity * dt;
+    // worn jetpack: hold space in the air to thrust (survival's short flight)
+    const jp = game.armor && game.armor.back;
+    if (jp && jp.kind === 'jetpack' && canMove && k['Space'] && !game.grounded && (jp.fuel || 0) > 0){
+      game.vel.y = Math.min(6.5, game.vel.y + 60 * dt);
+      jp.fuel = Math.max(0, jp.fuel - 9 * dt);
+      game.jetOn = true;
+      if (Math.random() < 0.5)
+        Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.15, [0xffb347, 0xff8830], 1, 1.2);
+    } else game.jetOn = false;
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
     if (game.vel.y < -40) game.vel.y = -40;
   }
@@ -6591,6 +6961,18 @@ function updatePlayer(dt){
   const still = !game.fly && fwd === 0 && str === 0 && !(canMove && k['Space']);
   const wasGrounded = game.grounded;
   const vyBefore = game.vel.y;
+  if (game.grapple && !game.fly){
+    const gp = game.grapple;
+    const dx = gp.x - game.pos.x, dy = gp.y - (game.pos.y + h * 0.6), dz = gp.z - game.pos.z;
+    const d = Math.hypot(dx, dy, dz);
+    const tl = activeTool();
+    if (d < 1.6 || !tl || tl.kind !== 'grapple'){
+      game.grapple = null;
+    } else {
+      const sp2 = 16;
+      game.vel.x = dx / d * sp2; game.vel.y = dy / d * sp2; game.vel.z = dz / d * sp2;
+    }
+  }
   // substep fast travel: one big Euler step can carry the capsule past the
   // MIDPLANE of a thin wrench-shrunk slab, and the SDF pushout then ejects
   // it out the far side (fly-sprint-descend through a 0.2m floor). Capping
@@ -6657,7 +7039,28 @@ function updatePlayer(dt){
   // never fall through bedrock even at low fps
   if (game.pos.y < CORE.BEDROCK_Y + 0.2){ game.pos.y = CORE.BEDROCK_Y + 0.2; if (game.vel.y < 0) game.vel.y = 0; }
 
-  game.camera.position.set(game.pos.x, game.pos.y + h - PLAYER.eyeGap, game.pos.z);
+  const eyeX = game.pos.x, eyeY = game.pos.y + h - PLAYER.eyeGap, eyeZ = game.pos.z;
+  if (game.camView === 1){
+    // third person: back off along the view ray, pulled in by the SDF so
+    // the camera never clips through terrain
+    const cp = Math.cos(game.pitch);
+    const fx = -Math.sin(game.yaw) * cp, fy = Math.sin(game.pitch), fz = -Math.cos(game.yaw) * cp;
+    const MAXD = 3.9;
+    const ce = nearEdits([eyeX - MAXD - 1, eyeY - MAXD - 1, eyeZ - MAXD - 1,
+                          eyeX + MAXD + 1, eyeY + MAXD + 1, eyeZ + MAXD + 1]);
+    let dist = MAXD;
+    for (let t = 0.4; t <= MAXD; t += 0.15){
+      if (CORE.evalSDF(eyeX - fx * t, eyeY - fy * t, eyeZ - fz * t, ce, game.gen) < 0.3){
+        dist = Math.max(0.4, t - 0.3);
+        break;
+      }
+    }
+    game.camera.position.set(eyeX - fx * dist, eyeY - fy * dist, eyeZ - fz * dist);
+    game.camBack = dist;
+  } else {
+    game.camera.position.set(eyeX, eyeY, eyeZ);
+    game.camBack = 0;
+  }
   game.camera.rotation.set(game.pitch, game.yaw, 0);
 
   // footsteps
@@ -6687,7 +7090,7 @@ function activeTool(){
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -6700,6 +7103,7 @@ function activeTool(){
   if (it.kind === 'tuft' || it.kind === 'flower' || it.kind === 'shrub')
     return { kind: 'decor', decorType: it.kind, tier: 0, item: it };
   if (it.kind === 'wrench') return { kind: 'wrench', tier: 0 };
+  if (it.kind === 'grapple') return { kind: 'grapple', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
     return { kind: 'disp', tier: game.dispSlot.tier, mat: it.mat, count: CORE.countMat(game.slots, it.mat) };
   return null;
@@ -6713,8 +7117,9 @@ function ghostPlacement(eff){
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
   const reach = PLAYER.reach;
+  const cb = game.camBack || 0;
   if (!game.snapOn){
-    const tt = Math.min(reach, Math.max(1.0, game.tool.dist));
+    const tt = Math.min(reach, Math.max(1.0, game.tool.dist)) + cb;
     return { x: o.x + dir.x*tt, y: o.y + dir.y*tt, z: o.z + dir.z*tt };
   }
   const segBox = [
@@ -6722,13 +7127,13 @@ function ghostPlacement(eff){
     Math.max(o.x, o.x + dir.x*reach) + 1, Math.max(o.y, o.y + dir.y*reach) + 1, Math.max(o.z, o.z + dir.z*reach) + 1,
   ];
   const edits = nearEdits(segBox);
-  let t = 0.4, hit = -1;
-  for (let i = 0; i < 96 && t < reach; i++){
+  let t = 0.4 + cb, hit = -1;
+  for (let i = 0; i < 96 && t < reach + cb; i++){
     const d = sdfWorld(o.x + dir.x*t, o.y + dir.y*t, o.z + dir.z*t, edits);
     if (d < 0.02){ hit = t; break; }
     t += Math.max(0.045, d * 0.5);
   }
-  const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + eff * 0.6);
+  const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + eff * 0.6) + cb;
   const cell = CORE.GRID_SIZES[game.gridIdx];
   const [cx, cy, cz] = CORE.snapPlace(o.x + dir.x*tt, o.y + dir.y*tt, o.z + dir.z*tt, eff, cell);
   return { x: cx, y: cy, z: cz };
@@ -6866,7 +7271,9 @@ const wrenchProps = {
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56],
-                  chest: [0.4, 0.52, 0.42, 0.4] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
+                  chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
+                  pad: [0.06, 0.52, 0.15, 0.52], ped: [0.5, 0.3, 0.55, 0.3],
+                  sign: [0.8, 0.55, 0.8, 0.15] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
       const s = ref.t === 'chest' ? (ref.sc || 1) : 1;
       return { x: ref.x, y: ref.y + D[0] * s, z: ref.z, hx: D[1] * s, hy: D[2] * s, hz: D[3] * s };
     }
@@ -6895,6 +7302,7 @@ const wrenchProps = {
     return out;
   },
   rayPick(maxDist){
+    maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
@@ -7051,6 +7459,7 @@ const wrenchProps = {
       const r = Object.assign({ k, t: ref.t, yaw: ref.yaw || 0, oldId: ref.id }, P3(ref.x, ref.y, ref.z));
       if (ref.t === 'chest' && ref.sc) r.sc = ref.sc;
       if (ref.t === 'staple'){ r.n = [ref.nx || 0, ref.ny == null ? 1 : ref.ny, ref.nz || 0]; if (ref.rot) r.rot = ref.rot; }
+      if (ref.t === 'sign' && ref.text) r.text = ref.text;
       return r;
     }
     return null;
@@ -7106,6 +7515,7 @@ const wrenchProps = {
       if (rec.t === 'crank') n.wound = 0;
       if (rec.t === 'gen' || rec.t === 'gen2') n.burn = 0;
       if (rec.sc) n.sc = rec.sc;
+      if (rec.text) n.text = rec.text;
       if (rec.n){
         n.nx = +(rec.n[0] * c - rec.n[2] * sn).toFixed(3);
         n.ny = rec.n[1];
@@ -7731,13 +8141,14 @@ const wrenchSys = {
       Math.max(o.x, o.x + dir.x * reach) + 1, Math.max(o.y, o.y + dir.y * reach) + 1, Math.max(o.z, o.z + dir.z * reach) + 1,
     ];
     const edits = nearEdits(segBox);
-    let t = 0.4, hit = -1;
-    for (let i = 0; i < 96 && t < reach; i++){
+    const cb2 = game.camBack || 0;
+    let t = 0.4 + cb2, hit = -1;
+    for (let i = 0; i < 96 && t < reach + cb2; i++){
       const d = sdfWorld(o.x + dir.x * t, o.y + dir.y * t, o.z + dir.z * t, edits);
       if (d < 0.02){ hit = t; break; }
       t += Math.max(0.045, d * 0.5);
     }
-    const tt = hit >= 0 ? hit : Math.min(reach, Math.max(1.0, game.tool.dist));
+    const tt = hit >= 0 ? hit : Math.min(reach, Math.max(1.0, game.tool.dist)) + cb2;
     let x = o.x + dir.x * tt, y = o.y + dir.y * tt, z = o.z + dir.z * tt;
     if (game.snapOn){
       const cell = CORE.GRID_SIZES[game.gridIdx];
@@ -8206,6 +8617,32 @@ function tryAction(dt, now){
     }
     return;
   }
+  // grappling hook: LMB fires at anything solid within 34m and reels you in
+  if (tool.kind === 'grapple'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      if (game.grapple){ game.grapple = null; toast('released'); return; }
+      const dir = new THREE.Vector3();
+      game.camera.getWorldDirection(dir);
+      const o = game.camera.position;
+      const R = 34 + (game.camBack || 0);
+      const segBox = [Math.min(o.x, o.x + dir.x * R) - 1, Math.min(o.y, o.y + dir.y * R) - 1, Math.min(o.z, o.z + dir.z * R) - 1,
+                      Math.max(o.x, o.x + dir.x * R) + 1, Math.max(o.y, o.y + dir.y * R) + 1, Math.max(o.z, o.z + dir.z * R) + 1];
+      const eds = nearEdits(segBox);
+      let t = 0.4 + (game.camBack || 0), hit = null;
+      for (let i = 0; i < 160 && t < R; i++){
+        const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+        const d = sdfWorld(x, y, z, eds);
+        if (d < 0.03){ hit = [x, y, z]; break; }
+        t += Math.max(0.05, d * 0.6);
+      }
+      if (!hit){ toast('nothing to hook within 34m'); AudioSys.sfx('deny'); return; }
+      game.grapple = { x: hit[0], y: hit[1], z: hit[2] };
+      AudioSys.sfx('place');
+      toast('grappled — left click again to release');
+    }
+    return;
+  }
   // wire: LEFT click staples the route down; RIGHT click runs the wire
   if (tool.kind === 'wire'){
     AudioSys.setHum(false, 0, 0);
@@ -8361,8 +8798,8 @@ function surfaceHit(){
   const o = game.camera.position;
   const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
   const edits = nearEdits(segBox);
-  let t = 0.4;
-  for (let i = 0; i < 96 && t < PLAYER.reach; i++){
+  let t = 0.4 + (game.camBack || 0);
+  for (let i = 0; i < 96 && t < PLAYER.reach + (game.camBack || 0); i++){
     const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
     const d = sdfWorld(x, y, z, edits);
     if (d < 0.02) return [x, y, z];
@@ -8429,7 +8866,7 @@ function itemIconURL(it){
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter', 'chest'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -8482,6 +8919,43 @@ function itemIconURL(it){
     c.fillStyle = '#ffb347'; c.fillRect(3, 8, 4, 3);
     c.fillStyle = '#ffe08a'; c.fillRect(4, 9, 2, 1);
     c.fillStyle = '#2c2c31'; c.fillRect(9, 8, 4, 4);
+  } else if (it.kind === 'helm'){
+    const col = TIER_COL[it.tier];
+    c.fillStyle = col; c.fillRect(4, 4, 8, 3); c.fillRect(3, 6, 10, 3); c.fillRect(3, 9, 2, 3); c.fillRect(11, 9, 2, 3);
+    c.fillStyle = '#00000044'; c.fillRect(5, 9, 6, 2);
+  } else if (it.kind === 'plate'){
+    const col = TIER_COL[it.tier];
+    c.fillStyle = col; c.fillRect(4, 3, 8, 9); c.fillRect(2, 3, 2, 4); c.fillRect(12, 3, 2, 4);
+    c.fillStyle = '#00000044'; c.fillRect(7, 5, 2, 5);
+  } else if (it.kind === 'boots'){
+    const col = TIER_COL[it.tier];
+    c.fillStyle = col;
+    c.fillRect(3, 6, 3, 6); c.fillRect(3, 11, 5, 2);
+    c.fillRect(10, 6, 3, 6); c.fillRect(10, 11, 5, 2);
+  } else if (it.kind === 'jetpack'){
+    c.fillStyle = '#3a3f4c'; c.fillRect(4, 3, 8, 9);
+    c.fillStyle = '#5a6274'; c.fillRect(5, 4, 2, 7);
+    c.fillStyle = '#d84a63'; c.fillRect(4, 12, 3, 2); c.fillRect(9, 12, 3, 2);
+    c.fillStyle = '#ffb347'; c.fillRect(4, 14, 3, 1); c.fillRect(9, 14, 3, 1);
+  } else if (it.kind === 'grapple'){
+    c.fillStyle = '#8d8d99'; c.fillRect(7, 2, 2, 8);
+    c.fillRect(4, 9, 3, 2); c.fillRect(9, 9, 3, 2);
+    c.fillRect(3, 10, 2, 3); c.fillRect(11, 10, 2, 3);
+    c.fillStyle = '#5a4632'; c.fillRect(6, 1, 4, 3);
+  } else if (it.kind === 'ped'){
+    c.fillStyle = '#7a8194'; c.fillRect(5, 5, 6, 8);
+    c.fillStyle = '#3a3f4c'; c.fillRect(3, 13, 10, 2); c.fillRect(4, 4, 8, 2);
+    c.fillStyle = '#f0d040'; c.fillRect(6, 1, 4, 3);
+  } else if (it.kind === 'sign'){
+    c.fillStyle = '#8a6237'; c.fillRect(2, 3, 12, 7);
+    c.fillStyle = '#59391c'; c.fillRect(7, 10, 2, 5);
+    c.fillStyle = '#2b1c0c'; c.fillRect(4, 5, 8, 1); c.fillRect(4, 7, 6, 1);
+  } else if (it.kind === 'pad'){
+    c.fillStyle = '#3a3f4c'; c.fillRect(1, 10, 14, 4);
+    c.fillStyle = '#59c8d8'; c.fillRect(3, 11, 10, 2);
+  } else if (it.kind === 'astand'){
+    c.fillStyle = '#8a6237'; c.fillRect(7, 3, 2, 10); c.fillRect(3, 5, 10, 2); c.fillRect(4, 13, 8, 2);
+    c.fillStyle = '#a37c47'; c.fillRect(6, 1, 4, 3);
   } else if (it.kind === 'chest'){
     c.fillStyle = '#8a6237'; c.fillRect(2, 5, 12, 9);
     c.fillStyle = '#a37c47'; c.fillRect(2, 5, 12, 3);
@@ -8714,6 +9188,15 @@ function itemLabel(it){
   if (it.kind === 'gen2') return 'generator mk2';
   if (it.kind === 'crafter') return 'auto-crafter';
   if (it.kind === 'chest') return 'chest';
+  if (it.kind === 'helm') return CORE.TIER_NAME[it.tier] + ' helmet';
+  if (it.kind === 'plate') return CORE.TIER_NAME[it.tier] + ' chestplate';
+  if (it.kind === 'boots') return CORE.TIER_NAME[it.tier] + ' boots';
+  if (it.kind === 'astand') return 'armor stand';
+  if (it.kind === 'jetpack') return 'jetpack';
+  if (it.kind === 'grapple') return 'grappling hook';
+  if (it.kind === 'pad') return 'charging pad';
+  if (it.kind === 'ped') return 'pedestal';
+  if (it.kind === 'sign') return 'sign';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
@@ -8755,13 +9238,17 @@ function slotItem(key){
   if (key === 'sin') return game.activeStove && game.activeStove.in;
   if (key === 'sfuel') return game.activeStove && game.activeStove.fuel;
   if (key === 'sout') return game.activeStove && game.activeStove.out;
+  if (key === 'ahead') return game.armor.head;
+  if (key === 'aback') return game.armor.back;
+  if (key === 'achest') return game.armor.chest;
+  if (key === 'afeet') return game.armor.feet;
   if (key === 'gfuel') return game.activeCont && game.activeCont.fuel;
   if (typeof key === 'string' && /^c\d+$/.test(key))
     return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
   return game.slots[+key];
 }
 function isPseudoKey(k){
-  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel'].includes(k) || /^c\d+$/.test(k);
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k);
 }
 function slotKeyOf(el){
   const k = el.dataset.slot;
@@ -8787,9 +9274,10 @@ function refreshHotbar(){
   document.querySelectorAll('#hotbar .slot').forEach(paintSlot);
 }
 function buildInvUI(){
-  const main = $('invmain'), hot = $('invhot'), dsp = $('invdisp');
-  main.innerHTML = ''; hot.innerHTML = ''; dsp.innerHTML = '';
+  const main = $('invmain'), hot = $('invhot'), dsp = $('invdisp'), arm = $('invarmor');
+  main.innerHTML = ''; hot.innerHTML = ''; dsp.innerHTML = ''; arm.innerHTML = '';
   dsp.appendChild(slotEl('disp'));
+  for (const k of ['ahead', 'achest', 'afeet', 'aback']) arm.appendChild(slotEl(k));
   for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildCatalogUI();
@@ -8803,11 +9291,16 @@ function catalogEntries(){
   for (let t = 0; t < 5; t++) out.push(CORE.makeDrill(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeDispenser(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeSword(t));
+  for (let t = 0; t < 5; t++) out.push({ kind: 'helm', tier: t });
+  for (let t = 0; t < 5; t++) out.push({ kind: 'plate', tier: t });
+  for (let t = 0; t < 5; t++) out.push({ kind: 'boots', tier: t });
+  out.push({ kind: 'jetpack', fuel: 100 });
+  out.push({ kind: 'grapple' });
   out.push(CORE.makeGun());
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -8843,7 +9336,7 @@ function buildCatalogUI(){
   }
 }
 function refreshInvUI(){
-  document.querySelectorAll('#invmain .slot, #invhot .slot, #invdisp .slot').forEach(paintSlot);
+  document.querySelectorAll('#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot').forEach(paintSlot);
 }
 
 // ---------- stove screen: 3 stove slots above the usual inventory ----------
@@ -8867,10 +9360,29 @@ function buildCrafterUI(){
   refreshCrafterUI();
 }
 // generic machine screen: generators (fuel slot), hoppers and chests (grid)
+function openSign(pn){
+  game.activeSign = pn;
+  game.ui = 'sign';
+  $('signtext').value = pn.text || '';
+  show('signscreen');
+  document.exitPointerLock();
+  setTimeout(() => $('signtext').focus(), 50);
+}
+function closeSign(){
+  const pn = game.activeSign;
+  if (pn){
+    pn.text = $('signtext').value.split('\n').slice(0, 4).map(l => l.slice(0, 16)).join('\n').trim();
+    pnodeSys.rebuild(); markSave();
+  }
+  game.activeSign = null;
+  game.ui = 'none';
+  hide('signscreen');
+  requestLock();
+}
 function openMachine(pn){
   game.activeCont = pn;
-  if ((pn.t === 'hopper' || pn.t === 'chest') && !pn.inv)
-    pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
+  if ((pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped') && !pn.inv)
+    pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : pn.t === 'astand' ? 3 : pn.t === 'ped' ? 1 : 24).fill(null);
   game.ui = 'cont';
   buildContUI();
   show('contscreen');
@@ -8906,7 +9418,10 @@ function refreshContUI(){
   } else {
     $('contstatus').textContent = pn.t === 'hopper'
       ? 'tubes push from here into stoves, crafters, chests and generators'
+      : pn.t === 'astand' ? 'dress the stand — helmet, chestplate, boots'
+      : pn.t === 'ped' ? 'display one thing proudly'
       : 'storage — tubes can pipe in';
+    if (pn.t === 'astand' || pn.t === 'ped') pnodeSys.rebuild();
   }
 }
 function refreshCrafterUI(){
@@ -8921,6 +9436,8 @@ function refreshCrafterUI(){
                : r.kind === 'gun' ? CORE.makeGun()
                : r.kind === 'sword' ? CORE.makeSword(r.tier)
                : r.kind === 'matout' ? CORE.makeStack(r.matOut, r.yields)
+               : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
+                 ? { kind: r.kind, tier: r.tier }
                : { kind: r.kind, count: r.yields || 1 };
     const row = document.createElement('div');
     row.className = 'craftrow';
@@ -8990,6 +9507,10 @@ function uiMove(from, to){
   const st = game.activeStove, pc = game.activeCont;
   const get = k => k === 'disp' ? game.dispSlot
     : k === 'sin' ? (st && st.in) : k === 'sfuel' ? (st && st.fuel) : k === 'sout' ? (st && st.out)
+    : k === 'aback' ? game.armor.back
+    : k === 'ahead' ? game.armor.head
+    : k === 'achest' ? game.armor.chest
+    : k === 'afeet' ? game.armor.feet
     : k === 'gfuel' ? (pc && pc.fuel)
     : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
     : game.slots[k];
@@ -8998,6 +9519,10 @@ function uiMove(from, to){
     else if (k === 'sin'){ if (st) st.in = v; }
     else if (k === 'sfuel'){ if (st) st.fuel = v; }
     else if (k === 'sout'){ if (st) st.out = v; }
+    else if (k === 'aback') game.armor.back = v;
+    else if (k === 'ahead') game.armor.head = v;
+    else if (k === 'achest') game.armor.chest = v;
+    else if (k === 'afeet') game.armor.feet = v;
     else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
     else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
     else game.slots[k] = v;
@@ -9010,8 +9535,15 @@ function uiMove(from, to){
   if (to === 'sin' && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
   if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
+  if (to === 'ahead' && A.kind !== 'helm'){ toast('that slot wants a helmet'); return 'none'; }
+  if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
+  if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
+  if (to === 'aback' && A.kind !== 'jetpack'){ toast('that slot wants a jetpack'); return 'none'; }
+  if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
+      !['helm', 'plate', 'boots'].includes(A.kind)){ toast('the stand holds armor'); return 'none'; }
   if (B && CORE.stackableWith(A, B)){ B.count += A.count; set(from, null); return 'merged'; }
-  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout' || from === 'gfuel')){ toast('that slot is taken'); return 'none'; }
+  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout' || from === 'gfuel' ||
+            from === 'ahead' || from === 'achest' || from === 'afeet' || from === 'aback')){ toast('that slot is taken'); return 'none'; }
   set(from, B || null); set(to, A);
   return 'swapped';
 }
@@ -9041,6 +9573,10 @@ function quickMove(key){
     // machine slot -> player inventory
     if (rangeInto(0, 40)){
       if (key === 'gfuel') game.activeCont.fuel = null;
+      else if (key === 'ahead') game.armor.head = null;
+      else if (key === 'aback') game.armor.back = null;
+      else if (key === 'achest') game.armor.chest = null;
+      else if (key === 'afeet') game.armor.feet = null;
       else if (/^c\d+$/.test(key)) game.activeCont.inv[+key.slice(1)] = null;
       else if (key === 'sin') game.activeStove.in = null;
       else if (key === 'sfuel') game.activeStove.fuel = null;
@@ -9064,10 +9600,22 @@ function quickMove(key){
         if (!pn.fuel){ pn.fuel = it; game.slots[key] = null; done = true; }
         else if (CORE.stackableWith(it, pn.fuel)){ pn.fuel.count += it.count; game.slots[key] = null; done = true; }
       } else toast('generators burn coal');
+    } else if (pn.t === 'astand'){
+      if (['helm', 'plate', 'boots'].includes(it.kind)){
+        if (!pn.inv) pn.inv = new Array(3).fill(null);
+        if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
+      } else toast('the stand holds armor');
     } else {
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack')){
+    // shift-click armor in your inventory = wear it (swaps what you had on)
+    const slot = it.kind === 'helm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const prev = game.armor[slot];
+    game.armor[slot] = it;
+    game.slots[key] = prev || null;
+    done = true;
   } else {
     // plain inventory screens: hotbar <-> main
     done = key < 10 ? rangeInto(10, 40) : rangeInto(0, 10);
@@ -9204,7 +9752,7 @@ function refreshToolHUD(){
     html = '<div class="t1">item tube ×' + it.count + '</div>' +
            '<div class="t2">' + (game.tubePending ? 'click the machine it feeds · right click cancels'
                                                   : 'click a hopper, then a stove / auto-crafter / hopper') + '</div>';
-  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest'].includes(it.kind)){
+  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'pad'].includes(it.kind)){
     const tip = { lever: 'inline switch — right click to flip', crank: 'right click to wind · ~20W while wound',
                   wheel: 'place IN water · ~15W', gen: 'right click to open, drop coal in the tank · ~40W',
                   meter: 'shows its circuit\'s watts',
@@ -9214,7 +9762,8 @@ function refreshToolHUD(){
                   tesla: 'wireless power in 8m · zaps anyone within arm\'s reach',
                   gen2: '~100W · right click to open, coal burns long and hot',
                   crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
-                  chest: 'storage — right click to open · tubes can pipe into it' }[it.kind];
+                  chest: 'storage — right click to open · tubes can pipe into it',
+                  pad: 'wire it up, stand on it wearing a jetpack — it refuels · 20W' }[it.kind];
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">left click to place · ' + tip + '</div>';
     html += '<div class="t2">' + (it.kind === 'chest'
       ? 'scroll: ' + (game.tool.chestRot ? 'rotate' : (game.tool.chestSc || 1).toFixed(1) + 'm · ' + chestSlots(game.tool.chestSc) + ' slots')
@@ -9242,6 +9791,26 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">crafting material (Q)</div>';
   } else if (it.kind === 'bulb'){
     html = '<div class="t1">lightbulbs ×' + it.count + '</div><div class="t2">left click to place — twice the reach of a torch</div>';
+  } else if (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots'){
+    html = '<div class="t1">' + itemLabel(it) + '</div>' +
+           '<div class="t2">armor — open your inventory (E) and shift-click to wear it</div>' +
+           '<div class="t2">wearing now blocks ' + Math.round(armorRed() * 100) + '% of damage</div>';
+  } else if (it.kind === 'jetpack'){
+    html = '<div class="t1">jetpack · ' + Math.round(it.fuel || 0) + '% fuel</div>' +
+           '<div class="t2">wear it (E, shift-click) — hold SPACE in the air to fly</div>' +
+           '<div class="t2">recharge: stand on a powered charging pad</div>';
+  } else if (it.kind === 'grapple'){
+    html = '<div class="t1">grappling hook</div>' +
+           '<div class="t2">left click any surface within 34m — it reels you in · click again to let go</div>';
+  } else if (it.kind === 'ped'){
+    html = '<div class="t1">pedestal ×' + it.count + '</div>' +
+           '<div class="t2">left click to place · right click to choose what it displays</div>';
+  } else if (it.kind === 'sign'){
+    html = '<div class="t1">sign ×' + it.count + '</div>' +
+           '<div class="t2">left click to place · right click to write on it</div>';
+  } else if (it.kind === 'astand'){
+    html = '<div class="t1">armor stand ×' + it.count + '</div>' +
+           '<div class="t2">left click to place · right click to dress it — it displays the set</div>';
   } else if (it.kind === 'stove'){
     html = '<div class="t1">stove ×' + it.count + '</div><div class="t2">place, then right click to cook and smelt</div>';
   } else if (it.kind === 'wrench'){
@@ -9291,8 +9860,17 @@ function refreshToolHUD(){
 }
 
 // ---------- survival: damage, death, hunger ----------
+function armorRed(){
+  const A = game.armor || {};
+  let r = 0;
+  for (const p of [A.head, A.chest, A.feet])
+    if (p) r += [0.06, 0.09, 0.12, 0.16, 0.2][p.tier] || 0;
+  return Math.min(0.6, r);
+}
 function damagePlayer(dmg, kx, kz){
   if (game.mode !== 'survival' || game.ui !== 'none') return;
+  const ar = armorRed();
+  if (ar && dmg > 0) dmg = Math.max(1, Math.round(dmg * (1 - ar)));
   game.hp = Math.max(0, game.hp - dmg);
   game.hurtT = performance.now();
   $('hurt').style.opacity = 1;
@@ -9450,6 +10028,8 @@ function buildCraftUI(){
                : r.kind === 'gun' ? CORE.makeGun()
                : r.kind === 'sword' ? CORE.makeSword(r.tier)
                : r.kind === 'matout' ? CORE.makeStack(r.matOut, r.yields)
+               : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
+                 ? { kind: r.kind, tier: r.tier }
                : { kind: r.kind, count: r.yields };
     const row = document.createElement('div'); row.className = 'craftrow';
     const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
@@ -9657,6 +10237,7 @@ function openOptions(from){
   $('optShad').value = o.shadows; $('optRays').value = o.rays;
   const fi = FPS_STOPS.indexOf(o.fpsCap);
   $('optFps').value = fi < 0 ? 7 : fi;
+  $('optSkin').value = o.skin || 0;
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -9672,6 +10253,7 @@ function syncOptLabels(){
   $('optRaysV').textContent = +$('optRays').value ? 'on' : 'off';
   const fc = FPS_STOPS[+$('optFps').value];
   $('optFpsV').textContent = fc ? fc : 'MAX';
+  $('optSkinV').textContent = PLAYER_SKINS[+$('optSkin').value].name;
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
@@ -9681,6 +10263,8 @@ function applyOptions(){
   game.opts.shadows = +$('optShad').value;
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
+  game.opts.skin = +$('optSkin').value;
+  playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
   saveOpts(game.opts);
   if (game.camera){
@@ -9772,6 +10356,7 @@ function saveNow(){
     edits: CORE.serializeEdits(game.edits),
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
+    armor: game.armor,
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
     torches: game.torches,
@@ -9813,6 +10398,7 @@ function startWorld(id){
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
+    game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   } else {
     // older save (or fresh world): pull the first dispenser out of the slots
     game.dispSlot = null;
@@ -10489,7 +11075,17 @@ function frame(now){
     tryAction(dt, now);
   }
   updateViewmodel(dt);
+  playerBody.update(dt);
   updateChargeBar();
+  {
+    const jp = game.armor && game.armor.back;
+    const jb = $('jetbox');
+    if (jp && jp.kind === 'jetpack' && game.running && game.ui === 'none' && game.mode === 'survival'){
+      const txt = 'jetpack ' + Math.round(jp.fuel || 0) + '%' + (game.jetOn ? ' 🔥' : '');
+      if (jb.textContent !== txt) jb.textContent = txt;
+      jb.classList.remove('hidden');
+    } else jb.classList.add('hidden');
+  }
 
   // stream chunks when crossing chunk borders (or forced). The vertical
   // chunk is part of the key: the deep world is 46 chunks tall, and the
@@ -10646,7 +11242,8 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  $('btnSignSave').addEventListener('click', closeSign);
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
 
@@ -10665,7 +11262,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
-  wrenchProps, chestSlots, beaconSys, bedSys, ropeSys };
+  wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed };
 </script>
 </body>
 </html>
