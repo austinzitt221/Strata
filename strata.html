@@ -63,6 +63,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
 .mstack{display:flex; flex-direction:column; gap:16px; align-items:center; max-height:96vh; overflow:auto; padding:8px;}
+#coinbox{position:absolute; right:14px; top:44px; background:rgba(10,10,16,0.55); color:#f0e0b0;
+  font:13px monospace; padding:5px 10px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
 #jetbox{position:absolute; right:14px; bottom:118px; background:rgba(10,10,16,0.55); color:#9fe8ff;
   font:12px monospace; padding:5px 9px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
 #navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
@@ -121,6 +123,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
   <div id="jetbox" class="hidden">jetpack</div>
+<div id="coinbox" class="hidden"><span style="color:#dcb54e;">&#9679;</span> <span id="coinnum">0</span></div>
 <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
   <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
@@ -1065,10 +1068,30 @@ function makeGen(seed){
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
   }
+  // ---- villages: one candidate per VILLAGE_CELL, flat friendly ground only
+  function villageAt(cx, cz){
+    const h0 = hashInt(sX ^ hashInt((cx * 668265263) ^ hashInt(cz * 374761393)));
+    if ((h0 & 3) === 0) return null;               // some cells just have none
+    const vx = cx * VILLAGE_CELL + 100 + (h0 % 312);
+    const vz = cz * VILLAGE_CELL + 100 + (hashInt(h0 ^ 5) % 312);
+    const a = archAt(vx, vz);
+    if (a !== 0 && a !== 1 && a !== 4 && a !== 5) return null;  // gentle land only
+    const hc = height(vx, vz);
+    if (hc < seaLevel + 2.5) return null;
+    let mn = hc, mx = hc;
+    for (const [dx, dz] of [[-16, 0], [16, 0], [0, -16], [0, 16], [12, 12], [-12, -12], [12, -12], [-12, 12]]){
+      const hh = height(vx + dx, vz + dz);
+      if (hh < mn) mn = hh;
+      if (hh > mx) mx = hh;
+    }
+    if (mx - mn > 4.0) return null;
+    return { x: vx, z: vz, y: hc, seed: h0, key: cx + ',' + cz };
+  }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt };
 }
 const TREE_CELL = 11;
+const VILLAGE_CELL = 512;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
@@ -1705,6 +1728,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
+  'coin',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2091,7 +2115,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL,
+  makeGun, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -2713,6 +2737,7 @@ const game = {
   // tools/ui state
   slots: [], hotSel: 0,
   armor: { head: null, chest: null, feet: null, back: null },
+  villages: {},
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -6130,6 +6155,11 @@ function itemModel(it){
     m.rotation.z = 0.2;
   } else if (K === 'wool'){
     box(0.3, 0.24, 0.3, pixMat(PROP_TEX.wool), 0, 0.12, 0);
+  } else if (K === 'coin'){
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.05, 12),
+      basic('#c9a13c'));
+    m.position.y = 0.16; m.rotation.x = Math.PI / 2;
+    g.add(m);
   } else if (K === 'diamond'){
     const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.18), basic('#6fe3ef'));
     m.position.y = 0.2; g.add(m);
@@ -6339,8 +6369,15 @@ const ENT_DEF = {
   grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
+  villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
 };
-function entMesh(type){
+const VROLE = {
+  broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
+  arms:    { name: 'arms dealer',  coat: 0x7a2f2f, hat: 0x4a1c1c },
+  tool:    { name: 'toolsmith',    coat: 0x2f5a7a, hat: 0x1c3a4a },
+  spark:   { name: 'electrician',  coat: 0x3f7a3f, hat: 0x245224 },
+};
+function entMesh(type, ent){
   const g = new THREE.Group();
   const legs = [];
   const box = (w, h, d, color, x, y, z, parent) => {
@@ -6349,6 +6386,28 @@ function entMesh(type){
     (parent || g).add(m);
     return m;
   };
+  if (type === 'villager'){
+    const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
+    legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
+    legs.push(box(0.16, 0.62, 0.18, 0x3a3540, 0.1, 0.31, 0));
+    box(0.44, 0.56, 0.26, R.coat, 0, 0.9, 0);                 // coat
+    box(0.12, 0.5, 0.16, R.coat, -0.29, 0.92, 0);             // arms
+    box(0.12, 0.5, 0.16, R.coat, 0.29, 0.92, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 9),
+      new THREE.MeshBasicMaterial({ color: 0xecd2b7 }));
+    head.position.set(0, 1.42, 0);
+    g.add(head);
+    const brim = box(0.5, 0.05, 0.5, R.hat, 0, 1.52, 0);      // hat
+    box(0.3, 0.16, 0.3, R.hat, 0, 1.6, 0);
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0x2c2c31 });
+    for (const s of [-1, 1]){
+      const e2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.03), eyeM);
+      e2.position.set(s * 0.09, 1.46, -0.22);
+      g.add(e2);
+    }
+    g.userData = { legs, phase: Math.random() * 6 };
+    return g;
+  }
   if (type === 'grazer'){
     box(0.72, 0.5, 1.0, 0xc8a24b, 0, 0.62, 0.05);            // body
     box(0.6, 0.12, 0.85, 0xb08d3f, 0, 0.9, 0.05);            // back fur ridge
@@ -6443,12 +6502,23 @@ function killEntity(e, byPlayer){
       addStackItem('wool', n); addStackItem('meat', 1);
       toast('+' + n + ' wool  ·  +1 meat');
     }
-    else { addStackItem('ironore', 4); toast('+4 iron ore (scavenged)'); }
+    else {
+      const coins = 3 + ((Math.random() * 4) | 0);
+      addStackItem('ironore', 2); addStackItem('coin', coins);
+      toast('+' + coins + ' coins  ·  +2 iron ore');
+    }
     refreshHotbar(); refreshToolHUD();
   }
   markSave();
 }
 function hurtEntity(e, dmg, kx, kz){
+  if (e.type === 'villager'){
+    // you can't kill the neighbors — but they take offense
+    e.flash = 0.15; e.fleeT = 5;
+    villageSys.offend(e);
+    AudioSys.sfx('hit');
+    return;
+  }
   e.hp -= dmg;
   e.flash = 0.15;
   e.fleeT = 6;
@@ -6464,6 +6534,156 @@ function nearestTorchDist(x, y, z){
   }
   return best;
 }
+// ---------- villages ----------
+// The world seed decides where villages CAN be; walking near one for the
+// first time stamps its houses into the edit list (so villages are built
+// from the same CSG bones as everything else) and mints its villager
+// records. game.villages holds everything that must persist.
+const villageSys = {
+  accT: 0,
+  nameFor(seed){
+    const A = ['Ka', 'Ro', 'Mi', 'Ta', 'Bel', 'Dor', 'Fen', 'Gar', 'Hol', 'Or'];
+    const B = ['ran', 'mor', 'lin', 'dow', 'ber', 'stad', 'wick', 'holm', 'ley', 'fell'];
+    const s = seed >>> 0;
+    return A[s % A.length] + B[(s >>> 4) % B.length];
+  },
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.villageAt) return [];
+    const C = CORE.VILLAGE_CELL;
+    const out = [];
+    const c0x = Math.floor((x - r) / C), c1x = Math.floor((x + r) / C);
+    const c0z = Math.floor((z - r) / C), c1z = Math.floor((z + r) / C);
+    for (let cz = c0z; cz <= c1z; cz++)
+      for (let cx = c0x; cx <= c1x; cx++){
+        const v = game.gen.villageAt(cx, cz);
+        if (v && Math.hypot(v.x - x, v.z - z) < r) out.push(v);
+      }
+    return out;
+  },
+  // deterministic layout: 4 houses on a ring around the well
+  layout(v){
+    const rng = CORE.mulberry32(v.seed);
+    const roles = ['broker', 'arms', 'tool', 'spark'];
+    const base = rng() * Math.PI * 2;
+    const houses = [];
+    for (let i = 0; i < 4; i++){
+      const a = base + i * Math.PI / 2 + (rng() - 0.5) * 0.5;
+      const r = 12 + rng() * 3;
+      const hx = Math.round(v.x + Math.cos(a) * r);
+      const hz = Math.round(v.z + Math.sin(a) * r);
+      // door faces the well, snapped to a cardinal
+      const dx = v.x - hx, dz = v.z - hz;
+      const face = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? [1, 0] : [-1, 0])
+                                               : (dz > 0 ? [0, 1] : [0, -1]);
+      houses.push({ x: hx, z: hz, role: roles[i], face });
+    }
+    return houses;
+  },
+  stamp(v, rec){
+    const MAT = CORE.MAT;
+    const E = (op, x, y, z, size, sy, mat) => {
+      const e = CORE.makeEdit(op, 1, x, y, z, size, mat, 0);
+      e.sy = sy;
+      applyEdit(e);
+    };
+    for (const hrec of rec.houses){
+      let g = game.gen.height(hrec.x, hrec.z);
+      for (const [cx2, cz2] of [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]])
+        g = Math.max(g, game.gen.height(hrec.x + cx2, hrec.z + cz2));
+      g = +g.toFixed(1);
+      hrec.gy = g;
+      // shell (stonebrick) with a buried foundation, hollowed inside
+      E(1, hrec.x, g + 1.1, hrec.z, 5.4, 4.6, MAT.STONEBRICK);
+      E(0, hrec.x, g + 1.85, hrec.z, 4.6, 2.5, 0);
+      // door hole on the plaza side
+      const [fx, fz] = hrec.face;
+      const doorE = CORE.makeEdit(0, 1, hrec.x + fx * 2.7, g + 1.75, hrec.z + fz * 2.7, 1.4, 0, 0);
+      doorE.sy = 2.3;
+      applyEdit(doorE);
+      // windows on the two side walls
+      const wx = fz, wz = fx;   // perpendicular
+      for (const s of [-1, 1]){
+        const win = CORE.makeEdit(0, 1, hrec.x + wx * 2.7 * s, g + 2.1, hrec.z + wz * 2.7 * s, 1.0, 0, 0);
+        win.sy = 0.9;
+        applyEdit(win);
+      }
+      // plank roof cap
+      E(1, hrec.x, g + 3.65, hrec.z, 6.0, 0.5, MAT.PLANKS);
+      // a torch outside the door
+      game.torches.push([hrec.x + fx * 3.4, g + 0.1, hrec.z + fz * 3.4]);
+    }
+    // the well
+    let wg0 = game.gen.height(v.x, v.z);
+    for (const [dx2, dz2] of [[-1.2, 0], [1.2, 0], [0, -1.2], [0, 1.2]])
+      wg0 = Math.max(wg0, game.gen.height(v.x + dx2, v.z + dz2));
+    const wg = +wg0.toFixed(1);
+    E(1, v.x, wg + 0.5, v.z, 2.6, 1.1, MAT.ROCK);
+    E(0, v.x, wg + 0.9, v.z, 1.5, 1.4, 0);
+    torchSys.rebuild();
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const v of this.candidatesNear(game.pos.x, game.pos.z, 95)){
+      const key = 'v' + v.key;
+      let rec = game.villages[key];
+      if (!rec){
+        rec = {
+          key, x: v.x, z: v.z, seed: v.seed,
+          name: this.nameFor(v.seed),
+          houses: this.layout(v),
+          stamped: false,
+        };
+        for (const hrec of rec.houses){
+          hrec.vname = this.nameFor((Math.imul(v.seed, 31) + hrec.x * 7 + hrec.z) >>> 0);
+          hrec.rep = 0;
+        }
+        game.villages[key] = rec;
+      }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(v, rec);
+        toast('you found ' + rec.name + ' — a village');
+        AudioSys.sfx('craft');
+        markSave();
+      }
+    }
+  },
+  // keep villagers alive near their stamped villages
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      if (!rec.stamped) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 60) continue;
+      for (let i = 0; i < rec.houses.length; i++){
+        const hrec = rec.houses[i];
+        const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
+        if (alive) continue;
+        const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
+        const e = spawnEntity('villager',
+          hrec.x + hrec.face[0] * 4.2, hy, hrec.z + hrec.face[1] * 4.2);
+        e.role = hrec.role; e.vkey = key; e.vi = i;
+        e.home = { x: hrec.x + hrec.face[0] * 4.2, y: hy, z: hrec.z + hrec.face[1] * 4.2 };
+      }
+    }
+  },
+  villagerRec(e){
+    const rec = game.villages[e.vkey];
+    return rec ? rec.houses[e.vi] : null;
+  },
+  offend(e){
+    const hrec = this.villagerRec(e);
+    if (hrec){
+      hrec.rep = (hrec.rep || 0) - 4;
+      toast(hrec.vname + ' will remember that (' + hrec.rep + ' goodwill)');
+      markSave();
+    }
+  },
+};
+
 function trySpawnEntities(){
   if (game.mode !== 'survival') return;
   const counts = { grazer: 0, lurker: 0, sheep: 0 };
@@ -6492,19 +6712,22 @@ function trySpawnEntities(){
   }
 }
 function updateEntities(dt, now){
-  if (game.mode !== 'survival') return;
-  game.spawnT += dt;
-  if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
+  const survival = game.mode === 'survival';
+  if (survival){
+    game.spawnT += dt;
+    if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
+  }
   for (let i = game.entities.length - 1; i >= 0; i--){
     const e = game.entities[i];
     const def = ENT_DEF[e.type];
+    if (!survival && e.type !== 'villager') continue;
     if (e.carried){
       // riding overhead, slightly forward so you can see your passenger
       e.x = game.pos.x - Math.sin(game.yaw) * 0.35;
       e.z = game.pos.z - Math.cos(game.yaw) * 0.35;
       e.y = game.pos.y + 2.3;
       e.vx = 0; e.vy = 0; e.vz = 0;
-      if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
       if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
       continue;
     }
@@ -6533,6 +6756,23 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else if (e.type === 'villager'){
+      if (e.fleeT > 0){
+        sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
+      } else if (pd < 3.2){
+        // stop and face whoever came to talk
+        sx = 0; sz = 0;
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+      } else {
+        if (e.tt <= 0){
+          e.tt = 5 + Math.random() * 6;
+          const H = e.home || e;
+          e.tx = H.x + (Math.random() - 0.5) * 9;
+          e.tz = H.z + (Math.random() - 0.5) * 9;
+        }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
     } else {
       if (e.tt <= 0){ e.tt = 4 + Math.random() * 5; e.tx = e.x + (Math.random() - 0.5) * 14; e.tz = e.z + (Math.random() - 0.5) * 14; }
       sx = e.tx - e.x; sz = e.tz - e.z;
@@ -6567,7 +6807,7 @@ function updateEntities(dt, now){
     if (grounded && sl > 1 && Math.hypot(e.x - ox, e.z - oz) < sp * dt * 0.25) e.vy = 6.5;
     if (e.y < CORE.BEDROCK_Y + 0.3){ e.y = CORE.BEDROCK_Y + 0.3; e.vy = 0; }
     // mesh
-    if (!e.mesh){ e.mesh = entMesh(e.type); game.scene.add(e.mesh); }
+    if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
     e.mesh.position.set(e.x, e.y, e.z);
     const spd = Math.hypot(e.vx, e.vz);
     if (spd > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
@@ -6777,6 +7017,13 @@ function bindInput(){
           toast(inWater(pn.x, pn.y + 0.6, pn.z) ? 'water wheel: turning, ~15W' : 'water wheel: dry — place it IN water');
           return;
         }
+      }
+      const vent = entityOnRay(3.6);
+      if (vent && vent.type === 'villager'){
+        const hrec = villageSys.villagerRec(vent);
+        if (hrec) toast(hrec.vname + ' the ' + VROLE[vent.role].name +
+                        ' — goodwill ' + (hrec.rep || 0));
+        return;
       }
       const selDrone = selectedItem();
       if (selDrone && selDrone.kind === 'drone'){
@@ -8636,6 +8883,7 @@ function tryAction(dt, now){
       const ent = entityOnRay(2.6);
       if (ent){
         if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
+        if (ent.type === 'villager'){ toast('they would rather walk, thanks'); return; }
         ent.carried = true;
         game.carried = ent;
         game.grabT = now;
@@ -9082,6 +9330,10 @@ function itemIconURL(it){
     c.fillRect(4, 9, 3, 2); c.fillRect(9, 9, 3, 2);
     c.fillRect(3, 10, 2, 3); c.fillRect(11, 10, 2, 3);
     c.fillStyle = '#5a4632'; c.fillRect(6, 1, 4, 3);
+  } else if (it.kind === 'coin'){
+    c.fillStyle = '#c9a13c'; c.fillRect(4, 3, 8, 10); c.fillRect(3, 4, 10, 8);
+    c.fillStyle = '#dcb54e'; c.fillRect(5, 4, 6, 8);
+    c.fillStyle = '#8f6d22'; c.fillRect(7, 6, 2, 4);
   } else if (it.kind === 'ped'){
     c.fillStyle = '#7a8194'; c.fillRect(5, 5, 6, 8);
     c.fillStyle = '#3a3f4c'; c.fillRect(3, 13, 10, 2); c.fillRect(4, 4, 8, 2);
@@ -9336,6 +9588,7 @@ function itemLabel(it){
   if (it.kind === 'grapple') return 'grappling hook';
   if (it.kind === 'pad') return 'charging pad';
   if (it.kind === 'ped') return 'pedestal';
+  if (it.kind === 'coin') return 'coin';
   if (it.kind === 'sign') return 'sign';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
@@ -9413,6 +9666,12 @@ function buildHotbar(){
 }
 function refreshHotbar(){
   document.querySelectorAll('#hotbar .slot').forEach(paintSlot);
+  const n = CORE.countItem(game.slots, 'coin');
+  const cb = $('coinbox');
+  if (n > 0 && game.running){
+    $('coinnum').textContent = n;
+    cb.classList.remove('hidden');
+  } else cb.classList.add('hidden');
 }
 function buildInvUI(){
   const main = $('invmain'), hot = $('invhot'), dsp = $('invdisp'), arm = $('invarmor');
@@ -9437,6 +9696,7 @@ function catalogEntries(){
   for (let t = 0; t < 5; t++) out.push({ kind: 'boots', tier: t });
   out.push({ kind: 'jetpack', fuel: 100 });
   out.push({ kind: 'grapple' });
+  out.push({ kind: 'coin', count: 500 });
   out.push(CORE.makeGun());
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
@@ -9945,6 +10205,9 @@ function refreshToolHUD(){
   } else if (it.kind === 'grapple'){
     html = '<div class="t1">grappling hook</div>' +
            '<div class="t2">left click any surface within 34m — it reels you in · click again to let go</div>';
+  } else if (it.kind === 'coin'){
+    html = '<div class="t1">coins ×' + it.count + '</div>' +
+           '<div class="t2">the other economy — lurkers drop them, villagers trade in them</div>';
   } else if (it.kind === 'ped'){
     html = '<div class="t1">pedestal ×' + it.count + '</div>' +
            '<div class="t2">left click to place · right click to choose what it displays</div>';
@@ -10500,6 +10763,7 @@ function saveNow(){
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
     armor: game.armor,
+    villages: game.villages,
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
     torches: game.torches,
@@ -10519,7 +10783,8 @@ function saveNow(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.map(e => [e.type, e.x, e.y, e.z, e.hp]),
+    entities: game.entities.filter(e => e.type !== 'villager')
+      .map(e => [e.type, e.x, e.y, e.z, e.hp]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -10540,6 +10805,7 @@ function startWorld(id){
   game.mode = data.mode || 'creative';   // pre-survival saves stay creative
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
+  game.villages = data.villages || {};
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
   } else {
@@ -11263,6 +11529,7 @@ function frame(now){
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
   powerSys.update(dt);
+  villageSys.tick(dt);
   wrenchSys.frame();
   updateSurvival(dt);
   // embers off nearby placed torches
@@ -11410,7 +11677,8 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
-  wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed };
+  wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
+  villageSys };
 </script>
 </body>
 </html>
