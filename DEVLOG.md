@@ -2,6 +2,58 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7 Phase B+C — machines & exotics (2026-08-24) — BUILD 7 COMPLETE
+
+The grid gets things to power.
+
+- **The elevator platform** — the reason to run wires down a mine shaft.
+  Place it, wire it, stand on the deck: space rises, C descends, speed
+  scales with your circuit's watt ratio (25W draw, only while moving). It
+  refuses to move without power, stops against solid rock in either
+  direction, travels ±60m, and glues its rider to the deck (your jump is
+  suppressed while riding so space means UP). The platform is a real
+  moving collider.
+- **The auto-crafter.** Wire it, feed it, right click to open its panel:
+  pick ANY recipe from the full catalog (it IS a station), and it crafts
+  every 4 seconds — faster circuits craft at full rate, starved ones slow
+  down (30W draw, only while it can actually craft). Its buffer is a
+  real inventory: `CORE.craft` runs directly against it, so outputs land
+  back in the buffer and can feed the next recipe. Deposit by
+  right-clicking the machine with a stack held; click a buffer stack to
+  take it back.
+- **Hoppers + item tubes.** A hopper holds stacks (right click with a
+  stack to deposit); rigid steel tubes — placed terminal-to-terminal like
+  wires, with the same live preview — push one item every 2 seconds into
+  whatever they feed: stove inputs and fuel slots (it knows ore from
+  coal), auto-crafter buffers, or other hoppers. Coal hopper → stove and
+  ore hopper → crafter chains work today.
+- **The animal crank.** Carry an animal (fists) to the wheel and right
+  click: it walks forever, ~10W. Right click again to set it free. The
+  wheel visibly turns while its watts are being drawn, with the animal
+  jogging inside.
+- **The tesla coil** (phase C): wireless power. A coil on a live circuit
+  reaches every terminal within 8m — no wires — and coils relay to each
+  other, so grids can hop gaps. Bulbs caught in the field behave like
+  wired ones. The orb glows cyan when humming, and standing within arm's
+  reach in survival gets you zapped (4 dmg every half second, with
+  sparks). Costs crystal from the caverns — the first crystal sink.
+- **Generator mk2**: 100W, coal burns twice as long (60s a lump, 240s
+  tank). Ruby-striped, twin exhausts.
+
+Everything rides the existing rails: placement previews are the real
+models, fists pick everything back up (wires and tubes refund), all
+machine state (buffers, fuel, platform height, caged animals, recipes)
+persists in the pnode save records with zero new serialization code.
+
+Verified synchronously in-browser: elevator rode up 7.2m and back down,
+dead elevator refused to move, crafter turned 2 planks into 4 sticks
+while flagged busy, tube moved 3 coal into a stove's fuel slot, animal
+crank lit a bulb with the wheel spinning, tesla bridged an unwired bulb
+at 4m (and dropped it when the generator died), the zap took 4hp, and a
+gen2+meter circuit read a combined 140W after the tesla merged it with
+the neighboring yard — emergent, and exactly how wireless power should
+behave. Plus 286 headless tests and the smoke suite green.
+
 ## Build 7 Phase A — electricity: the grid is live (2026-08-24)
 
 First: two 6.5 playtest fixes. The dispenser preview's texture no longer

@@ -110,12 +110,12 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
   generator. Wired bulbs live and die by their circuit; powered stoves
   smelt up to 3×. Camera drone shipped early (45m tether, battery,
   charges near a surplus grid). Still to come: animal/enemy crank.
-- **Phase B — machines**: auto-crafting table (select a recipe, it crafts
-  while powered), boosted stove (smelt speed scales with watts), hopper +
-  item tubes so materials can flow into machines. Powered elevator platform
-  — a real reason to run wires down a mine shaft.
-- **Phase C — exotics**: generator 2.0, tesla coil (wireless power in a
-  radius, zaps you if you stand too close).
+- **Phase B — machines (DONE)**: auto-crafting table (full catalog, crafts
+  while powered, real buffer inventory), boosted stove, hoppers + item
+  tubes feeding stoves/crafters, and the powered elevator platform.
+- **Phase C — exotics (DONE)**: generator mk2 (100W), tesla coil (wireless
+  power in 8m with coil-to-coil relaying; zaps the careless), animal crank
+  (~10W, forever).
 - **Camera drone**: photo mode for survival, with a body — a buildable or
   buyable drone you charge on the grid, keep in your inventory, and hold to
   pilot. Range-limited; your body stays standing while the drone flies.
