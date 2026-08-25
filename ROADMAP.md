@@ -116,6 +116,11 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
 - **Phase C — exotics (DONE)**: generator mk2 (100W), tesla coil (wireless
   power in 8m with coil-to-coil relaying; zaps the careless), animal crank
   (~10W, forever).
+- **7.1 — polish from playtesting (DONE)**: thin-slab collision fix
+  (substeps + thin-aware contact filter), redstone-style staple wiring
+  (stapler/spool viewmodel, chained RMB runs, taut straight lines),
+  all machines open menus over the full inventory, shift-click quick
+  move, generator fuel slots, chests + tube storage.
 - **Camera drone**: photo mode for survival, with a body — a buildable or
   buyable drone you charge on the grid, keep in your inventory, and hold to
   pilot. Range-limited; your body stays standing while the drone flies.

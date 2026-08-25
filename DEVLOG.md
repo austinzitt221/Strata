@@ -2,6 +2,68 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7.1 — staple wiring, everything-is-a-menu, chests (2026-08-25)
+
+Electricity iteration from playtesting, plus one physics bug that turned
+out to be two bugs.
+
+- **The fly-through-thin-floors bug.** Reported: fly + sprint + hold C on
+  a wrench-shrunk slab and you phase straight through. Root causes, both
+  fixed:
+  1. One Euler step at fly-sprint speed (22 m/s) can carry the capsule
+     past a thin slab's midplane, and the SDF pushout then ejects it out
+     the FAR side. Movement now substeps, capping per-step travel at
+     ~0.06m (up to 24 substeps a frame — only ever needed at speed).
+  2. Subtler and nastier: `contactReal`, the filter that rejects phantom
+     CSG contacts, confirms a surface by probing 0.12m PAST it. On a slab
+     thinner than ~0.13m the probe pokes out the far side into air and
+     rejects a genuine contact — so the slab never pushed back at all,
+     at any speed. A strictly-inside shallow probe (0.03m) now also
+     counts as confirmation. Verified: fly-sprint-C onto a 0.1m slab
+     stops dead on top; anti-slide, step-up and cave-entry suites
+     unchanged.
+- **Staple wiring** — wires work like redstone routes now. Holding wire
+  you carry a stapler in the left hand and a spool in the right. LEFT
+  click staples the route down: a small two-legged clip, oriented to the
+  surface like bulbs are (floors, walls, ceilings — it uses the SDF
+  gradient), and the staple itself is the placement preview. RIGHT click
+  starts a wire from any terminal — machine or staple — and then chains:
+  each right click on the next staple/machine commits that leg and
+  immediately continues the run from it, so laying a long line is
+  click-click-click. Right click on nothing ends the chain and hands the
+  preview back to the stapler. Wires between staples are TAUT — dead
+  straight when the two anchors face the same way, curving only where
+  the route turns (floor to wall, around corners; the bezier's control
+  points scale with how much the end normals disagree). Machine-to-machine
+  wires with no staples still work exactly as before, sag and all, and
+  wires now remember their exact attachment points (pa/pb) across saves.
+  Staples cost nothing, pull free with fists, and conduct like any node.
+- **Everything opens a menu now** — no more depositing by right-clicking
+  props with a stack. Generators, hoppers, chests and auto-crafters all
+  open a screen: the machine's own panel floats as a SEPARATE box above a
+  full inventory panel (30 main + hotbar), stove and crafting screens
+  restructured the same way. Generators got a real fuel slot — drop a
+  coal stack in and it ignites the moment something draws power, burning
+  through the stack lump by lump. Drag-and-drop works across every slot
+  (machine grids, fuel slots, stove, dispenser), and **shift-click quick
+  move** does the smart thing everywhere: hotbar↔main in plain screens,
+  coal→fuel in generators and stoves, ore→input in stoves, anything→
+  buffer in crafters/hoppers/chests, machine-slot→inventory coming back.
+- **Chests.** 8 planks. 24 slots, open like anything else, and tubes can
+  pipe into them — hopper→chest for automated storage, hopper→generator
+  for automated fueling.
+
+Browser-verified end to end: the slab catch, staple normals on
+floor/wall/ceiling, the full RMB chain flow (gen → 2 staples → bulb lit
+through the staples, chain ended on air click), straight-vs-curved runs,
+gen fuel-slot ignition (and a dry gen correctly refusing to power),
+tube→chest and tube→gen deliveries, every menu's DOM (1 fuel slot vs 24
+grid slots, inventory panels present), shift-click paths including the
+non-coal-into-generator refusal, E closing machine screens, and a full
+save/reload round-trip of staples, wire attachment points, chest
+contents and generator fuel. 286 headless tests + full smoke suite +
+the Build 7 machine suite all green.
+
 ## Build 7 Phase B+C — machines & exotics (2026-08-24) — BUILD 7 COMPLETE
 
 The grid gets things to power.
