@@ -121,6 +121,11 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
   (stapler/spool viewmodel, chained RMB runs, taut straight lines),
   all machines open menus over the full inventory, shift-click quick
   move, generator fuel slots, chests + tube storage.
+- **7.2 — rotate + wrench-everything (DONE)**: scroll rotates every
+  placement preview (staples twist on their normal), chests resize with
+  scroll (size = storage, 8–64 slots), the wrench selects/moves/deletes
+  every prop with refunds, multiselect + copy/paste/blueprints carry
+  props and their wiring.
 - **Camera drone**: photo mode for survival, with a body — a buildable or
   buyable drone you charge on the grid, keep in your inventory, and hold to
   pilot. Range-limited; your body stays standing while the drone flies.

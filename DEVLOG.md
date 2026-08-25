@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7.2 — rotate everything, sized chests, the wrench owns the world (2026-08-25)
+
+Quick-build from playtesting notes; the wrench half turned out to be the
+deepest cut of the three.
+
+- **Scroll rotates every placement.** Holding any placeable — stoves,
+  crafting tables, beds, beacons, machines, plants — the scroll wheel
+  spins the live preview in 15° steps (same rule as the drill's rotate
+  mode) and the placed thing keeps that facing. Stoves/machines still
+  auto-face you; the scroll adds onto that. Staples rotate too: the
+  scroll twists them around their surface normal, so a wall staple can
+  run its wire at any angle.
+- **Chests come in sizes.** Scroll resizes the chest preview through 6
+  steps (0.6m–2.0m); the box's physical size IS its storage — 8 slots
+  in the tiny one up to 64 in the crate. Middle click switches the
+  scroll between resize and rotate while holding one. The collision
+  box, wire terminal and menu grid all track the size, and the wrench
+  can resize a placed chest later (it refuses to shrink one whose slots
+  are still in use).
+- **The wrench selects EVERYTHING now.** Right click any placed thing —
+  torches, bulbs, tables, beacons, beds, stoves, doors, ropes, plants,
+  every machine, staples, even individual wires and tubes — and it gets
+  a highlight box and the gizmo. Shift-drag moves it (wires re-route
+  themselves since they follow their endpoints), X deletes with exactly
+  the refunds fists would give (machine buffers spill, attached
+  wires/tubes refund, caged animals go free), shift+RMB multiselects
+  props and terrain edits together. Things that aren't built to resize
+  refuse the resize drag and say so; chests resize. Solid machines
+  needed a smarter pick ray — their own collision box stops the surface
+  ray before it reaches their center, so the wrench now recognizes
+  "the surface you hit IS the prop" and selects it anyway. While the
+  wrench is in hand, right click always selects (machines don't open
+  their menus over it).
+- **Copy/paste and blueprints carry props.** Ctrl+C packs selected props
+  into the clipboard next to the terrain edits — and any wire or tube
+  whose BOTH endpoints were copied rides along for free. The paste ghost
+  shows the real prop models, stamping re-creates them with fresh ids
+  and re-wires the copies (verified: a pasted generator+bulb pair lit up
+  on its own new wire), survival pastes charge one item per prop.
+  Blueprints save the props too, so a wired factory module stamps whole.
+- Found and fixed a latent paste bug along the way: the paste ghost
+  rotated one way and the stamped result the other. Edit shapes are all
+  180°-symmetric so it was invisible for terrain — props made it obvious
+  in one screenshot. Ghost and stamp now agree.
+
+Verified in-browser: 45° stove/table/staple placements land and save,
+chest scroll-resize (48-slot 1.6m chest opened with 48 real slots),
+middle-click mode toggle, wrench-selecting a stove/generator/wire/torch,
+gizmo-moving a generator 3m with its terminal following, resize refusal
+on non-chests, wrench chest-grow 1.6→1.9 (64 slots), stove delete
+spilling its coal and refunding the stove, wire delete refunding wire,
+the powered-pair copy/paste lighting its clone, blueprint round-trip
+with props, and rotated pastes matching the ghost. Plus 286 headless
+tests, the smoke suite and the full 7.1 suite still green.
+
 ## Build 7.1 — staple wiring, everything-is-a-menu, chests (2026-08-25)
 
 Electricity iteration from playtesting, plus one physics bug that turned
