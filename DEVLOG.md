@@ -2,6 +2,47 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7.5.1 — playtest fixes: third person earns its keep (2026-08-25)
+
+Five bugs from the 7.5 playtest, each with a real root cause:
+
+- **Armor followed you between worlds.** The armor reset on world load
+  sat inside the `dispSlot !== undefined` branch — which freshly created
+  worlds skip — so gear worn in a creative world walked straight into a
+  brand-new survival world. The reset now runs for every load. Verified:
+  wear diamond in world A, quit to title, create a survival world —
+  empty; return to world A — still wearing it.
+- **Signs trapped you.** The sign editor's DOM node was accidentally
+  inserted INSIDE the HUD layer, which has `pointer-events:none` — the
+  textarea and DONE button were unclickable, E was gated off, and Enter
+  just made newlines: a soft-lock. The screen now lives with the other
+  menus, **Enter saves and closes** (Shift+Enter for a new line),
+  Escape closes too.
+- **Couldn't pick up animals in third person.** `entityOnRay` was the
+  one ray that never learned about the camera pull-back, so animals
+  within arm's reach were beyond its range. Fixed like every other ray.
+- **Shift-click in the creative inventory looked dead.** The repaint
+  crashed: `refreshAllUI`'s selector matched the CATALOG tiles, which
+  have no count element, and the exception killed the repaint mid-loop
+  (the item had already moved — hence "it's there after reopening").
+  `paintSlot` now skips structureless tiles and the selector names the
+  real grids. Live repaint verified with real shift-clicks.
+- **Third person got real animations.** Carrying an animal holds both
+  arms straight overhead under your passenger; punching jabs, gathering
+  scoops with both hands, sword swings arc, and mining/placing pumps
+  the tool arm. And the hand now grips a real miniature 3D model of
+  whatever you're holding — not a floating icon.
+- **Pedestals display the real thing** too: a full miniature model of
+  the chosen item (chests, tools, ore chunks, ingots, diamonds as
+  octahedra — everything has a 3D form now), auto-scaled to fit and
+  slowly rotating on the column.
+
+Full suite green: real-event shift-click repaint, cross-world armor
+isolation both directions, the complete sign flow (open via RMB, type,
+Enter, DONE button), third-person animal pickup with the overhead carry
+pose, hand and pedestal models, plus 286 headless tests, smoke and the
+7.5 suite.
+
 ## Build 7.5 — the player has a body (2026-08-25)
 
 You exist now. Four phases, one build.

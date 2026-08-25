@@ -120,16 +120,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div id="hurt"></div>
   <div id="toolinfo"></div>
   <div id="fpsbox"></div>
-  <div id="signscreen" class="screen hidden dim">
-  <div class="panel" style="min-width:380px;">
-    <h2>SIGN</h2>
-    <div class="sub">up to 4 lines, 16 characters each</div>
-    <textarea id="signtext" rows="4" style="width:100%; font:14px monospace; background:#141420; color:#e8e8f0;
-      border:1px solid rgba(255,255,255,0.2); border-radius:4px; padding:8px; resize:none;"></textarea>
-    <button class="btn" id="btnSignSave" style="margin-top:10px;">DONE</button>
-  </div>
-</div>
-<div id="jetbox" class="hidden">jetpack</div>
+  <div id="jetbox" class="hidden">jetpack</div>
 <div id="navbox"><span id="navarrow">&#9650;</span><span id="navdist"></span><span id="navpos"></span></div>
   <div id="chargebar"><div id="chargefill"></div></div>
   <div id="hotbar"></div>
@@ -202,6 +193,16 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
   </div>
 </div>
+<div id="signscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:380px;">
+    <h2>SIGN</h2>
+    <div class="sub">up to 4 lines, 16 characters each</div>
+    <textarea id="signtext" rows="4" style="width:100%; font:14px monospace; background:#141420; color:#e8e8f0;
+      border:1px solid rgba(255,255,255,0.2); border-radius:4px; padding:8px; resize:none;"></textarea>
+    <button class="btn" id="btnSignSave" style="margin-top:10px;">DONE</button>
+  </div>
+</div>
+
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
   <div class="panel hidden" id="catalogpanel">
@@ -3233,12 +3234,10 @@ const playerBody = {
     mouth.position.set(0, 0.14, -0.245);
     this.head.add(dome, hair, mouth);
     this.upper.add(this.head);
-    // held item drawn as its inventory icon in the right hand
-    this.itemPlane = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3),
-      new THREE.MeshBasicMaterial({ transparent: true, side: THREE.DoubleSide }));
-    this.itemPlane.position.set(0, -0.56, -0.2);
-    this.itemPlane.visible = false;
-    this.armR.add(this.itemPlane);
+    // held item: a real miniature model gripped by the right hand
+    this.handItem = new THREE.Group();
+    this.handItem.position.set(0, -0.6, -0.14);
+    this.armR.add(this.handItem);
     this.itemKind = null;
   },
   applySkin(idx){
@@ -3322,11 +3321,37 @@ const playerBody = {
     const key = it ? it.kind + ':' + (it.mat != null ? it.mat : it.tier != null ? it.tier : '') : null;
     if (key !== this.itemKind){
       this.itemKind = key;
-      this.itemPlane.visible = !!it;
-      if (it) this.itemPlane.material = this.iconMat(it);
+      while (this.handItem.children.length) this.handItem.remove(this.handItem.children[0]);
+      if (it){
+        const m = fitItemModel(itemModel(it), 0.42);
+        m.position.y -= 0.1;
+        this.handItem.add(m);
+      }
     }
-    // holding something: right arm carries it slightly forward
-    if (it) this.armR.rotation.x = Math.min(this.armR.rotation.x, -0.35);
+    // action poses override the walk swing
+    const tNow = performance.now();
+    if (game.carried){
+      // both arms straight overhead, holding the passenger
+      this.armR.rotation.x = Math.PI - 0.5;
+      this.armL.rotation.x = Math.PI - 0.5;
+    } else {
+      const jab = Math.max(0, 1 - (tNow - (game.punchT || 0)) / 240);
+      const swing = Math.max(0, 1 - (tNow - (game.swingT || 0)) / 280);
+      const gather = Math.max(0, 1 - (tNow - (game.gatherT || 0)) / 450);
+      const tl = activeTool();
+      const working = game.mouseL && tl && (tl.kind === 'drill' || tl.kind === 'disp');
+      if (jab > 0) this.armR.rotation.x = 0.4 + Math.sin(jab * Math.PI) * 1.3;
+      else if (swing > 0) this.armR.rotation.x = 0.3 + Math.sin(swing * Math.PI) * 1.7;
+      else if (gather > 0){
+        this.armR.rotation.x = 0.9 * gather;
+        this.armL.rotation.x = 0.9 * gather;
+      } else if (working){
+        this.armR.rotation.x = 0.85 + Math.sin(tNow * 0.02) * 0.18;
+      } else if (it){
+        // carrying something: arm bent forward
+        this.armR.rotation.x = Math.max(this.armR.rotation.x, 0.5);
+      }
+    }
   },
 };
 
@@ -4787,12 +4812,11 @@ const pnodeSys = {
       if (n.t === 'chest' && n.sc) g.scale.setScalar(n.sc);
       if (n.t === 'astand') this.dressStand(g, n.inv);
       if (n.t === 'ped' && n.inv && n.inv[0]){
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42),
-          playerBody.iconMat(n.inv[0]));
-        m.position.y = 1.22;
-        m.rotation.y = Math.PI / 4;
-        g.add(m);
-        const m2 = m.clone(); m2.rotation.y = -Math.PI / 4; g.add(m2);
+        const disp = itemModel(n.inv[0]);
+        fitItemModel(disp, 0.62);
+        disp.position.y += 0.98;
+        g.add(disp);
+        g.userData.pedItem = disp;
       }
       if (n.t === 'sign' && n.text){
         const cv = document.createElement('canvas');
@@ -4971,6 +4995,8 @@ const pnodeSys = {
       if (n.t === 'meter' && ud.meter && powerSys.meterDirty){
         this.drawMeter(ud.meter, powerSys.meterMap.get('n' + n.id) || null);
       }
+      if (n.t === 'ped' && ud.pedItem)
+        ud.pedItem.rotation.y += dt * 0.7;
     }
     powerSys.meterDirty = false;
   },
@@ -6023,6 +6049,119 @@ const tableSys = {
 // No more guessing from a wireframe box. (Dispenser shapes get the same
 // treatment with a world-tiled material preview in updateGhost; the drill
 // keeps its wireframe — a hole has no body to show.)
+// a real miniature 3D model for ANY item — pedestals and the third-person
+// hand use these instead of flat icons. Placeables reuse their prop models;
+// tools and materials get compact bespoke builds.
+function itemModel(it){
+  const g = new THREE.Group();
+  const K = it.kind;
+  const basic = c => new THREE.MeshBasicMaterial({ color: c });
+  const tierC = t => new THREE.Color(TIER_COL[t] || '#8a8a92');
+  const box = (w, h, d, m, x, y, z) => {
+    const q = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    q.position.set(x || 0, y || 0, z || 0);
+    g.add(q);
+    return q;
+  };
+  if (K === 'mat'){
+    box(0.34, 0.34, 0.34, vmMatMaterial(it.mat), 0, 0.17, 0);
+  } else if (K === 'torch') g.add(torchSys.model());
+  else if (K === 'bulb') g.add(bulbSys.model());
+  else if (K === 'table') g.add(tableSys.model());
+  else if (K === 'beacon') g.add(beaconSys.model());
+  else if (K === 'bed') g.add(bedSys.model());
+  else if (K === 'stove') g.add(stoveSys.model());
+  else if (K === 'door') g.add(doorSys.model(1.2, 2.2));
+  else if (K === 'rope') g.add(ropeSys.model(0.8));
+  else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
+  else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
+            'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube'].includes(K)){
+    g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
+  } else if (K === 'helm'){
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
+    m.position.y = 0.1; g.add(m);
+  } else if (K === 'plate'){
+    box(0.34, 0.4, 0.18, basic(tierC(it.tier)), 0, 0.2, 0);
+    box(0.1, 0.16, 0.19, basic('#00000044'), 0, 0.26, 0);
+  } else if (K === 'boots'){
+    for (const s of [-0.11, 0.11]){
+      box(0.13, 0.18, 0.2, basic(tierC(it.tier)), s, 0.09, -0.02);
+    }
+  } else if (K === 'sword'){
+    box(0.05, 0.5, 0.05, basic(tierC(it.tier)), 0, 0.45, 0);
+    box(0.04, 0.12, 0.04, basic(tierC(it.tier)), 0, 0.72, 0);
+    box(0.2, 0.05, 0.06, pixMat(PROP_TEX.steel), 0, 0.2, 0);
+    box(0.06, 0.2, 0.06, pixMat(PROP_TEX.grip), 0, 0.08, 0);
+  } else if (K === 'drill'){
+    box(0.24, 0.22, 0.34, pixMat(PROP_TEX.steel), 0, 0.24, 0.06);
+    box(0.08, 0.16, 0.1, pixMat(PROP_TEX.grip), 0, 0.06, 0.16);
+    const bit = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.26, 8), basic(tierC(it.tier)));
+    bit.rotation.x = -Math.PI / 2; bit.position.set(0, 0.24, -0.28);
+    g.add(bit);
+  } else if (K === 'disp'){
+    box(0.24, 0.22, 0.3, pixMat(PROP_TEX.steel), 0, 0.24, 0.08);
+    box(0.08, 0.16, 0.1, pixMat(PROP_TEX.grip), 0, 0.06, 0.18);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), basic(tierC(it.tier)));
+    orb.position.set(0, 0.24, -0.2);
+    g.add(orb);
+  } else if (K === 'gun'){
+    box(0.08, 0.1, 0.5, pixMat(PROP_TEX.steel), 0, 0.2, 0);
+    box(0.06, 0.16, 0.08, pixMat(PROP_TEX.grip), 0, 0.08, 0.16);
+    box(0.05, 0.05, 0.14, basic('#222028'), 0, 0.22, -0.3);
+  } else if (K === 'wrench'){
+    box(0.07, 0.4, 0.05, pixMat(PROP_TEX.steelLight), 0, 0.2, 0);
+    box(0.16, 0.1, 0.05, pixMat(PROP_TEX.steelLight), 0, 0.44, 0);
+    box(0.05, 0.08, 0.05, basic('#d84a63'), 0.07, 0.47, 0);
+  } else if (K === 'drone'){
+    box(0.2, 0.08, 0.2, pixMat(PROP_TEX.steel), 0, 0.1, 0);
+    for (const [sx, sz] of [[-0.14, -0.14], [0.14, -0.14], [-0.14, 0.14], [0.14, 0.14]])
+      box(0.1, 0.02, 0.1, basic('#8d8d99'), sx, 0.16, sz);
+  } else if (K === 'jetpack'){
+    box(0.26, 0.34, 0.14, basic('#3a3f4c'), 0, 0.2, 0);
+    for (const s of [-0.07, 0.07]) box(0.06, 0.1, 0.06, basic('#d84a63'), s, 0, 0);
+  } else if (K === 'grapple'){
+    box(0.05, 0.3, 0.05, pixMat(PROP_TEX.steelLight), 0, 0.2, 0);
+    box(0.2, 0.05, 0.05, pixMat(PROP_TEX.steelLight), 0, 0.06, 0);
+    box(0.05, 0.08, 0.05, pixMat(PROP_TEX.steelLight), -0.08, 0.02, 0);
+    box(0.05, 0.08, 0.05, pixMat(PROP_TEX.steelLight), 0.08, 0.02, 0);
+    box(0.07, 0.09, 0.07, pixMat(PROP_TEX.grip), 0, 0.38, 0);
+  } else if (K === 'stick'){
+    const m = box(0.05, 0.5, 0.05, pixMat(PROP_TEX.bark), 0, 0.25, 0);
+    m.rotation.z = 0.2;
+  } else if (K === 'wool'){
+    box(0.3, 0.24, 0.3, pixMat(PROP_TEX.wool), 0, 0.12, 0);
+  } else if (K === 'diamond'){
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.18), basic('#6fe3ef'));
+    m.position.y = 0.2; g.add(m);
+  } else if (K === 'ironingot' || K === 'rubyingot'){
+    box(0.3, 0.1, 0.16, basic(K === 'ironingot' ? '#c9c7d1' : '#d84a63'), 0, 0.05, 0);
+    box(0.24, 0.06, 0.12, basic(K === 'ironingot' ? '#e2e0ea' : '#e86a80'), 0, 0.13, 0);
+  } else if (K === 'coal' || K === 'ironore' || K === 'rubyore'){
+    const c = K === 'coal' ? '#26262c' : K === 'ironore' ? '#b8a488' : '#c2455c';
+    box(0.2, 0.16, 0.18, basic(c), -0.05, 0.08, 0);
+    box(0.14, 0.12, 0.14, basic(c), 0.1, 0.06, 0.05);
+    box(0.1, 0.1, 0.1, basic(c), 0, 0.2, -0.04);
+  } else if (K === 'meat' || K === 'cookedmeat'){
+    box(0.26, 0.12, 0.18, basic(K === 'meat' ? '#c2455c' : '#8a5a30'), 0, 0.06, 0);
+    box(0.2, 0.06, 0.12, basic(K === 'meat' ? '#e8a0a8' : '#b8824e'), 0, 0.14, 0);
+  } else {
+    // last resort: the icon as a 3D card
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.28, 0.05), playerBody.iconMat(it));
+    m.position.y = 0.14;
+    g.add(m);
+  }
+  return g;
+}
+// scale a model to fit maxDim and rest its base at y=0
+function fitItemModel(g, maxDim){
+  const bb = new THREE.Box3().setFromObject(g);
+  const size = bb.getSize(new THREE.Vector3());
+  const s = Math.min(1, maxDim / Math.max(size.x, size.y, size.z, 0.001));
+  g.scale.setScalar(s);
+  g.position.y = -bb.min.y * s;
+  return g;
+}
+
 const CHEST_SCALES = [0.6, 0.8, 1.0, 1.3, 1.6, 2.0];
 function chestSlots(sc){
   const s = sc || 1;
@@ -6444,6 +6583,7 @@ function updateEntities(dt, now){
 }
 // closest entity intersecting the view ray
 function entityOnRay(maxDist){
+  maxDist += game.camBack || 0;
   if (!game.entities.length) return null;
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
@@ -9259,6 +9399,7 @@ function paintSlot(el){
   const it = slotItem(key);
   const i = key === 'disp' ? -1 : +key;
   const img = el.querySelector('img'), cnt = el.querySelector('.cnt');
+  if (!img || !cnt) return;                      // catalog tiles have no counter
   const url = itemIconURL(it);
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
   cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
@@ -9632,7 +9773,9 @@ function refreshAllUI(){
   if (game.ui === 'stove') refreshStoveUI(true);
   else if (game.ui === 'cont') refreshContUI();
   else if (game.ui === 'crafter') refreshCrafterUI();
-  else document.querySelectorAll('#invscreen .slot, #craftscreen .slot').forEach(paintSlot);
+  else document.querySelectorAll(
+    '#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot, ' +
+    '#craftinvmain .slot, #craftinvhot .slot').forEach(paintSlot);
 }
 
 // drag & drop
@@ -10396,9 +10539,9 @@ function startWorld(id){
   wrenchSys.clearSelection();
   game.mode = data.mode || 'creative';   // pre-survival saves stay creative
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
+  game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
-    game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   } else {
     // older save (or fresh world): pull the first dispenser out of the slots
     game.dispSlot = null;
@@ -11244,6 +11387,11 @@ function bindMenus(){
   $('btnRespawn').addEventListener('click', respawn);
   for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
   $('btnSignSave').addEventListener('click', closeSign);
+  $('signtext').addEventListener('keydown', e => {
+    if (e.code === 'Enter' && !e.shiftKey){ e.preventDefault(); closeSign(); }
+    if (e.code === 'Escape'){ e.preventDefault(); closeSign(); }
+    e.stopPropagation();
+  });
   window.addEventListener('beforeunload', () => { if (game.running) saveNow(); });
 }
 
