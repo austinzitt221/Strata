@@ -141,7 +141,7 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
   charging pad; grappling hook (34m reel-in).
 - Base decor: item pedestals, editable signs.
 
-## Build 8 — Coins & villages (the world gets people)
+## Build 8 — Coins & villages (the world gets people) (DONE)
 - **Coins**: enemies drop coin instead of materials (mining stays the
   material economy); bosses drop piles; quests and treasure pay out. Coin
   is the invisible XP — no bar, progression IS purchasing power. Coin

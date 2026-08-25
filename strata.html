@@ -196,6 +196,29 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
   </div>
 </div>
+<div id="boardscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:520px;">
+    <h2 id="boardtitle">NOTICES</h2>
+    <div class="sub">accept a contract, come back to claim &nbsp;·&nbsp; E to close</div>
+    <div id="boardlist"></div>
+  </div>
+</div>
+<div id="tradescreen" class="screen hidden dim">
+  <div class="mstack">
+  <div class="panel" style="min-width:520px;">
+    <h2 id="tradetitle">TRADER</h2>
+    <div class="sub" id="tradesub">&nbsp;</div>
+    <div id="tradelist" style="max-height:300px; overflow:auto;"></div>
+  </div>
+  <div class="panel">
+    <div class="invlabel">INVENTORY</div>
+    <div class="invgrid" id="trademain"></div>
+    <div class="invlabel">HOTBAR</div>
+    <div class="invgrid" id="tradehot"></div>
+    <div class="sub" style="margin-top:10px;">click an offer to trade &nbsp;·&nbsp; every trade builds goodwill &nbsp;·&nbsp; E to close</div>
+  </div>
+  </div>
+</div>
 <div id="signscreen" class="screen hidden dim">
   <div class="panel" style="min-width:380px;">
     <h2>SIGN</h2>
@@ -3022,6 +3045,7 @@ function buildScene(){
   tableSys.init(scene);
   placePreview.init(scene);
   playerBody.init(scene);
+  missionSys.init(scene);
   pnodeSys.init(scene);
   wireSys.init(scene);
 
@@ -4751,6 +4775,21 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, orb, face);
       g.userData.orb = orb;
+    } else if (t === 'board'){
+      for (const s of [-0.9, 0.9]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.0, 0.14), M.bark);
+        post.position.set(s, 1.0, 0);
+        g.add(post);
+      }
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 0.1), M.wood);
+      panel.position.y = 1.45;
+      g.add(panel);
+      const paper = new THREE.MeshBasicMaterial({ color: 0xe8e2d0 });
+      for (const [px, py] of [[-0.6, 1.6], [0.1, 1.35], [0.65, 1.55]]){
+        const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.44, 0.03), paper);
+        p2.position.set(px, py, -0.07);
+        g.add(p2);
+      }
     } else if (t === 'ped'){
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), M.steel);
       base.position.y = 0.06;
@@ -4941,7 +4980,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -6488,6 +6527,8 @@ function spawnEntity(type, x, y, z){
   return e;
 }
 function killEntity(e, byPlayer){
+  if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
+  if (e.type === 'lurker' && byPlayer) boardSys.lurkerKilled(e.x, e.z);
   if (game.carried === e) game.carried = null;
   const i = game.entities.indexOf(e);
   if (i >= 0) game.entities.splice(i, 1);
@@ -6612,6 +6653,10 @@ const villageSys = {
       // a torch outside the door
       game.torches.push([hrec.x + fx * 3.4, g + 0.1, hrec.z + fz * 3.4]);
     }
+    // the bounty board, facing the well
+    const bg = game.gen.height(v.x + 4.2, v.z + 3.2);
+    pnodeSys.add('board', v.x + 4.2, +bg.toFixed(1), v.z + 3.2,
+      Math.atan2(v.x - (v.x + 4.2), v.z - (v.z + 3.2)), { vkey: 'v' + v.key });
     // the well
     let wg0 = game.gen.height(v.x, v.z);
     for (const [dx2, dz2] of [[-1.2, 0], [1.2, 0], [0, -1.2], [0, 1.2]])
@@ -6681,6 +6726,444 @@ const villageSys = {
       toast(hrec.vname + ' will remember that (' + hrec.rep + ' goodwill)');
       markSave();
     }
+  },
+};
+
+// ---------- the bounty board ----------
+// Three rotating contracts per village: repeatable coin income and a
+// reason to come back. Claim all three and the board re-papers itself.
+const boardSys = {
+  roll(rec){
+    const R = Math.random;
+    const a = R() * Math.PI * 2;
+    return [
+      { type: 'kill', need: 4 + ((R() * 3) | 0), got: 0, pay: 40, on: false },
+      { type: 'deliver', k: ['coal', 'ironore', 'stick'][(R() * 3) | 0],
+        need: 8 + ((R() * 8) | 0), pay: 30, on: false },
+      { type: 'explore', x: Math.round(rec.x + Math.cos(a) * (170 + R() * 80)),
+        z: Math.round(rec.z + Math.sin(a) * (170 + R() * 80)), pay: 35, on: false, done: false },
+    ];
+  },
+  open(rec){
+    game.activeBoard = rec;
+    if (!rec.board || !rec.board.length) rec.board = this.roll(rec);
+    game.ui = 'board';
+    this.refresh();
+    show('boardscreen');
+    document.exitPointerLock();
+    AudioSys.sfx('toggle');
+  },
+  text(c){
+    if (c.type === 'kill') return 'cull the lurkers — ' + c.got + '/' + c.need + ' down';
+    if (c.type === 'deliver') return 'deliver ' + c.need + ' ' + itemLabel({ kind: c.k });
+    const d = Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z));
+    return c.done ? 'the far marker — reached' : 'reach the marker ' + d + 'm out (' + c.x + ', ' + c.z + ')';
+  },
+  refresh(){
+    const rec = game.activeBoard;
+    if (!rec || game.ui !== 'board') return;
+    $('boardtitle').textContent = rec.name.toUpperCase() + ' — NOTICES';
+    const list = $('boardlist');
+    list.innerHTML = '';
+    rec.board.forEach((c, idx) => {
+      const row = document.createElement('div');
+      row.className = 'craftrow';
+      const nm = document.createElement('div');
+      nm.className = 'cname';
+      nm.textContent = this.text(c);
+      const act = document.createElement('div');
+      act.style.marginLeft = 'auto';
+      const claimable = (c.type === 'kill' && c.got >= c.need) ||
+                        (c.type === 'explore' && c.done) ||
+                        (c.type === 'deliver' && CORE.countItem(game.slots, c.k) >= c.need);
+      if (!c.on){
+        act.textContent = 'ACCEPT';
+        act.style.color = '#8bff9e';
+        row.addEventListener('click', () => { c.on = true; markSave(); this.refresh(); });
+      } else if (claimable){
+        act.textContent = 'CLAIM ' + c.pay + 'c';
+        act.style.color = '#ffb44d';
+        row.addEventListener('click', () => {
+          if (c.type === 'deliver') CORE.consumeItem(game.slots, c.k, c.need);
+          addStackItem('coin', c.pay);
+          rec.board.splice(idx, 1);
+          if (!rec.board.length) rec.board = this.roll(rec);
+          toast('+' + c.pay + ' coins');
+          AudioSys.sfx('craft');
+          refreshHotbar();
+          markSave();
+          this.refresh();
+        });
+      } else {
+        act.textContent = 'accepted';
+        act.style.color = '#8a8494';
+      }
+      row.appendChild(nm); row.appendChild(act);
+      list.appendChild(row);
+    });
+  },
+  // progress: lurker kills near a village + explore markers
+  lurkerKilled(x, z){
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      if (!rec.board || Math.hypot(rec.x - x, rec.z - z) > 350) continue;
+      for (const c of rec.board)
+        if (c.type === 'kill' && c.on && c.got < c.need){ c.got++; markSave(); }
+    }
+  },
+  tick(){
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      if (!rec.board) continue;
+      for (const c of rec.board)
+        if (c.type === 'explore' && c.on && !c.done &&
+            Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 15){
+          c.done = true;
+          toast('marker reached — the board owes you ' + c.pay + 'c');
+          AudioSys.sfx('craft');
+          markSave();
+        }
+    }
+  },
+};
+
+// ---------- missions ----------
+// One job per villager at a time. The reward is coins; the REAL reward is
+// goodwill — and the steal job burns goodwill with the victim, so the
+// thief route has a price.
+const missionSys = {
+  group: null,
+  init(scene){
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    scene.add(this.group);
+  },
+  // rotate job types as a villager comes to trust you
+  offer(rec, hrec, vi){
+    const n = hrec.mdone || 0;
+    const type = ['hunt', 'expand', 'steal'][n % 3];
+    if (type === 'hunt'){
+      const a = ((hrec.rep || 0) + n) * 2.4;
+      hrec.mission = { type, tx: Math.round(rec.x + Math.cos(a) * 30),
+                       tz: Math.round(rec.z + Math.sin(a) * 30), done: false };
+    } else if (type === 'expand'){
+      const [fx, fz] = hrec.face;
+      hrec.mission = { type, x: hrec.x - fx * 4.4, z: hrec.z - fz * 4.4,
+                       y: (hrec.gy || 0), done: false };
+      this.sync();
+    } else {
+      // steal from the next house over
+      const vic = (vi + 1) % rec.houses.length;
+      const vh = rec.houses[vic];
+      hrec.mission = { type, victim: vic, done: false };
+      // the victim's strongbox appears inside their house
+      const n2 = pnodeSys.add('chest', vh.x, (vh.gy || 0) + 0.65, vh.z, 0, { sc: 0.6 });
+      n2.inv = new Array(chestSlots(0.6)).fill(null);
+      n2.inv[0] = { kind: 'relic' };
+      n2.inv[1] = { kind: 'coin', count: 6 };
+      hrec.mission.chestId = n2.id;
+    }
+    markSave();
+  },
+  describe(rec, hrec){
+    const m = hrec.mission;
+    if (!m) return '';
+    if (m.type === 'hunt')
+      return m.done ? 'the beast is dead — claim your pay'
+        : 'a marked lurker prowls ' + Math.round(Math.hypot(m.tx - game.pos.x, m.tz - game.pos.z)) + 'm away — kill it';
+    if (m.type === 'expand')
+      return 'build me a storage room: fill the glowing frame behind my house with solid build';
+    const vh = rec.houses[m.victim];
+    return 'bring me the ledger from ' + vh.vname + "'s strongbox — quietly";
+  },
+  // keep bounty lurkers alive near their hunting grounds
+  tick(){
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      if (!rec.stamped) continue;
+      rec.houses.forEach((hrec, vi) => {
+        const m = hrec.mission;
+        if (!m || m.type !== 'hunt' || m.done) return;
+        if (Math.hypot(m.tx - game.pos.x, m.tz - game.pos.z) > 55) return;
+        const tag = key + ':' + vi;
+        if (game.entities.some(e => e.bountyTag === tag)) return;
+        const h = game.gen.height(m.tx, m.tz);
+        const e = spawnEntity('lurker', m.tx, h + 0.5, m.tz);
+        e.bountyTag = tag;
+        e.hp = 45;
+      });
+    }
+  },
+  bountyKilled(e){
+    const [key, vi] = e.bountyTag.split(':');
+    const rec = game.villages[key];
+    if (!rec) return;
+    const hrec = rec.houses[+vi];
+    if (hrec && hrec.mission && hrec.mission.type === 'hunt'){
+      hrec.mission.done = true;
+      toast('bounty down — collect from ' + hrec.vname);
+      markSave();
+    }
+  },
+  // the expand job: five shell points of the 3.4m frame must be solid
+  checkExpand(m){
+    const cx = m.x, cz = m.z, cy = m.y + 1.7;
+    const pts = [
+      [cx + 1.5, cy, cz], [cx - 1.5, cy, cz],
+      [cx, cy, cz + 1.5], [cx, cy, cz - 1.5],
+      [cx, m.y + 3.2, cz],
+    ];
+    let solid = 0;
+    for (const [px, py, pz] of pts){
+      const eds = nearEdits([px - 1, py - 1, pz - 1, px + 1, py + 1, pz + 1]);
+      if (CORE.evalSDF(px, py, pz, eds, game.gen) < -0.05) solid++;
+    }
+    return solid >= 4;
+  },
+  reward(hrec, coins, repGain){
+    addStackItem('coin', coins);
+    hrec.rep = Math.min(40, (hrec.rep || 0) + repGain);
+    hrec.mdone = (hrec.mdone || 0) + 1;
+    hrec.mission = null;
+    toast('+' + coins + ' coins · +' + repGain + ' goodwill with ' + hrec.vname);
+    AudioSys.sfx('craft');
+    refreshHotbar();
+    this.sync();
+    markSave();
+  },
+  // ghost frames for every active expand mission
+  sync(){
+    if (!this.group) return;
+    while (this.group.children.length){
+      const c = this.group.children.pop();
+      if (c.geometry) c.geometry.dispose();
+    }
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      for (const hrec of rec.houses || []){
+        const m = hrec.mission;
+        if (!m || m.type !== 'expand') continue;
+        const w = new THREE.LineSegments(
+          new THREE.EdgesGeometry(new THREE.BoxGeometry(3.4, 3.4, 3.4)),
+          new THREE.LineBasicMaterial({ color: 0xffb44d, transparent: true, opacity: 0.9, depthWrite: false }));
+        w.position.set(m.x, m.y + 1.7, m.z);
+        w.renderOrder = 7;
+        this.group.add(w);
+      }
+    }
+  },
+};
+
+// ---------- trading ----------
+// Coin is purchasing power; goodwill is access. Each villager runs their
+// own book: what they sell, what they buy, and what they keep behind the
+// counter until they trust you.
+const tradeSys = {
+  TIER: r => r >= 25 ? 'partner' : r >= 10 ? 'regular' : 'stranger',
+  offers(role){
+    if (role === 'broker') return [
+      { sell: { k: 'coal', n: 5 }, price: 10, rep: 0 },
+      { sell: { k: 'ironore', n: 5 }, price: 15, rep: 0 },
+      { sell: { k: 'ironingot', n: 3 }, price: 18, rep: 0 },
+      { sell: { k: 'rubyore', n: 3 }, price: 18, rep: 10 },
+      { sell: { k: 'rubyingot', n: 2 }, price: 24, rep: 10 },
+      { sell: { k: 'diamond', n: 1 }, price: 30, rep: 10 },
+      { buy: { make: 'tmap' }, price: 20, rep: 10 },
+      { buy: { k: 'coal', n: 6 }, price: 20, rep: 0 },
+      { buy: { k: 'ironore', n: 5 }, price: 28, rep: 0 },
+      { buy: { k: 'ironingot', n: 3 }, price: 32, rep: 10 },
+      { buy: { k: 'rubyingot', n: 2 }, price: 44, rep: 25 },
+      { buy: { k: 'diamond', n: 1 }, price: 65, rep: 25 },
+    ];
+    if (role === 'arms') return [
+      { buy: { make: 'sword', tier: 1 }, price: 30, rep: 0 },
+      { buy: { make: 'sword', tier: 2 }, price: 80, rep: 10 },
+      { buy: { make: 'sword', tier: 3 }, price: 160, rep: 25 },
+      { buy: { make: 'gun' }, price: 280, rep: 25 },
+      { sell: { k: 'meat', n: 4 }, price: 8, rep: 0 },
+    ];
+    if (role === 'tool') return [
+      { buy: { make: 'wrench' }, price: 25, rep: 0 },
+      { buy: { make: 'grapple' }, price: 35, rep: 0 },
+      { buy: { make: 'drill', tier: 1 }, price: 70, rep: 0 },
+      { buy: { make: 'disp', tier: 1 }, price: 55, rep: 0 },
+      { buy: { make: 'drill', tier: 2 }, price: 170, rep: 10 },
+      { buy: { make: 'drill', tier: 3 }, price: 340, rep: 25 },
+      { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
+    ];
+    return [   // spark: the mad-scientist electrician
+      { buy: { k: 'wire', n: 8 }, price: 12, rep: 0 },
+      { buy: { k: 'bulb', n: 4 }, price: 14, rep: 0 },
+      { buy: { k: 'tube', n: 4 }, price: 14, rep: 0 },
+      { buy: { k: 'gen', n: 1 }, price: 90, rep: 10 },
+      { buy: { k: 'pad', n: 1 }, price: 130, rep: 10 },
+      { buy: { k: 'tesla', n: 1 }, price: 220, rep: 25 },
+      { buy: { make: 'jetpack' }, price: 420, rep: 25 },
+      { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
+    ];
+  },
+  offerItem(o){
+    const s = o.buy || o.sell;
+    if (s.make === 'drill') return CORE.makeDrill(s.tier);
+    if (s.make === 'disp') return CORE.makeDispenser(s.tier);
+    if (s.make === 'sword') return CORE.makeSword(s.tier);
+    if (s.make === 'gun') return CORE.makeGun();
+    if (s.make === 'wrench') return CORE.makeWrench();
+    if (s.make === 'grapple') return { kind: 'grapple' };
+    if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
+    if (s.make === 'tmap') return { kind: 'tmap' };
+    return { kind: s.k, count: s.n };
+  },
+  open(e){
+    const hrec = villageSys.villagerRec(e);
+    if (!hrec) return;
+    game.activeTrade = { e, hrec };
+    game.ui = 'trade';
+    const main = $('trademain'), hot = $('tradehot');
+    main.innerHTML = ''; hot.innerHTML = '';
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    this.refresh();
+    show('tradescreen');
+    document.exitPointerLock();
+    AudioSys.sfx('toggle');
+  },
+  refresh(){
+    const T = game.activeTrade;
+    if (!T || game.ui !== 'trade') return;
+    const hrec = T.hrec;
+    $('tradetitle').textContent = (hrec.vname + ' the ' + VROLE[T.e.role].name).toUpperCase();
+    $('tradesub').innerHTML = 'goodwill <b>' + (hrec.rep || 0) + '</b> · ' + this.TIER(hrec.rep || 0) +
+      ' · coins: <b>' + CORE.countItem(game.slots, 'coin') + '</b>';
+    document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
+    const list = $('tradelist');
+    list.innerHTML = '';
+    // ---- the mission block sits above the offers ----
+    {
+      const rec = game.villages[T.e.vkey];
+      const vi = T.e.vi;
+      const mrow = document.createElement('div');
+      mrow.className = 'craftrow';
+      mrow.style.borderLeft = '3px solid #ffb44d';
+      const txt = document.createElement('div');
+      txt.className = 'cname';
+      const act = document.createElement('div');
+      act.style.marginLeft = 'auto';
+      act.style.color = '#ffb44d';
+      const m = hrec.mission;
+      if (!m){
+        txt.textContent = 'ask for work';
+        act.textContent = 'MISSION';
+        mrow.addEventListener('click', () => { missionSys.offer(rec, hrec, vi); this.refresh(); });
+      } else if (m.type === 'hunt'){
+        txt.textContent = missionSys.describe(rec, hrec);
+        act.textContent = m.done ? 'CLAIM 25c' : 'hunting…';
+        if (m.done) mrow.addEventListener('click', () => { missionSys.reward(hrec, 25, 3); this.refresh(); });
+      } else if (m.type === 'expand'){
+        txt.textContent = missionSys.describe(rec, hrec);
+        act.textContent = 'CHECK BUILD (60c)';
+        mrow.addEventListener('click', () => {
+          if (missionSys.checkExpand(m)){ missionSys.reward(hrec, 60, 6); }
+          else { toast('the frame is not filled yet — build solid walls through the glowing outline'); AudioSys.sfx('deny'); }
+          this.refresh();
+        });
+      } else {
+        txt.textContent = missionSys.describe(rec, hrec);
+        const hasRelic = game.slots.some(s => s && s.kind === 'relic');
+        act.textContent = hasRelic ? 'DELIVER 45c' : 'empty-handed';
+        if (hasRelic) mrow.addEventListener('click', () => {
+          for (let i = 0; i < 40; i++) if (game.slots[i] && game.slots[i].kind === 'relic'){ game.slots[i] = null; break; }
+          const vh = rec.houses[m.victim];
+          vh.rep = (vh.rep || 0) - 6;
+          toast(vh.vname + ' lost something precious (' + vh.rep + ' goodwill)');
+          missionSys.reward(hrec, 45, 5);
+          this.refresh();
+        });
+      }
+      mrow.appendChild(txt); mrow.appendChild(act);
+      list.appendChild(mrow);
+    }
+    const coins = CORE.countItem(game.slots, 'coin');
+    this.offers(T.e.role).forEach((o, idx) => {
+      const locked = (hrec.rep || 0) < o.rep;
+      const item = this.offerItem(o);
+      const row = document.createElement('div');
+      row.className = 'craftrow';
+      if (locked) row.style.opacity = 0.45;
+      const img = document.createElement('img');
+      img.src = itemIconURL(item);
+      row.appendChild(img);
+      const nm = document.createElement('div');
+      nm.className = 'cname';
+      const label = itemLabel(item) + (item.count > 1 ? ' ×' + item.count : '');
+      nm.textContent = o.buy ? 'buy ' + label : 'sell ' + label;
+      row.appendChild(nm);
+      const cost = document.createElement('div');
+      cost.style.marginLeft = 'auto';
+      if (locked){
+        cost.innerHTML = 'needs goodwill ' + o.rep;
+        cost.style.color = '#8a8494';
+      } else if (o.buy){
+        const can = coins >= o.price;
+        cost.innerHTML = o.price + 'c';
+        cost.style.color = can ? '#8bff9e' : '#ff7a5c';
+      } else {
+        const have = CORE.countItem(game.slots, o.sell.k);
+        cost.innerHTML = '+' + o.price + 'c';
+        cost.style.color = have >= o.sell.n ? '#8bff9e' : '#ff7a5c';
+      }
+      row.appendChild(cost);
+      row.addEventListener('click', () => this.execute(o));
+      list.appendChild(row);
+    });
+  },
+  execute(o){
+    const T = game.activeTrade;
+    if (!T) return;
+    const hrec = T.hrec;
+    if ((hrec.rep || 0) < o.rep){ toast('not enough goodwill — trade more first'); AudioSys.sfx('deny'); return; }
+    if (o.buy){
+      if (CORE.countItem(game.slots, 'coin') < o.price){
+        toast('not enough coins'); AudioSys.sfx('deny'); game.orbFlash = performance.now();
+        return;
+      }
+      const item = this.offerItem(o);
+      if (item.kind === 'tmap'){
+        // mint the X when the map is bought: a ring around this village
+        const rec = game.villages[T.e.vkey];
+        const a = Math.random() * Math.PI * 2;
+        const r = 140 + Math.random() * 120;
+        item.x = Math.round(rec.x + Math.cos(a) * r);
+        item.z = Math.round(rec.z + Math.sin(a) * r);
+      }
+      // non-stack tools need a free slot check first
+      if (item.count == null){
+        let free = -1;
+        for (let i = 0; i < 40; i++) if (!game.slots[i]){ free = i; break; }
+        if (free < 0){ toast('inventory full'); AudioSys.sfx('deny'); return; }
+        CORE.consumeItem(game.slots, 'coin', o.price);
+        game.slots[free] = item;
+      } else {
+        CORE.consumeItem(game.slots, 'coin', o.price);
+        addStackItem(item.kind, item.count);
+      }
+      toast('bought ' + itemLabel(item) + (item.count > 1 ? ' ×' + item.count : '') + ' — ' + o.price + 'c');
+    } else {
+      const have = CORE.countItem(game.slots, o.sell.k);
+      if (have < o.sell.n){
+        toast('need ' + o.sell.n + ' ' + itemLabel({ kind: o.sell.k }) + ' — have ' + have);
+        AudioSys.sfx('deny');
+        return;
+      }
+      CORE.consumeItem(game.slots, o.sell.k, o.sell.n);
+      addStackItem('coin', o.price);
+      toast('sold — +' + o.price + ' coins');
+    }
+    hrec.rep = Math.min(40, (hrec.rep || 0) + 1);
+    AudioSys.sfx('craft');
+    refreshHotbar(); refreshToolHUD();
+    this.refresh();
+    markSave();
   },
 };
 
@@ -6818,7 +7301,7 @@ function updateEntities(dt, now){
     for (let li = 0; li < legs.length; li++){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
-    e.mesh.scale.setScalar(e.flash > 0 ? 1.1 : 1);
+    e.mesh.scale.setScalar((e.bountyTag ? 1.25 : 1) * (e.flash > 0 ? 1.1 : 1));
   }
 }
 // closest entity intersecting the view ray
@@ -6996,6 +7479,11 @@ function bindInput(){
           openSign(pn); AudioSys.sfx('toggle');
           return;
         }
+        if (pn.t === 'board'){
+          const rec = game.villages[pn.vkey];
+          if (rec) boardSys.open(rec);
+          return;
+        }
         if (pn.t === 'elev'){
           toast('wire it to power, stand on the platform — space rises, C descends');
           return;
@@ -7020,9 +7508,7 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){
-        const hrec = villageSys.villagerRec(vent);
-        if (hrec) toast(hrec.vname + ' the ' + VROLE[vent.role].name +
-                        ' — goodwill ' + (hrec.rep || 0));
+        tradeSys.open(vent);
         return;
       }
       const selDrone = selectedItem();
@@ -7134,8 +7620,9 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont'){
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont')) closeOverlay();
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board'){
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade')) closeOverlay();
+      else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
@@ -7660,7 +8147,7 @@ const wrenchProps = {
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 0.52, 0.15, 0.52], ped: [0.5, 0.3, 0.55, 0.3],
-                  sign: [0.8, 0.55, 0.8, 0.15] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
+                  sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
       const s = ref.t === 'chest' ? (ref.sc || 1) : 1;
       return { x: ref.x, y: ref.y + D[0] * s, z: ref.z, hx: D[1] * s, hy: D[2] * s, hz: D[3] * s };
     }
@@ -8690,6 +9177,24 @@ function doMine(tool, p, shape, eff){
     if (added) parts.push('+' + got[m] + ' ' + name);
     else parts.push('inventory full — lost ' + got[m] + ' ' + name);
   }
+  // buried treasure: mining at the X with the map on you digs it up
+  for (let ti = 0; ti < 40; ti++){
+    const s = game.slots[ti];
+    if (s && s.kind === 'tmap' && s.x != null && Math.hypot(s.x - p.x, s.z - p.z) < 6){
+      game.slots[ti] = null;
+      const gy = game.gen.height(s.x, s.z);
+      const ch = pnodeSys.add('chest', s.x, +(gy + 0.2).toFixed(1), s.z, 0, { sc: 0.8 });
+      ch.inv = new Array(chestSlots(0.8)).fill(null);
+      ch.inv[0] = { kind: 'coin', count: 40 + ((Math.random() * 30) | 0) };
+      ch.inv[1] = { kind: 'rubyingot', count: 2 };
+      ch.inv[2] = { kind: 'diamond', count: 1 + ((Math.random() * 2) | 0) };
+      toast('TREASURE — a buried chest surfaces!');
+      AudioSys.sfx('craft');
+      Particles.burst(s.x, gy + 1, s.z, 1.2, [0xdcb54e, 0xc9a13c], 30, 2.5);
+      refreshHotbar();
+      break;
+    }
+  }
   const poppedTorches = torchSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedTorches){ addTorchesToInv(poppedTorches); parts.push('+' + poppedTorches + ' torch'); }
   const poppedDoors = doorSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
@@ -8847,6 +9352,7 @@ function tryAction(dt, now){
         return;
       }
       const pn2 = pnodeSys.onRay(3.0);
+      if (pn2 && pn2.t === 'board'){ toast('village property'); return; }
       if (pn2){
         const refunded = pnodeSys.removeNode(pn2);
         if (pn2.t !== 'staple') addStackItem(pn2.t, 1);
@@ -9330,6 +9836,16 @@ function itemIconURL(it){
     c.fillRect(4, 9, 3, 2); c.fillRect(9, 9, 3, 2);
     c.fillRect(3, 10, 2, 3); c.fillRect(11, 10, 2, 3);
     c.fillStyle = '#5a4632'; c.fillRect(6, 1, 4, 3);
+  } else if (it.kind === 'tmap'){
+    c.fillStyle = '#d8c485'; c.fillRect(2, 3, 12, 10);
+    c.fillStyle = '#b8a05e'; c.fillRect(2, 3, 12, 1); c.fillRect(2, 12, 12, 1);
+    c.fillStyle = '#b03a3a'; c.fillRect(9, 6, 1, 1); c.fillRect(11, 6, 1, 1);
+    c.fillRect(10, 7, 1, 1); c.fillRect(9, 8, 1, 1); c.fillRect(11, 8, 1, 1);
+    c.fillStyle = '#59391c'; c.fillRect(4, 9, 4, 1); c.fillRect(3, 6, 3, 1);
+  } else if (it.kind === 'relic'){
+    c.fillStyle = '#5a3a6e'; c.fillRect(3, 3, 10, 11);
+    c.fillStyle = '#8a5fd8'; c.fillRect(4, 4, 8, 2);
+    c.fillStyle = '#d8c485'; c.fillRect(5, 8, 6, 1); c.fillRect(5, 10, 6, 1);
   } else if (it.kind === 'coin'){
     c.fillStyle = '#c9a13c'; c.fillRect(4, 3, 8, 10); c.fillRect(3, 4, 10, 8);
     c.fillStyle = '#dcb54e'; c.fillRect(5, 4, 6, 8);
@@ -9589,6 +10105,8 @@ function itemLabel(it){
   if (it.kind === 'pad') return 'charging pad';
   if (it.kind === 'ped') return 'pedestal';
   if (it.kind === 'coin') return 'coin';
+  if (it.kind === 'relic') return 'stolen ledger';
+  if (it.kind === 'tmap') return 'treasure map';
   if (it.kind === 'sign') return 'sign';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
@@ -10033,6 +10551,7 @@ function refreshAllUI(){
   if (game.ui === 'stove') refreshStoveUI(true);
   else if (game.ui === 'cont') refreshContUI();
   else if (game.ui === 'crafter') refreshCrafterUI();
+  else if (game.ui === 'trade') tradeSys.refresh();
   else document.querySelectorAll(
     '#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot, ' +
     '#craftinvmain .slot, #craftinvhot .slot').forEach(paintSlot);
@@ -10043,7 +10562,7 @@ const drag = { active: false, from: -1 };
 function bindInvDnD(){
   const dgy = $('draggy'), dgi = dgy.querySelector('img');
   document.addEventListener('mousedown', e => {
-    if (!['inv', 'stove', 'cont', 'crafter', 'craft'].includes(game.ui)) return;
+    if (!['inv', 'stove', 'cont', 'crafter', 'craft', 'trade'].includes(game.ui)) return;
     const el = e.target.closest('.slot');
     if (!el || el.parentElement.id === 'hotbar') return;
     const key = slotKeyOf(el);
@@ -10205,6 +10724,9 @@ function refreshToolHUD(){
   } else if (it.kind === 'grapple'){
     html = '<div class="t1">grappling hook</div>' +
            '<div class="t2">left click any surface within 34m — it reels you in · click again to let go</div>';
+  } else if (it.kind === 'tmap'){
+    html = '<div class="t1">treasure map</div>' +
+           '<div class="t2">hold it and follow the compass ✗ — then DIG at the X</div>';
   } else if (it.kind === 'coin'){
     html = '<div class="t1">coins ×' + it.count + '</div>' +
            '<div class="t2">the other economy — lurkers drop them, villagers trade in them</div>';
@@ -10538,7 +11060,9 @@ function openMap(){
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen');
+  game.activeTrade = null;
+  game.activeBoard = null;
   game.activeCrafter = null;
   game.activeCont = null;
   game.activeStove = null;
@@ -10783,7 +11307,7 @@ function saveNow(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager')
+    entities: game.entities.filter(e => e.type !== 'villager' && !e.bountyTag)
       .map(e => [e.type, e.x, e.y, e.z, e.hp]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
@@ -10806,6 +11330,7 @@ function startWorld(id){
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
+  if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
   } else {
@@ -11530,6 +12055,8 @@ function frame(now){
   stoveSys.update(dt);
   powerSys.update(dt);
   villageSys.tick(dt);
+  game.missionT = (game.missionT || 0) + dt;
+  if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
   updateSurvival(dt);
   // embers off nearby placed torches
@@ -11595,12 +12122,13 @@ function frame(now){
       game.terrainMat.uniforms.uFogCol.value.copy(game.skyNow || SKY);
       game.terrainMat.uniforms.uUnderwater.value = 0;
     }
-    const home = beaconSys.nearest() || [0, 0, 0];
+    const heldMap = selectedItem() && selectedItem().kind === 'tmap' ? selectedItem() : null;
+    const home = heldMap ? [heldMap.x, 0, heldMap.z] : (beaconSys.nearest() || [0, 0, 0]);
     const dist = Math.hypot(home[0] - game.pos.x, home[2] - game.pos.z);
     const thv = Math.atan2(home[0] - game.pos.x, home[2] - game.pos.z);
     const thf = Math.atan2(-Math.sin(game.yaw), -Math.cos(game.yaw));
     $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
-    $('navdist').textContent = '\u2302 ' + Math.round(dist) + 'm';
+    $('navdist').textContent = (heldMap ? '\u2717 ' : '\u2302 ') + Math.round(dist) + 'm';
     let posTxt = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
     if (depth > 3) posTxt += ' · \u2193' + Math.round(depth) + 'm';
     if (game.deathCache){
@@ -11678,7 +12206,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
-  villageSys };
+  villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
 </html>
