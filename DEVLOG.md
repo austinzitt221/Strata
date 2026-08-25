@@ -2,6 +2,102 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8 — coins & villages: the world gets people (2026-08-25)
+
+Four phases. The wrench built the houses; the economy moved in.
+
+- **Coins.** Lurkers drop 3–6 (plus scavenged ore); a live counter sits
+  in the HUD whenever you're carrying any. No XP bar anywhere — coin IS
+  progression, because everything below spends it.
+- **Villages.** The world seed decides where they can be: one candidate
+  per 512m cell, gentle-land archetypes only, flatness checked across
+  the actual building ring. Walk near one and it STAMPS — stonebrick
+  houses with buried foundations (each stands on its highest footprint
+  corner, so nothing floats or drowns in a dune), hollow interiors,
+  doors facing the plaza, plank roofs, torches, a well, a notice board.
+  All of it lands in the edit list, so village walls mine, paint and
+  wrench like anything else you'd build. Villages get generated names
+  (Karan, Belwick, Holfell…) and their records persist in the save.
+- **Villagers.** Round-headed neighbors in role-colored coats — the ore
+  broker, the arms dealer, the toolsmith, the mad-scientist electrician
+  — spawned from village records, tethered to their homes, they stop
+  and face you when you walk up. They can't be killed, but hitting one
+  costs goodwill, and goodwill is the whole game here.
+- **Trading.** Right click a villager: their shop opens over your full
+  inventory. Every villager runs a book — the broker BUYS your ore and
+  ingots and sells them back at a spread; the arms dealer sells swords
+  and eventually the gun; the toolsmith sells drills, dispensers, the
+  wrench, the grapple; the electrician sells wire, generators, pads,
+  the tesla, and — at partner standing — a jetpack. Offers unlock by
+  per-villager goodwill (stranger → regular at 10 → partner at 25), and
+  every trade earns one more point.
+- **Missions.** Ask any villager for work and they rotate you through
+  three jobs: **hunt** (a marked, tougher lurker spawns at the stated
+  spot — kill it, collect), **expand their house** (a glowing 3.4m frame
+  appears behind it; build solid through the outline and the SDF itself
+  is the inspector — five shell samples must come back solid), and
+  **steal** (a strongbox appears in a neighbor's house holding a ledger;
+  delivering it pays well and earns the giver's trust — and costs you
+  six goodwill with the victim. The thief route has a price).
+- **The bounty board.** Three rotating contracts per village — cull N
+  lurkers (kills near the village count while accepted), deliver goods,
+  or reach a marker a couple hundred meters out. Claim pays coins; an
+  empty board re-papers itself.
+- **Treasure maps.** The broker sells them once he knows you. Hold the
+  map and the compass arrow swaps to an ✗ with the distance; at the X,
+  DIG — mining there with the map on you surfaces a buried chest of
+  coins, ingots and diamond, and consumes the map.
+
+Verified end to end in-browser: village stamped with board and named
+villagers, a full sell/buy/locked-offer/rep-gain loop, buying a real
+tier-1 drill, the complete hunt/expand/steal cycle (SDF build check
+failed empty and passed built; opposed reputations moved -6/+5), all
+three board contract types progressing and claiming, and a treasure map
+bought 217m from home that dug up coin + ruby + diamond and consumed
+itself. Village records, reps, missions and boards all round-trip
+through the save. 286 headless tests, smoke and the 7.5 suites green.
+
+## Build 7.5.1 — playtest fixes: third person earns its keep (2026-08-25)
+
+Five bugs from the 7.5 playtest, each with a real root cause:
+
+- **Armor followed you between worlds.** The armor reset on world load
+  sat inside the `dispSlot !== undefined` branch — which freshly created
+  worlds skip — so gear worn in a creative world walked straight into a
+  brand-new survival world. The reset now runs for every load. Verified:
+  wear diamond in world A, quit to title, create a survival world —
+  empty; return to world A — still wearing it.
+- **Signs trapped you.** The sign editor's DOM node was accidentally
+  inserted INSIDE the HUD layer, which has `pointer-events:none` — the
+  textarea and DONE button were unclickable, E was gated off, and Enter
+  just made newlines: a soft-lock. The screen now lives with the other
+  menus, **Enter saves and closes** (Shift+Enter for a new line),
+  Escape closes too.
+- **Couldn't pick up animals in third person.** `entityOnRay` was the
+  one ray that never learned about the camera pull-back, so animals
+  within arm's reach were beyond its range. Fixed like every other ray.
+- **Shift-click in the creative inventory looked dead.** The repaint
+  crashed: `refreshAllUI`'s selector matched the CATALOG tiles, which
+  have no count element, and the exception killed the repaint mid-loop
+  (the item had already moved — hence "it's there after reopening").
+  `paintSlot` now skips structureless tiles and the selector names the
+  real grids. Live repaint verified with real shift-clicks.
+- **Third person got real animations.** Carrying an animal holds both
+  arms straight overhead under your passenger; punching jabs, gathering
+  scoops with both hands, sword swings arc, and mining/placing pumps
+  the tool arm. And the hand now grips a real miniature 3D model of
+  whatever you're holding — not a floating icon.
+- **Pedestals display the real thing** too: a full miniature model of
+  the chosen item (chests, tools, ore chunks, ingots, diamonds as
+  octahedra — everything has a 3D form now), auto-scaled to fit and
+  slowly rotating on the column.
+
+Full suite green: real-event shift-click repaint, cross-world armor
+isolation both directions, the complete sign flow (open via RMB, type,
+Enter, DONE button), third-person animal pickup with the overhead carry
+pose, hand and pedestal models, plus 286 headless tests, smoke and the
+7.5 suite.
+
 ## Build 7.5 — the player has a body (2026-08-25)
 
 You exist now. Four phases, one build.
