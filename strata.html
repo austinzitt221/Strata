@@ -62,6 +62,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .t2{color:var(--ui-hi);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
+.mstack{display:flex; flex-direction:column; gap:16px; align-items:center; max-height:96vh; overflow:auto; padding:8px;}
 #navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
 #navarrow{display:inline-block; color:var(--accent); font-size:13px;}
 
@@ -217,37 +218,75 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 </div>
 
 <div id="crafterscreen" class="screen hidden dim">
-  <div class="panel" style="min-width:540px;">
-    <h2>AUTO-CRAFTER</h2>
-    <div class="sub" id="crafterstatus">&nbsp;</div>
-    <div class="invlabel">BUFFER — feed it by right-clicking the machine with a stack (or by tube) · click a stack to take it</div>
-    <div class="invgrid" id="crafterbuf"></div>
-    <div class="invlabel">RECIPE — click to select</div>
-    <div id="crafterlist" style="max-height:300px; overflow:auto;"></div>
-    <div class="sub" style="margin-top:10px;">E to close</div>
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2>AUTO-CRAFTER</h2>
+      <div class="sub" id="crafterstatus">&nbsp;</div>
+      <div class="invlabel">BUFFER</div>
+      <div class="invgrid" id="crafterbuf"></div>
+      <div class="invlabel">RECIPE — click to select</div>
+      <div id="crafterlist" style="max-height:240px; overflow:auto;"></div>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="craftermain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="crafterhot"></div>
+      <div class="sub" style="margin-top:8px;">drag or shift-click to move &nbsp;·&nbsp; E to close</div>
+    </div>
+  </div>
+</div>
+
+<div id="contscreen" class="screen hidden dim">
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2 id="conttitle">MACHINE</h2>
+      <div class="sub" id="contstatus">&nbsp;</div>
+      <div class="invgrid" id="contgrid"></div>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="contmain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="conthot"></div>
+      <div class="sub" style="margin-top:8px;">drag or shift-click to move &nbsp;·&nbsp; E to close</div>
+    </div>
   </div>
 </div>
 
 <div id="stovescreen" class="screen hidden dim">
-  <div class="panel">
-    <h2>STOVE</h2>
-    <div class="invlabel">INPUT &nbsp;&middot;&nbsp; FUEL &nbsp;&rarr;&nbsp; OUTPUT</div>
-    <div class="invgrid" style="grid-template-columns:52px 52px 70px 52px; align-items:center;" id="stoverow"></div>
-    <div class="sub" id="stovestatus" style="margin:6px 0 10px;">&nbsp;</div>
-    <div class="invlabel">STORAGE</div>
-    <div class="invgrid" id="stovemain"></div>
-    <div class="invlabel">HOTBAR</div>
-    <div class="invgrid" id="stovehot"></div>
-    <div class="sub" style="margin-top:12px;">drag ore or meat into INPUT, coal or wood into FUEL &nbsp;&middot;&nbsp; E to close</div>
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2>STOVE</h2>
+      <div class="invlabel">INPUT &nbsp;&middot;&nbsp; FUEL &nbsp;&rarr;&nbsp; OUTPUT</div>
+      <div class="invgrid" style="grid-template-columns:52px 52px 70px 52px; align-items:center;" id="stoverow"></div>
+      <div class="sub" id="stovestatus" style="margin:6px 0 0;">drag ore or meat into INPUT, coal or wood into FUEL</div>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="stovemain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="stovehot"></div>
+      <div class="sub" style="margin-top:8px;">drag or shift-click to move &nbsp;·&nbsp; E to close</div>
+    </div>
   </div>
 </div>
 
 <div id="craftscreen" class="screen hidden dim">
-  <div class="panel" style="min-width:480px;">
-    <h2>CRAFTING</h2>
-    <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
-    <div id="craftlist"></div>
-    <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2>CRAFTING</h2>
+      <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
+      <div id="craftlist" style="max-height:340px; overflow:auto;"></div>
+      <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="craftinvmain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="craftinvhot"></div>
+      <div class="sub" style="margin-top:8px;">drag or shift-click to move</div>
+    </div>
   </div>
 </div>
 
@@ -1651,7 +1690,7 @@ function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -1847,6 +1886,7 @@ const RECIPES = [];
   // phase B machines + phase C exotics
   RECIPES.push({ kind: 'tube', yields: 4, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.ROCK, n: 2 }] });
   RECIPES.push({ kind: 'hopper', yields: 1, station: true, costs: [{ item: 'ironingot', n: 5 }] });
+  RECIPES.push({ kind: 'chest', yields: 1, costs: [{ mat: MAT.PLANKS, n: 8 }] });
   RECIPES.push({ kind: 'elev', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { mat: MAT.PLANKS, n: 6 }] });
   RECIPES.push({ kind: 'acrank', yields: 1, station: true, costs: [{ item: 'ironingot', n: 4 }, { mat: MAT.PLANKS, n: 6 }, { item: 'stick', n: 2 }] });
   RECIPES.push({ kind: 'crafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 8 }, { item: 'rubyingot', n: 2 }] });
@@ -2738,8 +2778,13 @@ function gradWorld(x, y, z, edits){
 // if marching to the claimed surface actually reaches solid; phantom faces
 // never do. (Playtest: removed cubes still blocked the player invisibly.)
 function contactReal(x, y, z, dTrue, g, edits){
-  const t = dTrue + 0.12;
-  return sdfWorld(x - g[0] * t, y - g[1] * t, z - g[2] * t, edits) < 0.015;
+  // confirm the hit surface is real solid, not a CSG gradient phantom. The
+  // deep probe alone pokes out the FAR side of a thin wrench-shrunk slab
+  // and rejects genuine contact (the fly-through-thin-floors bug), so a
+  // strictly-inside shallow probe also counts.
+  const t = dTrue + 0.12, t1 = dTrue + 0.03;
+  return sdfWorld(x - g[0] * t, y - g[1] * t, z - g[2] * t, edits) < 0.015 ||
+         sdfWorld(x - g[0] * t1, y - g[1] * t1, z - g[2] * t1, edits) < -0.005;
 }
 function capsuleFree(x, y, z, edits){
   const r = PLAYER.radius, h = playerHeight();
@@ -3384,6 +3429,46 @@ function buildViewmodel(cam){
   fistL.visible = false;
   fists.add(fistR); fists.add(fistL);
   fists.userData = { R: fistR, L: fistL };
+  // --- WIRING RIG: stapler in the left hand, wire spool in the right ---
+  const wireRig = new THREE.Group();
+  {
+    const copperM = new THREE.MeshBasicMaterial({ color: 0xb5793a });
+    const spool = new THREE.Group();
+    for (const s of [-0.1, 0.1]){
+      const flange = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.025, 10), steelLM);
+      flange.rotation.z = Math.PI / 2;
+      flange.position.x = s;
+      spool.add(flange);
+    }
+    const wind = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.18, 8), copperM);
+    wind.rotation.z = Math.PI / 2;
+    spool.add(wind);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.3), copperM);
+    tail.position.set(0, -0.07, -0.2);
+    spool.add(tail);
+    const armR = poseArm(buildArm());
+    armR.position.set(0.05, -0.3, 0.3); armR.rotation.set(0.5, -0.1, 0);
+    spool.add(armR);
+    spool.position.set(0.05, 0.02, -0.12);
+    wireRig.add(spool);
+    const stapler = new THREE.Group();
+    const sBody = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.09, 0.34), steelM);
+    stapler.add(sBody);
+    const sHandle = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.055, 0.3), new THREE.MeshBasicMaterial({ color: 0xd84a63 }));
+    sHandle.position.set(0, 0.07, 0.02);
+    stapler.add(sHandle);
+    const sNose = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.13, 0.06), steelLM);
+    sNose.position.set(0, -0.02, -0.19);
+    stapler.add(sNose);
+    const armL = poseArm(buildArm());
+    armL.scale.x = -1;
+    armL.position.set(-0.04, -0.28, 0.32); armL.rotation.set(0.5, 0.1, 0);
+    stapler.add(armL);
+    stapler.position.set(-1.05, -0.04, -0.25);
+    stapler.rotation.y = -0.5;
+    wireRig.add(stapler);
+  }
+  vm.add(wireRig);
   vm.add(fists);
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
@@ -3392,7 +3477,7 @@ function buildViewmodel(cam){
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
   game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists,
-              bob: 0, emberT: 0 };
+              wireRig, bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
@@ -3411,6 +3496,7 @@ function updateViewmodel(dt){
   v.bed.visible = kind === 'bed';
   v.wool.visible = kind === 'wool';
   v.wrench.visible = kind === 'wrench';
+  v.wireRig.visible = kind === 'wire';
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove'];
   v.generic.visible = genericKinds.includes(kind);
@@ -4388,6 +4474,26 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, orb, face);
       g.userData.orb = orb;
+    } else if (t === 'chest'){
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.7), M.wood);
+      body.position.y = 0.31;
+      const lid = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.18, 0.75), M.wood);
+      lid.position.y = 0.7;
+      const band = new THREE.Mesh(new THREE.BoxGeometry(1.02, 0.05, 0.77), M.dark);
+      band.position.y = 0.6;
+      const latch = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.05), M.steel);
+      latch.position.set(0, 0.58, -0.37);
+      g.add(body, lid, band, latch);
+    } else if (t === 'staple'){
+      // a small metal staple, built pointing +Y; oriented by surface normal
+      for (const s of [-0.07, 0.07]){
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.09, 0.035), M.steel);
+        leg.position.set(s, 0.045, 0);
+        g.add(leg);
+      }
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.035, 0.05), M.steel);
+      bridge.position.y = 0.1;
+      g.add(bridge);
     }
     return g;
   },
@@ -4410,6 +4516,11 @@ const pnodeSys = {
       g.rotation.y = n.yaw || 0;
       if (n.t === 'lever' && g.userData.arm) g.userData.arm.rotation.z = n.on ? -0.7 : 0.7;
       if (n.t === 'elev' && g.userData.plat) g.userData.plat.position.y = 0.12 + (n.py || 0);
+      if (n.t === 'staple'){
+        g.rotation.set(0, 0, 0);
+        g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+          new THREE.Vector3(n.nx || 0, n.ny == null ? 1 : n.ny, n.nz || 0).normalize());
+      }
       if (n.t === 'acrank' && n.animal){
         const am = entMesh(n.animal);
         const ag = am.g || am;
@@ -4423,13 +4534,15 @@ const pnodeSys = {
     wireSys.rebuild();
     rebuildSolidProps();
   },
-  add(t, x, y, z, yaw){
+  add(t, x, y, z, yaw, extra){
     const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
     if (t === 'lever') n.on = true;
     if (t === 'crank') n.wound = 0;
     if (t === 'gen') n.burn = 0;
+    if (extra) Object.assign(n, extra);
     game.pnodes.push(n);
     this.rebuild(); markSave();
+    return n;
   },
   byId(id){ return (game.pnodes || []).find(n => n.id === id); },
   onRay(maxDist){
@@ -4438,11 +4551,14 @@ const pnodeSys = {
     const o = game.camera.position;
     let best = null, bestT = maxDist;
     for (const n of game.pnodes || []){
-      const vx = n.x - o.x, vy = n.y + 0.7 - o.y, vz = n.z - o.z;
+      const cy = n.t === 'staple' ? 0.05 : 0.7;
+      const vx = n.x - o.x, vy = n.y + cy - o.y, vz = n.z - o.z;
       const tt = vx * dir.x + vy * dir.y + vz * dir.z;
       if (tt < 0 || tt > bestT) continue;
       const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
-      if (Math.abs(py) < 0.9 && Math.hypot(px, pz) < 0.7){ best = n; bestT = tt; }
+      const hit = n.t === 'staple' ? Math.hypot(px, py, pz) < 0.42
+                                   : (Math.abs(py) < 0.9 && Math.hypot(px, pz) < 0.7);
+      if (hit){ best = n; bestT = tt; }
     }
     return best;
   },
@@ -4464,8 +4580,10 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
+      if (n.t === 'staple')
+        return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, chest: 0.9 }[n.t] || 1;
       return [n.x, n.y + dy, n.z];
     }
     if (k === 'b'){
@@ -4509,7 +4627,11 @@ const pnodeSys = {
       const tt = vx * dir.x + vy * dir.y + vz * dir.z;
       if (tt < 0 || tt > bestT) continue;
       const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
-      if (Math.hypot(px, py, pz) < 0.85){ best = t; bestT = tt; }
+      if (Math.hypot(px, py, pz) < 0.85){
+        best = { id: t.id, p: t.p,
+                 hit: [o.x + dir.x * tt, o.y + dir.y * tt, o.z + dir.z * tt] };
+        bestT = tt;
+      }
     }
     return best;
   },
@@ -4581,6 +4703,48 @@ const wireSys = {
     for (let i = 0; i + 1 < pts.length; i++) this.seg(pts[i], pts[i + 1], r, mat, group);
     return pts[3];
   },
+  // where a wire END actually sits, and the direction it leaves in:
+  // staples anchor at their surface point along their normal; machine ends
+  // use the exact click point (leaving away from the prop's core)
+  endInfo(id, attach){
+    const t = pnodeSys.terminal(id);
+    if (!t) return null;
+    if (id[0] === 'n'){
+      const n = pnodeSys.byId(+id.slice(1));
+      if (n && n.t === 'staple')
+        return { p: t, n: [n.nx || 0, n.ny == null ? 1 : n.ny, n.nz || 0], st: true };
+    }
+    if (attach){
+      const dx = attach[0] - t[0], dy = attach[1] - (t[1] - 0.45), dz = attach[2] - t[2];
+      const L = Math.hypot(dx, dy, dz) || 1;
+      return { p: attach, n: [dx / L, dy / L, dz / L] };
+    }
+    return { p: t, n: [0, 1, 0] };
+  },
+  // taut cubic run: leaves each end along its normal, then pulls straight —
+  // wire between two co-planar staples is a clean straight line; it only
+  // curves where the anchors face different ways (floor to wall, corners)
+  bez(A, B, r, mat, group){
+    const a = A.p, b = B.p;
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    // lift the control points only as much as the end normals disagree:
+    // matching staples (flat floor run) => dead straight; floor-to-wall or
+    // corner runs get a real curve
+    const dot = A.n[0] * B.n[0] + A.n[1] * B.n[1] + A.n[2] * B.n[2];
+    const c = Math.min(0.85, Math.max(0.1, L * 0.22)) * Math.min(1, (1 - dot) * 0.75);
+    const p1 = [a[0] + A.n[0] * c, a[1] + A.n[1] * c, a[2] + A.n[2] * c];
+    const p2 = [b[0] + B.n[0] * c, b[1] + B.n[1] * c, b[2] + B.n[2] * c];
+    let prev = a, mid = a;
+    for (let i = 1; i <= 8; i++){
+      const t = i / 8, u = 1 - t;
+      const pt = [0, 1, 2].map(k =>
+        u * u * u * a[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k] + t * t * t * b[k]);
+      this.seg(prev, pt, r, mat, group);
+      if (i === 4) mid = pt;
+      prev = pt;
+    }
+    return mid;
+  },
   rebuild(){
     if (!this.group) return;
     while (this.group.children.length){
@@ -4590,7 +4754,10 @@ const wireSys = {
     // drop wires whose endpoints vanished (prop removed)
     game.wires = (game.wires || []).filter(w => pnodeSys.terminal(w.a) && pnodeSys.terminal(w.b));
     for (const w of game.wires){
-      w.mid = this.strand(pnodeSys.terminal(w.a), pnodeSys.terminal(w.b), 0.028, this.mat, this.group);
+      const A = this.endInfo(w.a, w.pa), B = this.endInfo(w.b, w.pb);
+      // staple runs are taut and neat; free machine-to-machine wires sag
+      w.mid = (A.st || B.st) ? this.bez(A, B, 0.028, this.mat, this.group)
+                             : this.strand(A.p, B.p, 0.028, this.mat, this.group);
     }
     // item tubes: rigid straight pipes
     if (!this.tubeMat) this.tubeMat = new THREE.MeshBasicMaterial({ color: 0x8a8a94 });
@@ -4668,8 +4835,15 @@ const wireSys = {
         const c = this.preview.children.pop();
         if (c.geometry) c.geometry.dispose();
       }
-      if (kind === 'wire') this.strand(A, B, 0.03, this.pMat, this.preview);
-      else this.seg(A, B, 0.075, this.pMat, this.preview);
+      if (kind === 'wire'){
+        const AI = this.endInfo(pending, game.wireStartHit);
+        const t3 = pnodeSys.terminalOnRay(5.5);
+        const BI = t3 && t3.id !== pending ? this.endInfo(t3.id, t3.hit) : { p: B, n: [0, 1, 0] };
+        if (AI.st || BI.st) this.bez(AI, BI, 0.03, this.pMat, this.preview);
+        else this.strand(AI.p, BI.p, 0.03, this.pMat, this.preview);
+      } else {
+        this.seg(A, B, 0.075, this.pMat, this.preview);
+      }
     }
     this.preview.visible = true;
   },
@@ -4729,8 +4903,8 @@ const powerSys = {
           if (!n) continue;
           if (n.t === 'crank' && (n.wound || 0) > 0){ c.w += 20; c.srcs.push(n); }
           else if (n.t === 'wheel' && inWater(n.x, n.y + 0.6, n.z)){ c.w += 15; c.srcs.push(n); }
-          else if (n.t === 'gen' && (n.burn || 0) > 0){ c.w += 40; c.srcs.push(n); }
-          else if (n.t === 'gen2' && (n.burn || 0) > 0){ c.w += 100; c.srcs.push(n); }
+          else if (n.t === 'gen' && ((n.burn || 0) > 0 || (n.fuel && n.fuel.count > 0))){ c.w += 40; c.srcs.push(n); }
+          else if (n.t === 'gen2' && ((n.burn || 0) > 0 || (n.fuel && n.fuel.count > 0))){ c.w += 100; c.srcs.push(n); }
           else if (n.t === 'acrank' && n.animal){ c.w += 10; c.srcs.push(n); }
           else if (n.t === 'elev'){ if (n.riderDir) c.d += 25; c.elevs.push(n); }
           else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
@@ -4792,7 +4966,16 @@ const powerSys = {
         for (const n of c.srcs){
           this.activeSrc.add(n.id);
           if (n.t === 'crank') n.wound = Math.max(0, (n.wound || 0) - dt);
-          if (n.t === 'gen' || n.t === 'gen2') n.burn = Math.max(0, (n.burn || 0) - dt);
+          if (n.t === 'gen' || n.t === 'gen2'){
+            n.burn = Math.max(0, (n.burn || 0) - dt);
+            // out of burn but coal in the tank: shovel the next lump in
+            if (n.burn <= 0 && n.fuel && n.fuel.count > 0){
+              n.fuel.count--;
+              if (n.fuel.count <= 0) n.fuel = null;
+              n.burn = n.t === 'gen2' ? 60 : 30;
+              if (game.ui === 'cont' && game.activeCont === n) refreshContUI();
+            }
+          }
         }
       }
       if (c.w > c.d + 2) this.surplus.push(...c.terms);
@@ -4912,8 +5095,14 @@ const powerSys = {
     return false;
   },
   give(dst, s){
-    if (dst.t === 'hopper' || dst.t === 'crafter')
+    if (dst.t === 'hopper' || dst.t === 'crafter' || dst.t === 'chest')
       return this.invGive(dst.inv || (dst.inv = new Array(24).fill(null)), s.kind, s.mat);
+    if (dst.t === 'gen' || dst.t === 'gen2'){
+      if (s.kind !== 'coal') return false;
+      if (!dst.fuel){ dst.fuel = { kind: 'coal', count: 1 }; return true; }
+      dst.fuel.count++;
+      return true;
+    }
     // a stove: smeltables to INPUT, burnables to FUEL
     if (dst.in !== undefined){
       if (s.kind !== 'mat' && CORE.SMELTS[s.kind]){
@@ -5548,6 +5737,19 @@ const placePreview = {
   update(now){
     const tool = activeTool();
     if (tool && tool.kind === 'door') return;   // updateGhost owns the door pose
+    if (tool && tool.kind === 'wire' && game.ui === 'none' && isLocked() && !game.photo){
+      // holding wire: preview the STAPLE about to be placed (the wire run
+      // itself previews through wireSys once wiring starts)
+      if (game.wirePending){ this.hide(); return; }
+      const hit = surfaceHit();
+      if (!hit){ this.hide(); return; }
+      this.showAt('pnode', 'pnode|staple', hit[0], hit[1], hit[2], 0);
+      const le = nearEdits([hit[0] - 1, hit[1] - 1, hit[2] - 1, hit[0] + 1, hit[1] + 1, hit[2] + 1]);
+      const nn = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], le, 0.15, game.gen) : [0, 1, 0];
+      this.root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+        new THREE.Vector3(nn[0], nn[1], nn[2]).normalize());
+      return;
+    }
     const on = tool && this.KINDS.includes(tool.kind) &&
                game.ui === 'none' && isLocked() && !game.photo;
     if (!on){ this.hide(); return; }
@@ -5617,6 +5819,8 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.6, z: n.z, hx: 0.5, hy: 0.55, hz: 0.5 });
     else if (n.t === 'crafter')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.5, z: n.z, hx: 0.53, hy: 0.52, hz: 0.53 });
+    else if (n.t === 'chest')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.5, hy: 0.4, hz: 0.38 });
   }
   game.solidProps = props;
 }
@@ -5939,9 +6143,42 @@ function bindInput(){
     if (e.button === 2){
       if (game.photo){ if (game.photo.drone) exitPhoto(); return; }
       const wtool = activeTool();
-      if (wtool && wtool.kind === 'wire' && game.wirePending){
-        game.wirePending = null;
-        toast('wire cancelled');
+      if (wtool && wtool.kind === 'wire'){
+        const t = pnodeSys.terminalOnRay(4.5);
+        if (!t){
+          if (game.wirePending){
+            game.wirePending = null; game.wireStartHit = null;
+            toast('wiring ended');
+            refreshToolHUD();
+          }
+          return;
+        }
+        if (game.wirePending == null){
+          game.wirePending = t.id;
+          game.wireStartHit = t.hit;
+          AudioSys.sfx('toggle');
+          toast('wiring — right click the next staple or machine · right click air to stop');
+        } else if (game.wirePending === t.id){
+          game.wirePending = null; game.wireStartHit = null;
+          toast('wiring ended');
+        } else {
+          const dup = game.wires.some(w => (w.a === game.wirePending && w.b === t.id) ||
+                                           (w.b === game.wirePending && w.a === t.id));
+          if (dup){ toast('already connected'); return; }
+          if (game.mode !== 'creative'){
+            if (!wtool.item || wtool.item.count < 1){ toast('out of wire'); return; }
+            wtool.item.count--;
+            if (wtool.item.count <= 0) game.slots[game.hotSel] = null;
+          }
+          game.wires.push({ a: game.wirePending, b: t.id,
+                            pa: game.wireStartHit, pb: t.hit });
+          // the chain continues from what you just wired
+          game.wirePending = t.id;
+          game.wireStartHit = t.hit;
+          wireSys.rebuild(); markSave();
+          AudioSys.sfx('place');
+          refreshHotbar();
+        }
         refreshToolHUD();
         return;
       }
@@ -5975,18 +6212,7 @@ function bindInput(){
           return;
         }
         if (pn.t === 'gen' || pn.t === 'gen2'){
-          const cap = pn.t === 'gen2' ? 240 : 120, addF = pn.t === 'gen2' ? 60 : 30;
-          const fit = selectedItem();
-          if (fit && fit.kind === 'coal' && (pn.burn || 0) < cap){
-            fit.count--;
-            if (fit.count <= 0) game.slots[game.hotSel] = null;
-            pn.burn = (pn.burn || 0) + addF;
-            AudioSys.sfx('place'); markSave();
-            refreshHotbar(); refreshToolHUD();
-            toast(itemLabel({ kind: pn.t }) + ' fueled — ' + Math.round(pn.burn) + 's');
-          } else {
-            toast(itemLabel({ kind: pn.t }) + ': ' + Math.round(pn.burn || 0) + 's fuel — right click holding coal to feed');
-          }
+          openMachine(pn); AudioSys.sfx('toggle');
           return;
         }
         if (pn.t === 'acrank'){
@@ -6010,32 +6236,9 @@ function bindInput(){
           }
           return;
         }
-        if (pn.t === 'hopper' || pn.t === 'crafter'){
-          const held = selectedItem();
-          const depositable = held && held.count != null &&
-            !['drill', 'disp', 'sword', 'wrench', 'gun', 'drone'].includes(held.kind);
-          if (depositable){
-            const inv = pn.inv || (pn.inv = new Array(24).fill(null));
-            let ok = false;
-            for (const t of inv)
-              if (t && t.count != null && t.kind === held.kind && (held.kind !== 'mat' || t.mat === held.mat)){
-                t.count += held.count; ok = true; break;
-              }
-            if (!ok) for (let i2 = 0; i2 < inv.length; i2++)
-              if (!inv[i2]){ inv[i2] = held; ok = true; break; }
-            if (ok){
-              game.slots[game.hotSel] = null;
-              markSave(); AudioSys.sfx('place');
-              refreshHotbar(); refreshToolHUD();
-              toast('deposited into the ' + itemLabel({ kind: pn.t }));
-              if (game.ui === 'crafter') refreshCrafterUI();
-            } else toast('it is full');
-            return;
-          }
-          if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
-          const nIt = (pn.inv || []).filter(Boolean).length;
-          toast('hopper: ' + (nIt ? nIt + ' stack' + (nIt > 1 ? 's' : '') + ' inside'
-                                  : 'empty') + ' — right click holding a stack to deposit');
+        if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'hopper' || pn.t === 'chest'){
+          openMachine(pn); AudioSys.sfx('toggle');
           return;
         }
         if (pn.t === 'elev'){
@@ -6146,8 +6349,8 @@ function bindInput(){
     const code = e.code;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
-    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter'){
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter')) closeOverlay();
+    if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont'){
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
@@ -6340,18 +6543,28 @@ function updatePlayer(dt){
 
   const preX = game.pos.x, preZ = game.pos.z;
   const intX = game.vel.x * dt, intZ = game.vel.z * dt;
-  game.pos.x += game.vel.x * dt;
-  game.pos.y += game.vel.y * dt;
-  game.pos.z += game.vel.z * dt;
-
   const h = playerHeight();
-  const box = [game.pos.x - 1.5, game.pos.y - 1.5, game.pos.z - 1.5,
-               game.pos.x + 1.5, game.pos.y + h + 1.5, game.pos.z + 1.5];
   const still = !game.fly && fwd === 0 && str === 0 && !(canMove && k['Space']);
   const wasGrounded = game.grounded;
   const vyBefore = game.vel.y;
-  const colEdits = nearEdits(box);
-  collidePlayer(colEdits, still);
+  // substep fast travel: one big Euler step can carry the capsule past the
+  // MIDPLANE of a thin wrench-shrunk slab, and the SDF pushout then ejects
+  // it out the far side (fly-sprint-descend through a 0.2m floor). Capping
+  // per-step travel at ~0.06m keeps the contact point on the near side of
+  // any slab the wrench can make, so thin geometry always catches first.
+  const disp = Math.hypot(game.vel.x, game.vel.y, game.vel.z) * dt;
+  const steps = Math.min(24, Math.max(1, Math.ceil(disp / 0.06)));
+  let colEdits = null;
+  for (let s = 0; s < steps; s++){
+    const sdt = dt / steps;
+    game.pos.x += game.vel.x * sdt;
+    game.pos.y += game.vel.y * sdt;
+    game.pos.z += game.vel.z * sdt;
+    const box = [game.pos.x - 1.5, game.pos.y - 1.5, game.pos.z - 1.5,
+                 game.pos.x + 1.5, game.pos.y + h + 1.5, game.pos.z + 1.5];
+    colEdits = nearEdits(box);
+    collidePlayer(colEdits, still);
+  }
 
   // step-up assist: when horizontal motion is mostly eaten by a low ledge,
   // try the same spot a step higher instead of grinding against the lip.
@@ -6430,7 +6643,7 @@ function activeTool(){
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -7244,9 +7457,11 @@ function tryAction(dt, now){
       const pn2 = pnodeSys.onRay(3.0);
       if (pn2){
         const refunded = pnodeSys.removeNode(pn2);
-        addStackItem(pn2.t, 1);
+        if (pn2.t !== 'staple') addStackItem(pn2.t, 1);
         game.gatherT = now;
-        toast('+1 ' + itemLabel({ kind: pn2.t }) + (refunded ? ' (+' + refunded + ' wire)' : ''));
+        toast(pn2.t === 'staple'
+          ? 'staple pulled' + (refunded ? ' (+' + refunded + ' wire)' : '')
+          : '+1 ' + itemLabel({ kind: pn2.t }) + (refunded ? ' (+' + refunded + ' wire)' : ''));
         AudioSys.sfx('place');
         refreshHotbar(); refreshToolHUD();
         return;
@@ -7395,33 +7610,16 @@ function tryAction(dt, now){
     }
     return;
   }
-  // wire: two clicks — terminal to terminal
+  // wire: LEFT click staples the route down; RIGHT click runs the wire
   if (tool.kind === 'wire'){
     AudioSys.setHum(false, 0, 0);
-    if (edge){
-      const t = pnodeSys.terminalOnRay(4.5);
-      if (!t){ toast('aim at a terminal (power prop, bulb or stove)'); return; }
-      if (game.wirePending == null){
-        game.wirePending = t.id;
-        AudioSys.sfx('toggle');
-        toast('wire started — click another terminal (right click cancels)');
-      } else if (game.wirePending === t.id){
-        game.wirePending = null;
-        toast('wire cancelled');
-      } else {
-        const dup = game.wires.some(w => (w.a === game.wirePending && w.b === t.id) ||
-                                         (w.b === game.wirePending && w.a === t.id));
-        if (dup){ toast('already connected'); return; }
-        game.wires.push({ a: game.wirePending, b: t.id });
-        game.wirePending = null;
-        if (game.mode !== 'creative'){
-          tool.item.count--;
-          if (tool.item.count <= 0) game.slots[game.hotSel] = null;
-        }
-        wireSys.rebuild(); markSave();
-        AudioSys.sfx('place');
-        refreshHotbar();
-      }
+    if (edge && !game.wirePending){
+      const hit = surfaceHit();
+      if (!hit){ toast('no surface in reach'); return; }
+      const le = nearEdits([hit[0] - 1, hit[1] - 1, hit[2] - 1, hit[0] + 1, hit[1] + 1, hit[2] + 1]);
+      const nn = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], le, 0.15, game.gen) : [0, 1, 0];
+      pnodeSys.add('staple', hit[0], hit[1], hit[2], 0, { nx: +nn[0].toFixed(3), ny: +nn[1].toFixed(3), nz: +nn[2].toFixed(3) });
+      AudioSys.sfx('place');
       refreshToolHUD();
     }
     return;
@@ -7435,9 +7633,9 @@ function tryAction(dt, now){
       const nodeOf = id => id[0] === 'n' ? pnodeSys.byId(+id.slice(1)) : null;
       const isHop = id => { const n = nodeOf(id); return !!(n && n.t === 'hopper'); };
       const tubeOk = id => isHop(id) || id[0] === 's' ||
-        (nodeOf(id) && nodeOf(id).t === 'crafter');
+        (nodeOf(id) && ['crafter', 'chest', 'gen', 'gen2'].includes(nodeOf(id).t));
       if (game.tubePending == null){
-        if (!tubeOk(t.id)){ toast('tubes connect hoppers, stoves and auto-crafters'); return; }
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators'); return; }
         game.tubePending = t.id;
         AudioSys.sfx('toggle');
         toast('tube started — click the machine it feeds');
@@ -7445,7 +7643,7 @@ function tryAction(dt, now){
         game.tubePending = null;
         toast('tube cancelled');
       } else {
-        if (!tubeOk(t.id)){ toast('tubes connect hoppers, stoves and auto-crafters'); return; }
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators'); return; }
         if (!isHop(game.tubePending) && !isHop(t.id)){ toast('one end must be a hopper'); return; }
         game.tubes = game.tubes || [];
         const dup = game.tubes.some(w => (w.a === game.tubePending && w.b === t.id) ||
@@ -7634,7 +7832,7 @@ function itemIconURL(it){
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'crafter', 'chest'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -7687,6 +7885,11 @@ function itemIconURL(it){
     c.fillStyle = '#ffb347'; c.fillRect(3, 8, 4, 3);
     c.fillStyle = '#ffe08a'; c.fillRect(4, 9, 2, 1);
     c.fillStyle = '#2c2c31'; c.fillRect(9, 8, 4, 4);
+  } else if (it.kind === 'chest'){
+    c.fillStyle = '#8a6237'; c.fillRect(2, 5, 12, 9);
+    c.fillStyle = '#a37c47'; c.fillRect(2, 5, 12, 3);
+    c.fillStyle = '#59391c'; c.fillRect(2, 8, 12, 1);
+    c.fillStyle = '#b8b8c2'; c.fillRect(7, 7, 2, 3);
   } else if (it.kind === 'crafter'){
     c.fillStyle = '#8a6237'; c.fillRect(2, 4, 12, 10);
     c.fillStyle = '#a37c47'; c.fillRect(2, 4, 12, 2);
@@ -7913,6 +8116,7 @@ function itemLabel(it){
   if (it.kind === 'tesla') return 'tesla coil';
   if (it.kind === 'gen2') return 'generator mk2';
   if (it.kind === 'crafter') return 'auto-crafter';
+  if (it.kind === 'chest') return 'chest';
   if (it.kind === 'stick') return 'sticks';
   if (it.kind === 'beacon') return 'beacon';
   if (it.kind === 'wool') return 'wool';
@@ -7954,7 +8158,17 @@ function slotItem(key){
   if (key === 'sin') return game.activeStove && game.activeStove.in;
   if (key === 'sfuel') return game.activeStove && game.activeStove.fuel;
   if (key === 'sout') return game.activeStove && game.activeStove.out;
+  if (key === 'gfuel') return game.activeCont && game.activeCont.fuel;
+  if (typeof key === 'string' && /^c\d+$/.test(key))
+    return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
   return game.slots[+key];
+}
+function isPseudoKey(k){
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel'].includes(k) || /^c\d+$/.test(k);
+}
+function slotKeyOf(el){
+  const k = el.dataset.slot;
+  return /^\d+$/.test(k) ? +k : k;
 }
 function paintSlot(el){
   const key = el.dataset.slot;
@@ -7996,7 +8210,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -8038,48 +8252,68 @@ function refreshInvUI(){
 // ---------- stove screen: 3 stove slots above the usual inventory ----------
 function openCrafter(n){
   game.activeCrafter = n;
+  game.activeCont = n;
   if (!n.inv) n.inv = new Array(24).fill(null);
   game.ui = 'crafter';
-  refreshCrafterUI();
+  buildCrafterUI();
   show('crafterscreen');
   document.exitPointerLock();
+}
+function buildCrafterUI(){
+  const buf = $('crafterbuf');
+  buf.innerHTML = '';
+  for (let i = 0; i < 24; i++) buf.appendChild(slotEl('c' + i));
+  const main = $('craftermain'), hot = $('crafterhot');
+  main.innerHTML = ''; hot.innerHTML = '';
+  for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+  for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+  refreshCrafterUI();
+}
+// generic machine screen: generators (fuel slot), hoppers and chests (grid)
+function openMachine(pn){
+  game.activeCont = pn;
+  if ((pn.t === 'hopper' || pn.t === 'chest') && !pn.inv) pn.inv = new Array(24).fill(null);
+  game.ui = 'cont';
+  buildContUI();
+  show('contscreen');
+  document.exitPointerLock();
+}
+function buildContUI(){
+  const pn = game.activeCont;
+  $('conttitle').textContent = itemLabel({ kind: pn.t }).toUpperCase();
+  const grid = $('contgrid');
+  grid.innerHTML = '';
+  if (pn.t === 'gen' || pn.t === 'gen2'){
+    grid.style.gridTemplateColumns = '52px';
+    grid.appendChild(slotEl('gfuel'));
+  } else {
+    grid.style.gridTemplateColumns = '';
+    for (let i = 0; i < 24; i++) grid.appendChild(slotEl('c' + i));
+  }
+  const main = $('contmain'), hot = $('conthot');
+  main.innerHTML = ''; hot.innerHTML = '';
+  for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+  for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+  refreshContUI();
+}
+function refreshContUI(){
+  const pn = game.activeCont;
+  if (!pn || game.ui !== 'cont') return;
+  document.querySelectorAll('#contscreen .slot').forEach(paintSlot);
+  if (pn.t === 'gen' || pn.t === 'gen2'){
+    $('contstatus').textContent = (pn.burn || 0) > 0
+      ? 'burning — ' + Math.round(pn.burn) + 's left' + (pn.fuel ? ' · ' + pn.fuel.count + ' coal queued' : '')
+      : pn.fuel ? 'fueled — ignites the moment something draws power' : 'feed it coal (drag or shift-click)';
+  } else {
+    $('contstatus').textContent = pn.t === 'hopper'
+      ? 'tubes push from here into stoves, crafters, chests and generators'
+      : 'storage — tubes can pipe in';
+  }
 }
 function refreshCrafterUI(){
   const n = game.activeCrafter;
   if (!n) return;
-  const buf = $('crafterbuf');
-  buf.innerHTML = '';
-  for (let i = 0; i < n.inv.length; i++){
-    const d = document.createElement('div');
-    d.className = 'slot';
-    const it = n.inv[i];
-    if (it){
-      const img = document.createElement('img');
-      img.src = itemIconURL(it);
-      d.appendChild(img);
-      if (it.count != null){
-        const ct = document.createElement('span');
-        ct.className = 'count';
-        ct.textContent = it.count;
-        d.appendChild(ct);
-      }
-      d.title = itemLabel(it) + ' — click to take';
-      d.addEventListener('click', () => {
-        let ok = false;
-        if (it.count != null){
-          for (const s of game.slots)
-            if (s && s.count != null && s.kind === it.kind && (it.kind !== 'mat' || s.mat === it.mat)){
-              s.count += it.count; ok = true; break;
-            }
-        }
-        if (!ok) for (let j = 0; j < 40; j++) if (!game.slots[j]){ game.slots[j] = it; ok = true; break; }
-        if (!ok){ toast('inventory full'); return; }
-        n.inv[i] = null;
-        markSave(); refreshHotbar(); refreshCrafterUI();
-      });
-    }
-    buf.appendChild(d);
-  }
+  document.querySelectorAll('#crafterscreen .slot').forEach(paintSlot);
   const list = $('crafterlist');
   list.innerHTML = '';
   CORE.RECIPES.forEach((r, idx) => {
@@ -8154,15 +8388,19 @@ function uiMove(from, to){
   if (from === to) return 'none';
   if (typeof from === 'number' && typeof to === 'number')
     return CORE.invMove(game.slots, from, to);
-  const st = game.activeStove;
+  const st = game.activeStove, pc = game.activeCont;
   const get = k => k === 'disp' ? game.dispSlot
     : k === 'sin' ? (st && st.in) : k === 'sfuel' ? (st && st.fuel) : k === 'sout' ? (st && st.out)
+    : k === 'gfuel' ? (pc && pc.fuel)
+    : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
     : game.slots[k];
   const set = (k, v) => {
     if (k === 'disp') game.dispSlot = v;
     else if (k === 'sin'){ if (st) st.in = v; }
     else if (k === 'sfuel'){ if (st) st.fuel = v; }
     else if (k === 'sout'){ if (st) st.out = v; }
+    else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
+    else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
     else game.slots[k] = v;
   };
   const A = get(from), B = get(to);
@@ -8172,10 +8410,82 @@ function uiMove(from, to){
   if (to === 'sout'){ toast('the output slot only gives'); return 'none'; }
   if (to === 'sin' && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
+  if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
   if (B && CORE.stackableWith(A, B)){ B.count += A.count; set(from, null); return 'merged'; }
-  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout')){ toast('that slot is taken'); return 'none'; }
+  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout' || from === 'gfuel')){ toast('that slot is taken'); return 'none'; }
   set(from, B || null); set(to, A);
   return 'swapped';
+}
+// shift-click: send a stack where it obviously wants to go
+function quickMove(key){
+  const it = slotItem(key);
+  if (!it) return;
+  const isNum = typeof key === 'number';
+  const mergeInto = arr => {
+    if (it.count != null)
+      for (const s of arr)
+        if (s && s.count != null && CORE.stackableWith(it, s)){ s.count += it.count; return true; }
+    for (let i = 0; i < arr.length; i++) if (!arr[i]){ arr[i] = it; return true; }
+    return false;
+  };
+  const rangeInto = (a, b) => {
+    if (it.count != null)
+      for (let i = a; i < b; i++){
+        const s = game.slots[i];
+        if (s && s.count != null && CORE.stackableWith(it, s)){ s.count += it.count; return true; }
+      }
+    for (let i = a; i < b; i++) if (!game.slots[i]){ game.slots[i] = it; return true; }
+    return false;
+  };
+  let done = false;
+  if (!isNum){
+    // machine slot -> player inventory
+    if (rangeInto(0, 40)){
+      if (key === 'gfuel') game.activeCont.fuel = null;
+      else if (/^c\d+$/.test(key)) game.activeCont.inv[+key.slice(1)] = null;
+      else if (key === 'sin') game.activeStove.in = null;
+      else if (key === 'sfuel') game.activeStove.fuel = null;
+      else if (key === 'sout') game.activeStove.out = null;
+      else if (key === 'disp') game.dispSlot = null;
+      done = true;
+    }
+  } else if (game.ui === 'stove' && game.activeStove){
+    const st = game.activeStove;
+    if (CORE.SMELTS[it.kind] && (!st.in || CORE.stackableWith(it, st.in))){
+      if (st.in) st.in.count += it.count; else st.in = it;
+      game.slots[key] = null; done = true;
+    } else if (CORE.fuelOps(it) && (!st.fuel || CORE.stackableWith(it, st.fuel))){
+      if (st.fuel) st.fuel.count += it.count; else st.fuel = it;
+      game.slots[key] = null; done = true;
+    }
+  } else if ((game.ui === 'cont' || game.ui === 'crafter') && game.activeCont){
+    const pn = game.activeCont;
+    if (pn.t === 'gen' || pn.t === 'gen2'){
+      if (it.kind === 'coal'){
+        if (!pn.fuel){ pn.fuel = it; game.slots[key] = null; done = true; }
+        else if (CORE.stackableWith(it, pn.fuel)){ pn.fuel.count += it.count; game.slots[key] = null; done = true; }
+      } else toast('generators burn coal');
+    } else {
+      if (!pn.inv) pn.inv = new Array(24).fill(null);
+      if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
+    }
+  } else {
+    // plain inventory screens: hotbar <-> main
+    done = key < 10 ? rangeInto(10, 40) : rangeInto(0, 10);
+    if (done) game.slots[key] = null;
+  }
+  if (done){
+    AudioSys.sfx('toggle');
+    markSave();
+    refreshAllUI();
+  }
+}
+function refreshAllUI(){
+  refreshHotbar(); refreshToolHUD();
+  if (game.ui === 'stove') refreshStoveUI(true);
+  else if (game.ui === 'cont') refreshContUI();
+  else if (game.ui === 'crafter') refreshCrafterUI();
+  else document.querySelectorAll('#invscreen .slot, #craftscreen .slot').forEach(paintSlot);
 }
 
 // drag & drop
@@ -8183,12 +8493,16 @@ const drag = { active: false, from: -1 };
 function bindInvDnD(){
   const dgy = $('draggy'), dgi = dgy.querySelector('img');
   document.addEventListener('mousedown', e => {
-    if (game.ui !== 'inv' && game.ui !== 'stove') return;
+    if (!['inv', 'stove', 'cont', 'crafter', 'craft'].includes(game.ui)) return;
     const el = e.target.closest('.slot');
     if (!el || el.parentElement.id === 'hotbar') return;
-    const key = ['disp', 'sin', 'sfuel', 'sout'].includes(el.dataset.slot)
-      ? el.dataset.slot : +el.dataset.slot;
+    const key = slotKeyOf(el);
     if (!slotItem(key)) return;
+    if (e.shiftKey){
+      quickMove(key);
+      e.preventDefault();
+      return;
+    }
     drag.active = true; drag.from = key;
     dgi.src = itemIconURL(slotItem(key));
     dgy.style.display = 'block';
@@ -8208,11 +8522,10 @@ function bindInvDnD(){
     document.querySelectorAll('.drop-ok').forEach(x => x.classList.remove('drop-ok'));
     const el = e.target.closest && e.target.closest('.slot');
     if (el && el.parentElement.id !== 'hotbar'){
-      const to = ['disp', 'sin', 'sfuel', 'sout'].includes(el.dataset.slot)
-        ? el.dataset.slot : +el.dataset.slot;
-      uiMove(drag.from, to);
-      if (game.ui === 'stove') refreshStoveUI(true); else refreshInvUI();
-      refreshHotbar(); refreshToolHUD(); markSave();
+      uiMove(drag.from, slotKeyOf(el));
+      if (game.ui === 'inv') refreshInvUI();
+      refreshAllUI();
+      markSave();
     }
     drag.from = -1;
   });
@@ -8285,22 +8598,24 @@ function refreshToolHUD(){
     html = '<div class="t1">rope anchor ×' + it.count + '</div><div class="t2">left click a ledge — the rope drops to the floor · space/C to climb</div>';
   } else if (it.kind === 'wire'){
     html = '<div class="t1">wire ×' + it.count + '</div>' +
-           '<div class="t2">' + (game.wirePending ? 'click a second terminal to connect · right click cancels'
-                                                  : 'click a terminal (source, lever, meter, bulb, stove) to start a wire') + '</div>';
+           '<div class="t2">' + (game.wirePending
+             ? 'wiring — right click staples/machines to run wire · right click air to stop'
+             : 'left click staples the route down · right click a machine or staple to start wiring') + '</div>';
   } else if (it.kind === 'tube'){
     html = '<div class="t1">item tube ×' + it.count + '</div>' +
            '<div class="t2">' + (game.tubePending ? 'click the machine it feeds · right click cancels'
                                                   : 'click a hopper, then a stove / auto-crafter / hopper') + '</div>';
-  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter'].includes(it.kind)){
+  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest'].includes(it.kind)){
     const tip = { lever: 'inline switch — right click to flip', crank: 'right click to wind · ~20W while wound',
-                  wheel: 'place IN water · ~15W', gen: 'right click with coal to fuel · ~40W',
+                  wheel: 'place IN water · ~15W', gen: 'right click to open, drop coal in the tank · ~40W',
                   meter: 'shows its circuit\'s watts',
-                  hopper: 'right click with a stack to deposit · tubes feed machines from it',
+                  hopper: 'right click to open · tubes feed machines from it',
                   elev: 'wire it up, stand on it — space rises, C descends · faster with more watts',
                   acrank: 'carry an animal to it and right click · ~10W forever',
                   tesla: 'wireless power in 8m · zaps anyone within arm\'s reach',
-                  gen2: '~100W · right click with coal — burns long and hot',
-                  crafter: 'wire + feed it, right click to pick a recipe · crafts while powered' }[it.kind];
+                  gen2: '~100W · right click to open, coal burns long and hot',
+                  crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
+                  chest: 'storage — right click to open · tubes can pipe into it' }[it.kind];
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">left click to place · ' + tip + '</div>';
   } else if (it.kind === 'drone'){
     html = '<div class="t1">camera drone · ' + Math.round(it.charge || 0) + '%</div>' +
@@ -8498,7 +8813,13 @@ function openInventory(){
   game.ui = 'inv'; buildInvUI(); show('invscreen'); document.exitPointerLock();
 }
 function openCraft(){
-  game.ui = 'craft'; buildCraftUI(); show('craftscreen'); document.exitPointerLock();
+  game.ui = 'craft'; buildCraftUI();
+  const main = $('craftinvmain'), hot = $('craftinvhot');
+  main.innerHTML = ''; hot.innerHTML = '';
+  for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+  for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+  document.querySelectorAll('#craftscreen .slot').forEach(paintSlot);
+  show('craftscreen'); document.exitPointerLock();
 }
 function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
@@ -8618,8 +8939,9 @@ function openMap(){
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen');
   game.activeCrafter = null;
+  game.activeCont = null;
   game.activeStove = null;
   game.ui = 'none';
   requestLock();
@@ -8846,7 +9168,7 @@ function saveNow(){
     tables: game.tables,
     ropes: game.ropes || [],
     pnodes: game.pnodes || [],
-    wires: (game.wires || []).map(w => ({ a: w.a, b: w.b })),
+    wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
     pSeq: game.pSeq || 1,
     explored: [...(game.explored || [])],
@@ -8902,7 +9224,7 @@ function startWorld(id){
   game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
   game.pSeq = data.pSeq || 1;
   game.pnodes = (data.pnodes || []).map(n => ({ ...n }));
-  game.wires = (data.wires || []).map(w => ({ a: w.a, b: w.b }));
+  game.wires = (data.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb }));
   game.tubes = (data.tubes || []).map(t => ({ a: t.a, b: t.b }));
   game.wirePending = null;
   game.tubePending = null;
@@ -9725,7 +10047,8 @@ window.__THREE = THREE;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
-  pnodeSys, wireSys, powerSys, bulbSys, stoveSys };
+  pnodeSys, wireSys, powerSys, bulbSys, stoveSys,
+  uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow };
 </script>
 </body>
 </html>
