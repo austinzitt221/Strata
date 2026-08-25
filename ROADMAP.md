@@ -121,20 +121,25 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
   (stapler/spool viewmodel, chained RMB runs, taut straight lines),
   all machines open menus over the full inventory, shift-click quick
   move, generator fuel slots, chests + tube storage.
+- **7.2 — rotate + wrench-everything (DONE)**: scroll rotates every
+  placement preview (staples twist on their normal), chests resize with
+  scroll (size = storage, 8–64 slots), the wrench selects/moves/deletes
+  every prop with refunds, multiselect + copy/paste/blueprints carry
+  props and their wiring.
 - **Camera drone**: photo mode for survival, with a body — a buildable or
   buyable drone you charge on the grid, keep in your inventory, and hold to
   pilot. Range-limited; your body stays standing while the drone flies.
   Under the hood it's the existing photo mode with a new shell and rules.
 
-## Build 7.5 — The player has a body
-- 3rd-person camera toggle; full player model with a ROUND head (our
-  silhouette, not Minecraft's). Skin selection.
-- Armor: a set per ore tier, visible on the model, damage reduction.
-  Armor stand to display/store sets.
-- Jetpack: short creative-style flight in survival; recharges on a
-  powered charging pad (plugs into the grid).
-- Grappling hook: cheap-tier vertical movement.
-- Base decor: item pedestals, signs.
+## Build 7.5 — The player has a body (DONE)
+- F5 third person with SDF camera collision; round-head player model,
+  walk/crouch/air animation, held-item display, 5 skins in Options.
+- Armor: helmet/plate/boots per ore tier (15 pieces), armor row in the
+  inventory, tiered damage reduction (60% cap), visible on the model;
+  armor stand stores + displays a set.
+- Jetpack (back slot, hold-space flight, fuel HUD) + grid-powered
+  charging pad; grappling hook (34m reel-in).
+- Base decor: item pedestals, editable signs.
 
 ## Build 8 — Coins & villages (the world gets people)
 - **Coins**: enemies drop coin instead of materials (mining stays the

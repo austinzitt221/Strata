@@ -2,6 +2,116 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 7.5 — the player has a body (2026-08-25)
+
+You exist now. Four phases, one build.
+
+- **The body.** Full player model with a ROUND head — sphere dome, hair
+  cap, real eyes and a mouth, our silhouette, not Minecraft's. Pixel-art
+  skin from the same speckle language as everything else. It walks (legs
+  and arms swing with your actual speed), crouches (whole upper body
+  drops, legs fold), tucks its legs mid-air, holds whatever item you're
+  holding as its icon in the right hand, and its head follows your
+  pitch. **F5** toggles third person: the camera backs off along the
+  view ray and the SDF pulls it in so it never clips through terrain —
+  and every interaction ray (mining, placing, wiring, wrench, fists)
+  now compensates for the pull-back, so aiming works identically in
+  both views. Five skins (miner, ranger, ember, midnight, gilded) in
+  Options. Photo mode and the drone finally show your body standing
+  where you left it.
+- **Armor.** Helmet, chestplate and boots for every ore tier — stone to
+  diamond, 15 craftable pieces. A new armor row in the inventory
+  (helmet · chestplate · boots · back); shift-click any piece to wear
+  it, swaps included. Each piece blocks a cut of incoming damage by
+  tier, capped at 60% for a full diamond set — verified: 50 damage hit
+  for 20. Worn armor renders on the body in its tier color. The **armor
+  stand** (4 sticks + 3 planks) opens like any machine, takes exactly a
+  helmet/plate/boots, and DISPLAYS whatever it holds on its wooden
+  frame.
+- **Jetpack** (10 iron + 4 ruby, worn in the back slot): hold SPACE in
+  the air for short creative-style flight in survival — real thrust,
+  exhaust embers, a live fuel readout in the corner, ~11 seconds of
+  burn from full. It recharges on the **charging pad** (6 iron + 2
+  ruby): wire the pad into your grid and stand on it — 20W draw, only
+  while someone with a hungry jetpack is actually standing there, in
+  the best analog-grid tradition. 10%→100% verified against a coal
+  generator.
+- **Grappling hook** (2 iron + 2 wool — cheap-tier vertical movement):
+  left click any surface within 34m and it reels you in at 16 m/s;
+  click again to let go, or ride it to the wall.
+- **Base decor:** the **pedestal** (6 stonebrick) displays one item of
+  your choosing — its menu is a single proud slot; the **sign** (2
+  sticks + 2 planks) opens a little editor — four lines, sixteen
+  characters, rendered onto the board in pixel type.
+
+Everything rides the existing rails: all seven new items place with
+real-model previews, rotate with the scroll wheel, get picked up by
+fists, selected/moved/deleted by the wrench, and their state (worn
+armor, jetpack fuel, stand contents, pedestal item, sign text) saves
+inside the records that already existed.
+
+Verified in-browser: F5 round-trip with viewmodel/body swap, skin
+switching, the 60% damage cap, stand dressing with non-armor refused,
+jetpack thrust draining fuel mid-air with the HUD live, pad charging
+10→100 and idling when you step off, an 18.5m grapple pull, pedestal
+display + sign text round-tripping through save/load, plus 286
+headless tests and the smoke/7.1/7.2 suites all green.
+
+## Build 7.2 — rotate everything, sized chests, the wrench owns the world (2026-08-25)
+
+Quick-build from playtesting notes; the wrench half turned out to be the
+deepest cut of the three.
+
+- **Scroll rotates every placement.** Holding any placeable — stoves,
+  crafting tables, beds, beacons, machines, plants — the scroll wheel
+  spins the live preview in 15° steps (same rule as the drill's rotate
+  mode) and the placed thing keeps that facing. Stoves/machines still
+  auto-face you; the scroll adds onto that. Staples rotate too: the
+  scroll twists them around their surface normal, so a wall staple can
+  run its wire at any angle.
+- **Chests come in sizes.** Scroll resizes the chest preview through 6
+  steps (0.6m–2.0m); the box's physical size IS its storage — 8 slots
+  in the tiny one up to 64 in the crate. Middle click switches the
+  scroll between resize and rotate while holding one. The collision
+  box, wire terminal and menu grid all track the size, and the wrench
+  can resize a placed chest later (it refuses to shrink one whose slots
+  are still in use).
+- **The wrench selects EVERYTHING now.** Right click any placed thing —
+  torches, bulbs, tables, beacons, beds, stoves, doors, ropes, plants,
+  every machine, staples, even individual wires and tubes — and it gets
+  a highlight box and the gizmo. Shift-drag moves it (wires re-route
+  themselves since they follow their endpoints), X deletes with exactly
+  the refunds fists would give (machine buffers spill, attached
+  wires/tubes refund, caged animals go free), shift+RMB multiselects
+  props and terrain edits together. Things that aren't built to resize
+  refuse the resize drag and say so; chests resize. Solid machines
+  needed a smarter pick ray — their own collision box stops the surface
+  ray before it reaches their center, so the wrench now recognizes
+  "the surface you hit IS the prop" and selects it anyway. While the
+  wrench is in hand, right click always selects (machines don't open
+  their menus over it).
+- **Copy/paste and blueprints carry props.** Ctrl+C packs selected props
+  into the clipboard next to the terrain edits — and any wire or tube
+  whose BOTH endpoints were copied rides along for free. The paste ghost
+  shows the real prop models, stamping re-creates them with fresh ids
+  and re-wires the copies (verified: a pasted generator+bulb pair lit up
+  on its own new wire), survival pastes charge one item per prop.
+  Blueprints save the props too, so a wired factory module stamps whole.
+- Found and fixed a latent paste bug along the way: the paste ghost
+  rotated one way and the stamped result the other. Edit shapes are all
+  180°-symmetric so it was invisible for terrain — props made it obvious
+  in one screenshot. Ghost and stamp now agree.
+
+Verified in-browser: 45° stove/table/staple placements land and save,
+chest scroll-resize (48-slot 1.6m chest opened with 48 real slots),
+middle-click mode toggle, wrench-selecting a stove/generator/wire/torch,
+gizmo-moving a generator 3m with its terminal following, resize refusal
+on non-chests, wrench chest-grow 1.6→1.9 (64 slots), stove delete
+spilling its coal and refunding the stove, wire delete refunding wire,
+the powered-pair copy/paste lighting its clone, blueprint round-trip
+with props, and rotated pastes matching the ghost. Plus 286 headless
+tests, the smoke suite and the full 7.1 suite still green.
+
 ## Build 7.1 — staple wiring, everything-is-a-menu, chests (2026-08-25)
 
 Electricity iteration from playtesting, plus one physics bug that turned
