@@ -1342,11 +1342,42 @@ function snapVec(x, y, z, cell){ return [snapVal(x, cell), snapVal(y, cell), sna
 // when that's larger), anchored so FACES land on the lattice — two adjacent
 // snapped placements always connect flush, never eating into each other
 function snapSpacing(size, cell){ return cell >= size ? cell : size; }
-function snapPlace(px, py, pz, size, cell){
+// Rotate a vector about the world origin, in the SAME convention the edit
+// SDF uses (see rotToWorld / toLocal): local->world applies roll, pitch,
+// then yaw. These are standalone (no edit, no translation) so the placement
+// lattice can be expressed in a rotated frame; a test asserts they agree
+// with rotToWorld/toLocal exactly, keeping one convention in the codebase.
+function frameToWorld(rot, rx, rz, x, y, z){
+  if (rz){ const c = Math.cos(rz), s = Math.sin(rz);
+    const r = x * c - y * s; y = x * s + y * c; x = r; }
+  if (rx){ const c = Math.cos(rx), s = Math.sin(rx);
+    const r = y * c - z * s; z = y * s + z * c; y = r; }
+  if (rot){ const c = Math.cos(rot), s = Math.sin(rot);
+    const r = x * c - z * s; z = x * s + z * c; x = r; }
+  return [x, y, z];
+}
+function worldToFrame(rot, rx, rz, x, y, z){
+  if (rot){ const c = Math.cos(-rot), s = Math.sin(-rot);
+    const r = x * c - z * s; z = x * s + z * c; x = r; }
+  if (rx){ const c = Math.cos(-rx), s = Math.sin(-rx);
+    const r = y * c - z * s; z = y * s + z * c; y = r; }
+  if (rz){ const c = Math.cos(-rz), s = Math.sin(-rz);
+    const r = x * c - y * s; y = x * s + y * c; x = r; }
+  return [x, y, z];
+}
+// The lattice rides the brush's rotation: quantize in the ROTATED frame, not
+// in world axes. The frame is anchored at the world origin (not at the first
+// placement), so two objects placed at the same angle anywhere in the world
+// land on the same lattice and stack flush -- that's what lets you build a
+// whole structure on a 45-degree diagonal. With no rotation the math reduces
+// exactly to the old world-axis snap, so ordinary building is untouched.
+function snapPlace(px, py, pz, size, cell, rot, rx, rz){
   const s = snapSpacing(size, cell);
   const h = size * 0.5;
   const q = v => Math.round((v - h) / s) * s + h;
-  return [q(px), q(py), q(pz)];
+  if (!rot && !rx && !rz) return [q(px), q(py), q(pz)];
+  const l = worldToFrame(rot || 0, rx || 0, rz || 0, px, py, pz);
+  return frameToWorld(rot || 0, rx || 0, rz || 0, q(l[0]), q(l[1]), q(l[2]));
 }
 
 // ---- dual contouring ----
@@ -2134,7 +2165,7 @@ return {
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
-  snapSpacing, snapPlace, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
+  snapSpacing, snapPlace, frameToWorld, worldToFrame, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
@@ -8009,7 +8040,9 @@ function ghostPlacement(eff){
   }
   const tt = hit >= 0 ? hit : Math.min(reach * 0.7, 4 + eff * 0.6) + cb;
   const cell = CORE.GRID_SIZES[game.gridIdx];
-  const [cx, cy, cz] = CORE.snapPlace(o.x + dir.x*tt, o.y + dir.y*tt, o.z + dir.z*tt, eff, cell);
+  // the lattice is rotated by whatever the brush is rotated by
+  const [cx, cy, cz] = CORE.snapPlace(o.x + dir.x*tt, o.y + dir.y*tt, o.z + dir.z*tt,
+    eff, cell, editRot(game.tool.shape), brushRX(), brushRZ());
   return { x: cx, y: cy, z: cz };
 }
 
@@ -8086,27 +8119,38 @@ function updateGhost(){
     gm.visible = true;
     gm.position.set(p.x, p.y, p.z);
     gm.scale.setScalar(eff);
-    gm.rotation.set(grx, rot, grz);
+    applyEditRot(gm, rot, grx, grz);
   } else {
     const gs = game.ghostSet[game.tool.shape];
     gs.fill.material.color.set(paint ? 0xffb44d : 0x6fd3ff);
     gs.fill.visible = true; gs.wire.visible = true;
     gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
     gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
-    gs.fill.rotation.order = 'YXZ'; gs.wire.rotation.order = 'YXZ';
-    gs.fill.rotation.set(grx, rot, grz); gs.wire.rotation.set(grx, rot, grz);
+    applyEditRot(gs.fill, rot, grx, grz); applyEditRot(gs.wire, rot, grx, grz);
     // charging feedback: the shape visibly "fills in" as the action completes
     gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
   }
 
   if (game.snapOn){
     // visualize the actual placement lattice (spacing = shape size when the
-    // grid cell is smaller), anchored on the ghost's bottom face
+    // grid cell is smaller), anchored on the ghost's bottom face. When the
+    // brush is rotated the lattice is too, so the grid plane tilts and spins
+    // with it -- what you see is exactly where the next placement can land.
     const s = CORE.snapSpacing(eff, CORE.GRID_SIZES[game.gridIdx]);
     if (!game.gridViz || game.gridVizCell !== s) buildGridViz(s);
     game.gridViz.visible = true;
     const h = eff * 0.5;
-    game.gridViz.position.set(p.x - h, p.y - h, p.z - h);
+    if (rot || grx || grz){
+      // step back to the ghost's own corner INSIDE the rotated frame, then
+      // return to world -- that corner is a true lattice point
+      const l = CORE.worldToFrame(rot, grx, grz, p.x, p.y, p.z);
+      const w = CORE.frameToWorld(rot, grx, grz, l[0] - h, l[1] - h, l[2] - h);
+      game.gridViz.position.set(w[0], w[1], w[2]);
+      applyEditRot(game.gridViz, rot, grx, grz);
+    } else {
+      game.gridViz.position.set(p.x - h, p.y - h, p.z - h);
+      applyEditRot(game.gridViz, 0, 0, 0);
+    }
   }
 }
 
@@ -8125,21 +8169,23 @@ const wrenchProps = {
   // center + half extents of the selection box, world space
   boundsOf(k, ref){
     if (k === 'torch') return { x: ref[0], y: ref[1] + 0.35, z: ref[2], hx: 0.16, hy: 0.42, hz: 0.16 };
-    if (k === 'table') return { x: ref[0], y: ref[1] + 0.5, z: ref[2], hx: 0.6, hy: 0.5, hz: 0.6 };
-    if (k === 'beacon') return { x: ref[0], y: ref[1] + 1.0, z: ref[2], hx: 0.4, hy: 1.05, hz: 0.4 };
-    if (k === 'bed') return { x: ref[0], y: ref[1] + 0.32, z: ref[2], hx: 0.75, hy: 0.34, hz: 0.75 };
+    if (k === 'table') return { x: ref[0], y: ref[1] + 0.5, z: ref[2], hx: 0.6, hy: 0.5, hz: 0.6, yaw: ref[3] || 0 };
+    if (k === 'beacon') return { x: ref[0], y: ref[1] + 1.0, z: ref[2], hx: 0.4, hy: 1.05, hz: 0.4, yaw: ref[3] || 0 };
+    if (k === 'bed') return { x: ref[0], y: ref[1] + 0.32, z: ref[2], hx: 0.56, hy: 0.34, hz: 1.02, yaw: ref[3] || 0 };
     if (k === 'bulb'){
       const nx = ref[3] || 0, ny = ref[4] == null ? 1 : ref[4], nz = ref[5] || 0;
       return { x: ref[0] + nx * 0.28, y: ref[1] + ny * 0.28, z: ref[2] + nz * 0.28, hx: 0.26, hy: 0.26, hz: 0.26 };
     }
-    if (k === 'stove') return { x: ref.x, y: ref.y + 0.5, z: ref.z, hx: 0.52, hy: 0.56, hz: 0.52 };
+    if (k === 'stove') return { x: ref.x, y: ref.y + 0.5, z: ref.z, hx: 0.52, hy: 0.56, hz: 0.52, yaw: ref.yaw || 0 };
     if (k === 'door'){
       const w = ref.w || 1.2, h = ref.h || 2.2, a = ref.yaw + (ref.open ? Math.PI / 2 : 0);
+      // the outline hugs the real panel now that it can turn with the door;
+      // the pick radius is dominated by h/2 either way, so reach is unchanged
       return { x: ref.x + Math.cos(a) * w * 0.5, y: ref.y + h * 0.5, z: ref.z - Math.sin(a) * w * 0.5,
-               hx: Math.max(0.3, w * 0.5), hy: h * 0.5, hz: Math.max(0.3, w * 0.5) };
+               hx: w * 0.5, hy: h * 0.5, hz: 0.1, yaw: a, pickR: Math.max(0.3, w * 0.5) };
     }
     if (k === 'rope') return { x: ref[0], y: ref[1], z: ref[2], hx: 0.28, hy: 0.22, hz: 0.28 };
-    if (k === 'decor') return { x: ref.x, y: ref.y + 0.35, z: ref.z, hx: 0.45, hy: 0.42, hz: 0.45 };
+    if (k === 'decor') return { x: ref.x, y: ref.y + 0.35, z: ref.z, hx: 0.45, hy: 0.42, hz: 0.45, yaw: ref.yaw || 0 };
     if (k === 'pnode'){
       const D = { staple: [0.05, 0.22, 0.12, 0.22], lever: [0.2, 0.32, 0.3, 0.28], crank: [0.5, 0.34, 0.55, 0.34],
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
@@ -8149,7 +8195,12 @@ const wrenchProps = {
                   pad: [0.06, 0.52, 0.15, 0.52], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
       const s = ref.t === 'chest' ? (ref.sc || 1) : 1;
-      return { x: ref.x, y: ref.y + D[0] * s, z: ref.z, hx: D[1] * s, hy: D[2] * s, hz: D[3] * s };
+      const B = { x: ref.x, y: ref.y + D[0] * s, z: ref.z, hx: D[1] * s, hy: D[2] * s, hz: D[3] * s,
+                  yaw: ref.yaw || 0 };
+      // staples sit on a surface normal rather than a yaw: hand the outline
+      // the same orientation pnodeSys.rebuild gives the model
+      if (ref.t === 'staple') B.n = [ref.nx || 0, ref.ny == null ? 1 : ref.ny, ref.nz || 0, ref.rot || 0];
+      return B;
     }
     if (k === 'wire' || k === 'tube'){
       const A = pnodeSys.terminal(ref.a), B = pnodeSys.terminal(ref.b);
@@ -8187,7 +8238,7 @@ const wrenchProps = {
       const tt = vx * dir.x + vy * dir.y + vz * dir.z;
       if (tt < 0.2 || tt > bestT) continue;
       const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
-      const r = Math.max(b.hx, b.hy, b.hz) + 0.12;
+      const r = Math.max(b.pickR || 0, b.hx, b.hy, b.hz) + 0.12;
       if (Math.hypot(px, py, pz) < r){ best = { k: s.k, ref: s.ref, t: tt, r }; bestT = tt; }
     }
     return best;
@@ -8403,6 +8454,22 @@ const wrenchProps = {
     return null;
   },
 };
+
+// Props store yaw the way THREE does (pnodeSys draws them with rotation.y =
+// yaw), so unlike edits these are NOT negated; staples ride a surface normal
+// instead and get the same quaternion their model does.
+function orientPropWire(obj, b){
+  if (b.n){
+    obj.rotation.set(0, 0, 0);
+    obj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(b.n[0], b.n[1], b.n[2]).normalize());
+    if (b.n[3]) obj.quaternion.multiply(new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(0, 1, 0), b.n[3]));
+    return;
+  }
+  obj.quaternion.identity();
+  obj.rotation.set(0, b.yaw || 0, 0);
+}
 
 // ---------- the wrench: a material editor over the edit list ----------
 // The edit list IS the memory of how the world was built — every placed cube
@@ -8620,10 +8687,15 @@ const wrenchSys = {
       w.visible = true;
       w.position.set(e.x, e.y, e.z);
       w.scale.set(hx * 2 + 0.04, hy * 2 + 0.04, hz * 2 + 0.04);
-      w.rotation.set(e.rx || 0, e.rot || 0, e.rz || 0);
+      applyEditRot(w, e.rot, e.rx, e.rz);
       half = [hx, hy, hz]; cx = e.x; cy = e.y; cz = e.z;
     } else {
       const b = wrenchProps.boundsOf(pp.k, pp.ref);
+      const w = this.wires[1];
+      w.visible = true;
+      w.position.set(b.x, b.y, b.z);
+      w.scale.set(b.hx * 2 + 0.06, b.hy * 2 + 0.06, b.hz * 2 + 0.06);
+      orientPropWire(w, b);
       half = [b.hx, b.hy, b.hz]; cx = b.x; cy = b.y; cz = b.z;
     }
     for (let i = 0; i < 6; i++){
@@ -8652,7 +8724,7 @@ const wrenchSys = {
       sw.visible = true;
       sw.position.set(t.x, t.y, t.z);
       sw.scale.set(thx * 2 + 0.04, thy * 2 + 0.04, thz * 2 + 0.04);
-      sw.rotation.set(t.rx || 0, t.rot || 0, t.rz || 0);
+      applyEditRot(sw, t.rot, t.rx, t.rz);
     }
     for (const pw of this.propWires){
       const s = pw.userData.propSel;
@@ -8660,6 +8732,7 @@ const wrenchSys = {
       pw.visible = b.y > -900;
       pw.position.set(b.x, b.y, b.z);
       pw.scale.set(b.hx * 2 + 0.06, b.hy * 2 + 0.06, b.hz * 2 + 0.06);
+      orientPropWire(pw, b);
     }
   },
   onLMB(){
@@ -8992,14 +9065,13 @@ const wrenchSys = {
       const w = new THREE.LineSegments(this.selGeos[t.shape], mats.wire);
       w.position.set(t.x, t.y, t.z);
       w.scale.set(thx * 2, thy * 2, thz * 2);
-      w.rotation.order = 'YXZ';
-      w.rotation.set(t.rx || 0, t.rot || 0, t.rz || 0);
+      applyEditRot(w, t.rot, t.rx, t.rz);
       w.renderOrder = 7;
       g.add(w);
       if (showFill){
         const f = new THREE.Mesh(this.solidGeos[t.shape], mats.fill);
         f.position.copy(w.position); f.scale.copy(w.scale);
-        f.rotation.order = 'YXZ'; f.rotation.copy(w.rotation);
+        f.rotation.order = 'YXZ'; f.rotation.copy(w.rotation);   // matches the wire
         f.renderOrder = 6;
         g.add(f);
       }
@@ -9147,6 +9219,17 @@ const wrenchSys = {
 
 function editRot(shape){
   return shape !== 0 ? game.tool.rot : 0;
+}
+function brushRX(){ return game.tool.shape !== 0 ? game.tool.rx || 0 : 0; }
+function brushRZ(){ return game.tool.shape !== 0 ? game.tool.rz || 0 : 0; }
+// CORE yaws by Ry(-t) (see rotToWorld) but THREE's rotation.y is Ry(+t), so
+// every edit -> scene-object mapping has to NEGATE the yaw. Getting this
+// wrong drew rotated outlines mirrored about the Z axis -- invisible on a
+// plain cube (4-fold symmetric) and obvious the moment one is stretched.
+// Order YXZ matches CORE's world = Ry * Rx * Rz.
+function applyEditRot(obj, rot, rx, rz){
+  obj.rotation.order = 'YXZ';
+  obj.rotation.set(rx || 0, -(rot || 0), rz || 0);
 }
 // attach the tool's full rotation to a new edit (spheres ignore rotation)
 function applyToolRot(e){
