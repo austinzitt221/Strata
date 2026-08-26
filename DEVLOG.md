@@ -2,6 +2,52 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8.2 — logs, empty hands, and a real grappling hook (2026-08-26)
+
+- **Wood is a log now, not a second plank.** The old WOOD tile was a warm
+  mid-brown speckle with HORIZONTAL seams — the same recipe as planks, so
+  the two were nearly indistinguishable (their average colors sat 65 RGB
+  points apart after the rework; before, they read as siblings). It's
+  bark now: a much darker, desaturated trunk brown with broken VERTICAL
+  furrows of varying width, lighter raised ridges, and the occasional
+  knot. The vertical run is what sells it — measured, the tile now varies
+  ~1.9× more across columns than down rows, which is the signature of
+  vertical grain.
+  Better still, a felled log shows **end grain on its cut faces**: pale
+  heartwood with concentric rings and a bark rim. The terrain shader
+  already picks a texture by dominant axis, so the atlas grew one extra
+  column past the materials and the shader swaps to it on top faces
+  (`uLogMat` / `uLogEnd`). Cheap — one compare in the fragment shader —
+  and it's what makes a trunk read as a trunk from above. The HUD icon
+  comes from the same tile, so it fixed itself.
+- **Coin and drone raise a hand.** Neither matched any viewmodel branch,
+  so selecting them showed literally nothing — no arm, no item. They're
+  in the held-item list now, along with the treasure map, ledger,
+  pedestal, sign and chest, which had the same gap.
+- **The grappling hook is a real gun.** It was borrowing the generic
+  icon-in-fist. Now it's a proper prop like the drill: steel receiver,
+  raised spine, angled grip, a wide muzzle collar, the wound spool of
+  line sitting on top, and three prongs stowed in the barrel.
+- **The line is real too.** Fire it and a rope leaves the **actual muzzle**
+  — the gun carries an empty marker object that the rope reads its world
+  position from, so the line always starts at the barrel rather than a
+  guessed offset. It spans to whatever you hooked and ends in a claw:
+  a hub with four barbed prongs, oriented to the surface normal captured
+  at the moment of impact, so it presses flat against a wall or hangs off
+  a ceiling correctly. In third person (or photo mode) the rope switches
+  to leaving your hand, since the viewmodel isn't drawn there.
+  First attempt buried the claw *inside* the rock — the prongs pointed
+  along the normal, which is into the surface — so it now stands off by
+  one prong length with only the barbs reaching back in.
+
+Verified in-browser: the atlas carries 18 columns with the log-end
+uniforms wired, wood measures 65 RGB points from planks and darker, grain
+runs vertical; coin, drone and grapple each raise the right hand; the
+gun has its 10 parts plus muzzle marker; and the rope's length matched
+the true muzzle-to-anchor span exactly (18.27m), centred on the line,
+with the claw on the face, oriented to the normal, and everything hidden
+again on release. 297 headless tests, smoke, and the 7.5 suite green.
+
 ## Build 8.1 — the grid turns with you (2026-08-26)
 
 Two things that had been quietly wrong, and one that was only half built.
