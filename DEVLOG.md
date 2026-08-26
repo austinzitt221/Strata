@@ -2,6 +2,55 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8.3 — food is the health bar now (2026-08-26)
+
+Opus patch pass #3. Survival economy, two texture/animation fixes, and
+menus that no longer make you scroll for a lightbulb.
+
+- **Hunger is gone.** No bar, no drain, no starvation damage, no
+  `game.food` field anywhere in the file. Sprint is unlimited.
+- **Health never regenerates on its own.** Eating is the only way back
+  up, and it isn't a potion: a meal banks a *pool* of healing that
+  trickles into the bar at a fixed 100 hp / 30 s. So a full bar from
+  empty always takes thirty seconds no matter what paid for it —
+  4 raw meat (25 each) or 2 cooked (50 each). Overeating is refused
+  rather than wasted: if the bank plus current hp would exceed full,
+  the meal stays in your hand and you get "already mending".
+- **Log end grain, fixed and rotation-aware.** The old end texture drew
+  concentric rings centred on the 16×16 tile, so it only ever lined up
+  on a one-metre cube and turned into bullseyes at every other size.
+  Replaced with pale peeled-back inner wood: straight vertical fibre
+  that runs the full height of the tile, so it tiles seamlessly at any
+  scale. And which faces are pale now follows the block, not the world
+  — the mesher bakes the placing edit's trunk direction into a new
+  per-vertex `aAxis`, and the shader picks end grain where the surface
+  normal lines up with that axis. Roll a log 90° and the pale ends move
+  to its left and right. A wood *sphere* gets a zero axis, which never
+  matches, so it stays bark all over.
+- **A real sword swing.** It used to just rotate right. Now it's an arc
+  — up and back, then a fast diagonal chop across the body on a
+  `sin(sqrt(t)·π)` curve so the cut snaps and the recovery drifts, with
+  the blade translating as well as rotating.
+- **Grapple aiming preview.** Hold the hook and a ghosted claw sits
+  wherever a shot would catch, oriented to that surface. No rope — the
+  line only exists once you fire. The preview runs the *same* cast the
+  trigger runs, so it can't disagree with the shot.
+- **Categories in both menus.** One shared taxonomy — material, gadgets,
+  electricity, special, items — behind the creative catalog and the
+  crafting table, so nothing sorts differently depending on which menu
+  you opened. Tabs are picture buttons (rock, drill, lever, bed, stick).
+  The catalog grid went from 5 columns to 10; the craft panel widened to
+  fit the tab row without cramming.
+
+Verified in-browser: hunger bar absent and the field removed; zero
+passive regen across a simulated 10 s; 4 raw and 2 cooked each bank
+exactly 100; empty-to-full measured at 30.0 s; log axis reads [0,1,0]
+upright, [-1,0,0] rolled, [0,0,0] for a sphere, with the end tile pale
+and vertically seamless; swing peaks at -1.9 rad and returns to zero;
+preview lands within 0.5 m of the real cast and vanishes the instant
+the rope appears; 5 tabs in both menus, 10 grid columns, every category
+non-empty. 297 headless tests and the smoke suite green.
+
 ## Build 8.2 — logs, empty hands, and a real grappling hook (2026-08-26)
 
 - **Wood is a log now, not a second plank.** The old WOOD tile was a warm
