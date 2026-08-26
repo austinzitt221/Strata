@@ -53,7 +53,6 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .statbar{width:220px; height:12px; background:rgba(10,9,16,0.75); border:2px solid var(--ui-border);}
 .statfill{height:100%;}
 .statfill.hp{background:#e04545; width:100%;}
-.statfill.food{background:#c8a24b; width:100%;}
 #hurt{position:fixed; inset:0; pointer-events:none; background:radial-gradient(ellipse at center, transparent 40%, rgba(200,20,20,0.55) 100%); opacity:0; transition:opacity .12s;}
 #chargebar{position:absolute; left:50%; bottom:74px; transform:translateX(-50%); width:180px; height:10px; background:rgba(10,9,16,0.7); border:2px solid var(--ui-border); display:none;}
 #chargefill{height:100%; width:0%; background:var(--accent);}
@@ -67,6 +66,16 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   font:13px monospace; padding:5px 10px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
 #jetbox{position:absolute; right:14px; bottom:118px; background:rgba(10,10,16,0.55); color:#9fe8ff;
   font:12px monospace; padding:5px 9px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
+.cattabs{display:flex; gap:6px; margin-bottom:10px; flex-wrap:nowrap;}
+.cattab{display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer;
+  padding:5px 9px; border:2px solid rgba(74,68,88,0.8); background:rgba(20,18,30,0.6);
+  border-radius:3px; user-select:none; white-space:nowrap;}
+.cattab img{width:26px; height:26px; image-rendering:pixelated; opacity:0.55;}
+.cattab span{font-size:9px; letter-spacing:1px; color:#8a8494;}
+.cattab:hover{border-color:#6fd3ff;}
+.cattab.on{border-color:#6fd3ff; background:rgba(50,90,120,0.35);}
+.cattab.on img{opacity:1;}
+.cattab.on span{color:#cfe9ff;}
 #navbox{position:absolute; left:50%; top:12px; transform:translateX(-50%); display:flex; gap:8px; align-items:center; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 10px; border:2px solid rgba(74,68,88,0.5); letter-spacing:1px;}
 #navarrow{display:inline-block; color:var(--accent); font-size:13px;}
 
@@ -98,7 +107,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- fatal ---------- */
 #fatal{z-index:100; background:#14060a;}
-#cataloggrid{display:grid; grid-template-columns:repeat(5, 52px); gap:6px;
+#cataloggrid{display:grid; grid-template-columns:repeat(10, 52px); gap:6px;
   max-height:420px; overflow-y:auto; padding-right:4px;}
 #cataloggrid .slot{cursor:pointer;}
 #cataloggrid .slot:hover{border-color:#6fd3ff;}
@@ -114,7 +123,6 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <div id="hud" class="hidden">
   <div id="statbars" class="hidden">
     <div class="statbar"><div id="hpfill" class="statfill hp"></div></div>
-    <div class="statbar"><div id="foodfill" class="statfill food"></div></div>
     <div class="statbar hidden" id="breathbar"><div id="breathfill" class="statfill breath"></div></div>
   </div>
   <div id="uwater" class="hidden"></div>
@@ -234,6 +242,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="panel hidden" id="catalogpanel">
     <h2>CATALOG</h2>
     <div class="sub" style="margin-bottom:8px;">creative — click anything to take it</div>
+    <div class="cattabs" id="catalogtabs"></div>
     <div id="cataloggrid"></div>
   </div>
   <div class="panel">
@@ -316,9 +325,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 <div id="craftscreen" class="screen hidden dim">
   <div class="mstack">
-    <div class="panel" style="min-width:560px;">
+    <div class="panel" style="min-width:720px;">
       <h2>CRAFTING</h2>
       <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
+      <div class="cattabs" id="crafttabs"></div>
       <div id="craftlist" style="max-height:340px; overflow:auto;"></div>
       <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
     </div>
@@ -1261,7 +1271,12 @@ function evalSDF(px, py, pz, edits, gen){
 // material of a solid point: bedrock zone wins, else last union containing
 // the point, else base rock. (Solid points whose last containing edit is a
 // subtract cannot exist, so subtracts are irrelevant here.)
+// the edit that won the most recent materialAt() -- a scratch global rather
+// than a returned pair so the mesher's hot loop allocates nothing
+let _matEdit = null;
+function lastMatEdit(){ return _matEdit; }
 function materialAt(px, py, pz, edits, gen){
+  _matEdit = null;
   if (py < BEDROCK_Y) return MAT.BEDROCK;
   let m = (gen || FLAT_GEN).mat(px, py, pz);
   for (let i = 0; i < edits.length; i++){
@@ -1269,7 +1284,7 @@ function materialAt(px, py, pz, edits, gen){
     // <= 0: boundary samples count as solid (SOLID = d <= 0), so a snapped
     // placement must claim its own faces or they'd fall through to the
     // generator's material (grass specks in placed obsidian)
-    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) <= 0) m = e.mat || MAT.ROCK;
+    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
   }
   return m;
 }
@@ -1648,7 +1663,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
         if (cellVertex(x, y, z)) hasVert[CI(x, y, z)] = 1;
 
   // emit quads for owned sign-change edges
-  const pos = [], nrm = [], mat = [], sky = [], aoA = [];
+  const pos = [], nrm = [], mat = [], sky = [], aoA = [], axs = [];
   // SDF ambient occlusion, baked per quad: march along the normal and
   // compare the free space the field grants against the march distance.
   // The SDF is a global min-distance, so walls darken nearby floors
@@ -1737,6 +1752,21 @@ function meshChunk(cx, cy, cz, allEdits, gen){
                                 Math.max(ax0,bx0), Math.max(ay0,by0), Math.max(az0,bz0));
           const mEps = 0.06;
           const mSample = materialAt(h.px - h.nx * mEps, h.py - h.ny * mEps, h.pz - h.nz * mEps, le, gen);
+          // A log's pale faces are the ends of ITS trunk, not whatever happens
+          // to point at the sky -- so each vertex carries the axis of the edit
+          // that placed it. Spheres get a zero axis: a ball of wood is bark
+          // all over, it has no ends.
+          let axX = 0, axY = 1, axZ = 0;
+          if (mSample === MAT.WOOD){
+            const me = lastMatEdit();
+            if (me){
+              if (me.shape === 0){ axX = 0; axY = 0; axZ = 0; }
+              else if (editHasRot(me)){
+                const av = rotToWorld(me, 0, 1, 0);
+                axX = av[0]; axY = av[1]; axZ = av[2];
+              }
+            }
+          }
           // quad c0,c1,c2,c3 (ring around edge). Winding is canonical from the
           // sign configuration: the ring order faces -axis, so flip when the
           // near sample is solid (outward normal is +axis). Never derived from
@@ -1750,7 +1780,10 @@ function meshChunk(cx, cy, cz, allEdits, gen){
           for (const tri of (flip ? [[0, 2, 1], [0, 3, 2]] : [[0, 1, 2], [0, 2, 3]])){
             const a0 = tri[0]*3, a1 = tri[1]*3, a2 = tri[2]*3;
             pos.push(V[a0], V[a0+1], V[a0+2], V[a1], V[a1+1], V[a1+2], V[a2], V[a2+1], V[a2+2]);
-            for (let q = 0; q < 3; q++){ nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv); }
+            for (let q = 0; q < 3; q++){
+              nrm.push(g[0], g[1], g[2]); mat.push(mSample - 1); sky.push(sv);
+              axs.push(axX, axY, axZ);
+            }
             aoA.push(cAO[tri[0]], cAO[tri[1]], cAO[tri[2]]);
           }
         }
@@ -1764,6 +1797,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
     mats: new Float32Array(mat),
     skys: new Float32Array(sky),
     aos: new Float32Array(aoA),
+    axes: new Float32Array(axs),
   };
 }
 
@@ -2307,20 +2341,31 @@ function makeTileDrawers(){
         ctx.fillStyle = '#241708'; ctx.fillRect(kx + 1, ky, 1, 2);
       }
     },
-    // END GRAIN: the cut face. Pale heartwood with concentric rings, so a
-    // felled trunk reads as a log from above instead of more bark.
-    logEnd(ctx, rng){
-      speckle(ctx, rng, '#a9814c', '#96703f', '#bb9660', 0.26, 0.2);
-      const cx = 7.5, cy = 7.5;
-      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++){
-        const d = Math.hypot(x - cx, y - cy);
-        // wobble the radius a touch so the rings are not perfect circles
-        const w = d + (rng() - 0.5) * 0.9;
-        const ring = Math.abs(Math.sin(w * 1.5));
-        if (ring < 0.20){ ctx.fillStyle = '#7d5c31'; ctx.fillRect(x, y, 1, 1); }
-        if (d > 6.9){ ctx.fillStyle = '#4f3820'; ctx.fillRect(x, y, 1, 1); }  // bark rim
+    // INNER WOOD: what's under the bark once you peel it back. Very pale,
+    // with straight fibrous grain running one way. Rings were a mistake here
+    // -- they are centred on the tile, so they only ever lined up on a
+    // one-metre cube and turned into bullseyes at any other size. Straight
+    // grain tiles seamlessly and reads correctly at every scale.
+    logInner(ctx, rng){
+      speckle(ctx, rng, '#d8bb8a', '#c9a877', '#e6cd9f', 0.24, 0.24);
+      // grain: continuous top-to-bottom lines, so vertically adjacent tiles
+      // join up instead of showing a seam
+      for (let x = 0; x < 16; x++){
+        const r = rng();
+        if (r < 0.26){
+          ctx.fillStyle = r < 0.10 ? '#a8875a' : '#bd9a68';
+          ctx.fillRect(x, 0, 1, 16);
+        } else if (r > 0.88){
+          ctx.fillStyle = '#f0dcb6';
+          ctx.fillRect(x, 0, 1, 16);
+        }
       }
-      ctx.fillStyle = '#5f4526'; ctx.fillRect(7, 7, 2, 2);                     // pith
+      // a few short fibre breaks to stop it reading as a barcode
+      for (let i = 0; i < 5; i++){
+        const x = (rng() * 15) | 0, y = (rng() * 13) | 0;
+        ctx.fillStyle = '#b08f60';
+        ctx.fillRect(x, y, 1, 2 + ((rng() * 2) | 0));
+      }
     },
     [CORE.MAT.PLANKS](ctx, rng){
       speckle(ctx, rng, '#b08d55', '#997641', '#c6a36b', 0.3, 0.2);
@@ -2417,7 +2462,7 @@ function buildAtlas(seed){
     ctx.restore();
   }
   ctx.save(); ctx.translate(LOG_END_SLOT * TEX_SIZE, 0);
-  drawers.logEnd(ctx, CORE.mulberry32(seed ^ 0x51ab3f27));
+  drawers.logInner(ctx, CORE.mulberry32(seed ^ 0x51ab3f27));
   ctx.restore();
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.NearestFilter;
@@ -2440,12 +2485,14 @@ const TERRAIN_VERT = `
 attribute float aMat;
 attribute float aSky;
 attribute float aAO;
+attribute vec3 aAxis;
 uniform mat4 uShadowMatrix;
 varying vec3 vPos;
 varying vec3 vNrm;
 varying float vMat;
 varying float vSky;
 varying float vAO;
+varying vec3 vAxis;
 varying vec4 vShadowCoord;
 void main(){
   vPos = position;              // chunk meshes live in world space
@@ -2453,6 +2500,7 @@ void main(){
   vMat = aMat;
   vSky = aSky;
   vAO = aAO;
+  vAxis = aAxis;
   vShadowCoord = uShadowMatrix * vec4(position, 1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }`;
@@ -2484,6 +2532,7 @@ varying vec3 vNrm;
 varying float vMat;
 varying float vSky;
 varying float vAO;
+varying vec3 vAxis;
 // large-scale world-anchored luminance variation: gives big single-material
 // faces landmarks that slide with parallax instead of a uniform sheet.
 // Lattice is wrapped mod 64 before hashing so sin() stays precise far from
@@ -2517,8 +2566,14 @@ void main(){
   else if (an.x >= an.z)                 uv = vPos.zy;
   else                                   uv = vPos.xy;
   float m = floor(vMat + 0.5);
-  // a log shows bark around its sides and end grain where it was cut
-  if (topFace && abs(m - uLogMat) < 0.5) m = uLogEnd;
+  // A log shows bark around its barrel and pale inner wood on the two cut
+  // ends. Which faces those are follows the BLOCK's rotation, not the world:
+  // vAxis is the trunk direction baked in by the mesher. A zero axis (a wood
+  // sphere) never matches, so it stays bark all over.
+  if (abs(m - uLogMat) < 0.5){
+    float axLen = length(vAxis);
+    if (axLen > 0.5 && abs(dot(n, vAxis / axLen)) > 0.7) m = uLogEnd;
+  }
   float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
   float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
   vec4 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy));
@@ -2720,6 +2775,7 @@ class Terrain {
     g.setAttribute('aMat', new THREE.BufferAttribute(data.mats, 1));
     g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
     g.setAttribute('aAO', new THREE.BufferAttribute(data.aos, 1));
+    g.setAttribute('aAxis', new THREE.BufferAttribute(data.axes, 3));
     const mesh = new THREE.Mesh(g, this.material);
     mesh.castShadow = true;
     mesh.frustumCulled = true;
@@ -2849,7 +2905,7 @@ const game = {
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
   // survival state
-  mode: 'creative', hp: 100, food: 100, timeOfDay: 0.2, dayF: 1,
+  mode: 'creative', hp: 100, heal: 0, timeOfDay: 0.2, dayF: 1,
   torches: [], beacons: [], beds: [], spawnPoint: null, stoves: [], bulbs: [], entities: [], deathCache: null,
   doors: [], tables: [], removedTrees: [], solidProps: [],
   lastMelee: 0, lastShot: 0, spawnT: 0, hurtT: 0,
@@ -3980,8 +4036,15 @@ function updateViewmodel(dt){
   if (kind === 'sword'){
     v.sword.userData.item.userData.bladeMat.color.set(TIER_COL[tool.tier]);
     const sw = Math.max(0, 1 - (performance.now() - (game.swingT || 0)) / 260);
-    v.sword.rotation.z = -sw * 1.3;
-    v.sword.rotation.x = sw * 0.5;
+    // a real swing: up and back, then a fast diagonal chop down across the
+    // body, easing out as it returns. sqrt() front-loads the arc so the cut
+    // snaps and the recovery drifts, the way Minecraft's does.
+    const p = 1 - sw;                        // 0 -> 1 across the swing
+    const arc = Math.sin(Math.sqrt(p) * Math.PI);
+    v.sword.rotation.z = -arc * 1.9;
+    v.sword.rotation.x = arc * 1.0;
+    v.sword.rotation.y = arc * 0.5;
+    v.sword.position.set(-arc * 0.12, -arc * 0.05, arc * 0.14);
     return;
   }
   if (kind === 'torch'){
@@ -4012,6 +4075,30 @@ function updateViewmodel(dt){
     const fill = Math.min(1, Math.max(0.45, 0.45 + tool.count / 1200));
     ud.orb.scale.setScalar(fill);
   }
+}
+
+// where a shot from here would land: the same march the trigger runs, so
+// the preview can never disagree with the shot
+function grappleCast(){
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  const o = game.camera.position;
+  const R = 34 + (game.camBack || 0);
+  const segBox = [Math.min(o.x, o.x + dir.x * R) - 1, Math.min(o.y, o.y + dir.y * R) - 1, Math.min(o.z, o.z + dir.z * R) - 1,
+                  Math.max(o.x, o.x + dir.x * R) + 1, Math.max(o.y, o.y + dir.y * R) + 1, Math.max(o.z, o.z + dir.z * R) + 1];
+  const eds = nearEdits(segBox);
+  let t = 0.4 + (game.camBack || 0);
+  for (let i = 0; i < 160 && t < R; i++){
+    const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+    const d = sdfWorld(x, y, z, eds);
+    if (d < 0.03){
+      const ge = nearEdits([x-1, y-1, z-1, x+1, y+1, z+1]);
+      const gn = CORE.gradSDF ? CORE.gradSDF(x, y, z, ge, 0.15, game.gen) : [0, 1, 0];
+      return { x, y, z, n: [gn[0], gn[1], gn[2]] };
+    }
+    t += Math.max(0.05, d * 0.6);
+  }
+  return null;
 }
 
 // ---------- the grappling line ----------
@@ -4052,6 +4139,25 @@ const grappleSys = {
     this.claw.scale.setScalar(1.5);
     this.group.add(this.claw);
     scene.add(this.group);
+    // aiming preview: the same claw, ghosted, parked where a shot would
+    // land. Deliberately no rope -- the line only exists once you fire.
+    this.preview = this.claw.clone(true);
+    this.preview.traverse(o => {
+      if (!o.isMesh) return;
+      o.material = o.material.clone();
+      o.material.transparent = true;
+      o.material.opacity = 0.42;
+      o.material.depthWrite = false;
+    });
+    this.preview.visible = false;
+    this.preview.userData.noShadow = true;
+    scene.add(this.preview);
+  },
+  aimAt(p, n){
+    this.preview.position.set(p.x + n[0] * CLAW_LIFT, p.y + n[1] * CLAW_LIFT, p.z + n[2] * CLAW_LIFT);
+    this.preview.quaternion.setFromUnitVectors(UP_Y,
+      (this._pn || (this._pn = new THREE.Vector3())).set(n[0], n[1], n[2]).normalize());
+    this.preview.visible = true;
   },
   // where the line leaves the player: the gun barrel in first person, the
   // hand in third person / photo mode where the viewmodel is hidden
@@ -4069,8 +4175,19 @@ const grappleSys = {
     return out.set(game.pos.x, game.pos.y + playerHeight() * 0.62, game.pos.z);
   },
   update(){
+    if (!this.group) return;
     const gp = game.grapple;
-    if (!gp || !this.group){ if (this.group) this.group.visible = false; return; }
+    // idle with the hook out: show where the claw would catch
+    if (!gp){
+      this.group.visible = false;
+      const tl = activeTool();
+      if (tl && tl.kind === 'grapple' && game.ui === 'none' && isLocked() && !game.photo){
+        const c = grappleCast();
+        if (c) this.aimAt(c, c.n); else this.preview.visible = false;
+      } else this.preview.visible = false;
+      return;
+    }
+    this.preview.visible = false;
     this.group.visible = true;
     const A = this._a || (this._a = new THREE.Vector3());
     this.muzzleWorld(A);
@@ -9779,24 +9896,9 @@ function tryAction(dt, now){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       if (game.grapple){ game.grapple = null; toast('released'); return; }
-      const dir = new THREE.Vector3();
-      game.camera.getWorldDirection(dir);
-      const o = game.camera.position;
-      const R = 34 + (game.camBack || 0);
-      const segBox = [Math.min(o.x, o.x + dir.x * R) - 1, Math.min(o.y, o.y + dir.y * R) - 1, Math.min(o.z, o.z + dir.z * R) - 1,
-                      Math.max(o.x, o.x + dir.x * R) + 1, Math.max(o.y, o.y + dir.y * R) + 1, Math.max(o.z, o.z + dir.z * R) + 1];
-      const eds = nearEdits(segBox);
-      let t = 0.4 + (game.camBack || 0), hit = null;
-      for (let i = 0; i < 160 && t < R; i++){
-        const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
-        const d = sdfWorld(x, y, z, eds);
-        if (d < 0.03){ hit = [x, y, z]; break; }
-        t += Math.max(0.05, d * 0.6);
-      }
+      const hit = grappleCast();
       if (!hit){ toast('nothing to hook within 34m'); AudioSys.sfx('deny'); return; }
-      const ge = nearEdits([hit[0]-1, hit[1]-1, hit[2]-1, hit[0]+1, hit[1]+1, hit[2]+1]);
-      const gn = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], ge, 0.15, game.gen) : [0, 1, 0];
-      game.grapple = { x: hit[0], y: hit[1], z: hit[2], n: [gn[0], gn[1], gn[2]] };
+      game.grapple = hit;
       AudioSys.sfx('place');
       toast('grappled — left click again to release');
     }
@@ -10467,6 +10569,53 @@ function buildInvUI(){
   refreshInvUI();
 }
 
+// ---------- item categories ----------
+// One shared taxonomy behind both the creative catalog and the crafting
+// table, so an item never sorts differently depending on which menu you
+// opened. Each tab is labelled by a picture of a representative item.
+const CAT_GADGETS = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'sword', 'gun',
+                     'jetpack', 'helm', 'plate', 'boots'];
+const CAT_POWER   = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
+                     'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
+const CAT_SPECIAL = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
+                     'sign', 'rope', 'ped', 'torch', 'board'];
+const ITEM_CATS = [
+  { id: 'mat',     label: 'MATERIAL',    icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
+  { id: 'gadget',  label: 'GADGETS',     icon: () => CORE.makeDrill(1) },
+  { id: 'power',   label: 'ELECTRICITY', icon: () => ({ kind: 'lever', count: 1 }) },
+  { id: 'special', label: 'SPECIAL',     icon: () => ({ kind: 'bed', count: 1 }) },
+  { id: 'item',    label: 'ITEMS',       icon: () => ({ kind: 'stick', count: 1 }) },
+];
+function itemCat(it){
+  if (!it) return 4;
+  if (it.kind === 'mat') return 0;
+  if (CAT_GADGETS.includes(it.kind)) return 1;
+  if (CAT_POWER.includes(it.kind)) return 2;
+  if (CAT_SPECIAL.includes(it.kind)) return 3;
+  return 4;                                     // coins, ore, food, plants...
+}
+function recipeCat(r){
+  if (r.kind === 'matout') return 0;
+  return itemCat({ kind: r.kind });
+}
+// a row of picture tabs; onPick(index) rebuilds whatever list sits below
+function buildCatTabs(host, active, onPick){
+  host.innerHTML = '';
+  ITEM_CATS.forEach((c, i) => {
+    const b = document.createElement('div');
+    b.className = 'cattab' + (i === active ? ' on' : '');
+    b.title = c.label;
+    const img = document.createElement('img');
+    img.src = itemIconURL(c.icon());
+    b.appendChild(img);
+    const t = document.createElement('span');
+    t.textContent = c.label;
+    b.appendChild(t);
+    b.addEventListener('mousedown', ev => { ev.stopPropagation(); onPick(i); });
+    host.appendChild(b);
+  });
+}
+
 // creative catalog: one entry for EVERYTHING in the game; click to take
 function catalogEntries(){
   const out = [];
@@ -10496,8 +10645,11 @@ function buildCatalogUI(){
   const grid = $('cataloggrid');
   if (game.mode !== 'creative'){ panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
+  if (game.catTab == null) game.catTab = 0;
+  buildCatTabs($('catalogtabs'), game.catTab, i => { game.catTab = i; buildCatalogUI(); });
   grid.innerHTML = '';
   for (const entry of catalogEntries()){
+    if (itemCat(entry) !== game.catTab) continue;
     const d = document.createElement('div');
     d.className = 'slot';
     d.title = itemLabel(entry);
@@ -10969,7 +11121,9 @@ function refreshToolHUD(){
     html = '<div class="t1">bed ×' + it.count + '</div><div class="t2">place, then right click it: sets spawn · sleeps through night</div>';
   } else if (it.kind === 'meat' || it.kind === 'cookedmeat'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">' +
-           (game.mode === 'survival' ? 'right click to eat' + (it.kind === 'meat' ? ' · cook in a stove for more food' : '') : 'food (survival)') + '</div>';
+           (game.mode === 'survival'
+             ? 'right click to eat — heals ' + (it.kind === 'meat' ? HEAL_RAW + ' hp over time · cook it to double that' : HEAL_COOKED + ' hp over time')
+             : 'food (survival)') + '</div>';
   } else if (it.kind === 'coal'){
     html = '<div class="t1">coal ×' + it.count + '</div><div class="t2">stove fuel · crafts torches with sticks</div>';
   } else if (it.kind === 'ironore' || it.kind === 'rubyore'){
@@ -11052,7 +11206,12 @@ function refreshToolHUD(){
   el.innerHTML = html;
 }
 
-// ---------- survival: damage, death, hunger ----------
+// ---------- survival: damage, death, healing ----------
+// 30 seconds to refill an empty bar; four raw meals or two cooked ones pay
+// for exactly one full bar.
+const HEAL_SECONDS = 30;
+const HEAL_RATE = 100 / HEAL_SECONDS;
+const HEAL_RAW = 25, HEAL_COOKED = 50, HEAL_SHROOM = 25;
 function armorRed(){
   const A = game.armor || {};
   let r = 0;
@@ -11099,7 +11258,7 @@ function respawn(){
     game.pos.set(0, h + 1.5, 0);
   }
   game.vel.set(0, 0, 0);
-  game.hp = 100; game.food = 100;
+  game.hp = 100; game.heal = 0;
   hide('deathscreen');
   game.ui = 'none';
   requestLock();
@@ -11154,25 +11313,30 @@ function updateSurvival(dt){
     bb.classList.remove('hidden');
     $('breathfill').style.width = game.breath.toFixed(0) + '%';
   } else bb.classList.add('hidden');
-  const sprint = (game.keys['ShiftLeft'] || game.keys['ShiftRight']) && Math.hypot(game.vel.x, game.vel.z) > 4;
-  game.food = Math.max(0, game.food - dt * (sprint ? 0.45 : 0.2));
-  if (game.food <= 0) damagePlayer(dt * 2.2, 0, 0);
-  else if (game.food > 60 && game.hp < 100 && game.hp > 0){
-    game.hp = Math.min(100, game.hp + dt * 1.6);
-    game.food = Math.max(0, game.food - dt * 0.1);
+  // Health never comes back on its own. Eating banks a pool of healing that
+  // trickles in at a fixed rate -- a full bar from empty takes HEAL_SECONDS,
+  // no matter how it was paid for, so food is a commitment rather than a
+  // panic button.
+  if (game.heal > 0 && game.hp > 0){
+    const step = Math.min(game.heal, HEAL_RATE * dt, 100 - game.hp);
+    if (step > 0){ game.hp += step; game.heal -= step; }
+    if (game.hp >= 100 || game.heal <= 0.001) game.heal = Math.max(0, game.heal);
+    if (game.hp >= 100) game.heal = 0;
   }
   tryPickupCache();
 }
 function tryEat(){
-  if (game.mode !== 'survival'){ toast('no hunger in creative'); return; }
+  if (game.mode !== 'survival'){ toast('nothing to heal in creative'); return; }
   const it = selectedItem();
-  if (game.food > 95){ toast('not hungry'); return; }
+  // banking more than you can use would just throw the meal away
+  const roomLeft = () => Math.max(0, 100 - game.hp - game.heal);
+  if (roomLeft() < 1){ toast(game.heal > 0 ? 'already mending' : 'already at full health'); return; }
   if (it && (it.kind === 'meat' || it.kind === 'cookedmeat')){
-    const gain = it.kind === 'meat' ? 20 : 45;
+    const gain = it.kind === 'meat' ? HEAL_RAW : HEAL_COOKED;
     it.count -= 1;
     if (it.count === 0) game.slots[game.hotSel] = null;
-    game.food = Math.min(100, game.food + gain);
-    toast('ate ' + itemLabel(it) + ' (+' + gain + ' food)');
+    game.heal = Math.min(game.heal + gain, 100 - game.hp);
+    toast('ate ' + itemLabel(it) + ' — mending ' + Math.round(game.heal) + ' hp');
     AudioSys.sfx('eat');
     refreshHotbar(); refreshToolHUD();
     return;
@@ -11181,8 +11345,8 @@ function tryEat(){
     if (it.count < 8){ toast('need 8 glowshroom to eat'); return; }
     it.count -= 8;
     if (it.count === 0) game.slots[game.hotSel] = null;
-    game.food = Math.min(100, game.food + 30);
-    toast('ate glowshroom (+30 food)');
+    game.heal = Math.min(game.heal + HEAL_SHROOM, 100 - game.hp);
+    toast('ate glowshroom — mending ' + Math.round(game.heal) + ' hp');
     AudioSys.sfx('eat');
     refreshHotbar(); refreshToolHUD();
     return;
@@ -11209,13 +11373,18 @@ function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
   const creative = game.mode === 'creative';
   const atTable = creative || nearTable();
+  if (game.craftTab == null) game.craftTab = 0;
+  buildCatTabs($('crafttabs'), game.craftTab, i => { game.craftTab = i; buildCraftUI(); });
   const head = document.createElement('div');
   head.className = 'sub';
   head.textContent = creative ? 'creative — every recipe unlocked, no materials needed'
     : atTable ? 'crafting table in range — full catalog' : 'basic recipes — stand near a crafting table for tools';
   list.appendChild(head);
+  let shown = 0;
   for (const r of CORE.RECIPES){
     if (r.station && !atTable) continue;
+    if (recipeCat(r) !== game.craftTab) continue;
+    shown++;
     const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
                : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
                : r.kind === 'gun' ? CORE.makeGun()
@@ -11244,6 +11413,13 @@ function buildCraftUI(){
     });
     row.appendChild(btn);
     list.appendChild(row);
+  }
+  if (!shown){
+    const none = document.createElement('div');
+    none.className = 'sub';
+    none.textContent = atTable ? 'nothing in this category yet'
+                               : 'nothing here without a crafting table';
+    list.appendChild(none);
   }
 }
 // ---------- surface auto-map ----------
@@ -11554,7 +11730,7 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
-    hp: game.hp, food: game.food, timeOfDay: game.timeOfDay,
+    hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
     torches: game.torches,
     beacons: game.beacons,
     beds: game.beds,
@@ -11609,7 +11785,7 @@ function startWorld(id){
     if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(game.mode === 'creative' ? 4 : 0);
   }
   game.hp = data.hp == null ? 100 : data.hp;
-  game.food = data.food == null ? 100 : data.food;
+  game.heal = data.heal || 0;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
@@ -12344,7 +12520,6 @@ function frame(now){
   Embers.update(dt);
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
-    $('foodfill').style.width = game.food.toFixed(0) + '%';
   }
   if (game.cacheMarker){
     game.cacheMarker.rotation.y += dt * 2;
@@ -12474,6 +12649,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
+  updateSurvival, tryEat, grappleCast, openInventory,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
