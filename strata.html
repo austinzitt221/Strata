@@ -2273,14 +2273,54 @@ function makeTileDrawers(){
         ctx.fillStyle = '#b39a58'; ctx.fillRect(x, y, 1, 1);
       }
     },
+    // BARK: the trunk's side. Deep, desaturated brown with VERTICAL fibrous
+    // ridges -- the vertical run is what separates a log from planks at a
+    // glance (planks are horizontal boards in a warmer, lighter tone).
     [CORE.MAT.WOOD](ctx, rng){
-      speckle(ctx, rng, '#8a6237', '#74512c', '#9c7344', 0.3, 0.2);
-      ctx.fillStyle = '#5f421f';
-      for (const y of [3, 8, 13]) ctx.fillRect(0, y, 16, 1);
-      for (let i = 0; i < 3; i++){
-        const x = (rng()*14)|0, y = (rng()*14)|0;
-        ctx.fillStyle = '#4e3517'; ctx.fillRect(x, y, 2, 1);
+      speckle(ctx, rng, '#4f3820', '#3d2a17', '#5e4429', 0.34, 0.22);
+      // ridges: broken vertical furrows of varying width and darkness
+      for (let x = 0; x < 16; x++){
+        const seam = rng();
+        if (seam < 0.30){
+          ctx.fillStyle = seam < 0.13 ? '#2c1d0f' : '#3a2716';
+          let y = 0;
+          while (y < 16){
+            const run = 2 + ((rng() * 5) | 0);
+            if (rng() < 0.78) ctx.fillRect(x, y, 1, Math.min(run, 16 - y));
+            y += run + ((rng() * 2) | 0);       // gaps keep it from striping
+          }
+        } else if (seam > 0.86){
+          ctx.fillStyle = '#6b5031';            // a lighter raised ridge
+          let y = (rng() * 6) | 0;
+          while (y < 16){
+            const run = 3 + ((rng() * 5) | 0);
+            ctx.fillRect(x, y, 1, Math.min(run, 16 - y));
+            y += run + 3 + ((rng() * 4) | 0);
+          }
+        }
       }
+      // knots: a dark eye with a lighter rim, where a branch broke off
+      for (let i = 0; i < 2; i++){
+        if (rng() > 0.55) continue;
+        const kx = 1 + ((rng() * 13) | 0), ky = 1 + ((rng() * 13) | 0);
+        ctx.fillStyle = '#6b5031'; ctx.fillRect(kx, ky, 3, 2);
+        ctx.fillStyle = '#241708'; ctx.fillRect(kx + 1, ky, 1, 2);
+      }
+    },
+    // END GRAIN: the cut face. Pale heartwood with concentric rings, so a
+    // felled trunk reads as a log from above instead of more bark.
+    logEnd(ctx, rng){
+      speckle(ctx, rng, '#a9814c', '#96703f', '#bb9660', 0.26, 0.2);
+      const cx = 7.5, cy = 7.5;
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++){
+        const d = Math.hypot(x - cx, y - cy);
+        // wobble the radius a touch so the rings are not perfect circles
+        const w = d + (rng() - 0.5) * 0.9;
+        const ring = Math.abs(Math.sin(w * 1.5));
+        if (ring < 0.20){ ctx.fillStyle = '#7d5c31'; ctx.fillRect(x, y, 1, 1); }
+        if (d > 6.9){ ctx.fillStyle = '#4f3820'; ctx.fillRect(x, y, 1, 1); }  // bark rim
+      }
+      ctx.fillStyle = '#5f4526'; ctx.fillRect(7, 7, 2, 2);                     // pith
     },
     [CORE.MAT.PLANKS](ctx, rng){
       speckle(ctx, rng, '#b08d55', '#997641', '#c6a36b', 0.3, 0.2);
@@ -2360,9 +2400,14 @@ function makeTileDrawers(){
     },
   };
 }
+// Column i holds material i+1 (the mesher writes mat-1 into aMat). One extra
+// column past the materials holds the log's end grain, which the terrain
+// shader swaps in on cut faces -- see ATLAS_SLOTS / uLogEnd.
+const ATLAS_SLOTS = CORE.NMAT + 1;
+const LOG_END_SLOT = CORE.NMAT;          // 0-based column index of the extra
 function buildAtlas(seed){
   const cv = document.createElement('canvas');
-  cv.width = TEX_SIZE * CORE.NMAT; cv.height = TEX_SIZE;
+  cv.width = TEX_SIZE * ATLAS_SLOTS; cv.height = TEX_SIZE;
   const ctx = cv.getContext('2d');
   const drawers = makeTileDrawers();
   for (let m = 1; m <= CORE.NMAT; m++){
@@ -2371,6 +2416,9 @@ function buildAtlas(seed){
     drawers[m](ctx, rng);
     ctx.restore();
   }
+  ctx.save(); ctx.translate(LOG_END_SLOT * TEX_SIZE, 0);
+  drawers.logEnd(ctx, CORE.mulberry32(seed ^ 0x51ab3f27));
+  ctx.restore();
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
@@ -2412,6 +2460,8 @@ const TERRAIN_FRAG = `
 precision highp float;
 uniform sampler2D uAtlas;
 uniform float uNMat;
+uniform float uLogMat;
+uniform float uLogEnd;
 uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform vec3 uAmbCol;
@@ -2462,10 +2512,13 @@ void main(){
   vec3 an = abs(n);
   // dominant-axis triplanar: single plane, no blend -> crisp pixel tiling
   vec2 uv;
-  if (an.y >= an.x && an.y >= an.z)      uv = vPos.xz;
+  bool topFace = (an.y >= an.x && an.y >= an.z);
+  if (topFace)                           uv = vPos.xz;
   else if (an.x >= an.z)                 uv = vPos.zy;
   else                                   uv = vPos.xy;
   float m = floor(vMat + 0.5);
+  // a log shows bark around its sides and end grain where it was cut
+  if (topFace && abs(m - uLogMat) < 0.5) m = uLogEnd;
   float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
   float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
   vec4 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy));
@@ -2946,7 +2999,9 @@ function buildScene(){
     fragmentShader: TERRAIN_FRAG,
     uniforms: {
       uAtlas: { value: game.atlas.tex },
-      uNMat: { value: CORE.NMAT },
+      uNMat: { value: ATLAS_SLOTS },
+      uLogMat: { value: CORE.MAT.WOOD - 1 },
+      uLogEnd: { value: LOG_END_SLOT },
       uSunDir: { value: new THREE.Vector3(0.55, 0.75, 0.35).normalize() },
       uSunCol: { value: new THREE.Color(0.42, 0.40, 0.36) },
       uAmbCol: { value: new THREE.Color(0.62, 0.63, 0.68) },
@@ -3076,6 +3131,7 @@ function buildScene(){
   tableSys.init(scene);
   placePreview.init(scene);
   playerBody.init(scene);
+  grappleSys.init(scene);
   missionSys.init(scene);
   pnodeSys.init(scene);
   wireSys.init(scene);
@@ -3478,6 +3534,7 @@ function buildViewmodel(cam){
   const steelLM = pixMat(PROP_TEX.steelLight);
   const ventM = pixMat(PROP_TEX.vent);
   const barkM = pixMat(PROP_TEX.bark, null, 1, 2);
+  const ropeM = new THREE.MeshBasicMaterial({ color: 0x9a7444 });
 
   // --- DRILL: big industrial driver — motor block, vents, energy core,
   // tiered spiral bit on a spinning head ---
@@ -3733,6 +3790,44 @@ function buildViewmodel(cam){
     return t;
   });
 
+  // GRAPPLE GUN: stubby launcher -- receiver, grip, wide muzzle with the
+  // claw folded at rest. `muzzle` is an empty marker the rope reads its
+  // world position from, so the line always leaves the actual barrel.
+  const grapple = held(() => {
+    const t = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.14, 0.36), steelM);
+    body.position.set(0, 0.1, -0.05);
+    const spine = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.3), steelLM);
+    spine.position.set(0, 0.18, -0.05);
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.1), gripM);
+    grip.position.set(0, -0.01, 0.08);
+    grip.rotation.x = -0.22;
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.062, 0.2, 8), steelLM);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.1, -0.26);
+    const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.04, 8), steelM);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.set(0, 0.1, -0.16);
+    // the spool of line sitting on top, wound in copper
+    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.08, 10), ropeM);
+    spool.rotation.z = Math.PI / 2;
+    spool.position.set(0, 0.22, 0.04);
+    t.add(body, spine, grip, barrel, collar, spool);
+    // stowed claw: three little prongs peeking out of the muzzle
+    for (let i = 0; i < 3; i++){
+      const a = i * Math.PI * 2 / 3;
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.075, 0.022), steelLM);
+      p.position.set(Math.cos(a) * 0.036, 0.1 + Math.sin(a) * 0.036, -0.35);
+      p.rotation.x = 0.5;
+      t.add(p);
+    }
+    const muzzle = new THREE.Object3D();
+    muzzle.position.set(0, 0.1, -0.38);
+    t.add(muzzle);
+    t.userData = { muzzle };
+    return t;
+  });
+
   const matCube = held(() => {
     const t = new THREE.Group();
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15),
@@ -3794,6 +3889,7 @@ function buildViewmodel(cam){
     wireRig.add(stapler);
   }
   vm.add(wireRig);
+  vm.add(grapple);
   vm.add(fists);
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
@@ -3802,7 +3898,7 @@ function buildViewmodel(cam){
   vm.position.set(0.34, -0.22, -0.5);
   cam.add(vm);
   game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists,
-              wireRig, bob: 0, emberT: 0 };
+              wireRig, grapple, bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
@@ -3824,9 +3920,13 @@ function updateViewmodel(dt){
   v.wool.visible = kind === 'wool';
   v.wrench.visible = kind === 'wrench';
   v.wireRig.visible = kind === 'wire';
+  v.grapple.visible = kind === 'grapple';
+  // anything here shows the item's own icon in the fist; coin and drone used
+  // to match no branch at all, so selecting them raised no hand whatsoever
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
-                        'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'grapple', 'jetpack',
-                        'helm', 'plate', 'boots', 'astand', 'pad'];
+                        'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
+                        'helm', 'plate', 'boots', 'astand', 'pad',
+                        'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -3913,6 +4013,86 @@ function updateViewmodel(dt){
     ud.orb.scale.setScalar(fill);
   }
 }
+
+// ---------- the grappling line ----------
+// A real rope in world space: it leaves the gun's muzzle, spans to whatever
+// you hooked, and ends in a claw whose prongs are splayed against the
+// surface normal so it reads as gripping rather than floating.
+const grappleSys = {
+  group: null, rope: null, claw: null, hub: null,
+  init(scene){
+    this.group = new THREE.Group();
+    this.group.visible = false;
+    this.group.userData.noShadow = true;
+    const ropeMat = new THREE.MeshBasicMaterial({ color: 0x9a7444 });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x9fa3b0 });
+    const steelDark = new THREE.MeshBasicMaterial({ color: 0x6a6f7d });
+    // unit-length rope along +Y, scaled and aimed every frame
+    this.rope = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1, 6), ropeMat);
+    this.group.add(this.rope);
+    // claw: a hub plus four prongs curling back into the surface
+    this.claw = new THREE.Group();
+    this.hub = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.1, 0.16, 8), steelDark);
+    this.hub.position.y = 0.12;
+    this.claw.add(this.hub);
+    for (let i = 0; i < 4; i++){
+      const a = i * Math.PI / 2 + Math.PI / 4;
+      const arm = new THREE.Group();
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.17, 0.045), steel);
+      upper.position.y = -0.06;
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.04), steel);
+      tip.position.set(0, -0.17, -0.05);
+      tip.rotation.x = 0.85;                       // the barb that bites in
+      arm.add(upper, tip);
+      arm.position.set(Math.cos(a) * 0.085, 0.13, Math.sin(a) * 0.085);
+      arm.rotation.z = -Math.cos(a) * 0.5;
+      arm.rotation.x = Math.sin(a) * 0.5;
+      this.claw.add(arm);
+    }
+    this.claw.scale.setScalar(1.5);
+    this.group.add(this.claw);
+    scene.add(this.group);
+  },
+  // where the line leaves the player: the gun barrel in first person, the
+  // hand in third person / photo mode where the viewmodel is hidden
+  muzzleWorld(out){
+    const v = game.vm;
+    if (v && v.grapple && v.root.visible && v.grapple.visible){
+      const mz = v.grapple.userData.item.userData.muzzle;
+      mz.updateWorldMatrix(true, false);
+      return out.setFromMatrixPosition(mz.matrixWorld);
+    }
+    if (playerBody.root && playerBody.root.visible){
+      playerBody.handItem.updateWorldMatrix(true, false);
+      return out.setFromMatrixPosition(playerBody.handItem.matrixWorld);
+    }
+    return out.set(game.pos.x, game.pos.y + playerHeight() * 0.62, game.pos.z);
+  },
+  update(){
+    const gp = game.grapple;
+    if (!gp || !this.group){ if (this.group) this.group.visible = false; return; }
+    this.group.visible = true;
+    const A = this._a || (this._a = new THREE.Vector3());
+    this.muzzleWorld(A);
+    const B = this._b || (this._b = new THREE.Vector3());
+    B.set(gp.x, gp.y, gp.z);
+    const d = this._d || (this._d = new THREE.Vector3());
+    d.subVectors(B, A);
+    const len = d.length() || 0.001;
+    this.rope.position.set((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2);
+    this.rope.scale.set(1, len, 1);
+    this.rope.quaternion.setFromUnitVectors(UP_Y, d.normalize());
+    // the claw sits on the anchor, splayed along the surface it grabbed.
+    // Ride OUT along the normal by the length of a prong, otherwise the whole
+    // assembly is swallowed by the rock and only the rope's end shows.
+    const n = gp.n || [0, 1, 0];
+    this.claw.position.set(B.x + n[0] * CLAW_LIFT, B.y + n[1] * CLAW_LIFT, B.z + n[2] * CLAW_LIFT);
+    this.claw.quaternion.setFromUnitVectors(UP_Y,
+      (this._n || (this._n = new THREE.Vector3())).set(n[0], n[1], n[2]).normalize());
+  },
+};
+const UP_Y = new THREE.Vector3(0, 1, 0);
+const CLAW_LIFT = 0.22;   // prong length: barb tips land right on the surface
 
 function buildGridViz(cell){
   if (game.gridViz){ game.scene.remove(game.gridViz); game.gridViz.geometry.dispose(); game.gridViz = null; }
@@ -9614,7 +9794,9 @@ function tryAction(dt, now){
         t += Math.max(0.05, d * 0.6);
       }
       if (!hit){ toast('nothing to hook within 34m'); AudioSys.sfx('deny'); return; }
-      game.grapple = { x: hit[0], y: hit[1], z: hit[2] };
+      const ge = nearEdits([hit[0]-1, hit[1]-1, hit[2]-1, hit[0]+1, hit[1]+1, hit[2]+1]);
+      const gn = CORE.gradSDF ? CORE.gradSDF(hit[0], hit[1], hit[2], ge, 0.15, game.gen) : [0, 1, 0];
+      game.grapple = { x: hit[0], y: hit[1], z: hit[2], n: [gn[0], gn[1], gn[2]] };
       AudioSys.sfx('place');
       toast('grappled — left click again to release');
     }
@@ -12093,6 +12275,7 @@ function frame(now){
   }
   updateViewmodel(dt);
   playerBody.update(dt);
+  grappleSys.update();
   updateChargeBar();
   {
     const jp = game.armor && game.armor.back;
@@ -12283,10 +12466,12 @@ requestAnimationFrame(frame);
 window.__game = game;
 window.__CORE = CORE;
 window.__THREE = THREE;
+window.__forceVM = () => updateViewmodel(0.016);
+window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
-  pnodeSys, wireSys, powerSys, bulbSys, stoveSys,
+  pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   villageSys, tradeSys, missionSys, boardSys };
