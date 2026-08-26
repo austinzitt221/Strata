@@ -2,6 +2,60 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8.1 — the grid turns with you (2026-08-26)
+
+Two things that had been quietly wrong, and one that was only half built.
+
+- **The grid rotates with the brush.** Rotate a cube 45° and the placement
+  lattice rotates 45° with it — all three axes, yaw, pitch and roll. Any
+  two objects placed at the same angle, anywhere in the world, land on the
+  same lattice and stack flush, so you can build an entire house on a
+  diagonal just by holding one rotation. The snap now quantizes in the
+  brush's own rotated frame instead of on world axes; the frame is anchored
+  at the world origin rather than at your first placement, which is
+  precisely what makes two independent placements at the same angle tile.
+  With no rotation the math reduces to the old world-axis snap exactly, so
+  ordinary square building is untouched (there's a test pinning that).
+- **The grid visualization turns too.** It used to draw a flat, permanently
+  world-aligned plane no matter how the brush was turned — so at any angle
+  it was actively lying about where the next block could go. It now tilts
+  and spins onto the real lattice, anchored on a true lattice point through
+  the ghost's bottom face.
+- **The wrench outline was mirrored, and nobody could see it.** CORE yaws by
+  Ry(−θ) (see `rotToWorld`) but THREE's `rotation.y` is Ry(+θ), so every
+  place that mapped an edit's rotation onto a scene object drew it flipped
+  about Z. A plain cube is 4-fold symmetric, so +45° and −45° look
+  identical and the bug hid — until you stretched a box with the wrench,
+  and then the outline sat visibly wrong. Confirmed by probing the SDF: the
+  real long axis ran to (0.707, 0, **+**0.707) while the outline drew
+  (0.707, 0, **−**0.707). One helper, `applyEditRot`, now owns that
+  conversion and all five sites use it — wrench outline, multi-select
+  outlines, paste ghost, and both drill/dispenser previews (which had the
+  same flip, invisible for a uniform brush but real once pitch or roll was
+  involved).
+- **Prop selection outlines match their rotation.** Props became rotatable
+  in 7.2 but their selection box never turned, so a stove placed at 60° got
+  a box at 0°. Bounds now carry the prop's orientation and the outline uses
+  it — yaw for machines, tables, beds, beacons, plants and stoves, the real
+  surface-normal quaternion for staples, and the door outline now hugs the
+  actual panel instead of a rotation-proof square (its pick radius is
+  unchanged, so reach is identical).
+
+Note the two conventions are genuinely different and both are correct:
+edits store yaw in CORE's convention and get negated on the way to the
+scene; props store yaw the way THREE does and don't. That's now stated in
+the code at both sites so the next person doesn't 'fix' one into the other.
+
+Verified: 297 headless tests (11 new — the rotation helpers are exact
+inverses, they agree with `rotToWorld`/`toLocal` so there's one convention
+in the codebase, zero rotation snaps identically to before, and same-angle
+placements land integer lattice steps apart at yaw / yaw+roll /
+yaw+pitch+roll). In-browser: three separate 45° aim points snapped onto one
+shared lattice (integer steps apart), the grid plane read −45° in THREE
+terms, a rotated stretched box's outline matched the SDF, a 60° stove's
+outline matched, and unrotated placement still landed exactly on the world
+lattice. Smoke and the Build 7.2 wrench/prop suite green.
+
 ## Build 8 — coins & villages: the world gets people (2026-08-25)
 
 Four phases. The wrench built the houses; the economy moved in.
