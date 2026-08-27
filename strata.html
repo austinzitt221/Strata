@@ -3547,15 +3547,80 @@ const playerBody = {
   },
 };
 
-function buildArm(){
+function buildArm(back){
   const arm = new THREE.Group();
   const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.175, 0.46), pixMat(PROP_TEX.sleeve, null, 1, 2));
   sleeve.position.z = 0.17;                       // upper arm, slightly fatter (jacket layer)
   const hand = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.26), pixMat(PROP_TEX.skin));
   hand.position.z = -0.17;
   arm.add(sleeve); arm.add(hand);
+  // optional tail on the shoulder end. It is never meant to be seen -- it
+  // exists so a raised arm runs off behind the camera rather than ending in
+  // a floating cut face somewhere in the middle of the screen.
+  if (back){
+    const up = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.175, back),
+                              pixMat(PROP_TEX.sleeve, null, 1, Math.max(2, Math.round(back * 4))));
+    up.position.z = 0.40 + back / 2;
+    arm.add(up);
+    arm.userData.tail = up;
+  }
   return arm;
 }
+// where the whole viewmodel group sits relative to the camera: shoved right
+// and tipped inward so a one-handed tool's business end reads on screen
+const VM_YAW = 0.42;
+const VM_POS = { x: 0.34, y: -0.22, z: -0.5 };
+
+// ---- posing the empty fists ----
+// buildArm() spans z from -0.30 (knuckles) to +0.40 (shoulder end). Held-tool
+// arms use it at HOLD scale; raised fists thicken it (a bare arm with a
+// tool's slim proportions reads as a stick, not a forearm) and stretch it a
+// long way back, so that whatever the pose, the arm's cut-off end is always
+// behind the camera instead of floating in the middle of the screen.
+const ARM_HOLD = [1.15, 1.15, 1.6];
+const ARM_FAT = 1.4, ARM_Z = 1.6, ARM_BACK = 1.325;
+const ARM_LEN = (0.30 + ARM_BACK) * ARM_Z, ARM_PIVOT = 0.30 / (0.30 + ARM_BACK);
+// The viewmodel group is shoved to the right and tipped inward because it is
+// built around one-handed tools, so its axes are not the screen's. Fist poses
+// are written in plain screen terms -- x out from the CENTRE of the view, -z
+// straight ahead -- and converted here. Without this, mirroring x does not
+// put the left hand anywhere near where the left hand belongs.
+function toVMSpace(x, y, z){
+  const c = Math.cos(VM_YAW), s = Math.sin(VM_YAW);
+  const px = x - VM_POS.x * 2, pz = z - VM_POS.z * 2;
+  return [px * c - pz * s, y, px * s + pz * c];
+}
+// Pose an arm by naming the two points that actually matter -- where the fist
+// is and where the arm leaves the body -- and solving for the transform.
+// Much easier to tune than raw eulers, and it guarantees the arm really does
+// point from your shoulder to your fist instead of merely looking like it
+// might. Coordinates describe the RIGHT arm; mirror flips them for the left.
+function poseFist(arm, fist, shoulder, roll, mirror){
+  const s = mirror ? -1 : 1;
+  const f = toVMSpace(fist[0] * s, fist[1], fist[2]);
+  const h = toVMSpace(shoulder[0] * s, shoulder[1], shoulder[2]);
+  let dx = f[0] - h[0], dy = f[1] - h[1], dz = f[2] - h[2];
+  const len = Math.hypot(dx, dy, dz) || 1;
+  dx /= len; dy /= len; dz /= len;
+  // the XYZ euler whose local -z (the way the arm points) lands on d
+  arm.rotation.set(Math.atan2(dy, -dz), Math.asin(-dx), roll * s);
+  const back = ARM_LEN * ARM_PIVOT;
+  arm.position.set(f[0] - dx * back, f[1] - dy * back, f[2] - dz * back);
+}
+// boxing guard: fists up in front of the face, knuckles turned in toward each
+// other, arms running down and out to the bottom corners of the frame
+const GUARD_FIST     = [0.28,  0.46, -1.24];
+const GUARD_SHOULDER = [0.88, -0.92, -0.24];
+// the jab swings the fist in toward the centre and turns the arm to point
+// down the camera's own axis, which foreshortens it the way a punch should
+const JAB_FIST       = [0.06,  0.20, -1.10];
+const JAB_SHOULDER   = [0.66, -0.66,  0.10];
+function armScale(arm, mirror, s, tail){
+  arm.scale.set(mirror ? -s[0] : s[0], s[1], s[2]);
+  if (arm.userData.tail) arm.userData.tail.visible = !!tail;
+}
+const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+
 // arm posed like Minecraft's: from the bottom-right corner, angled inward/up,
 // fist landing at roughly (0.05, -0.12, -0.06) in group space
 function poseArm(arm){
@@ -3898,10 +3963,9 @@ function buildViewmodel(cam){
   // fists: what you hold when you hold nothing — right arm relaxed low,
   // both raised in a guard when fists are up (pose driven per frame)
   const fists = new THREE.Group();
-  const fistR = buildArm();
-  fistR.scale.set(1.15, 1.15, 1.6);              // longer so no cutoff shows
-  const fistL = buildArm();
-  fistL.scale.set(-1.15, 1.15, 1.6);             // mirrored left
+  const fistR = buildArm(ARM_BACK - 0.40);
+  const fistL = buildArm(ARM_BACK - 0.40);       // negative x scale mirrors it
+  armScale(fistR, false, ARM_HOLD); armScale(fistL, true, ARM_HOLD);
   fistL.visible = false;
   fists.add(fistR); fists.add(fistL);
   fists.userData = { R: fistR, L: fistL };
@@ -3950,8 +4014,8 @@ function buildViewmodel(cam){
   vm.add(drill); vm.add(disp); vm.add(gun); vm.add(torch); vm.add(sword);
   vm.add(stick); vm.add(door); vm.add(table); vm.add(beacon); vm.add(bed); vm.add(wool); vm.add(wrench); vm.add(generic); vm.add(matCube);
   vm.scale.setScalar(0.5);
-  vm.rotation.y = 0.42;                // tips angle inward so the business end reads
-  vm.position.set(0.34, -0.22, -0.5);
+  vm.rotation.y = VM_YAW;              // tips angle inward so the business end reads
+  vm.position.set(VM_POS.x, VM_POS.y, VM_POS.z);
   cam.add(vm);
   game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists,
               wireRig, grapple, bob: 0, emberT: 0 };
@@ -4000,6 +4064,11 @@ function updateViewmodel(dt){
     // fists down = empty screen; hands only appear to fight, scoop, or hold
     v.fists.visible = game.fistsUp || carrying || gather > 0;
     if (!v.fists.visible) return;
+    // the guard needs the long tail so a raised arm runs off behind the
+    // camera; the reach and scoop poses are close-in and keep their own look
+    const guarding = !carrying && !(gather > 0 && !game.fistsUp);
+    const sc = guarding ? [ARM_FAT, ARM_FAT, ARM_Z] : ARM_HOLD;
+    armScale(R, false, sc, guarding); armScale(L, true, sc, guarding);
     if (carrying){
       // two-hand grab reaching forward, blending up into an overhead hold —
       // look up and both hands are in the air under your passenger
@@ -4016,12 +4085,13 @@ function updateViewmodel(dt){
       R.position.set(0.12 - pr * 0.06, -0.6 + pr * 0.05, 0.1 - pr * 0.95);
       R.rotation.set(-0.25 - pr * 0.5, -0.3, 0.05);
     } else {
-      // boxing guard: forearms up, fists angled toward each other
+      // boxing guard. The right fist drives out along the jab and the guard
+      // hand pulls in a touch to cover, the way the other glove comes up.
       R.visible = L.visible = true;
-      R.position.set(0.32 - jab * 0.1, -0.26, -0.32 - jab * 0.55);
-      R.rotation.set(1.0 - jab * 0.5, -0.55, 0.15);
-      L.position.set(-0.52, -0.28, -0.72);
-      L.rotation.set(1.0, 0.55, -0.15);
+      poseFist(R, lerp3(GUARD_FIST, JAB_FIST, jab), lerp3(GUARD_SHOULDER, JAB_SHOULDER, jab), 0.45, false);
+      // the off hand pulls in and covers while the other one goes
+      poseFist(L, [GUARD_FIST[0] - jab * 0.06, GUARD_FIST[1] + jab * 0.05, GUARD_FIST[2] + jab * 0.05],
+               GUARD_SHOULDER, 0.45, true);
     }
     return;
   }
@@ -10573,29 +10643,35 @@ function buildInvUI(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'sword', 'gun',
-                     'jetpack', 'helm', 'plate', 'boots'];
-const CAT_POWER   = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
-                     'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
-const CAT_SPECIAL = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                     'sign', 'rope', 'ped', 'torch', 'board'];
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone'];
+const CAT_WEAPONS  = ['sword', 'gun'];          // every sword tier, plus the blaster
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
+const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
+                      'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
+const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
+                      'sign', 'rope', 'ped', 'torch', 'board'];
 const ITEM_CATS = [
-  { id: 'mat',     label: 'MATERIAL',    icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
-  { id: 'gadget',  label: 'GADGETS',     icon: () => CORE.makeDrill(1) },
-  { id: 'power',   label: 'ELECTRICITY', icon: () => ({ kind: 'lever', count: 1 }) },
-  { id: 'special', label: 'SPECIAL',     icon: () => ({ kind: 'bed', count: 1 }) },
-  { id: 'item',    label: 'ITEMS',       icon: () => ({ kind: 'stick', count: 1 }) },
+  { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
+  { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
+  { id: 'weapon',   label: 'WEAPONS',     kinds: CAT_WEAPONS,   icon: () => CORE.makeGun() },
+  // tiers are 0-based here: 4 is diamond
+  { id: 'clothing', label: 'CLOTHING',    kinds: CAT_CLOTHING,  icon: () => ({ kind: 'helm', tier: 4, count: 1 }) },
+  { id: 'power',    label: 'ELECTRICITY', kinds: CAT_POWER,     icon: () => ({ kind: 'lever', count: 1 }) },
+  { id: 'special',  label: 'SPECIAL',     kinds: CAT_SPECIAL,   icon: () => ({ kind: 'bed', count: 1 }) },
+  // everything with nowhere else to go: coins, ore, ingots, food, plants
+  { id: 'item',     label: 'ITEMS',       kinds: null,          icon: () => ({ kind: 'stick', count: 1 }) },
 ];
+const CAT_MAT  = ITEM_CATS.findIndex(c => c.id === 'mat');
+const CAT_MISC = ITEM_CATS.findIndex(c => c.id === 'item');
 function itemCat(it){
-  if (!it) return 4;
-  if (it.kind === 'mat') return 0;
-  if (CAT_GADGETS.includes(it.kind)) return 1;
-  if (CAT_POWER.includes(it.kind)) return 2;
-  if (CAT_SPECIAL.includes(it.kind)) return 3;
-  return 4;                                     // coins, ore, food, plants...
+  if (!it) return CAT_MISC;
+  if (it.kind === 'mat') return CAT_MAT;
+  for (let i = 0; i < ITEM_CATS.length; i++)
+    if (ITEM_CATS[i].kinds && ITEM_CATS[i].kinds.includes(it.kind)) return i;
+  return CAT_MISC;
 }
 function recipeCat(r){
-  if (r.kind === 'matout') return 0;
+  if (r.kind === 'matout') return CAT_MAT;
   return itemCat({ kind: r.kind });
 }
 // a row of picture tabs; onPick(index) rebuilds whatever list sits below
@@ -12650,6 +12726,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
+  itemCat, recipeCat, ITEM_CATS, poseFist,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>

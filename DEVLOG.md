@@ -2,6 +2,51 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8.4 — weapons, clothing, and hands that make a fist (2026-08-27)
+
+Opus patch pass #4. Two more menu categories, and the empty-hand pose
+rebuilt from the ground up.
+
+- **WEAPONS and CLOTHING.** Two new tabs carved out of GADGETS, which
+  had quietly become a junk drawer of 35 things. Weapons takes every
+  sword tier and the blaster (and every gun we add later); clothing
+  takes all fifteen armour pieces plus the jetpack. Gadgets is left
+  with exactly what the name says: drills, dispensers, wrench, grapple,
+  drone. Tab order is material · gadgets · weapons · clothing ·
+  electricity · special · items, with the blaster and a diamond helmet
+  as the two new tab pictures. One taxonomy still drives both the
+  creative catalog and the crafting table.
+- **The fists.** They were wrong in a way that was easy to see and hard
+  to fix by nudging numbers, because the whole viewmodel group is
+  shoved 0.34 to the right and yawed 24° inward — it is built around
+  one-handed tools. Mirroring the right arm's x in that space does not
+  put the left arm anywhere near the left of the screen; it put it in
+  the middle, pointing the wrong way. So poses are now written in plain
+  screen terms (x out from the CENTRE of the view, -z straight ahead)
+  and converted, and an arm is posed by naming the two points that
+  actually matter — where the fist is and where the arm leaves the body
+  — with the euler solved from those. The guard is symmetric by
+  construction: both fists up in front of the face, knuckles turned in
+  toward each other, forearms running down and out to the bottom
+  corners so they read as coming out of your shoulders.
+- **Arms that end off-screen.** A rigid arm posed by its fist has its
+  far end ARM_LEN behind it, and on a punch that end swung into frame
+  as a floating cut-off box. Raised fists now carry an extra sleeve
+  section on the shoulder end, long enough that the cut face is always
+  behind the camera. It is hidden for the reach-and-carry and scoop
+  poses, which are close-in and keep exactly the look they had.
+- **A jab that reads.** The punch swings the fist in toward the centre
+  of the screen and slightly closer to the eye, so it lands bigger
+  rather than receding, and the off hand pulls in to cover.
+
+Verified in-browser: seven tabs in both menus in the right order, with
+the five sword tiers and blaster under weapons, all fifteen armour
+pieces and the jetpack under clothing, and gadgets down to thirteen
+entries; both fists project to exactly mirrored screen positions; both
+arms' cut ends stay outside the frustum through the whole swing; and
+the carry and gather poses are pixel-unchanged. 297 headless tests,
+smoke, and the 8.2/8.3 suites green.
+
 ## Build 8.3 — food is the health bar now (2026-08-26)
 
 Opus patch pass #3. Survival economy, two texture/animation fixes, and
