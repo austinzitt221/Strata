@@ -2,6 +2,58 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 8.5 — the twist, a real punch, and hands that hold the sheep up (2026-08-27)
+
+Opus patch pass #5. Three notes from the playtest, and the first one
+turned out to be a real bug my last round's verification had missed.
+
+- **The left arm really was twisted.** I checked the mirror last build by
+  projecting both hands and confirming they landed at exactly ±0.297 —
+  which they did, and which proved nothing, because a roll about the
+  arm's own axis does not move the fist. The cause: the viewmodel group
+  is yawed 24° inward for one-handed tools, and mirroring a pose's x
+  *inside* a yawed space gives you the right position with a residual
+  roll of a few degrees. The fix is structural rather than a fudge
+  factor: the fists group now cancels the group's offset AND its yaw, so
+  fist poses live in plain camera-aligned space and the left arm is the
+  right arm's exact mirror by construction. Measured by masking the arm
+  silhouettes against a flat sky and comparing the frame with its own
+  mirror: **0 of 37,820 silhouette pixels differ.** It was 15.4% before.
+- **The guard sits wider.** Both fists moved out; the gap went from 0.462
+  to 0.594 in screen units, about 29% further apart, with the arm angle
+  unchanged (both fist and shoulder moved by the same amount).
+- **A real punch.** The old one faded the guard toward a single extended
+  pose, so both arms drifted and neither read as throwing anything. Now
+  it is keyframed — guard, chamber down and back, drive up and across to
+  the crosshair and *closer* so it lands bigger, then a slower recovery —
+  with a small forward shove of the whole viewmodel on the hit. The off
+  hand holds its guard: measured across the swing, the right fist travels
+  0.53 in screen units and the left 0.017.
+  One dead end worth recording: aiming the arm straight down the camera's
+  axis at the moment of impact foreshortens beautifully for about one
+  frame and then sails the sleeve through the eye, filling the screen
+  with a blue wall. The drive sells itself by moving the fist, not by
+  pointing the arm away. There is now a test that walks each arm's axis
+  and fails if any on-screen point comes within 0.25m of the camera.
+- **Carrying an animal is locked to the world, not the view.** The arms
+  used to be posed in camera space, so they hung in front of you forever
+  and swung around as you looked. Now the pose takes the pitch back out:
+  the hands hold a fixed spot relative to *you*, so they stay put while
+  you look around and swing into frame when you look up at your
+  passenger. Verified by reading the hand's world position at four
+  pitches from 0.2 to 1.2 — drift 0.000m. Only upward pitch is cancelled;
+  look down and it falls back to view-relative, which is the identical
+  pose at level and avoids two forearms sliding past your eyes when you
+  stare at your feet.
+- **And it is an animation now.** Your arms reach out in front toward the
+  animal, it attaches, and then it comes up with your hands to the locked
+  overhead hold — the animal rides the same curve the arms do, so it sits
+  on them the whole way rather than teleporting overhead the instant you
+  grab it. The arms also carry the long shoulder section in every pose
+  now, so there is no cut-off edge to find at any angle.
+
+297 headless tests, smoke, and the 8.2/8.3/8.4 suites green.
+
 ## Build 8.4 — weapons, clothing, and hands that make a fist (2026-08-27)
 
 Opus patch pass #4. Two more menu categories, and the empty-hand pose
