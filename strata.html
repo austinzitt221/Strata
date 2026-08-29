@@ -6179,6 +6179,7 @@ const powerSys = {
     this.crafterMap = this.crafterMap || new Map(); this.crafterMap.clear();
     this.crafterBusy = this.crafterBusy || new Set(); this.crafterBusy.clear();
     this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
+    this.gridSites = [];
     for (const c of comps.values()){
       const ratio = c.d > 0 ? Math.min(1, c.w / c.d) : (c.w > 0 ? 1 : 0);
       for (const b of c.bulbs) this.bulbMap.set(b, ratio);
@@ -6216,6 +6217,9 @@ const powerSys = {
       }
       if (c.w > c.d + 2) this.surplus.push(...c.terms);
       for (const mid of c.meters) this.meterMap.set(mid, { w: c.w, d: c.d });
+      // raids read this: live source watts, and where that grid physically is
+      if (c.w > 0 && c.terms.length)
+        (this.gridSites = this.gridSites || []).push({ w: c.w, x: c.terms[0][0], z: c.terms[0][2] });
     }
     this.meterDirty = true;
   },
@@ -7373,7 +7377,8 @@ function killEntity(e, byPlayer){
       toast('+' + n + ' wool  ·  +1 meat');
     }
     else {
-      const coins = 3 + ((Math.random() * 4) | 0);
+      let coins = 3 + ((Math.random() * 4) | 0);
+      if (e.raider) coins = coins * 2 + 4;                    // raiders pay
       addStackItem('ironore', 2); addStackItem('coin', coins);
       toast('+' + coins + ' coins  ·  +2 iron ore');
     }
@@ -8152,6 +8157,46 @@ const tradeSys = {
   },
 };
 
+// ---------- raids: your grid hums, and the night hears it ----------
+// Once per night, if live source watts are running near you, a raid comes:
+// more watts, more raiders. Raiders are meaner lurkers that hunt you from
+// any distance -- and like all lurkers, dawn burns whatever you don't kill.
+const raidSys = {
+  nightDone: false, pending: 0, spawnT: 0,
+  wattsNear(x, z, r){
+    let w = 0;
+    for (const s2 of (powerSys.gridSites || []))
+      if (Math.hypot(s2.x - x, s2.z - z) < r) w += s2.w;
+    return w;
+  },
+  tick(dt){
+    if (game.mode !== 'survival'){ this.pending = 0; return; }
+    if (game.dayF > 0.5){ this.nightDone = false; return; }   // noon resets
+    if (this.nightDone || game.dayF > 0.22) return;           // deep night only
+    const W = this.wattsNear(game.pos.x, game.pos.z, 140);
+    if (W <= 0) return;
+    this.nightDone = true;
+    const N = Math.min(12, 2 + Math.floor(W / 25));
+    this.pending = N; this.spawnT = 1.5;
+    toast('RAID — your grid hums too loud (' + N + ' raiders inbound)');
+    AudioSys.sfx('boom');
+  },
+  update(dt){
+    if (!this.pending) return;
+    this.spawnT -= dt;
+    if (this.spawnT > 0) return;
+    this.spawnT = 0.8;
+    const a = Math.random() * Math.PI * 2, d = 34 + Math.random() * 14;
+    const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+    const h = game.gen.height(x, z);
+    if (game.gen.wetAt && game.gen.wetAt(x, z, h)) return;    // no sea raids; retry
+    const e = spawnEntity('lurker', x, h + 0.5, z);
+    e.raider = true; e.hp = 55;
+    if (e.mesh){ e.mesh.scale.setScalar(1.18); }
+    this.pending--;
+  },
+};
+
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0 };
@@ -8227,7 +8272,8 @@ function updateEntities(dt, now){
     // steering
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
-    if (e.type === 'lurker' && pd < 15){
+    if (e.type === 'lurker' && (pd < 15 || e.raider)){
+      if (e.raider) sp *= 1.15;
       sx = game.pos.x - e.x; sz = game.pos.z - e.z;
       const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
       if (d3 < 1.6 && e.atkT <= 0){
@@ -13628,6 +13674,8 @@ function frame(now){
   stoveSys.update(dt);
   powerSys.update(dt);
   villageSys.tick(dt);
+  raidSys.tick(dt);
+  raidSys.update(dt);
   game.missionT = (game.missionT || 0) + dt;
   if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
@@ -13786,7 +13834,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
   itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
-  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
