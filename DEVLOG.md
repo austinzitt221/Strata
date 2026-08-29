@@ -2,6 +2,73 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 9 — World Gen 3.0: every world its own place (2026-08-29)
+
+The big one. Three phases, all aimed at the same complaint: every world
+looked like the same confetti of same-sized biome cells.
+
+- **The terrain backbone.** height() now stacks three world-scale fields
+  the way Minecraft 1.18 does it: CONTINENTALNESS (basin, shelf, or
+  highland, through a spline), EROSION (a flatness multiplier — where
+  it's high the land is flat no matter what else wants to happen), and
+  PEAKS & VALLEYS (broad swells plus cubed ridge crest lines). Every
+  spline control point, field wavelength, the sea bias and the world's
+  ridge amplitude jitter per seed — so one seed is an archipelago,
+  another an eroded plain, another a craggy highland. The old archetype
+  heightfields survive as half-amplitude local character riding on top;
+  mesa quantizes the combined height so backbone relief becomes stacked
+  tables instead of a tilted plain.
+- **Biomes follow the geography.** Archetype choice is no longer a
+  uniform die roll: coasts draw swamps and dunes, high-relief zones draw
+  ranges, glaciers and volcanoes, and a very-low-frequency heat field
+  pushes hot and cold families to different parts of the world.
+  Weighted Voronoi gives each region cell a conquest weight, so one sand
+  biome is a pocket and the next is huge, and same-family neighbors
+  cluster into mega-biomes.
+- **Real oceans.** Low continentalness dips well below sea level, so
+  worlds get coastlines, shelves, islands, inland seas — and on volcanic
+  coasts, lava shores. Water is depth-aware on both the near chunk
+  meshes and the LOD rings (translucent turquoise over a visible shallow
+  bed, deepening to near-opaque ocean blue), the LOD ring water no
+  longer double-covers its underlap strips (which blended into dark
+  bands across open water), and gen.spawn() walks outward from (0,0)
+  until it finds dry land — one test seed spawned 20m under the sea
+  before that, because createWorld pre-seeded the player at x:0 and the
+  spawn finder never ran.
+- **Villages worth walking into.** Each house rolls its own footprint
+  (small square, classic, big square, or a rectangle either way round)
+  and 38% grow a second story: a real slab between floors, a hatch in a
+  back corner, a rope dropped through it to climb, upper windows.
+  Interiors are furnished by role — every house a bed (upstairs if there
+  is one) and a torch; the toolsmith a crafting table and a stove out
+  front, the broker a stocked chest, the arms dealer an armor stand, and
+  the electrician a hand crank wired to a wall lamp that lights when you
+  crank it.
+- **You can see your work.** Every active mission and accepted explore
+  contract projects a COD-style diamond marker into the world with a
+  live meter count; off-screen or behind you it clamps to the screen
+  edge as a dot so it always tells you which way to turn. The inventory
+  gained a MISSIONS panel on the right listing every active job with its
+  giver, village, description and distance.
+- **Creative is alive now.** Grazers and sheep spawn and wander in
+  creative too (nothing spawns in the sea), villages were already
+  streaming in but got a slightly more forgiving flatness check for
+  WG3's gentler slopes; free-roaming lurkers stay a survival thing,
+  while bounty targets still tick in creative so hunts work.
+
+Verified: aerial biome maps of four seeds old-vs-new (old: identical
+texture; new: four different geographies); watertight seam test 0/3503
+hole edges on WG3 terrain; height() at 0.98us/call vs 0.79 before;
+spawn dry on all four test seeds; two-story probes (slab solid, upper
+room open) on two villages; the crank-to-lamp wire carries power ids
+correctly; markers tick 18m -> 8m walking toward a hunt; 296 headless
+tests, smoke, and the full B8 village/mission/treasure suite green.
+
+Known issue: terrain under OLD saves shifts (the world is (seed, edits)
+and the generator changed) — the existing lift-out-of-ground guard
+handles the player, but pre-WG3 villages may sit oddly on the new
+ground. New worlds are the point of this build.
+
 ## Build 8.5 — the twist, a real punch, and hands that hold the sheep up (2026-08-27)
 
 Opus patch pass #5. Three notes from the playtest, and the first one
