@@ -8415,6 +8415,65 @@ function explode(x, y, z, r, dmg, opts){
     damagePlayer(Math.round(dmg * 0.8 * f), (game.pos.x - x) * 3 * f, (game.pos.z - z) * 3 * f);
   }
 }
+// ---- set charges: fused explosives sitting in the world. TNT makes a
+// crater and hurts everything; the shaped mining charge computes its yield
+// the way the drill does BEFORE the blast, so lighting one is mining.
+// A blast near another charge cooks it off -- chains are a feature.
+const chargeSys = {
+  list: [], group: null,
+  set(type, x, y, z){
+    if (!this.group){
+      this.group = new THREE.Group();
+      this.group.userData.noShadow = true;
+      game.scene.add(this.group);
+    }
+    let m;
+    if (type === 'tnt'){
+      m = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+        new THREE.MeshLambertMaterial({ color: 0xb03a3a }));
+    } else {
+      m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.4, 8),
+        new THREE.MeshLambertMaterial({ color: 0x8d8a96 }));
+    }
+    m.position.set(x, y + 0.25, z);
+    this.group.add(m);
+    this.list.push({ type, x, y, z, t: type === 'tnt' ? 3 : 2, mesh: m });
+  },
+  update(dt){
+    for (let i = this.list.length - 1; i >= 0; i--){
+      const c = this.list[i];
+      c.t -= dt;
+      // the fuse blinks, frantic near zero
+      const on = Math.sin(c.t * (c.t < 1 ? 40 : 12)) > 0;
+      c.mesh.material.emissive && c.mesh.material.emissive.setHex(on ? 0x662211 : 0);
+      c.mesh.scale.setScalar(on ? 1.06 : 1);
+      if (c.t > 0) continue;
+      this.list.splice(i, 1);
+      this.group.remove(c.mesh);
+      c.mesh.geometry.dispose(); c.mesh.material.dispose();
+      if (c.type === 'mcharge'){
+        // pay the ore out first, exactly like a drill of this shape would
+        const e = CORE.makeEdit(0, 0, +c.x.toFixed(2), +(c.y + 0.3).toFixed(2), +c.z.toFixed(2), 5.2, 0, 0);
+        const got = CORE.mineYield(game.edits, e, game.gen);
+        const parts = [];
+        for (const m2 in got){
+          const oreKind = CORE.ORE_ITEM[+m2];
+          const added = oreKind ? addStackItem(oreKind, got[m2]) : CORE.addMat(game.slots, +m2, got[m2]);
+          if (added) parts.push('+' + got[m2] + ' ' + (oreKind ? itemLabel({ kind: oreKind }) : CORE.MAT_NAME[m2]));
+        }
+        explode(c.x, c.y + 0.3, c.z, 2.6, 24);
+        if (parts.length) toast(parts.join('  '));
+        refreshHotbar();
+      } else {
+        explode(c.x, c.y + 0.4, c.z, 3.4, 55);
+      }
+      // cook off neighbors
+      for (const o of this.list)
+        if (Math.hypot(o.x - c.x, o.y - c.y, o.z - c.z) < 7) o.t = Math.min(o.t, 0.2);
+    }
+  },
+};
+
 // rockets: dumb-fire ballistic points that pop on the first thing they touch
 function updateProjectiles(dt){
   const ps = game.projectiles;
@@ -9083,6 +9142,7 @@ function activeTool(){
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
+  if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
@@ -10686,6 +10746,24 @@ function tryAction(dt, now){
     fireHitscan(G);
     return;
   }
+  // explosives: set the charge on any surface, then RUN. TNT is a crater;
+  // the shaped mining charge is a drill you light -- it pays its ore out.
+  if (tool.kind === 'boom'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('no surface in reach'); return; }
+      if (game.mode !== 'creative'){
+        tool.item.count--;
+        if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      }
+      chargeSys.set(tool.btype, hit[0], hit[1], hit[2]);
+      AudioSys.sfx('place');
+      toast(tool.btype === 'tnt' ? 'TNT set — 3 seconds' : 'charge set — 2 seconds');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
   // bulb: place on any surface — floors, walls (sideways), ceilings
   // (upside down) — oriented along the surface normal
   if (tool.kind === 'bulb'){
@@ -12084,6 +12162,10 @@ function refreshToolHUD(){
     }
   } else if (it.kind === 'gun'){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'tnt'){
+    html = '<div class="t1">TNT ×' + it.count + '</div><div class="t2">left click to set the charge · 3s fuse · RUN</div>';
+  } else if (it.kind === 'mcharge'){
+    html = '<div class="t1">mining charge ×' + it.count + '</div><div class="t2">left click to set · 2s fuse · blast-carves AND pays out the ore</div>';
   } else if (it.kind === 'fw'){
     const G = CORE.GUNS[it.g] || CORE.GUNS[0];
     const ammoN = game.mode === 'creative' ? '∞' : CORE.countItem(game.slots, G.ammo);
@@ -13570,6 +13652,7 @@ function frame(now){
   Embers.update(dt);
   beamFX.update(dt);
   updateProjectiles(dt);
+  chargeSys.update(dt);
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
   }
@@ -13703,7 +13786,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
   itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
-  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
