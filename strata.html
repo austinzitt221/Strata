@@ -1316,11 +1316,38 @@ function makeGen(seed){
     if (mx - mn > 4.5) return null;
     return { x: vx, z: vz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- raid forts: one hostile candidate per FORT_CELL, dry open ground,
+  // kept away from village candidates so the neighbors stay out of the war
+  function fortAt(cx, cz){
+    const h0 = hashInt(sX ^ 0x0f0f ^ hashInt((cx * 913856943) ^ hashInt(cz * 208375421)));
+    if ((h0 & 3) === 0) return null;
+    const fx = cx * FORT_CELL + 150 + (h0 % (FORT_CELL - 300));
+    const fz = cz * FORT_CELL + 150 + (hashInt(h0 ^ 9) % (FORT_CELL - 300));
+    const hc = height(fx, fz);
+    if (hc < seaLevel + 2.5) return null;
+    const a = archAt(fx, fz);
+    if (a === 6 || a === 7) return null;             // no ice or lava forts
+    let mn = hc, mx = hc;
+    for (const [dx, dz] of [[-20, 0], [20, 0], [0, -20], [0, 20], [15, 15], [-15, -15]]){
+      const hh = height(fx + dx, fz + dz);
+      if (hh < mn) mn = hh;
+      if (hh > mx) mx = hh;
+    }
+    if (mx - mn > 6) return null;
+    // stay clear of any village candidate
+    for (let vx = Math.floor((fx - 250) / VILLAGE_CELL); vx <= Math.floor((fx + 250) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((fz - 250) / VILLAGE_CELL); vz <= Math.floor((fz + 250) / VILLAGE_CELL); vz++){
+        const v = villageAt(vx, vz);
+        if (v && Math.hypot(v.x - fx, v.z - fz) < 250) return null;
+      }
+    return { x: fx, z: fz, y: hc, seed: h0, key: cx + ',' + cz };
+  }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
+const FORT_CELL = 900;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
@@ -2029,7 +2056,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2422,7 +2449,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -3123,6 +3150,7 @@ const game = {
   slots: [], hotSel: 0,
   armor: { head: null, chest: null, feet: null, back: null },
   villages: {},
+  forts: {},
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -4424,7 +4452,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7376,6 +7404,13 @@ function killEntity(e, byPlayer){
       addStackItem('wool', n); addStackItem('meat', 1);
       toast('+' + n + ' wool  ·  +1 meat');
     }
+    else if (e.warlord){
+      const rec = game.forts && game.forts[e.fortKey];
+      if (rec) rec.bossDead = true;
+      addStackItem('vkey', 1); addStackItem('coin', 40);
+      toast('the WARLORD falls — +1 VAULT KEY  ·  +40 coins');
+      markSave();
+    }
     else {
       let coins = 3 + ((Math.random() * 4) | 0);
       if (e.raider) coins = coins * 2 + 4;                    // raiders pay
@@ -7670,6 +7705,14 @@ const objectiveSys = {
         if (c.type === 'explore' && c.on && !c.done)
           out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec });
       });
+    }
+    // discovered forts advertise themselves until their vault is looted
+    for (const key in (game.forts || {})){
+      const rec = game.forts[key];
+      if (!rec.stamped || rec.looted) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
+      out.push({ id: 'fort' + key, x: rec.x, z: rec.z, fort: true,
+                 label: rec.bossDead ? 'VAULT' : 'RAID FORT', rec: { name: 'raid fort' } });
     }
     return out;
   },
@@ -8197,6 +8240,127 @@ const raidSys = {
   },
 };
 
+// ---------- raid bases: walled forts worth shooting your way into ----------
+// Stamped like villages: approach one and the walls, towers, bunkers and an
+// obsidian vault land in the edit list. A garrison of day-proof raiders
+// holds it, a WARLORD holds the vault key, and the vault chest holds the
+// kind of loot that makes the fight worth it.
+const raidBaseSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.fortAt) return [];
+    const C = CORE.FORT_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const f = game.gen.fortAt(cx, cz);
+        if (f && Math.hypot(f.x - x, f.z - z) < r) out.push(f);
+      }
+    return out;
+  },
+  stamp(f, rec){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, x, y, z, sx, mat, 0);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    let g = game.gen.height(f.x, f.z);
+    for (const [dx, dz] of [[-17, -17], [17, -17], [-17, 17], [17, 17]])
+      g = Math.max(g, game.gen.height(f.x + dx, f.z + dz));
+    g = +g.toFixed(1);
+    rec.gy = g;
+    // perimeter walls, buried footing, gate to the south
+    EB(1, f.x, g + 1.5, f.z - 17, 36, 5.8, 1.4, MAT.STONEBRICK);   // south
+    EB(1, f.x, g + 1.5, f.z + 17, 36, 5.8, 1.4, MAT.STONEBRICK);   // north
+    EB(1, f.x - 17, g + 1.5, f.z, 1.4, 5.8, 36, MAT.STONEBRICK);   // west
+    EB(1, f.x + 17, g + 1.5, f.z, 1.4, 5.8, 36, MAT.STONEBRICK);   // east
+    EB(0, f.x, g + 1.9, f.z - 17, 4.2, 3.2, 2.2);                  // the gate
+    // corner towers with plank caps
+    for (const [sx2, sz2] of [[-17, -17], [17, -17], [-17, 17], [17, 17]]){
+      EB(1, f.x + sx2, g + 2.6, f.z + sz2, 5, 8.4, 5, MAT.STONEBRICK);
+      EB(1, f.x + sx2, g + 7.1, f.z + sz2, 6, 0.5, 6, MAT.PLANKS);
+    }
+    // two bunkers, hollow, doorways facing the yard
+    for (const bx of [-8, 8]){
+      EB(1, f.x + bx, g + 1.4, f.z - 5, 7, 4.4, 5.6, MAT.STONEBRICK);
+      EB(0, f.x + bx, g + 1.9, f.z - 5, 6.2, 2.6, 4.8);
+      EB(0, f.x + bx, g + 1.75, f.z - 5 + 2.9, 1.4, 2.2, 1.2);
+      const ch = pnodeSys.add('chest', f.x + bx, g + 0.95, f.z - 5 - 1.4, 0, { sc: 0.7 });
+      ch.inv = new Array(chestSlots(0.7)).fill(null);
+      ch.inv[0] = { kind: 'rounds', count: 30 + (f.seed % 30) };
+      ch.inv[1] = { kind: 'coal', count: 6 };
+      ch.inv[2] = { kind: 'coin', count: 8 + (f.seed % 9) };
+    }
+    // the VAULT: an obsidian block with one doorway and a locked chest
+    EB(1, f.x, g + 2.0, f.z + 10, 7, 5.6, 7, MAT.OBSIDIAN);
+    EB(0, f.x, g + 2.1, f.z + 10, 5.6, 3.0, 5.6);
+    EB(0, f.x, g + 1.85, f.z + 10 - 3.4, 1.5, 2.3, 1.4);
+    const vc = pnodeSys.add('chest', f.x, g + 0.95, f.z + 10 + 1.3, 0, { sc: 1.0 });
+    vc.inv = new Array(chestSlots(1.0)).fill(null);
+    const rng = CORE.mulberry32(f.seed);
+    vc.inv[0] = { kind: 'coin', count: 90 + ((rng() * 70) | 0) };
+    vc.inv[1] = { kind: 'diamond', count: 2 + ((rng() * 3) | 0) };
+    vc.inv[2] = CORE.makeFirearm(3 + ((rng() * 4) | 0));           // DMR..lance
+    vc.inv[3] = { kind: 'rounds', count: 60 };
+    vc.inv[4] = { kind: 'mcharge', count: 3 };
+    vc.locked = true;
+    vc.fkey = rec.key;
+    // torches flank the gate
+    game.torches.push([f.x - 2.6, g + 0.1, f.z - 18.2]);
+    game.torches.push([f.x + 2.6, g + 0.1, f.z - 18.2]);
+    torchSys.rebuild();
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const f of this.candidatesNear(game.pos.x, game.pos.z, 110)){
+      const key = 'f' + f.key;
+      let rec = (game.forts = game.forts || {})[key];
+      if (!rec){
+        rec = { key, x: f.x, z: f.z, seed: f.seed, stamped: false, bossDead: false, looted: false };
+        game.forts[key] = rec;
+      }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(f, rec);
+        toast('a RAID FORT looms ahead — its warlord holds the vault key');
+        AudioSys.sfx('boom');
+        markSave();
+      }
+    }
+  },
+  // keep the garrison manned while you're near an uncleared fort
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    for (const key in (game.forts || {})){
+      const rec = game.forts[key];
+      if (!rec.stamped || rec.bossDead) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 90) continue;
+      const gy = rec.gy != null ? rec.gy : game.gen.height(rec.x, rec.z);
+      const troops = game.entities.filter(e => e.fortKey === key && !e.warlord).length;
+      if (troops < 5){
+        const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 9;
+        const e = spawnEntity('lurker', rec.x + Math.cos(a) * r, gy + 0.6, rec.z + Math.sin(a) * r);
+        e.raider = true; e.noburn = true; e.fortKey = key; e.hp = 55;
+        if (e.mesh) e.mesh.scale.setScalar(1.18);
+      }
+      const bossAlive = game.entities.some(e => e.fortKey === key && e.warlord);
+      if (!bossAlive){
+        const e = spawnEntity('lurker', rec.x, gy + 0.7, rec.z + 6);
+        e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260;
+        if (e.mesh){
+          e.mesh.scale.setScalar(1.65);
+          e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = o.material.clone(); });
+          e.mesh.traverse(o => { if (o.isMesh && o.material.color) o.material.color.offsetHSL(0, 0.15, 0.06); });
+        }
+      }
+    }
+  },
+};
+
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0 };
@@ -8263,7 +8427,7 @@ function updateEntities(dt, now){
       continue;
     }
     // night hunters can't survive the sun: surface lurkers ignite at dawn
-    if (e.type === 'lurker' && game.dayF > 0.45 && e.y > game.gen.height(e.x, e.z) - 1.5){
+    if (e.type === 'lurker' && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
       e.burnT = (e.burnT || 0) + dt;
       if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 1.2, e.z, 0.3, [0xff8830, 0xffb347, 0x442211], 2, 1.4);
       if (e.burnT > 0.4){ e.burnT = 0; e.hp -= 5; e.flash = 0.1; }
@@ -8697,6 +8861,22 @@ function bindInput(){
         }
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'chest' && pn.locked){
+          if (CORE.countItem(game.slots, 'vkey') >= 1){
+            CORE.consumeItem(game.slots, 'vkey', 1);
+            pn.locked = false;
+            const fr = game.forts && game.forts[pn.fkey];
+            if (fr) fr.looted = true;
+            toast('the vault opens');
+            AudioSys.sfx('craft');
+            refreshHotbar(); markSave();
+            openMachine(pn);
+          } else {
+            toast('locked tight — the fort\'s WARLORD holds the key');
+            AudioSys.sfx('deny');
+          }
+          return;
+        }
         if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
@@ -11081,7 +11261,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -11150,6 +11330,10 @@ function itemIconURL(it){
     c.fillStyle = '#2b2119'; c.fillRect(7, 9, 2, 1);
     c.fillStyle = '#5a4632'; c.fillRect(7, 2, 2, 3);
     c.fillStyle = '#ffb347'; c.fillRect(7, 1, 2, 1);
+  } else if (it.kind === 'vkey'){
+    c.fillStyle = '#d9b25a'; c.fillRect(3, 6, 6, 6); c.fillRect(9, 8, 5, 2);
+    c.fillStyle = '#8f6f2c'; c.fillRect(5, 8, 2, 2);
+    c.fillStyle = '#d9b25a'; c.fillRect(12, 10, 2, 2);
   } else if (it.kind === 'mcharge'){
     c.fillStyle = '#4a4a52'; c.fillRect(4, 6, 8, 8);
     c.fillStyle = '#c9c7d1'; c.fillRect(6, 4, 4, 2);
@@ -11469,6 +11653,7 @@ function itemLabel(it){
   if (it.kind === 'wtable') return 'weapon table';
   if (it.kind === 'tnt') return 'TNT';
   if (it.kind === 'mcharge') return 'mining charge';
+  if (it.kind === 'vkey') return 'vault key';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -11591,11 +11776,13 @@ function buildMissionsUI(){
     const d = Math.round(Math.hypot(o.x - game.pos.x, o.z - game.pos.z));
     const t1 = document.createElement('div');
     t1.className = 't1';
-    t1.textContent = o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
+    t1.textContent = o.fort ? 'raid fort'
+                   : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
     t2.className = 't2';
-    t2.textContent = (o.hrec ? missionSys.describe(o.rec, o.hrec)
+    t2.textContent = (o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
+                    : o.hrec ? missionSys.describe(o.rec, o.hrec)
                              : 'reach the marked spot')
                    + ' · ' + o.label + ' ' + d + 'm';
     row.appendChild(t1); row.appendChild(t2);
@@ -12883,6 +13070,7 @@ function saveNow(){
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
     armor: game.armor,
     villages: game.villages,
+    forts: game.forts || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
     torches: game.torches,
@@ -12925,6 +13113,7 @@ function startWorld(id){
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
+  game.forts = data.forts || {};
   if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
@@ -13676,6 +13865,7 @@ function frame(now){
   villageSys.tick(dt);
   raidSys.tick(dt);
   raidSys.update(dt);
+  raidBaseSys.tick(dt);
   game.missionT = (game.missionT || 0) + dt;
   if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
@@ -13834,7 +14024,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
   itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
-  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>

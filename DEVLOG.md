@@ -2,6 +2,57 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 10 — Arms Race (roadmap build 9) (2026-08-29)
+
+Guns, bombs, and reasons to use them. Four phases.
+
+- **The arsenal.** Ten real-model-inspired, renamed firearms in one GUNS
+  table — S9 Sidearm, Magnus .50, Hornet SMG, DMR-14, AV-47 Ripper,
+  Longeye .338, GAT-900, Photon Lance, Sun Spinner, Boomtube RPG — each a
+  personality of rpm / damage / spread / range / recoil / price. One
+  firing engine drives all of them: SDF-marched hitscan (walls actually
+  stop bullets), semi vs full-auto, gatling spin-up, sniper double-ammo
+  cost, laser tracer beams, dry-fire refusal, recoil kick in the
+  viewmodel and the camera. Ten parametric viewmodels from one parts kit
+  and ten pixel icons.
+- **Guns are costly, ammo is cheap.** Rounds, energy cells and rockets
+  are stackable items — rounds craft 24-a-pop from an ingot and a coal
+  even without a station; the arms dealer sells ammo cheap and three
+  starter guns at rep gates. That's the coin loop working as designed.
+- **The weapon table.** A craftable gunsmith bench that must be WIRED to
+  live power. Dark benches refuse to work; powered ones sell the whole
+  arsenal plus ammo and explosives for coin + ingots.
+- **Explosives, i.e. CSG subtract as a weapon.** explode() carves a real
+  crater and throws falloff damage at everything including you. The
+  Boomtube fires a genuine ballistic projectile. TNT (3s fuse) is a
+  crater; the shaped mining charge (2s) computes its yield through the
+  drill's own mineYield path BEFORE the blast — verified voxel-exact
+  against a drill probe — so lighting one is mining. Charges near a
+  blast cook off: chains are a feature.
+- **Raids.** Your power grid is a beacon: once per night in survival,
+  the watts running within 140m of you summon 2 + W/25 raiders (cap 12)
+  — bigger, faster, 55hp lurkers that hunt from any distance and pay
+  double coin. No watts, no raid. Dawn burns the stragglers.
+- **Raid forts.** Generated walled bases on their own 900m grid, stamped
+  on approach like villages: stonebrick perimeter with a gate, four
+  capped towers, two bunkers with supply chests, and an obsidian VAULT
+  whose chest is locked. A day-proof garrison of five holds the yard, a
+  260hp WARLORD holds the key. Kill him, take the key, open the vault:
+  a coin pile, diamonds, a real mid-tier gun, ammo, mining charges.
+  Discovered forts advertise themselves with RAID FORT / VAULT markers
+  and a missions-panel entry until looted; the whole record round-trips
+  through the save.
+
+Verified end to end in-browser: ripper hits for exactly its 14, burst
+drains 4 rounds, sniper takes 2, dry fire refused, laser beam spawns,
+RPG carves an air-verified crater; TNT places/consumes/detonates and a
+bystander pays for it; the mining charge's payout matched a drill probe
+of the same sphere voxel-for-voxel; a 140W grid called a 7-raider raid
+that closed distance over live frames; a full fort run — stamp probes
+(wall solid, gate open, vault obsidian), garrison + warlord manning,
+locked-vault refusal, warlord key drop, no boss respawn, vault loot,
+save round-trip. 297 headless tests, smoke, and the B8 suite green.
+
 ## Build 9.1 — World Gen 3.1: rivers, ponds, and biomes that hurry up (2026-08-29)
 
 Playtest verdict on 9.0 was blunt and right: still flat, biomes still
