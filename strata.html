@@ -217,6 +217,15 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
   </div>
 </div>
+<div id="wtabscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:640px;">
+    <h2>WEAPON TABLE</h2>
+    <div class="sub" id="wtabstatus">&nbsp;</div>
+    <div id="wtablist" style="max-height:420px; overflow:auto;"></div>
+    <button class="btn" id="btnWtabClose">CLOSE (E)</button>
+  </div>
+</div>
+
 <div id="boardscreen" class="screen hidden dim">
   <div class="panel" style="min-width:520px;">
     <h2 id="boardtitle">NOTICES</h2>
@@ -1996,6 +2005,23 @@ function makeDrill(tier){ return { kind:'drill', tier }; }
 function makeDispenser(tier){ return { kind:'disp', tier }; }
 function makeStack(matId, count){ return { kind:'mat', mat: matId, count }; }
 function makeGun(){ return { kind:'gun' }; }
+// ---- the arsenal (build 9). Real-model-inspired, renamed. One item kind
+// ('fw') carrying a variant index into this table; guns are expensive, the
+// ammo that feeds them is cheap. rpm is shots/minute; spread is radians;
+// auto guns fire while held, the rest per click.
+const GUNS = [
+  { id: 'sidearm',  name: 'S9 Sidearm',    auto: 0, rpm: 300,  dmg: 12, spread: 0.014, range: 50,  ammo: 'rounds',  kick: 0.012, price: 60 },
+  { id: 'magnus',   name: 'Magnus .50',    auto: 0, rpm: 130,  dmg: 32, spread: 0.010, range: 55,  ammo: 'rounds',  kick: 0.038, price: 170 },
+  { id: 'hornet',   name: 'Hornet SMG',    auto: 1, rpm: 750,  dmg: 8,  spread: 0.032, range: 40,  ammo: 'rounds',  kick: 0.008, price: 260 },
+  { id: 'marksman', name: 'DMR-14',        auto: 0, rpm: 200,  dmg: 26, spread: 0.004, range: 90,  ammo: 'rounds',  kick: 0.024, price: 340 },
+  { id: 'ripper',   name: 'AV-47 Ripper',  auto: 1, rpm: 540,  dmg: 14, spread: 0.024, range: 55,  ammo: 'rounds',  kick: 0.015, price: 480 },
+  { id: 'longeye',  name: 'Longeye .338',  auto: 0, rpm: 45,   dmg: 95, spread: 0.001, range: 160, ammo: 'rounds', perShot: 2, kick: 0.065, price: 720, zoom: true },
+  { id: 'gatling',  name: 'GAT-900',       auto: 1, rpm: 1100, dmg: 7,  spread: 0.042, range: 45,  ammo: 'rounds',  kick: 0.006, price: 980, spinup: 0.55 },
+  { id: 'lance',    name: 'Photon Lance',  auto: 0, rpm: 240,  dmg: 24, spread: 0.0,   range: 85,  ammo: 'cells',   kick: 0.005, price: 850,  laser: 1 },
+  { id: 'sunlance', name: 'Sun Spinner',   auto: 1, rpm: 700,  dmg: 9,  spread: 0.012, range: 60,  ammo: 'cells',   kick: 0.003, price: 1500, laser: 1 },
+  { id: 'boomtube', name: 'Boomtube RPG',  auto: 0, rpm: 40,   dmg: 60, spread: 0.0,   range: 120, ammo: 'rockets', kick: 0.095, price: 1300, rocket: 1 },
+];
+function makeFirearm(g){ return { kind: 'fw', g: g | 0 }; }
 function makeSword(tier){ return { kind:'sword', tier }; }
 function makeWrench(){ return { kind:'wrench' }; }
 function makeTorches(count){ return { kind:'torch', count }; }
@@ -2003,7 +2029,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2236,6 +2262,12 @@ const RECIPES = [];
   RECIPES.push({ kind: 'ped', yields: 1, costs: [{ mat: MAT.STONEBRICK, n: 6 }] });
   RECIPES.push({ kind: 'sign', yields: 2, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
+  RECIPES.push({ kind: 'wtable', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }, { item: 'coin', n: 40 }] });
+  RECIPES.push({ kind: 'rounds', yields: 24, costs: [{ item: 'ironingot', n: 1 }, { item: 'coal', n: 1 }] });
+  RECIPES.push({ kind: 'cells', yields: 16, costs: [{ item: 'rubyingot', n: 1 }, { item: 'coal', n: 1 }] });
+  RECIPES.push({ kind: 'rockets', yields: 2, station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'coal', n: 2 }] });
+  RECIPES.push({ kind: 'tnt', yields: 2, station: true, costs: [{ item: 'coal', n: 6 }, { item: 'ironingot', n: 1 }, { mat: MAT.SAND, n: 4 }] });
+  RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
@@ -2390,7 +2422,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -4020,6 +4052,78 @@ function buildViewmodel(cam){
     gun.add(armG);
   }
 
+  // --- THE ARSENAL: ten firearms from one parts kit. Same convention as
+  // the blaster: -z is downrange, grip near the origin, arm behind ---
+  const fwDark = pixMat(PROP_TEX.vent);
+  const fws = CORE.GUNS.map(G => {
+    const g = new THREE.Group();
+    const B = (w, h, d, m, x, y, z) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      b.position.set(x, y, z); g.add(b); return b;
+    };
+    const CYL = (r, len, m, x, y, z) => {
+      const c2 = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 8), m);
+      c2.rotation.x = Math.PI / 2; c2.position.set(x, y, z); g.add(c2); return c2;
+    };
+    const accM = G.laser ? pixMat(PROP_TEX.energy, 0x6fd3ff)
+               : G.rocket ? pixMat(PROP_TEX.energy, 0xc96a2a) : steelLM;
+    if (G.id === 'sidearm' || G.id === 'magnus'){
+      const sc = G.id === 'magnus' ? 1.25 : 1;
+      B(0.09 * sc, 0.11 * sc, 0.24 * sc, steelM, 0, 0, -0.02);
+      B(0.05 * sc, 0.05 * sc, 0.12 * sc, steelLM, 0, 0.015, -0.18 * sc);
+      B(0.065, 0.14, 0.075, gripM, 0, -0.11, 0.06);
+      if (G.id === 'magnus') B(0.095, 0.03, 0.22, accM, 0, 0.075, -0.02);
+    } else if (G.id === 'hornet'){
+      B(0.09, 0.1, 0.3, steelM, 0, 0, -0.04);
+      B(0.05, 0.05, 0.1, steelLM, 0, 0.01, -0.24);
+      B(0.065, 0.13, 0.075, gripM, 0, -0.1, 0.06);
+      B(0.05, 0.16, 0.06, fwDark, 0, -0.11, -0.08);         // long mag
+      B(0.03, 0.05, 0.12, steelM, 0, 0.0, 0.16);            // stock nub
+    } else if (G.id === 'marksman' || G.id === 'ripper'){
+      B(0.09, 0.11, 0.42, steelM, 0, 0, -0.06);
+      B(0.045, 0.045, 0.2, steelLM, 0, 0.015, -0.35);
+      B(0.065, 0.14, 0.075, gripM, 0, -0.11, 0.1);
+      B(0.07, 0.1, 0.16, gripM, 0, -0.02, 0.24);            // wood stock
+      const mag = B(0.05, 0.15, 0.08, G.id === 'ripper' ? gripM : fwDark, 0, -0.11, -0.05);
+      if (G.id === 'ripper') mag.rotation.x = 0.4;          // curved mag
+      if (G.id === 'marksman') B(0.09, 0.02, 0.4, accM, 0, 0.065, -0.06);
+    } else if (G.id === 'longeye'){
+      B(0.085, 0.1, 0.55, steelM, 0, 0, -0.1);
+      B(0.04, 0.04, 0.26, steelLM, 0, 0.01, -0.48);
+      B(0.065, 0.14, 0.075, gripM, 0, -0.11, 0.1);
+      B(0.07, 0.1, 0.16, gripM, 0, -0.02, 0.26);
+      CYL(0.032, 0.16, fwDark, 0, 0.085, -0.08);            // scope
+      B(0.05, 0.02, 0.02, accM, 0, 0.085, -0.17);
+    } else if (G.id === 'gatling' || G.id === 'sunlance'){
+      B(0.14, 0.16, 0.3, steelM, 0, 0, 0.02);
+      for (const [ox, oy] of [[-0.035, 0.03], [0.035, 0.03], [0, -0.04]])
+        CYL(0.022, 0.34, G.id === 'sunlance' ? accM : steelLM, ox, oy, -0.3);
+      CYL(0.055, 0.06, fwDark, 0, 0, -0.16);
+      B(0.065, 0.15, 0.08, gripM, 0, -0.14, 0.08);
+      if (G.id === 'sunlance') B(0.15, 0.03, 0.2, accM, 0, 0.1, 0.02);
+    } else if (G.id === 'lance'){
+      B(0.09, 0.1, 0.4, steelM, 0, 0, -0.05);
+      B(0.05, 0.06, 0.14, accM, 0, 0.01, -0.3);
+      B(0.09, 0.03, 0.26, accM, 0, 0.07, -0.02);
+      B(0.065, 0.14, 0.075, gripM, 0, -0.11, 0.09);
+      B(0.06, 0.09, 0.12, fwDark, 0, -0.01, 0.2);
+    } else {  // boomtube
+      const tube = CYL(0.055, 0.6, fwDark, 0, 0.02, -0.02);
+      const wh = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.16, 8), accM);
+      wh.rotation.x = -Math.PI / 2; wh.position.set(0, 0.02, -0.4); g.add(wh);
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.05, 0.1, 8), steelM);
+      bell.rotation.x = Math.PI / 2; bell.position.set(0, 0.02, 0.3); g.add(bell);
+      B(0.065, 0.13, 0.075, gripM, 0, -0.1, 0.02);
+      B(0.05, 0.09, 0.06, gripM, 0, -0.08, -0.16);
+    }
+    const armF = poseArm(buildArm());
+    armF.position.set(0.0, -0.26, 0.28); armF.rotation.set(0.42, -0.08, 0);
+    g.add(armF);
+    g.visible = false;
+    return g;
+  });
+  for (const f of fws) vm.add(f);
+
   // held items sit AT the fist (siblings of the arm, so they stay upright
   // instead of inheriting its tilt) and overlap the hand box — no floating
   const held = (build) => {
@@ -4279,7 +4383,7 @@ function buildViewmodel(cam){
   vm.rotation.y = VM_YAW;              // tips angle inward so the business end reads
   vm.position.set(VM_POS.x, VM_POS.y, VM_POS.z);
   cam.add(vm);
-  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists,
+  game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists, fws,
               wireRig, grapple, bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
@@ -4292,6 +4396,17 @@ function updateViewmodel(dt){
   v.drill.visible = kind === 'drill';
   v.disp.visible = kind === 'disp';
   v.gun.visible = kind === 'gun';
+  // firearms: show the held variant, kicked back for a beat after each shot
+  const fwOn = kind === 'fw' ? (tool.g | 0) : -1;
+  for (let fi = 0; fi < v.fws.length; fi++){
+    const fg = v.fws[fi];
+    fg.visible = fi === fwOn;
+    if (fi === fwOn){
+      const kk = Math.max(0, 1 - (performance.now() - (game.gunKickT || 0)) / 130);
+      fg.position.z = kk * 0.09;
+      fg.rotation.x = kk * 0.08;
+    }
+  }
   v.torch.visible = kind === 'torch';
   v.sword.visible = kind === 'sword';
   v.stick.visible = kind === 'stick';
@@ -4308,7 +4423,8 @@ function updateViewmodel(dt){
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
-                        'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest'];
+                        'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -4677,6 +4793,9 @@ const AudioSys = {
       case 'craft': this.tone({ freq: 660, dur: 0.09, gain: 0.09 }); this.tone({ freq: 990, dur: 0.13, gain: 0.07 }); break;
       case 'undo': this.tone({ freq: 400, dur: 0.08, gain: 0.08, type: 'triangle' }); break;
       case 'shot': this.burst({ dur: 0.09, freq: 2600, gain: 0.28 }); this.tone({ freq: 240, dur: 0.12, gain: 0.16, type: 'sawtooth' }); break;
+      case 'laser': this.tone({ freq: 1400, dur: 0.08, gain: 0.2, type: 'square' }); this.tone({ freq: 700, dur: 0.1, gain: 0.1, type: 'sine' }); break;
+      case 'rocket': this.burst({ dur: 0.25, freq: 900, gain: 0.3 }); this.tone({ freq: 120, dur: 0.3, gain: 0.2, type: 'sawtooth' }); break;
+      case 'boom': this.burst({ dur: 0.5, freq: 300, gain: 0.5 }); this.tone({ freq: 60, dur: 0.55, gain: 0.4, type: 'sine' }); this.tone({ freq: 45, dur: 0.7, gain: 0.3, type: 'triangle' }); break;
       case 'hit': this.burst({ dur: 0.08, freq: 700, gain: 0.16 }); break;
       case 'die': this.burst({ dur: 0.3, freq: 500, gain: 0.2, drop: 300 }); this.tone({ freq: 220, dur: 0.25, gain: 0.1, type: 'triangle' }); break;
       case 'hurt': this.tone({ freq: 110, dur: 0.2, gain: 0.2, type: 'sawtooth' }); break;
@@ -5440,6 +5559,30 @@ const pnodeSys = {
       const rim = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.06, 1.06), M.copper);
       rim.position.y = 1.12;
       g.add(top, midB, spout, rim);
+    } else if (t === 'wtable'){
+      // the weapon table: a gunsmith's bench -- dark top, tool rack, a red
+      // work lamp that only means business when the bench has power
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.12, 0.85), M.dark);
+      top.position.y = 0.86;
+      const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.86, 0.7), M.steel);
+      leg1.position.set(-0.62, 0.43, 0);
+      const leg2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.86, 0.7), M.steel);
+      leg2.position.set(0.62, 0.43, 0);
+      const rack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 0.08), M.steel);
+      rack.position.set(0, 1.4, -0.38);
+      const gunS = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.05),
+        new THREE.MeshLambertMaterial({ color: 0x2c2a33 }));
+      gunS.position.set(-0.1, 1.42, -0.33); gunS.rotation.z = -0.15;
+      const barrelS = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.05),
+        new THREE.MeshLambertMaterial({ color: 0x4a4852 }));
+      barrelS.position.set(0.35, 1.47, -0.33); barrelS.rotation.z = -0.15;
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.08, 0.16),
+        new THREE.MeshBasicMaterial({ color: 0xd84a63 }));
+      lamp.position.set(0.55, 1.6, -0.35);
+      const vice = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.2), M.steel);
+      vice.position.set(-0.5, 1.0, 0.15);
+      g.add(top, leg1, leg2, rack, gunS, barrelS, lamp, vice);
+      g.userData.lamp = lamp;
     } else if (t === 'crafter'){
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.95, 1.05), M.wood);
       body.position.y = 0.48;
@@ -5991,6 +6134,7 @@ const powerSys = {
           else if (n.t === 'acrank' && n.animal){ c.w += 10; c.srcs.push(n); }
           else if (n.t === 'elev'){ if (n.riderDir) c.d += 25; c.elevs.push(n); }
           else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
+          else if (n.t === 'wtable'){ c.d += 8; (c.wtabs = c.wtabs || []).push(n); }
           else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
@@ -6048,6 +6192,10 @@ const powerSys = {
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
       }
+      if (c.wtabs){
+        this.wtabMap = this.wtabMap || new Map();
+        for (const n of c.wtabs) this.wtabMap.set(n.id, c.w > 0 ? 1 : 0);
+      }
       if (c.w > 0) for (const t of c.teslas) this.hotTeslas.push([t.x, t.y + 1.7, t.z, t.id]);
       if (c.d > 0 && c.w > 0){
         // sources drain only while something draws
@@ -6075,6 +6223,9 @@ const powerSys = {
   bulbLight(id){
     if (id == null || !this.wiredBulbs.has('b' + id)) return 1;
     return this.bulbMap.get('b' + id) || 0;
+  },
+  wtablePowered(n){
+    return !!(this.wtabMap && this.wtabMap.get(n.id) > 0);
   },
   stoveBoost(st){
     if (st.id == null) return 0;
@@ -6817,7 +6968,7 @@ function itemModel(it){
   else if (K === 'rope') g.add(ropeSys.model(0.8));
   else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
   else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
-            'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube'].includes(K)){
+            'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable'].includes(K)){
     g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
   } else if (K === 'helm'){
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
@@ -7806,8 +7957,13 @@ const tradeSys = {
     if (role === 'arms') return [
       { buy: { make: 'sword', tier: 1 }, price: 30, rep: 0 },
       { buy: { make: 'sword', tier: 2 }, price: 80, rep: 10 },
-      { buy: { make: 'sword', tier: 3 }, price: 160, rep: 25 },
+      { buy: { k: 'rounds', n: 48 }, price: 12, rep: 0 },
+      { buy: { k: 'cells', n: 32 }, price: 16, rep: 10 },
+      { buy: { make: 'fw', g: 0 }, price: 70, rep: 0 },
+      { buy: { make: 'fw', g: 2 }, price: 290, rep: 10 },
+      { buy: { make: 'fw', g: 4 }, price: 520, rep: 25 },
       { buy: { make: 'gun' }, price: 280, rep: 25 },
+      { buy: { k: 'tnt', n: 2 }, price: 20, rep: 10 },
       { sell: { k: 'meat', n: 4 }, price: 8, rep: 0 },
     ];
     if (role === 'tool') return [
@@ -7836,6 +7992,7 @@ const tradeSys = {
     if (s.make === 'disp') return CORE.makeDispenser(s.tier);
     if (s.make === 'sword') return CORE.makeSword(s.tier);
     if (s.make === 'gun') return CORE.makeGun();
+    if (s.make === 'fw') return CORE.makeFirearm(s.g);
     if (s.make === 'wrench') return CORE.makeWrench();
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
@@ -8163,6 +8320,129 @@ function entityOnRay(maxDist){
   return best;
 }
 
+// ---------- gunfire: hitscan, tracers, rockets, explosions ----------
+// One ray with per-gun spread, marched against the SDF so a wall actually
+// stops the bullet, checked against every entity along the way.
+function fireHitscan(G){
+  const dir = new THREE.Vector3();
+  game.camera.getWorldDirection(dir);
+  if (G.spread){
+    dir.x += (Math.random() - 0.5) * 2 * G.spread;
+    dir.y += (Math.random() - 0.5) * 2 * G.spread;
+    dir.z += (Math.random() - 0.5) * 2 * G.spread;
+    dir.normalize();
+  }
+  const o = game.camera.position;
+  // terrain stop: march the field along the ray
+  const R = G.range + (game.camBack || 0);
+  const segBox = [Math.min(o.x, o.x + dir.x * R) - 1, Math.min(o.y, o.y + dir.y * R) - 1, Math.min(o.z, o.z + dir.z * R) - 1,
+                  Math.max(o.x, o.x + dir.x * R) + 1, Math.max(o.y, o.y + dir.y * R) + 1, Math.max(o.z, o.z + dir.z * R) + 1];
+  const eds = nearEdits(segBox);
+  let tWall = R;
+  for (let i = 0, t = 0.4 + (game.camBack || 0); i < 220 && t < R; i++){
+    const d = sdfWorld(o.x + dir.x * t, o.y + dir.y * t, o.z + dir.z * t, eds);
+    if (d < 0.04){ tWall = t; break; }
+    t += Math.max(0.06, d * 0.7);
+  }
+  // nearest entity in front of the wall
+  let best = null, bestT = tWall;
+  for (const e of game.entities){
+    const def = ENT_DEF[e.type];
+    const vx = e.x - o.x, vy = e.y + def.h * 0.6 - o.y, vz = e.z - o.z;
+    const t = vx * dir.x + vy * dir.y + vz * dir.z;
+    if (t < 0 || t > bestT) continue;
+    const px = vx - dir.x * t, py = vy - dir.y * t, pz = vz - dir.z * t;
+    if (Math.hypot(px, py, pz) < def.r + 0.35){ best = e; bestT = t; }
+  }
+  game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + (G.kick || 0.01));
+  const hx = o.x + dir.x * bestT, hy = o.y + dir.y * bestT, hz = o.z + dir.z * bestT;
+  if (G.laser) beamFX.add(o.x + dir.x * 0.8, o.y + dir.y * 0.8 - 0.15, o.z + dir.z * 0.8, hx, hy, hz, 0x7fe7ff);
+  if (best){
+    hurtEntity(best, G.dmg, (best.x - game.pos.x) * 0.6, (best.z - game.pos.z) * 0.6);
+    Particles.burst(best.x, best.y + 0.6, best.z, 0.3, [0xff5544], 8, 2);
+  } else if (bestT < R - 0.5){
+    Particles.burst(hx, hy, hz, 0.2, [0x9a9aa5, 0x77747f], 6, 1.6);   // wall dust
+  }
+}
+// laser tracers: additive lines that live for a tenth of a second
+const beamFX = {
+  list: [], mat: null,
+  add(x0, y0, z0, x1, y1, z1, col){
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([x0, y0, z0, x1, y1, z1]), 3));
+    const m = new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.9 });
+    const line = new THREE.Line(g, m);
+    line.userData.noShadow = true;
+    game.scene.add(line);
+    this.list.push({ line, t: 0.1 });
+  },
+  update(dt){
+    for (let i = this.list.length - 1; i >= 0; i--){
+      const b = this.list[i];
+      b.t -= dt;
+      b.line.material.opacity = Math.max(0, b.t / 0.1) * 0.9;
+      if (b.t <= 0){
+        game.scene.remove(b.line);
+        b.line.geometry.dispose(); b.line.material.dispose();
+        this.list.splice(i, 1);
+      }
+    }
+  },
+};
+// ---- the explosion: CSG subtract as a weapon. Carves a real crater,
+// throws damage at everything in range (the shooter included), and leaves
+// no yield -- blasting is for holes and hurt, the drill is for ore.
+function explode(x, y, z, r, dmg, opts){
+  opts = opts || {};
+  const e = CORE.makeEdit(0, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r * 2, 0, 0);
+  applyEdit(e);
+  // a shaped mining charge computes its yield BEFORE the carve and hands it
+  // in here; plain explosions pay nothing (blasting is for holes, not ore)
+  if (opts.yieldMap) for (const m in opts.yieldMap) CORE.addMat(game.slots, +m, opts.yieldMap[m]);
+  Particles.burst(x, y, z, r * 0.5, [0xffb347, 0xff8830, 0x51484f, 0x9a9aa5], 40, 7);
+  Embers.burst(x, y, z, r * 0.4, [0xffb347, 0xffdd66], 10, 3);
+  AudioSys.sfx('boom');
+  for (const en of [...game.entities]){
+    const d = Math.hypot(en.x - x, en.y - y, en.z - z);
+    if (d < r * 2.4){
+      const f = 1 - d / (r * 2.4);
+      hurtEntity(en, Math.round(dmg * f), (en.x - x) * 2 * f, (en.z - z) * 2 * f);
+    }
+  }
+  const pd = Math.hypot(game.pos.x - x, game.pos.y + 0.9 - y, game.pos.z - z);
+  if (pd < r * 2.2){
+    const f = 1 - pd / (r * 2.2);
+    damagePlayer(Math.round(dmg * 0.8 * f), (game.pos.x - x) * 3 * f, (game.pos.z - z) * 3 * f);
+  }
+}
+// rockets: dumb-fire ballistic points that pop on the first thing they touch
+function updateProjectiles(dt){
+  const ps = game.projectiles;
+  if (!ps || !ps.length) return;
+  for (let i = ps.length - 1; i >= 0; i--){
+    const p = ps[i];
+    const steps = 3;
+    let done = false;
+    for (let k = 0; k < steps && !done; k++){
+      const h = dt / steps;
+      p.vy -= 3.5 * h;
+      p.x += p.vx * h; p.y += p.vy * h; p.z += p.vz * h;
+      const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
+      if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
+      if (!done) for (const en of game.entities){
+        const def = ENT_DEF[en.type];
+        if (Math.hypot(en.x - p.x, en.y + def.h * 0.5 - p.y, en.z - p.z) < def.r + 0.5){ done = true; break; }
+      }
+    }
+    p.t -= dt;
+    Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
+    if (done || p.t <= 0){
+      explode(p.x, p.y, p.z, p.r, p.dmg);
+      ps.splice(i, 1);
+    }
+  }
+}
+
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
@@ -8311,6 +8591,7 @@ function bindInput(){
           return;
         }
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
@@ -8460,8 +8741,8 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board'){
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade')) closeOverlay();
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab'){
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab')) closeOverlay();
       else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -8801,10 +9082,11 @@ function activeTool(){
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
+  if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -10361,14 +10643,47 @@ function tryAction(dt, now){
     AudioSys.setHum(false, 0, 0);
     if (game.mouseL && now - game.lastShot > 500){
       game.lastShot = now;
-      AudioSys.sfx('shot');
-      game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + 0.025);
-      const ent = entityOnRay(45);
-      if (ent){
-        hurtEntity(ent, 18, (ent.x - game.pos.x) * 0.8, (ent.z - game.pos.z) * 0.8);
-        Particles.burst(ent.x, ent.y + 0.6, ent.z, 0.3, [0xff5544], 10, 2);
-      }
+      fireHitscan({ dmg: 18, spread: 0.008, range: 45, kick: 0.025, laser: 1 });
     }
+    return;
+  }
+  // the arsenal: one engine, ten personalities from the GUNS table
+  if (tool.kind === 'fw'){
+    AudioSys.setHum(false, 0, 0);
+    const G = CORE.GUNS[tool.g] || CORE.GUNS[0];
+    const wantFire = G.auto ? game.mouseL : edge;
+    // gatlings spin up: the barrel needs half a second of held trigger
+    // before it reaches full rate
+    if (G.spinup){
+      game.spinT = game.mouseL ? Math.min(G.spinup, (game.spinT || 0) + dt) : 0;
+    }
+    const rate = G.spinup ? G.rpm * (0.18 + 0.82 * ((game.spinT || 0) / G.spinup)) : G.rpm;
+    if (!wantFire || now - game.lastShot < 60000 / rate) return;
+    const need = G.perShot || 1;
+    if (game.mode !== 'creative'){
+      if (CORE.countItem(game.slots, G.ammo) < need){
+        if (edge){ toast('out of ' + itemLabel({ kind: G.ammo }) + ' — craft or buy more'); AudioSys.sfx('deny'); }
+        return;
+      }
+      CORE.consumeItem(game.slots, G.ammo, need);
+      refreshHotbar();
+    }
+    game.lastShot = now;
+    game.gunKickT = now;
+    if (G.rocket){
+      AudioSys.sfx('rocket');
+      const dir = new THREE.Vector3();
+      game.camera.getWorldDirection(dir);
+      const o = game.camera.position;
+      (game.projectiles = game.projectiles || []).push({
+        x: o.x + dir.x, y: o.y + dir.y, z: o.z + dir.z,
+        vx: dir.x * 34, vy: dir.y * 34, vz: dir.z * 34,
+        t: 5, dmg: G.dmg, r: 3.4 });
+      game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + G.kick);
+      return;
+    }
+    AudioSys.sfx(G.laser ? 'laser' : 'shot');
+    fireHitscan(G);
     return;
   }
   // bulb: place on any surface — floors, walls (sideways), ceilings
@@ -10636,11 +10951,13 @@ const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
   const key = it.kind === 'mat' ? 'm' + it.mat
+    : it.kind === 'fw' ? 'fw' + it.g
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -10652,6 +10969,68 @@ function itemIconURL(it){
     c.fillStyle = '#2f2d38'; c.fillRect(3, 6, 9, 4);
     c.fillStyle = '#3c3a44'; c.fillRect(12, 7, 3, 2);
     c.fillStyle = '#d84a63'; c.fillRect(6, 5, 3, 1); c.fillRect(13, 7, 1, 1);
+  } else if (it.kind === 'fw'){
+    // pixel silhouettes per class -- body, barrel, grip, class accent
+    const G = CORE.GUNS[it.g] || CORE.GUNS[0];
+    const body = '#34323c', steel = '#5b5964', grip2 = '#5a4632';
+    const acc = G.laser ? '#6fd3ff' : G.rocket ? '#c96a2a' : '#8d8a96';
+    if (G.id === 'sidearm' || G.id === 'magnus'){
+      c.fillStyle = body; c.fillRect(3, 6, 9, 3);
+      c.fillStyle = steel; c.fillRect(11, 6, 3, 2);
+      c.fillStyle = grip2; c.fillRect(4, 9, 3, 5);
+      if (G.id === 'magnus'){ c.fillStyle = acc; c.fillRect(3, 5, 9, 1); }
+    } else if (G.id === 'hornet'){
+      c.fillStyle = body; c.fillRect(2, 6, 10, 3);
+      c.fillStyle = steel; c.fillRect(12, 7, 3, 1);
+      c.fillStyle = grip2; c.fillRect(5, 9, 2, 4); c.fillRect(8, 9, 2, 6);
+    } else if (G.id === 'boomtube'){
+      c.fillStyle = '#4a4a52'; c.fillRect(1, 7, 12, 3);
+      c.fillStyle = acc; c.fillRect(12, 6, 3, 5);
+      c.fillStyle = grip2; c.fillRect(5, 10, 2, 4);
+    } else if (G.id === 'gatling' || G.id === 'sunlance'){
+      c.fillStyle = body; c.fillRect(2, 6, 7, 5);
+      c.fillStyle = steel; c.fillRect(9, 5, 6, 1); c.fillRect(9, 7, 6, 1); c.fillRect(9, 9, 6, 1);
+      c.fillStyle = grip2; c.fillRect(4, 11, 2, 4);
+      if (G.id === 'sunlance'){ c.fillStyle = acc; c.fillRect(9, 6, 6, 1); c.fillRect(9, 8, 6, 1); }
+    } else if (G.id === 'lance'){
+      c.fillStyle = body; c.fillRect(2, 7, 10, 3);
+      c.fillStyle = acc; c.fillRect(12, 7, 3, 2); c.fillRect(5, 6, 4, 1);
+      c.fillStyle = grip2; c.fillRect(5, 10, 2, 4);
+    } else {   // marksman / ripper / longeye: rifle silhouette
+      c.fillStyle = grip2; c.fillRect(1, 8, 3, 3);
+      c.fillStyle = body; c.fillRect(3, 7, 9, 3);
+      c.fillStyle = steel; c.fillRect(12, 7, 4, 1.5); c.fillRect(12, 7, 4, 2);
+      c.fillStyle = grip2; c.fillRect(6, 10, 2, 4);
+      if (G.id === 'longeye'){ c.fillStyle = acc; c.fillRect(5, 5, 5, 2); }
+      if (G.id === 'ripper'){ c.fillStyle = grip2; c.fillRect(8, 10, 3, 3); }
+    }
+  } else if (it.kind === 'rounds'){
+    c.fillStyle = '#b08a3c'; c.fillRect(4, 5, 2, 8); c.fillRect(7, 5, 2, 8); c.fillRect(10, 5, 2, 8);
+    c.fillStyle = '#d9b25a'; c.fillRect(4, 3, 2, 2); c.fillRect(7, 3, 2, 2); c.fillRect(10, 3, 2, 2);
+  } else if (it.kind === 'cells'){
+    c.fillStyle = '#25404e'; c.fillRect(5, 3, 6, 10);
+    c.fillStyle = '#6fd3ff'; c.fillRect(6, 4, 4, 4);
+    c.fillStyle = '#b7ecff'; c.fillRect(7, 5, 2, 2);
+  } else if (it.kind === 'rockets'){
+    c.fillStyle = '#4a4a52'; c.fillRect(6, 5, 4, 8);
+    c.fillStyle = '#c96a2a'; c.fillRect(6, 2, 4, 3);
+    c.fillStyle = '#8d5a1e'; c.fillRect(5, 13, 2, 2); c.fillRect(9, 13, 2, 2);
+  } else if (it.kind === 'wtable'){
+    c.fillStyle = '#3a3f4c'; c.fillRect(2, 7, 12, 3);
+    c.fillStyle = '#2b2e38'; c.fillRect(3, 10, 2, 5); c.fillRect(11, 10, 2, 5);
+    c.fillStyle = '#d84a63'; c.fillRect(4, 5, 6, 2);
+    c.fillStyle = '#6fd3ff'; c.fillRect(11, 6, 2, 1);
+  } else if (it.kind === 'tnt'){
+    c.fillStyle = '#b03a3a'; c.fillRect(3, 5, 10, 9);
+    c.fillStyle = '#e8e0d0'; c.fillRect(3, 8, 10, 3);
+    c.fillStyle = '#2b2119'; c.fillRect(7, 9, 2, 1);
+    c.fillStyle = '#5a4632'; c.fillRect(7, 2, 2, 3);
+    c.fillStyle = '#ffb347'; c.fillRect(7, 1, 2, 1);
+  } else if (it.kind === 'mcharge'){
+    c.fillStyle = '#4a4a52'; c.fillRect(4, 6, 8, 8);
+    c.fillStyle = '#c9c7d1'; c.fillRect(6, 4, 4, 2);
+    c.fillStyle = '#ffb347'; c.fillRect(7, 8, 2, 2);
+    c.fillStyle = '#2b2e38'; c.fillRect(4, 13, 8, 1);
   } else if (it.kind === 'torch'){
     c.fillStyle = '#5a4632'; c.fillRect(7, 5, 2, 9);
     c.fillStyle = '#ffb347'; c.fillRect(6, 2, 4, 4);
@@ -10959,6 +11338,13 @@ function itemLabel(it){
   if (!it) return '';
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
   if (it.kind === 'gun') return 'blaster';
+  if (it.kind === 'fw') return (CORE.GUNS[it.g] || CORE.GUNS[0]).name;
+  if (it.kind === 'rounds') return 'rounds';
+  if (it.kind === 'cells') return 'energy cells';
+  if (it.kind === 'rockets') return 'rockets';
+  if (it.kind === 'wtable') return 'weapon table';
+  if (it.kind === 'tnt') return 'TNT';
+  if (it.kind === 'mcharge') return 'mining charge';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -11115,12 +11501,12 @@ function buildInvUI(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone'];
-const CAT_WEAPONS  = ['sword', 'gun'];          // every sword tier, plus the blaster
+const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
 const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
@@ -11177,6 +11563,13 @@ function catalogEntries(){
   out.push({ kind: 'grapple' });
   out.push({ kind: 'coin', count: 500 });
   out.push(CORE.makeGun());
+  for (let gi = 0; gi < CORE.GUNS.length; gi++) out.push(CORE.makeFirearm(gi));
+  out.push({ kind: 'rounds', count: 240 });
+  out.push({ kind: 'cells', count: 160 });
+  out.push({ kind: 'rockets', count: 24 });
+  out.push({ kind: 'tnt', count: 20 });
+  out.push({ kind: 'mcharge', count: 20 });
+  out.push({ kind: 'wtable', count: 4 });
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
@@ -11220,6 +11613,84 @@ function buildCatalogUI(){
 }
 function refreshInvUI(){
   document.querySelectorAll('#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot').forEach(paintSlot);
+}
+
+// ---------- the weapon table: guns for coin + materials, only while powered ----------
+function openWeaponTable(n){
+  game.activeWtab = n;
+  game.ui = 'wtab';
+  buildWtabUI();
+  show('wtabscreen');
+  document.exitPointerLock();
+}
+// what the bench sells: the whole arsenal plus ammo boxes and explosives
+function wtabOffers(){
+  const out = CORE.GUNS.map((G, gi) => ({
+    make: () => CORE.makeFirearm(gi), name: G.name,
+    sub: (G.auto ? 'auto' : 'semi') + ' · ' + G.dmg + ' dmg · ' + itemLabel({ kind: G.ammo }),
+    coins: G.price, iron: Math.ceil(G.price / 60), icon: CORE.makeFirearm(gi),
+  }));
+  out.push({ make: () => ({ kind: 'rounds', count: 48 }), name: 'rounds ×48', sub: 'ballistic ammo', coins: 10, iron: 1, icon: { kind: 'rounds' } });
+  out.push({ make: () => ({ kind: 'cells', count: 32 }), name: 'energy cells ×32', sub: 'laser ammo', coins: 14, iron: 0, ruby: 1, icon: { kind: 'cells' } });
+  out.push({ make: () => ({ kind: 'rockets', count: 4 }), name: 'rockets ×4', sub: 'for the Boomtube', coins: 24, iron: 2, icon: { kind: 'rockets' } });
+  out.push({ make: () => ({ kind: 'tnt', count: 2 }), name: 'TNT ×2', sub: 'place, light, run', coins: 18, iron: 1, icon: { kind: 'tnt' } });
+  out.push({ make: () => ({ kind: 'mcharge', count: 2 }), name: 'mining charge ×2', sub: 'blast-carves AND pays the ore out', coins: 22, iron: 2, icon: { kind: 'mcharge' } });
+  return out;
+}
+function buildWtabUI(){
+  const n = game.activeWtab;
+  if (!n) return;
+  const powered = game.mode === 'creative' || powerSys.wtablePowered(n);
+  $('wtabstatus').textContent = powered
+    ? 'powered — coin and iron buy anything on the rack (you have ' + CORE.countItem(game.slots, 'coin') + ' coin)'
+    : 'DARK — wire the bench to a live circuit before it will work';
+  const list = $('wtablist');
+  list.innerHTML = '';
+  for (const off of wtabOffers()){
+    const row = document.createElement('div');
+    row.className = 'craftrow';
+    const img = document.createElement('img');
+    img.src = itemIconURL(off.icon);
+    row.appendChild(img);
+    const nm = document.createElement('div');
+    nm.className = 'cname';
+    nm.innerHTML = off.name + '<div style="font-size:11px;color:var(--ui-hi)">' + off.sub + '</div>';
+    row.appendChild(nm);
+    const cost = document.createElement('div');
+    cost.className = 'ccost';
+    const parts = [off.coins + ' coin'];
+    if (off.iron) parts.push(off.iron + ' iron ingot');
+    if (off.ruby) parts.push(off.ruby + ' ruby ingot');
+    cost.textContent = parts.join(' + ');
+    const can = powered && (game.mode === 'creative' ||
+      (CORE.countItem(game.slots, 'coin') >= off.coins &&
+       CORE.countItem(game.slots, 'ironingot') >= (off.iron || 0) &&
+       CORE.countItem(game.slots, 'rubyingot') >= (off.ruby || 0)));
+    if (can) cost.classList.add('ok');
+    row.appendChild(cost);
+    row.addEventListener('click', () => {
+      if (!powered){ toast('no power'); AudioSys.sfx('deny'); return; }
+      if (game.mode !== 'creative'){
+        if (CORE.countItem(game.slots, 'coin') < off.coins ||
+            CORE.countItem(game.slots, 'ironingot') < (off.iron || 0) ||
+            CORE.countItem(game.slots, 'rubyingot') < (off.ruby || 0)){
+          toast('you cannot afford that'); AudioSys.sfx('deny'); return;
+        }
+        CORE.consumeItem(game.slots, 'coin', off.coins);
+        if (off.iron) CORE.consumeItem(game.slots, 'ironingot', off.iron);
+        if (off.ruby) CORE.consumeItem(game.slots, 'rubyingot', off.ruby);
+      }
+      const it = off.make();
+      const placed = it.count ? addStackItem(it.kind, it.count)
+                              : (() => { for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = it; return true; } return false; })();
+      if (!placed){ toast('inventory full'); return; }
+      toast('built: ' + off.name);
+      AudioSys.sfx('craft');
+      refreshHotbar(); refreshToolHUD(); markSave();
+      buildWtabUI();
+    });
+    list.appendChild(row);
+  }
 }
 
 // ---------- stove screen: 3 stove slots above the usual inventory ----------
@@ -11613,6 +12084,12 @@ function refreshToolHUD(){
     }
   } else if (it.kind === 'gun'){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'fw'){
+    const G = CORE.GUNS[it.g] || CORE.GUNS[0];
+    const ammoN = game.mode === 'creative' ? '∞' : CORE.countItem(game.slots, G.ammo);
+    html = '<div class="t1">' + G.name + '</div>' +
+           '<div class="t2">' + (G.auto ? 'hold' : 'click') + ' to fire · ' + G.dmg + ' dmg · ' +
+           itemLabel({ kind: G.ammo }) + ' ' + ammoN + (G.perShot > 1 ? ' (uses ' + G.perShot + ')' : '') + '</div>';
   } else if (it.kind === 'sword'){
     html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
   } else if (it.kind === 'door'){
@@ -11638,7 +12115,7 @@ function refreshToolHUD(){
     html = '<div class="t1">item tube ×' + it.count + '</div>' +
            '<div class="t2">' + (game.tubePending ? 'click the machine it feeds · right click cancels'
                                                   : 'click a hopper, then a stove / auto-crafter / hopper') + '</div>';
-  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'pad'].includes(it.kind)){
+  } else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'pad', 'wtable'].includes(it.kind)){
     const tip = { lever: 'inline switch — right click to flip', crank: 'right click to wind · ~20W while wound',
                   wheel: 'place IN water · ~15W', gen: 'right click to open, drop coal in the tank · ~40W',
                   meter: 'shows its circuit\'s watts',
@@ -12048,7 +12525,8 @@ function openMap(){
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen');
+  game.activeWtab = null;
   game.activeTrade = null;
   game.activeBoard = null;
   game.activeCrafter = null;
@@ -13090,6 +13568,8 @@ function frame(now){
   }
   Particles.update(dt);
   Embers.update(dt);
+  beamFX.update(dt);
+  updateProjectiles(dt);
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
   }
@@ -13223,6 +13703,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
   itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
