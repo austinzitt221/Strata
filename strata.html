@@ -102,6 +102,19 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .craftrow .ccost{font-size:12px; color:var(--ui-hi);}
 .craftrow .ccost.ok{color:#7dff9b;}
 
+/* ---------- objective markers ---------- */
+#objlayer{position:fixed; inset:0; pointer-events:none; z-index:5;}
+.objmark{position:absolute; left:0; top:0; width:64px; text-align:center; will-change:transform;}
+.objdia{width:13px; height:13px; margin:0 auto; background:#ffd75e; border:2px solid #7a5c14;
+  transform:rotate(45deg); box-shadow:0 0 7px rgba(0,0,0,0.8);}
+.objtxt{margin-top:5px; font-size:11px; color:#ffe9a8; letter-spacing:1px; white-space:nowrap;
+  text-shadow:0 1px 3px #000, 0 0 5px #000;}
+.objmark.edge .objdia{background:#ffb84d; border-radius:50%; transform:none;}
+.mrow{border:2px solid rgba(74,68,88,0.8); background:rgba(20,18,30,0.5);
+  padding:7px 10px; margin-bottom:7px; max-width:300px;}
+.mrow .t1{font-size:12px; color:#ffe9a8; letter-spacing:1px; margin-bottom:3px;}
+.mrow .t2{font-size:11px; color:var(--ui-hi); line-height:1.45;}
+
 /* ---------- toast ---------- */
 #toast{position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:rgba(10,9,16,0.85); border:2px solid var(--ui-border); padding:6px 14px; letter-spacing:1px; z-index:60; transition:opacity .3s; opacity:0; pointer-events:none;}
 
@@ -237,6 +250,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="objlayer"></div>
+
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
   <div class="panel hidden" id="catalogpanel">
@@ -256,6 +271,11 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="invlabel">HOTBAR</div>
     <div class="invgrid" id="invhot"></div>
     <div class="sub" style="margin-top:12px;">with a dispenser slotted, any material you hold becomes buildable &nbsp;·&nbsp; E to close</div>
+  </div>
+  <div class="panel" id="missionpanel">
+    <h2>MISSIONS</h2>
+    <div class="sub" style="margin-bottom:8px;">active work, and where it is</div>
+    <div id="missionlist"></div>
   </div>
   </div>
 </div>
@@ -494,24 +514,126 @@ function makeGen(seed){
   const sU = hashInt(seed ^ 0x27d4eb2f), sU2 = hashInt(seed ^ 0x165667b1);
   const sRg = hashInt(seed ^ 0x5bd1e995), sWp = hashInt(seed ^ 0xcc9e2d51);
   const sN = hashInt(seed ^ 0x8f1bbcdc), sX = hashInt(seed ^ 0x5a8279f9);
+  const sCo = hashInt(seed ^ 0x243f6a88), sEr = hashInt(seed ^ 0x93c467e3);
+  const sPv = hashInt(seed ^ 0xb7e15162), sRi = hashInt(seed ^ 0x9216d5d9);
+  const sWb = hashInt(seed ^ 0xf7ca88e3), sCl = hashInt(seed ^ 0x649d8f6a);
 
   const seaLevel = -1.5;   // global water table: valleys and caves below flood
+
+  // ---- WG3 backbone: the world-scale shape lives in three stacked fields,
+  // the way Minecraft 1.18 builds terrain -- CONTINENTALNESS (are we in a
+  // basin, a shelf, or a highland), EROSION (how flat the land is regardless
+  // of what else wants to happen), and PEAKS & VALLEYS (broad swells plus
+  // ridged crest lines). Each runs through a spline whose control points are
+  // jittered per seed, so worlds get personalities: one seed is an
+  // archipelago, another an eroded plain, another a craggy highland. The old
+  // archetype heightfields still ride on top as local character.
+  const rj01 = k => hashInt(seed ^ Math.imul(k, 0x9E3779B1)) / 4294967296;
+  const rjr = (k, a, b) => a + rj01(k) * (b - a);
+  const fCont = 0.00095 * rjr(0x11a, 0.72, 1.38);   // continent wavelength
+  const fEro  = 0.0019  * rjr(0x22b, 0.75, 1.30);
+  const fPvF  = 0.0055  * rjr(0x33c, 0.80, 1.25);
+  const fRg   = 0.0036  * rjr(0x44d, 0.80, 1.25);
+  const seaShift = rjr(0x55e, -0.05, 0.08);          // wetter vs drier worlds
+  const contAmp  = rjr(0x66f, 0.85, 1.25);
+  const ridgeWorld = rjr(0x770, 0.70, 1.45);         // craggy vs soft worlds
+  const CPT = [                                      // continentalness -> base
+    [0.00, -30 * rjr(1, 0.8, 1.2)], [0.26, -11 * rjr(2, 0.7, 1.3)],
+    [0.40, -2.6], [0.50, 1.6], [0.62, 4.5 * rjr(3, 0.7, 1.3)],
+    [0.78, 11 * rjr(4, 0.75, 1.35)], [1.00, 24 * rjr(5, 0.7, 1.4)],
+  ];
+  const EPT = [                                      // erosion -> relief mul
+    [0.00, 1.85 * rjr(6, 0.8, 1.2)], [0.30, 1.15], [0.52, 0.66],
+    [0.72, 0.34], [0.88, 0.18], [1.00, 0.12],
+  ];
+  function spline(P, t){
+    if (t <= P[0][0]) return P[0][1];
+    for (let i = 1; i < P.length; i++){
+      if (t <= P[i][0]){
+        const u = (t - P[i - 1][0]) / (P[i][0] - P[i - 1][0]);
+        return P[i - 1][1] + (P[i][1] - P[i - 1][1]) * (u * u * (3 - 2 * u));
+      }
+    }
+    return P[P.length - 1][1];
+  }
+  // scratch record refilled per query -- the mesher calls height() per
+  // column, thousands of times per chunk, so this allocates nothing
+  const FLD = { c: 0, base: 0, relief: 0, swell: 0, ridge: 0 };
+  function fieldsAt(x, z){
+    const wx = x + (noise2(sWb, x * 0.0013, z * 0.0013) - 0.5) * 260
+                 + (noise2(sWb, x * 0.006 + 91.2, z * 0.006) - 0.5) * 46;
+    const wz = z + (noise2(sWb, x * 0.0013 + 41.7, z * 0.0013 + 17.3) - 0.5) * 260
+                 + (noise2(sWb, x * 0.006, z * 0.006 + 77.8) - 0.5) * 46;
+    let C = fbm2(sCo, wx * fCont, wz * fCont, 3) + seaShift;
+    C = C < 0 ? 0 : C > 1 ? 1 : C;
+    let E = fbm2(sEr, x * fEro, z * fEro, 2);
+    E = E < 0 ? 0 : E > 1 ? 1 : E;
+    FLD.c = C;
+    FLD.base = spline(CPT, C) * contAmp;
+    FLD.relief = spline(EPT, E);
+    FLD.swell = (fbm2(sPv, wx * fPvF, wz * fPvF, 2) - 0.5) * 2;
+    const rr = 1 - Math.abs(2 * fbm2(sRi, wx * fRg, wz * fRg, 2) - 1);
+    FLD.ridge = rr * rr * rr;
+    return FLD;
+  }
+  // per-archetype response to the backbone: how hard swells and crest lines
+  // hit, and a base nudge. Ranges live on the ridge field; swamps ignore it.
+  const ARCHP = [
+    { sw: 10, rg: 6,  add: 1.2 },   // plains
+    { sw: 20, rg: 14, add: 2.0 },   // hills
+    { sw: 26, rg: 58, add: 4.0 },   // ranges
+    { sw: 14, rg: 8,  add: 0.0, step: true },   // mesa
+    { sw: 9,  rg: 4,  add: 1.4 },   // dunes
+    { sw: 4,  rg: 2,  add: -0.8 },  // swamp
+    { sw: 18, rg: 30, add: 8.0 },   // glacier
+    { sw: 16, rg: 22, add: 1.6 },   // volcanic
+  ];
+  function coreH(a, x, z, F){
+    const P = ARCHP[a];
+    let h = F.base + P.add
+          + F.swell * P.sw * F.relief
+          + F.ridge * P.rg * F.relief * ridgeWorld
+          + archDetail(a, x, z) * (0.45 + 0.55 * F.relief);
+    if (P.step && h > seaLevel + 1){
+      // mesa: the WHOLE hill quantizes into plateaus with soft risers, so
+      // backbone relief becomes stacked tables instead of a tilted plain
+      const t = h / 7, st = Math.floor(t);
+      h = (st + sstep(0.70, 0.95, t - st)) * 7;
+    }
+    return h;
+  }
   // ---- macro-regions: warped Voronoi cells (~520m), each committed to one
   // of 8 terrain archetypes. Height blends between the two nearest region
   // sites near borders; everything discrete (surface mats, trees, decor,
   // water-vs-lava) reads the nearest site only.
   const regionCache = new Map();
   function regionCell(cx, cz){
-    const key = cx + ',' + cz;
+    const key = (cx + 32768) * 65536 + (cz + 32768);
     let R = regionCache.get(key);
     if (R !== undefined) return R;
     const h0 = hashInt(sRg ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
-    const arch = hashInt(h0 ^ 7) % 8;
-    R = {
-      sx: (cx + 0.18 + (hashInt(h0 ^ 1) / 4294967296) * 0.64) * REGION,
-      sz: (cz + 0.18 + (hashInt(h0 ^ 3) / 4294967296) * 0.64) * REGION,
-      arch, lm: null,
-    };
+    const sx = (cx + 0.18 + (hashInt(h0 ^ 1) / 4294967296) * 0.64) * REGION;
+    const sz = (cz + 0.18 + (hashInt(h0 ^ 3) / 4294967296) * 0.64) * REGION;
+    // Archetypes follow the geography instead of rolling uniform dice:
+    // coasts get swamps and dunes, high-relief zones get ranges/glaciers/
+    // volcanoes, and a very-low-frequency heat field pushes hot families in
+    // one part of the world and cold in another. Neighboring cells sampling
+    // the same climate often agree, so same-type cells CLUSTER into
+    // mega-biomes -- while the per-cell size weight below still lets a lone
+    // pocket biome sit inside them.
+    const Fc = fieldsAt(sx, sz);
+    const heat = fbm2(sCl, sx * 0.0006, sz * 0.0006, 2);
+    let pool;
+    if (Fc.c < 0.37)            pool = heat > 0.60 ? [4, 4, 0, 5, 1] : [5, 5, 0, 1, 4];
+    else if (Fc.relief > 1.05)  pool = heat < 0.42 ? [6, 2, 2, 1, 7]
+                                     : heat > 0.66 ? [7, 2, 2, 3, 1] : [2, 2, 1, 6, 7];
+    else                        pool = heat > 0.62 ? [4, 3, 0, 1, 7, 3]
+                                     : heat < 0.38 ? [6, 0, 1, 2, 5, 1] : [0, 1, 3, 5, 1, 4];
+    const arch = pool[hashInt(h0 ^ 7) % pool.length];
+    // per-cell conquest weight: most cells near 1, a few pockets, a few
+    // giants -- this is what makes one sand biome small and the next huge
+    const wr = hashInt(h0 ^ 29) / 4294967296;
+    R = { sx, sz, arch, lm: null, w: 0.74 + wr * wr * 0.78 };
     // landmarks: at most one set-piece per region, kept >= 132m inside the
     // cell so its whole footprint stays in this cell (lookups stay O(1) and
     // heightRange can enumerate exactly the cells a chunk overlaps)
@@ -528,14 +650,14 @@ function makeGen(seed){
       if (lm){
         lm.x = cx * REGION + 132 + (hashInt(h0 ^ 13) / 4294967296) * (REGION - 264);
         lm.z = cz * REGION + 132 + (hashInt(h0 ^ 17) / 4294967296) * (REGION - 264);
-        const base = archH(arch, lm.x, lm.z);
-        lm.peak = lm.type === 'volcano' ? base + lm.coneH + 8
-                : lm.type === 'monolith' ? base + lm.h + 8
-                : lm.type === 'craterlake' ? Math.max(base, seaLevel + 5) + 6
-                : base + 6;
-        lm.floor = lm.type === 'sinkhole' ? base - lm.d - 6
-                 : lm.type === 'craterlake' ? seaLevel - 12
-                 : base - 6;
+        const base = coreH(arch, lm.x, lm.z, fieldsAt(lm.x, lm.z));
+        lm.peak = lm.type === 'volcano' ? base + lm.coneH + 18
+                : lm.type === 'monolith' ? base + lm.h + 18
+                : lm.type === 'craterlake' ? Math.max(base, seaLevel + 5) + 14
+                : base + 14;
+        lm.floor = lm.type === 'sinkhole' ? base - lm.d - 14
+                 : lm.type === 'craterlake' ? seaLevel - 14
+                 : base - 14;
         // sinkholes on dry land are dry shafts into the deep; ones whose
         // surroundings already sit below sea flood like any other basin
         if (lm.type === 'sinkhole') lm.dry = base > seaLevel + 0.5;
@@ -547,13 +669,17 @@ function makeGen(seed){
   }
   function regionQuery(x, z){
     // domain warp wobbles the borders so cells never read as straight lines
-    const wx = x + (fbm2(sWp, x * 0.0032, z * 0.0032, 2) - 0.5) * 156;
-    const wz = z + (fbm2(sWp, x * 0.0032 + 71.3, z * 0.0032 + 29.7, 2) - 0.5) * 156;
+    const wx = x + (noise2(sWp, x * 0.0032, z * 0.0032) - 0.5) * 156;
+    const wz = z + (noise2(sWp, x * 0.0032 + 71.3, z * 0.0032 + 29.7) - 0.5) * 156;
     const cx = Math.floor(wx / REGION), cz = Math.floor(wz / REGION);
+    // weighted Voronoi: a cell's weight divides its distance, so heavy cells
+    // conquer their neighbors (big biomes) and light ones shrink to pockets.
+    // Weights reach far enough that the scan needs the 5x5 neighborhood.
     let d1 = 1e18, d2 = 1e18, s1 = null, s2 = null;
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++){
       const S = regionCell(cx + dx, cz + dz);
-      const ddx = wx - S.sx, ddz = wz - S.sz, d = ddx * ddx + ddz * ddz;
+      const ddx = wx - S.sx, ddz = wz - S.sz;
+      const d = (ddx * ddx + ddz * ddz) / (S.w * S.w);
       if (d < d1){ d2 = d1; s2 = s1; d1 = d; s1 = S; }
       else if (d < d2){ d2 = d; s2 = S; }
     }
@@ -565,35 +691,35 @@ function makeGen(seed){
   function lmAt(x, z){
     return regionCell(Math.floor(x / REGION), Math.floor(z / REGION)).lm;
   }
-  // per-archetype heightfields (sea level is -1.5)
-  function archH(a, x, z){
+  // per-archetype DETAIL fields: the close-up texture of each biome. The
+  // macro relief they used to carry moved into the backbone, so amplitudes
+  // here are the local half of what they were.
+  function archDetail(a, x, z){
     switch (a){
       case 0:   // plains: gentle meadow swells
-        return 1.6 + (fbm2(sH, x * 0.015, z * 0.015, 3) - 0.5) * 8;
-      case 1:   // hills: big rolling waves
-        return 4 + (fbm2(sH, x * 0.011, z * 0.011, 3) - 0.5) * 26;
-      case 2: { // sharp ranges: ridged noise, knife crests
+        return 0.6 + (fbm2(sH, x * 0.015, z * 0.015, 3) - 0.5) * 7;
+      case 1:   // hills: rolling waves
+        return 1.2 + (fbm2(sH, x * 0.011, z * 0.011, 3) - 0.5) * 15;
+      case 2: { // sharp ranges: knife crests riding the backbone ridges
         const r = 1 - Math.abs(2 * fbm2(sR, x * 0.008, z * 0.008, 3) - 1);
-        return 6 + (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 10 + r * r * r * 54;
+        return (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 8 + r * r * r * 24;
       }
-      case 3: { // mesa badlands: stepped plateaus cut by slot canyons
-        const n = fbm2(sH, x * 0.0085, z * 0.0085, 3);
-        const t = n * 5.2, st = Math.floor(t);
-        const h = -2 + (st + sstep(0.72, 0.94, t - st)) * 7;
+      case 3: { // mesa: slot canyons still knife through the plateaus
         const cy = 1 - Math.abs(2 * fbm2(sR, x * 0.005, z * 0.005, 2) - 1);
-        return h - sstep(0.84, 0.96, cy) * (h + 6);
+        return (fbm2(sH, x * 0.0085, z * 0.0085, 3) - 0.5) * 6
+             - sstep(0.84, 0.96, cy) * 15;
       }
       case 4:   // dunes: wind-stretched sand waves
-        return 2.2 + (fbm2(sH, x * 0.024, z * 0.008, 3) - 0.5) * 10
-                   + (fbm2(sR, x * 0.005, z * 0.005, 2) - 0.5) * 6;
-      case 5:   // swamp: near-sea flats pocked with pools
-        return -1.1 + (fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5) * 5.5;
-      case 6: { // glacier: high ice sheet split by crevasses
+        return (fbm2(sH, x * 0.024, z * 0.008, 3) - 0.5) * 9
+             + (fbm2(sR, x * 0.005, z * 0.005, 2) - 0.5) * 5;
+      case 5:   // swamp: near-flat, pocked with pools
+        return -0.6 + (fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5) * 4.5;
+      case 6: { // glacier: ice sheet split by crevasses
         const c = 1 - Math.abs(2 * fbm2(sR, x * 0.021, z * 0.021, 2) - 1);
-        return 11 + (fbm2(sH, x * 0.01, z * 0.01, 3) - 0.5) * 18 - sstep(0.88, 0.97, c) * 9;
+        return (fbm2(sH, x * 0.01, z * 0.01, 3) - 0.5) * 12 - sstep(0.88, 0.97, c) * 9;
       }
       default:  // 7 volcanic: rough basalt fields
-        return 2.6 + (fbm2(sH, x * 0.018, z * 0.018, 3) - 0.5) * 13;
+        return (fbm2(sH, x * 0.018, z * 0.018, 3) - 0.5) * 10;
     }
   }
   function lmApply(L, x, z, h){
@@ -613,14 +739,28 @@ function makeGen(seed){
     return h + (target - h) * w;
   }
   function height(x, z){
-    const q = regionQuery(x, z);
+    const q = regionQuery(x, z);          // may create cells (clobbers FLD)
+    const F = fieldsAt(x, z);             // so the fields come after
     const aa = q.a.arch, ab = q.b.arch;
     let h = (aa === ab || q.w > 0.999)
-      ? archH(aa, x, z)
-      : archH(aa, x, z) * q.w + archH(ab, x, z) * (1 - q.w);
+      ? coreH(aa, x, z, F)
+      : coreH(aa, x, z, F) * q.w + coreH(ab, x, z, F) * (1 - q.w);
     const L = lmAt(x, z);
     if (L) h = lmApply(L, x, z, h);
     return Math.max(-45, Math.min(95, h));
+  }
+  // a guaranteed-dry spawn: with real oceans in the world, (0,0) can be
+  // open water -- walk outward deterministically until we find a beachhead
+  function findSpawn(){
+    if (height(0, 0) > seaLevel + 1.6 && archAt(0, 0) !== 7) return { x: 0, z: 0 };
+    for (let r = 40; r <= 2400; r += 40){
+      for (let k = 0; k < 10; k++){
+        const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
+        const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
+        if (height(x, z) > seaLevel + 1.6 && archAt(x, z) !== 7) return { x, z };
+      }
+    }
+    return { x: 0, z: 0 };
   }
   function isDesert(x, z){ return archAt(x, z) === 4; }
   // where does standing water exist? Below sea level, except volcanic ground
@@ -984,8 +1124,8 @@ function makeGen(seed){
       if (a === 4) return MAT.SAND;              // dunes
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
       if (a === 3) return h < 6 ? MAT.SAND : MAT.ROCK;  // badlands
-      if (h >= 26) return MAT.SNOW;              // snow-capped peaks
-      if (h < 20) return MAT.GRASS;
+      if (h >= 30) return MAT.SNOW;              // snow-capped peaks
+      if (h < 24) return MAT.GRASS;
       return MAT.ROCK;                           // bare rock band below the caps
     }
     // deep strata: basalt takes over below ~-80 (noisy boundary)
@@ -1067,7 +1207,7 @@ function makeGen(seed){
     const x = cx * DECOR_CELL + 0.4 + (hashInt(h0 ^ 5) / 4294967296) * (DECOR_CELL - 0.8);
     const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
     const h = height(x, z);
-    if (h < seaLevel + 0.6 || h > 19) return null;      // no beaches, no snowline
+    if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
     const arch = archAt(x, z);
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
@@ -1095,7 +1235,7 @@ function makeGen(seed){
     const a = archAt(x, z);
     if (a !== 0 && a !== 1 && a !== 5) return null;  // trees: plains, hills, swamp
     const h = height(x, z);
-    if (h < seaLevel + 1.8 || h > 18) return null;   // no trees on beaches or underwater
+    if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
@@ -1117,11 +1257,11 @@ function makeGen(seed){
       if (hh < mn) mn = hh;
       if (hh > mx) mx = hh;
     }
-    if (mx - mn > 4.0) return null;
+    if (mx - mn > 4.5) return null;
     return { x: vx, z: vz, y: hc, seed: h0, key: cx + ',' + cz };
   }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
@@ -2793,12 +2933,14 @@ class Terrain {
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     if (!game.waterMat) return;
     const x0 = cx * M, z0 = cz * M;
-    const pos = [], uv = [];
-    const quad = (xa, za, xb, zb, wy) => {
+    const pos = [], uv = [], dep = [];
+    const quad = (xa, za, xb, zb, wy, d) => {
       pos.push(xa, wy, za, xa, wy, zb, xb, wy, zb,
                xa, wy, za, xb, wy, zb, xb, wy, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
               xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+      const dd = d == null ? 0.8 : d;
+      dep.push(dd, dd, dd, dd, dd, dd);
     };
     if (cy === seaCy){
       const hs = [];                                  // 9x9 corner heights
@@ -2812,7 +2954,7 @@ class Terrain {
           const hm = Math.min(a, b, c, d);
           if (hm >= sea) continue;                    // dry cell
           if (this.gen.wetAt && !this.gen.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) continue;
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, sea);
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, sea, sea - hm);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -2841,6 +2983,7 @@ class Terrain {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
+    g.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(dep), 1));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, game.waterMat);
     mesh.userData.noShadow = true;
@@ -3165,10 +3308,31 @@ function buildScene(){
       c.fillRect(1, 3, 5, 1); c.fillRect(9, 7, 5, 1); c.fillRect(4, 12, 5, 1);
     });
     const wt = wTex.clone(); wt.needsUpdate = true;
-    game.waterMat = new THREE.MeshBasicMaterial({
-      map: wt, color: 0xbcd4e8, transparent: true, opacity: 0.62,
-      depthWrite: false, side: THREE.DoubleSide,
+    // depth-aware, like the LOD water: translucent over a visible shallow
+    // bed, deepening to an opaque ocean blue -- WG3's seas are too deep for
+    // a fixed 62% wash to read as anything but grey
+    game.waterMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uTex: { value: wt } },
+      vertexShader: `
+        attribute float aDep;
+        varying vec2 vUv; varying float vDep;
+        void main(){
+          vUv = uv; vDep = aDep;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D uTex;
+        varying vec2 vUv; varying float vDep;
+        void main(){
+          vec3 col = texture2D(uTex, vUv).rgb * vec3(0.737, 0.831, 0.910);
+          float deep = smoothstep(0.6, 7.5, vDep);
+          col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
+          gl_FragColor = vec4(col, mix(0.68, 0.96, deep));
+        }`,
     });
+    game.waterMat.map = wt;      // farTerrain reads .map for its own surface
   }
   Particles.init(scene);
   Embers.init(scene);
@@ -3570,6 +3734,8 @@ function buildArm(back){
 // and tipped inward so a one-handed tool's business end reads on screen
 const VM_YAW = 0.42;
 const VM_POS = { x: 0.34, y: -0.22, z: -0.5 };
+// where the group actually rides once the walk bob is applied each frame
+const VM_Y = -0.26;
 
 // ---- posing the empty fists ----
 // buildArm() spans z from -0.30 (knuckles) to +0.40 (shoulder end). Held-tool
@@ -3577,19 +3743,16 @@ const VM_POS = { x: 0.34, y: -0.22, z: -0.5 };
 // tool's slim proportions reads as a stick, not a forearm) and stretch it a
 // long way back, so that whatever the pose, the arm's cut-off end is always
 // behind the camera instead of floating in the middle of the screen.
-const ARM_HOLD = [1.15, 1.15, 1.6];
-const ARM_FAT = 1.4, ARM_Z = 1.6, ARM_BACK = 1.325;
+const ARM_FAT = 1.4, ARM_Z = 1.6, ARM_BACK = 1.9;
 const ARM_LEN = (0.30 + ARM_BACK) * ARM_Z, ARM_PIVOT = 0.30 / (0.30 + ARM_BACK);
+const ARM_FISTS = [ARM_FAT, ARM_FAT, ARM_Z];
 // The viewmodel group is shoved to the right and tipped inward because it is
-// built around one-handed tools, so its axes are not the screen's. Fist poses
-// are written in plain screen terms -- x out from the CENTRE of the view, -z
-// straight ahead -- and converted here. Without this, mirroring x does not
-// put the left hand anywhere near where the left hand belongs.
-function toVMSpace(x, y, z){
-  const c = Math.cos(VM_YAW), s = Math.sin(VM_YAW);
-  const px = x - VM_POS.x * 2, pz = z - VM_POS.z * 2;
-  return [px * c - pz * s, y, px * s + pz * c];
-}
+// built around one-handed tools. The fists group cancels both (see
+// buildViewmodel), so inside it x really is measured out from the CENTRE of
+// the screen and -z really is straight ahead. That is not just convenience:
+// with the group yawed, mirroring the right arm's numbers leaves a residual
+// ROLL on the left one -- the arms line up but the left is twisted a few
+// degrees about its own axis. Cancelling the yaw makes the mirror exact.
 // Pose an arm by naming the two points that actually matter -- where the fist
 // is and where the arm leaves the body -- and solving for the transform.
 // Much easier to tune than raw eulers, and it guarantees the arm really does
@@ -3597,8 +3760,8 @@ function toVMSpace(x, y, z){
 // might. Coordinates describe the RIGHT arm; mirror flips them for the left.
 function poseFist(arm, fist, shoulder, roll, mirror){
   const s = mirror ? -1 : 1;
-  const f = toVMSpace(fist[0] * s, fist[1], fist[2]);
-  const h = toVMSpace(shoulder[0] * s, shoulder[1], shoulder[2]);
+  const f = [fist[0] * s, fist[1], fist[2]];
+  const h = [shoulder[0] * s, shoulder[1], shoulder[2]];
   let dx = f[0] - h[0], dy = f[1] - h[1], dz = f[2] - h[2];
   const len = Math.hypot(dx, dy, dz) || 1;
   dx /= len; dy /= len; dz /= len;
@@ -3609,12 +3772,55 @@ function poseFist(arm, fist, shoulder, roll, mirror){
 }
 // boxing guard: fists up in front of the face, knuckles turned in toward each
 // other, arms running down and out to the bottom corners of the frame
-const GUARD_FIST     = [0.28,  0.46, -1.24];
-const GUARD_SHOULDER = [0.88, -0.92, -0.24];
-// the jab swings the fist in toward the centre and turns the arm to point
-// down the camera's own axis, which foreshortens it the way a punch should
-const JAB_FIST       = [0.06,  0.20, -1.10];
-const JAB_SHOULDER   = [0.66, -0.66,  0.10];
+const GUARD_FIST     = [0.38,  0.46, -1.24];
+const GUARD_SHOULDER = [0.98, -0.92, -0.24];
+// A punch is not one pose faded in and out -- it is wind-up, drive, recover,
+// and the beats are what make it read. Each key names where the fist is and
+// where the arm comes from.
+//
+// The arm must keep running down and out of the bottom of the frame at every
+// beat. Aim it along the camera's own axis instead and it reads beautifully
+// for about one frame before the sleeve sails straight through the eye and
+// fills the screen with a blue wall. So the drive sells itself by bringing
+// the fist across to the crosshair and CLOSER, not by pointing the arm away.
+const PUNCH_MS = 300;
+const PUNCH_R = [
+  { t: 0.00, fist: GUARD_FIST,            from: GUARD_SHOULDER,        roll: 0.45 },
+  { t: 0.14, fist: [0.62,  0.24, -1.16],  from: [1.20, -1.00, -0.22],  roll: 0.54 },
+  { t: 0.36, fist: [0.02,  0.60, -0.94],  from: [0.46, -0.46,  0.02],  roll: 0.06 },
+  { t: 1.00, fist: GUARD_FIST,            from: GUARD_SHOULDER,        roll: 0.45 },
+];
+// the off hand barely moves -- one arm throws the punch, the other covers
+const PUNCH_L = [
+  { t: 0.00, fist: GUARD_FIST,            from: GUARD_SHOULDER,        roll: 0.45 },
+  { t: 0.36, fist: [0.42,  0.42, -1.30],  from: [1.00, -0.94, -0.28],  roll: 0.48 },
+  { t: 1.00, fist: GUARD_FIST,            from: GUARD_SHOULDER,        roll: 0.45 },
+];
+function punchPose(keys, t){
+  let i = 0;
+  while (i < keys.length - 2 && t > keys[i + 1].t) i++;
+  const a = keys[i], b = keys[i + 1];
+  const e = b.t === a.t ? 0 : sstep((t - a.t) / (b.t - a.t));   // smooth each beat
+  return { fist: lerp3(a.fist, b.fist, e), from: lerp3(a.from, b.from, e),
+           roll: a.roll + (b.roll - a.roll) * e };
+}
+// Carrying an animal. The hands lock to WORLD up rather than to the view, so
+// the pose holds still while you look around and only swings into frame when
+// you look up at your passenger. GRAB_MS is the whole reach-and-lift; the
+// arms are out in front for the first GRAB_REACH of it.
+const GRAB_MS = 700, GRAB_REACH = 0.38;
+// 0 while the arms are still reaching out, then eased to 1 as they lift
+function carryLift(b){ return sstep((b - GRAB_REACH) / (1 - GRAB_REACH)); }
+// how hard the punch shoves the whole viewmodel forward: builds to the hit,
+// then drifts back. It is a small number and it does most of the work.
+function punchShove(t){
+  if (!(t >= 0 && t < 1)) return 0;
+  const hit = PUNCH_R[2].t;
+  return t < hit ? sstep(t / hit) : 1 - sstep((t - hit) / (1 - hit));
+}
+// fist space is the camera's, doubled, with y measured from the viewmodel
+const toFistSpace = c => [c[0] * 2, (c[1] - VM_Y) * 2, c[2] * 2];
+const sstep = u => (u = Math.min(1, Math.max(0, u)), u * u * (3 - 2 * u));
 function armScale(arm, mirror, s, tail){
   arm.scale.set(mirror ? -s[0] : s[0], s[1], s[2]);
   if (arm.userData.tail) arm.userData.tail.visible = !!tail;
@@ -3965,10 +4171,19 @@ function buildViewmodel(cam){
   const fists = new THREE.Group();
   const fistR = buildArm(ARM_BACK - 0.40);
   const fistL = buildArm(ARM_BACK - 0.40);       // negative x scale mirrors it
-  armScale(fistR, false, ARM_HOLD); armScale(fistL, true, ARM_HOLD);
+  armScale(fistR, false, ARM_FISTS, true); armScale(fistL, true, ARM_FISTS, true);
   fistL.visible = false;
   fists.add(fistR); fists.add(fistL);
   fists.userData = { R: fistR, L: fistL };
+  // Undo the group's sideways offset and inward tip, so inside the fists
+  // group the axes are the camera's own and the two arms can be exact
+  // mirrors of each other. y is left alone so the walk bob still reaches them.
+  {
+    const c = Math.cos(VM_YAW), sn = Math.sin(VM_YAW);
+    const ox = -2 * VM_POS.x, oz = -2 * VM_POS.z;
+    fists.position.set(ox * c - oz * sn, 0, ox * sn + oz * c);
+    fists.rotation.y = -VM_YAW;
+  }
   // --- WIRING RIG: stapler in the left hand, wire spool in the right ---
   const wireRig = new THREE.Group();
   {
@@ -4053,45 +4268,63 @@ function updateViewmodel(dt){
   // walk bob
   const speed = Math.hypot(game.vel.x, game.vel.z);
   v.bob += dt * Math.min(speed, 10) * 1.6;
-  v.root.position.y = -0.26 + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
+  v.root.position.y = VM_Y + Math.sin(v.bob) * 0.008 * Math.min(speed, 8);
+  // an empty-handed punch shoves the whole viewmodel forward for a beat
+  v.root.position.z = VM_POS.z - 0.055 *
+    (kind ? 0 : punchShove((performance.now() - (game.punchT || 0)) / PUNCH_MS));
   if (!kind){
     const f = v.fists.userData, R = f.R, L = f.L;
     const tNow = performance.now();
-    const jab = Math.sin(Math.max(0, 1 - (tNow - (game.punchT || 0)) / 220) * Math.PI);
+    const punch = (tNow - (game.punchT || 0)) / PUNCH_MS;
     const gather = Math.max(0, 1 - (tNow - (game.gatherT || 0)) / 500);
     const carrying = !!game.carried;
-    const grab = carrying ? Math.min(1, (tNow - (game.grabT || 0)) / 450) : 0;
     // fists down = empty screen; hands only appear to fight, scoop, or hold
     v.fists.visible = game.fistsUp || carrying || gather > 0;
     if (!v.fists.visible) return;
-    // the guard needs the long tail so a raised arm runs off behind the
-    // camera; the reach and scoop poses are close-in and keep their own look
-    const guarding = !carrying && !(gather > 0 && !game.fistsUp);
-    const sc = guarding ? [ARM_FAT, ARM_FAT, ARM_Z] : ARM_HOLD;
-    armScale(R, false, sc, guarding); armScale(L, true, sc, guarding);
+    // every fist pose uses the long tail, so an arm always runs off behind the
+    // camera instead of ending in a cut face somewhere in the frame
+    const scooping = gather > 0 && !game.fistsUp && !carrying;
     if (carrying){
-      // two-hand grab reaching forward, blending up into an overhead hold —
-      // look up and both hands are in the air under your passenger
-      const b = grab;
       R.visible = L.visible = true;
-      R.position.set(0.42 - b * 0.04, -0.55 + b * 1.15, -0.55 + b * 0.05);
-      R.rotation.set(-0.2 + b * 1.75, -0.2, -0.12);
-      L.position.set(-0.72 + b * 0.06, -0.55 + b * 1.15, -0.8 + b * 0.07);
-      L.rotation.set(-0.2 + b * 1.75, 0.2, 0.12);
-    } else if (gather > 0 && !game.fistsUp){
+      // World up and world forward, expressed in camera space: this is what
+      // takes the pitch back out, so the pose holds still while you look
+      // around instead of swinging with the view. Only UPWARD pitch is taken
+      // out -- look down and the arms fall back to view-relative, which is
+      // the same pose at level and keeps them from turning into two pillars
+      // sliding past your eyes when you stare at your feet.
+      const p = Math.max(0, game.pitch || 0), cp = Math.cos(p), sp = Math.sin(p);
+      const UP = [0, cp, -sp], FW = [0, -sp, -cp];
+      // out in front first, then up: e is the lift, eased so it settles
+      const e = carryLift(Math.min(1, (tNow - (game.grabT || 0)) / GRAB_MS));
+      const reach = 0.62 - e * 0.17, rise = -0.22 + e * 0.72, wide = 0.24 + e * 0.06;
+      const h = [wide + FW[0] * reach + UP[0] * rise,
+                 FW[1] * reach + UP[1] * rise,
+                 FW[2] * reach + UP[2] * rise];
+      // the arm swings from pointing forward to pointing up, splayed outward
+      // as it rises so the forearm leaves the frame at the side instead of
+      // standing in it
+      const dir = [-0.45 * e,
+                   FW[1] + (UP[1] - FW[1]) * e,
+                   FW[2] + (UP[2] - FW[2]) * e];
+      const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+      const from = [h[0] - dir[0] / dl, h[1] - dir[1] / dl, h[2] - dir[2] / dl];
+      poseFist(R, toFistSpace(h), toFistSpace(from), 0.12, false);
+      poseFist(L, toFistSpace(h), toFistSpace(from), 0.12, true);
+    } else if (scooping){
       // one hand scoops down toward the ground and comes back
       const pr = Math.sin((1 - gather) * Math.PI);
       R.visible = true; L.visible = false;
-      R.position.set(0.12 - pr * 0.06, -0.6 + pr * 0.05, 0.1 - pr * 0.95);
-      R.rotation.set(-0.25 - pr * 0.5, -0.3, 0.05);
+      poseFist(R, [0.44 - pr * 0.16, -0.08 - pr * 0.08, -0.70 - pr * 1.00],
+                  [0.95 - pr * 0.15, -1.10 - pr * 0.10, -0.10 - pr * 0.50], 0.20, false);
     } else {
-      // boxing guard. The right fist drives out along the jab and the guard
-      // hand pulls in a touch to cover, the way the other glove comes up.
+      // boxing guard, and the punch that comes out of it. Both arms run the
+      // same solver on mirrored numbers, so at rest they are exact mirrors of
+      // each other by construction rather than by matching eulers by hand.
       R.visible = L.visible = true;
-      poseFist(R, lerp3(GUARD_FIST, JAB_FIST, jab), lerp3(GUARD_SHOULDER, JAB_SHOULDER, jab), 0.45, false);
-      // the off hand pulls in and covers while the other one goes
-      poseFist(L, [GUARD_FIST[0] - jab * 0.06, GUARD_FIST[1] + jab * 0.05, GUARD_FIST[2] + jab * 0.05],
-               GUARD_SHOULDER, 0.45, true);
+      const t = punch >= 0 && punch < 1 ? punch : 1;
+      const pr = punchPose(PUNCH_R, t), pl = punchPose(PUNCH_L, t);
+      poseFist(R, pr.fist, pr.from, pr.roll, false);
+      poseFist(L, pl.fist, pl.from, pl.roll, true);
     }
     return;
   }
@@ -6999,7 +7232,8 @@ const villageSys = {
       }
     return out;
   },
-  // deterministic layout: 4 houses on a ring around the well
+  // deterministic layout: 4 houses on a ring around the well, each rolling
+  // its own footprint and story count so no two villages read the same
   layout(v){
     const rng = CORE.mulberry32(v.seed);
     const roles = ['broker', 'arms', 'tool', 'spark'];
@@ -7007,17 +7241,28 @@ const villageSys = {
     const houses = [];
     for (let i = 0; i < 4; i++){
       const a = base + i * Math.PI / 2 + (rng() - 0.5) * 0.5;
-      const r = 12 + rng() * 3;
+      // footprint: small square, the classic, a big square, or a rectangle
+      // either way round
+      const shape = rng();
+      let w = 5.4, d = 5.4;
+      if (shape < 0.24){ w = 4.6; d = 4.6; }
+      else if (shape < 0.44){ w = 6.6; d = 6.6; }
+      else if (shape < 0.68){ w = 7.6; d = 5.2; }
+      else if (shape < 0.86){ w = 5.2; d = 7.6; }
+      const two = rng() < 0.38;                     // some grow a second story
+      const r = 12.5 + Math.max(w, d) * 0.35 + rng() * 3;
       const hx = Math.round(v.x + Math.cos(a) * r);
       const hz = Math.round(v.z + Math.sin(a) * r);
       // door faces the well, snapped to a cardinal
       const dx = v.x - hx, dz = v.z - hz;
       const face = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? [1, 0] : [-1, 0])
                                                : (dz > 0 ? [0, 1] : [0, -1]);
-      houses.push({ x: hx, z: hz, role: roles[i], face });
+      houses.push({ x: hx, z: hz, role: roles[i], face, w, d, two: two ? 1 : 0 });
     }
     return houses;
   },
+  // half-extent of a house along its door axis (old saves lack w/d)
+  faceHalf(hrec){ return ((hrec.face[0] ? hrec.w : hrec.d) || 5.4) / 2; },
   stamp(v, rec){
     const MAT = CORE.MAT;
     const E = (op, x, y, z, size, sy, mat) => {
@@ -7025,32 +7270,95 @@ const villageSys = {
       e.sy = sy;
       applyEdit(e);
     };
+    // box edit with independent x/y/z extents
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, x, y, z, sx, mat, 0);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    let ropesAdded = false;
     for (const hrec of rec.houses){
+      const w = hrec.w || 5.4, d = hrec.d || 5.4, two = !!hrec.two;
       let g = game.gen.height(hrec.x, hrec.z);
-      for (const [cx2, cz2] of [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]])
+      for (const [cx2, cz2] of [[-w/2, -d/2], [w/2, -d/2], [-w/2, d/2], [w/2, d/2]])
         g = Math.max(g, game.gen.height(hrec.x + cx2, hrec.z + cz2));
       g = +g.toFixed(1);
       hrec.gy = g;
-      // shell (stonebrick) with a buried foundation, hollowed inside
-      E(1, hrec.x, g + 1.1, hrec.z, 5.4, 4.6, MAT.STONEBRICK);
-      E(0, hrec.x, g + 1.85, hrec.z, 4.6, 2.5, 0);
-      // door hole on the plaza side
       const [fx, fz] = hrec.face;
-      const doorE = CORE.makeEdit(0, 1, hrec.x + fx * 2.7, g + 1.75, hrec.z + fz * 2.7, 1.4, 0, 0);
-      doorE.sy = 2.3;
-      applyEdit(doorE);
-      // windows on the two side walls
-      const wx = fz, wz = fx;   // perpendicular
-      for (const s of [-1, 1]){
-        const win = CORE.makeEdit(0, 1, hrec.x + wx * 2.7 * s, g + 2.1, hrec.z + wz * 2.7 * s, 1.0, 0, 0);
-        win.sy = 0.9;
-        applyEdit(win);
+      const px2 = fz, pz2 = fx;                  // the perpendicular axis
+      // a point in house space: af meters toward the door, ap sideways
+      const at = (af, ap) => [hrec.x + fx * af + px2 * ap, hrec.z + fz * af + pz2 * ap];
+      const hf = (fx ? w : d) / 2;               // half-extent toward the door
+      const hp = (fx ? d : w) / 2;               // half-extent sideways
+      // shell (stonebrick) with a buried foundation, hollowed per story
+      const shellTop = two ? 6.7 : 3.4;
+      EB(1, hrec.x, g + (shellTop - 1.2) / 2, hrec.z, w, shellTop + 1.2, d, MAT.STONEBRICK);
+      EB(0, hrec.x, g + 1.85, hrec.z, w - 0.8, 2.5, d - 0.8);
+      if (two){
+        // upper room, with a solid 0.6m slab left between the stories
+        EB(0, hrec.x, g + 4.95, hrec.z, w - 0.8, 2.5, d - 0.8);
+        // hatch through the slab in a back corner, with a rope to climb
+        const [hx2, hz2] = at(-(hf - 1.55), hp - 1.55);
+        EB(0, hx2, g + 3.4, hz2, 1.4, 1.8, 1.4);
+        (game.ropes = game.ropes || []).push([+hx2.toFixed(2), +(g + 3.68).toFixed(2), +hz2.toFixed(2), 3.1]);
+        ropesAdded = true;
+        // upper windows on both side walls
+        for (const sgn of [-1, 1]){
+          const [ux, uz] = at(0, (hp - 0.2) * sgn);
+          EB(0, ux, g + 4.85, uz, 1.0, 0.9, 1.0);
+        }
+      }
+      // door hole on the plaza side
+      const [dx2, dz2] = at(hf - 0.2, 0);
+      EB(0, dx2, g + 1.75, dz2, fx ? 1.0 : 1.4, 2.3, fz ? 1.0 : 1.4);
+      // ground-floor windows on the two side walls
+      for (const sgn of [-1, 1]){
+        const [wx2, wz2] = at(0, (hp - 0.2) * sgn);
+        EB(0, wx2, g + 2.1, wz2, 1.0, 0.9, 1.0);
       }
       // plank roof cap
-      E(1, hrec.x, g + 3.65, hrec.z, 6.0, 0.5, MAT.PLANKS);
-      // a torch outside the door
-      game.torches.push([hrec.x + fx * 3.4, g + 0.1, hrec.z + fz * 3.4]);
+      EB(1, hrec.x, g + shellTop + 0.25, hrec.z, w + 0.6, 0.5, d + 0.6, MAT.PLANKS);
+      // a torch outside the door, and one inside on the back wall
+      const [tx2, tz2] = at(hf + 0.7, 0.9);
+      game.torches.push([tx2, g + 0.1, tz2]);
+      const [ti2, tzi] = at(-(hf - 1.2), -(hp - 1.2));
+      game.torches.push([ti2, g + 0.7, tzi]);
+      // ---- furnishings: what this villager's life looks like ----
+      const yawDoor = Math.atan2(fx, fz);        // facing the door
+      const floor1 = g + 0.6, floor2 = g + 3.7;
+      // the bed goes upstairs when there is an upstairs
+      const [bx2, bz2] = at(-(hf - 1.6), two ? -(hp - 1.5) : -(hp - 1.5));
+      bedSys.add(+bx2.toFixed(2), +(two ? floor2 : floor1).toFixed(2), +bz2.toFixed(2), yawDoor);
+      const [rx2, rz2] = at(-(hf - 1.4), hp - 1.4);
+      if (hrec.role === 'tool'){
+        tableSys.add(+rx2.toFixed(2), +floor1.toFixed(2), +rz2.toFixed(2), yawDoor);
+      } else if (hrec.role === 'broker'){
+        const n = pnodeSys.add('chest', +rx2.toFixed(2), floor1 + 0.35, +rz2.toFixed(2), yawDoor, { sc: 0.7 });
+        n.inv = new Array(chestSlots(0.7)).fill(null);
+        n.inv[0] = { kind: 'coin', count: 4 + (v.seed % 5) };
+        n.inv[1] = { kind: 'ironore', count: 2 };
+      } else if (hrec.role === 'arms'){
+        pnodeSys.add('astand', +rx2.toFixed(2), floor1, +rz2.toFixed(2), yawDoor, {});
+      } else if (hrec.role === 'spark'){
+        // the electrician's workshop: a hand crank wired to a wall bulb --
+        // crank it and the lamp lights
+        const crank = pnodeSys.add('crank', +rx2.toFixed(2), floor1, +rz2.toFixed(2), yawDoor, {});
+        // lamp on the opposite side wall, its face pointing into the room
+        const [lx2, lz2] = at(-(hf - 1.0), -(hp - 0.35));
+        bulbSys.add(+lx2.toFixed(2), g + 2.5, +lz2.toFixed(2), px2, 0, pz2);
+        const bulbId = game.bulbs[game.bulbs.length - 1][6];
+        game.wires.push({ a: 'n' + crank.id, b: 'b' + bulbId,
+                          pa: [+rx2.toFixed(2), floor1 + 0.8, +rz2.toFixed(2)],
+                          pb: [+lx2.toFixed(2), g + 2.5, +lz2.toFixed(2)] });
+      }
+      // the smith's stove stands outside the toolsmith's door
+      if (hrec.role === 'tool'){
+        const [ox2, oz2] = at(hf + 1.6, -1.6);
+        stoveSys.add(+ox2.toFixed(2), g, +oz2.toFixed(2), yawDoor + Math.PI);
+      }
     }
+    if (ropesAdded) ropeSys.rebuild();
+    wireSys.rebuild();
     // the bounty board, facing the well
     const bg = game.gen.height(v.x + 4.2, v.z + 3.2);
     pnodeSys.add('board', v.x + 4.2, +bg.toFixed(1), v.z + 3.2,
@@ -7106,10 +7414,11 @@ const villageSys = {
         const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
         if (alive) continue;
         const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
+        const off = this.faceHalf(hrec) + 1.8;
         const e = spawnEntity('villager',
-          hrec.x + hrec.face[0] * 4.2, hy, hrec.z + hrec.face[1] * 4.2);
+          hrec.x + hrec.face[0] * off, hy, hrec.z + hrec.face[1] * off);
         e.role = hrec.role; e.vkey = key; e.vi = i;
-        e.home = { x: hrec.x + hrec.face[0] * 4.2, y: hy, z: hrec.z + hrec.face[1] * 4.2 };
+        e.home = { x: hrec.x + hrec.face[0] * off, y: hy, z: hrec.z + hrec.face[1] * off };
       }
     }
   },
@@ -7124,6 +7433,79 @@ const villageSys = {
       toast(hrec.vname + ' will remember that (' + hrec.rep + ' goodwill)');
       markSave();
     }
+  },
+};
+
+// ---------- objective markers: see your work in the world ----------
+// A COD-style marker layer: every active mission and accepted explore
+// contract projects a floating diamond with a live meter count. Off-screen
+// (or behind you) it clamps to the screen edge as a dot, so it always tells
+// you which way to turn.
+const objectiveSys = {
+  els: new Map(), _v: null, _f: null,
+  // every active objective in the world right now
+  list(){
+    const out = [];
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      if (!rec.stamped) continue;
+      rec.houses.forEach((hrec, vi) => {
+        const m = hrec.mission;
+        if (!m) return;
+        const id = key + ':' + vi;
+        if (m.type === 'hunt')
+          out.push(m.done ? { id, x: hrec.x, z: hrec.z, label: 'COLLECT', rec, hrec }
+                          : { id, x: m.tx, z: m.tz, label: 'HUNT', rec, hrec });
+        else if (m.type === 'expand')
+          out.push({ id, x: m.x, z: m.z, y: m.y + 3, label: 'BUILD', rec, hrec });
+        else if (m.type === 'steal'){
+          const vh = rec.houses[m.victim];
+          out.push({ id, x: vh.x, z: vh.z, label: 'STEAL', rec, hrec });
+        }
+      });
+      (rec.board || []).forEach((c, ci) => {
+        if (c.type === 'explore' && c.on && !c.done)
+          out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec });
+      });
+    }
+    return out;
+  },
+  frame(){
+    const host = $('objlayer');
+    const show = game.running && game.ui === 'none' && !game.photo;
+    const objs = show ? this.list().slice(0, 8) : [];
+    const seen = new Set();
+    const v = this._v || (this._v = new THREE.Vector3());
+    const fw = this._f || (this._f = new THREE.Vector3());
+    game.camera.getWorldDirection(fw);
+    for (const o of objs){
+      seen.add(o.id);
+      let el = this.els.get(o.id);
+      if (!el){
+        el = document.createElement('div');
+        el.className = 'objmark';
+        el.innerHTML = '<div class="objdia"></div><div class="objtxt"></div>';
+        host.appendChild(el);
+        this.els.set(o.id, el);
+      }
+      const oy = o.y != null ? o.y : (game.gen ? game.gen.height(o.x, o.z) + 2.4 : 0);
+      v.set(o.x, oy, o.z);
+      const behind = v.clone().sub(game.camera.position).dot(fw) < 0;
+      v.project(game.camera);
+      let sx = (v.x * 0.5 + 0.5) * innerWidth;
+      let sy = (-v.y * 0.5 + 0.5) * innerHeight;
+      if (behind){ sx = innerWidth - sx; sy = innerHeight - 60; }
+      const m = 46;
+      const clamped = behind || sx < m || sx > innerWidth - m || sy < m || sy > innerHeight - m;
+      sx = Math.max(m, Math.min(innerWidth - m, sx));
+      sy = Math.max(m, Math.min(innerHeight - m, sy));
+      const d = Math.round(Math.hypot(o.x - game.pos.x, o.z - game.pos.z));
+      el.style.transform = 'translate(' + (sx - 32).toFixed(0) + 'px,' + (sy - 10).toFixed(0) + 'px)';
+      el.classList.toggle('edge', clamped);
+      el.lastChild.textContent = o.label + ' ' + d + 'm';
+    }
+    for (const [id, el] of this.els)
+      if (!seen.has(id)){ el.remove(); this.els.delete(id); }
   },
 };
 
@@ -7246,7 +7628,8 @@ const missionSys = {
                        tz: Math.round(rec.z + Math.sin(a) * 30), done: false };
     } else if (type === 'expand'){
       const [fx, fz] = hrec.face;
-      hrec.mission = { type, x: hrec.x - fx * 4.4, z: hrec.z - fz * 4.4,
+      const off = villageSys.faceHalf(hrec) + 2.1;
+      hrec.mission = { type, x: hrec.x - fx * off, z: hrec.z - fz * off,
                        y: (hrec.gy || 0), done: false };
       this.sync();
     } else {
@@ -7566,16 +7949,18 @@ const tradeSys = {
 };
 
 function trySpawnEntities(){
-  if (game.mode !== 'survival') return;
+  const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0 };
   for (const e of game.entities) counts[e.type]++;
   const a = Math.random() * Math.PI * 2;
   const d = 22 + Math.random() * 20;
   const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
   const h = game.gen.height(x, z);
+  if (game.gen.wetAt && game.gen.wetAt(x, z, h)) return;   // nothing spawns in the sea
   const night = game.dayF < 0.25;
-  // lurkers spawn in the dark: night surface, or an underground air pocket
-  if (counts.lurker < ENT_DEF.lurker.cap){
+  // lurkers spawn in the dark (survival only): night surface, or an
+  // underground air pocket
+  if (survival && counts.lurker < ENT_DEF.lurker.cap){
     if (night && nearestTorchDist(x, h, z) > 12){
       spawnEntity('lurker', x, h + 0.5, z); return;
     }
@@ -7594,19 +7979,29 @@ function trySpawnEntities(){
 }
 function updateEntities(dt, now){
   const survival = game.mode === 'survival';
-  if (survival){
-    game.spawnT += dt;
-    if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
-  }
+  game.spawnT += dt;
+  if (game.spawnT > 3){ game.spawnT = 0; trySpawnEntities(); }
   for (let i = game.entities.length - 1; i >= 0; i--){
     const e = game.entities[i];
     const def = ENT_DEF[e.type];
-    if (!survival && e.type !== 'villager') continue;
+    // creative gets living animals and villagers too; only free-roaming
+    // lurkers stay a survival thing (bounty targets still tick for hunts)
+    if (!survival && e.type === 'lurker' && !e.bountyTag) continue;
     if (e.carried){
-      // riding overhead, slightly forward so you can see your passenger
-      e.x = game.pos.x - Math.sin(game.yaw) * 0.35;
-      e.z = game.pos.z - Math.cos(game.yaw) * 0.35;
-      e.y = game.pos.y + 2.3;
+      // Riding overhead, slightly forward so you can see your passenger --
+      // but only once you have lifted it. For the first beat of the grab your
+      // arms are still reaching out, so it stays where you found it and then
+      // comes up with your hands, on the same curve the viewmodel uses.
+      const tx = game.pos.x - Math.sin(game.yaw) * 0.35;
+      const tz = game.pos.z - Math.cos(game.yaw) * 0.35;
+      const ty = game.pos.y + 2.3;
+      const k = carryLift(Math.min(1, (performance.now() - (game.grabT || 0)) / GRAB_MS));
+      const from = e.grabFrom;
+      if (from && k < 1){
+        e.x = from[0] + (tx - from[0]) * k;
+        e.y = from[1] + (ty - from[1]) * k;
+        e.z = from[2] + (tz - from[2]) * k;
+      } else { e.x = tx; e.y = ty; e.z = tz; }
       e.vx = 0; e.vy = 0; e.vz = 0;
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
       if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
@@ -9841,6 +10236,7 @@ function tryAction(dt, now){
         if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
         if (ent.type === 'villager'){ toast('they would rather walk, thanks'); return; }
         ent.carried = true;
+        ent.grabFrom = [ent.x, ent.y, ent.z];    // lift starts from where it stood
         game.carried = ent;
         game.grabT = now;
         toast('picked up the ' + ent.type + ' — left click to throw');
@@ -10628,6 +11024,33 @@ function refreshHotbar(){
     cb.classList.remove('hidden');
   } else cb.classList.add('hidden');
 }
+function buildMissionsUI(){
+  const host = $('missionlist');
+  host.innerHTML = '';
+  const objs = objectiveSys.list();
+  for (const o of objs){
+    const row = document.createElement('div');
+    row.className = 'mrow';
+    const d = Math.round(Math.hypot(o.x - game.pos.x, o.z - game.pos.z));
+    const t1 = document.createElement('div');
+    t1.className = 't1';
+    t1.textContent = o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
+                            : (o.rec.name + ' — notice board');
+    const t2 = document.createElement('div');
+    t2.className = 't2';
+    t2.textContent = (o.hrec ? missionSys.describe(o.rec, o.hrec)
+                             : 'reach the marked spot')
+                   + ' · ' + o.label + ' ' + d + 'm';
+    row.appendChild(t1); row.appendChild(t2);
+    host.appendChild(row);
+  }
+  if (!objs.length){
+    const none = document.createElement('div');
+    none.className = 'sub';
+    none.textContent = 'no active work — ask a villager, or take a notice-board contract';
+    host.appendChild(none);
+  }
+}
 function buildInvUI(){
   const main = $('invmain'), hot = $('invhot'), dsp = $('invdisp'), arm = $('invarmor');
   main.innerHTML = ''; hot.innerHTML = ''; dsp.innerHTML = ''; arm.innerHTML = '';
@@ -10636,6 +11059,7 @@ function buildInvUI(){
   for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildCatalogUI();
+  buildMissionsUI();
   refreshInvUI();
 }
 
@@ -11330,8 +11754,8 @@ function respawn(){
   if (sp){
     game.pos.set(sp[0] + 1.1, sp[1] + 1.0, sp[2] + 1.1);
   } else {
-    const h = game.gen.height(0, 0);
-    game.pos.set(0, h + 1.5, 0);
+    const sp = game.gen.spawn ? game.gen.spawn() : { x: 0, z: 0 };
+    game.pos.set(sp.x, game.gen.height(sp.x, sp.z) + 1.5, sp.z);
   }
   game.vel.set(0, 0, 0);
   game.hp = 100; game.heal = 0;
@@ -11778,7 +12202,8 @@ function freshWorldData(name, seedStr, mode){
   return {
     v: 4, name, seed: seedStr, mode: mode || 'survival',
     edits: [],
-    player: { x: 0, y: null, z: 0, yaw: 0, pitch: 0, fly: false },
+    // null position = "let the generator pick a dry spawn" on first load
+    player: { x: null, y: null, z: null, yaw: 0, pitch: 0, fly: false },
     slots: null, hotSel: 0, snapOn: false, gridIdx: 3,
   };
 }
@@ -11901,8 +12326,10 @@ function startWorld(id){
   game.gridIdx = Math.min(9, Math.max(0, data.gridIdx | 0));
   const p = data.player || {};
   game.gen = CORE.makeGen(game.seed);
-  const spawnY = game.gen.height(0, 0) + 1.5;
-  game.pos.set(p.x || 0, p.y == null ? spawnY : p.y, p.z || 0);
+  // fresh world: spawn on dry land -- (0,0) can be mid-ocean now
+  const sp0 = p.x == null ? game.gen.spawn() : { x: p.x, z: p.z || 0 };
+  const spawnY = game.gen.height(sp0.x, sp0.z) + 1.5;
+  game.pos.set(sp0.x, p.y == null ? spawnY : p.y, sp0.z);
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
     game.pos.y += 0.5;
@@ -12006,24 +12433,31 @@ const farTerrain = {
         uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
       },
       vertexShader: `
-        varying vec3 vW;
+        attribute float aDep;
+        varying vec3 vW; varying float vDep;
         void main(){
-          vW = position;
+          vW = position; vDep = aDep;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
       fragmentShader: `
         precision highp float;
         uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
         uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
-        varying vec3 vW;
+        varying vec3 vW; varying float vDep;
         void main(){
           vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
           if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
               texture2D(uMask, mi).r > 0.5) discard;
           vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
+          // real water goes deep-blue and opaque as the bed drops away --
+          // with WG3's oceans, letting a dark seabed show through at 62%
+          // read as grey mud, and ring-underlap strips double-blended into
+          // dark bands. Deep water hides both by construction.
+          float deep = smoothstep(0.6, 7.5, vDep);
+          col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
           float dist = gl_FragCoord.z / gl_FragCoord.w;
           float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
-          gl_FragColor = vec4(mix(col, uFogCol, fog), 0.62);
+          gl_FragColor = vec4(mix(col, uFogCol, fog), mix(0.68, 0.96, deep));
         }`,
     });
     this.mat = new THREE.ShaderMaterial({
@@ -12249,7 +12683,7 @@ const farTerrain = {
     const pos = new Float32Array(quads.length * 18);
     const nrm = new Float32Array(quads.length * 18);
     const mats = new Float32Array(quads.length * 6);
-    const wpos = [];
+    const wpos = [], wdep = [];
     const wY = sea > -1e8 ? sea - 0.015 - j.k * 0.012 : 0;
     let w = 0;
     for (const a of quads){
@@ -12261,11 +12695,24 @@ const farTerrain = {
       if (j.h[c] > qh){ qh = j.h[c]; qc = c; }
       if (j.h[d] > qh){ qh = j.h[d]; qc = d; }
       const qm = j.m[qc];
-      if (j.wet[a] || j.wet[b] || j.wet[c] || j.wet[d]){
+      // the terrain hole is shrunk 2 cells for a backed seam, but WATER must
+      // not double-cover there -- two translucent layers blend into visible
+      // dark bands across an ocean. The finer ring owns the water inside its
+      // full extent.
+      const wa = a % N1, wr = (a / N1) | 0;
+      const wHole = j.k === 0 ? 0 : Math.round(this.L[j.k - 1].E / s);
+      const inFiner = wHole > 0 &&
+        wa >= half - wHole && wa < half + wHole &&
+        wr >= half - wHole && wr < half + wHole;
+      if (!inFiner && (j.wet[a] || j.wet[b] || j.wet[c] || j.wet[d])){
         const xa = x0 + (a % N1) * s, za = z0 + ((a / N1) | 0) * s;
         const xb = xa + s, zb = za + s;
         wpos.push(xa, wY, za, xa, wY, zb, xb, wY, zb,
                   xa, wY, za, xb, wY, zb, xb, wY, za);
+        // per-corner water depth (bed heights carry the ring sink; add it back)
+        const dA = sea - (j.h[a] + Lk.sink), dB = sea - (j.h[b] + Lk.sink);
+        const dC = sea - (j.h[c] + Lk.sink), dD = sea - (j.h[d] + Lk.sink);
+        wdep.push(dA, dC, dD, dA, dD, dB);
       }
       for (const kk of [a, c, b, b, c, d]){
         const vi = kk % N1, vr = (kk / N1) | 0;
@@ -12289,6 +12736,7 @@ const farTerrain = {
     if (wpos.length){
       const wg = new THREE.BufferGeometry();
       wg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wpos), 3));
+      wg.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(wdep), 1));
       lv.water = new THREE.Mesh(wg, this.waterSurfMat);
       lv.water.frustumCulled = false;
       lv.water.renderOrder = 3;
@@ -12576,6 +13024,7 @@ function frame(now){
   game.missionT = (game.missionT || 0) + dt;
   if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
+  objectiveSys.frame();
   updateSurvival(dt);
   // embers off nearby placed torches
   game.emberT = (game.emberT || 0) + dt;
@@ -12726,7 +13175,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>

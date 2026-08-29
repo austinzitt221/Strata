@@ -2,6 +2,125 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 9 — World Gen 3.0: every world its own place (2026-08-29)
+
+The big one. Three phases, all aimed at the same complaint: every world
+looked like the same confetti of same-sized biome cells.
+
+- **The terrain backbone.** height() now stacks three world-scale fields
+  the way Minecraft 1.18 does it: CONTINENTALNESS (basin, shelf, or
+  highland, through a spline), EROSION (a flatness multiplier — where
+  it's high the land is flat no matter what else wants to happen), and
+  PEAKS & VALLEYS (broad swells plus cubed ridge crest lines). Every
+  spline control point, field wavelength, the sea bias and the world's
+  ridge amplitude jitter per seed — so one seed is an archipelago,
+  another an eroded plain, another a craggy highland. The old archetype
+  heightfields survive as half-amplitude local character riding on top;
+  mesa quantizes the combined height so backbone relief becomes stacked
+  tables instead of a tilted plain.
+- **Biomes follow the geography.** Archetype choice is no longer a
+  uniform die roll: coasts draw swamps and dunes, high-relief zones draw
+  ranges, glaciers and volcanoes, and a very-low-frequency heat field
+  pushes hot and cold families to different parts of the world.
+  Weighted Voronoi gives each region cell a conquest weight, so one sand
+  biome is a pocket and the next is huge, and same-family neighbors
+  cluster into mega-biomes.
+- **Real oceans.** Low continentalness dips well below sea level, so
+  worlds get coastlines, shelves, islands, inland seas — and on volcanic
+  coasts, lava shores. Water is depth-aware on both the near chunk
+  meshes and the LOD rings (translucent turquoise over a visible shallow
+  bed, deepening to near-opaque ocean blue), the LOD ring water no
+  longer double-covers its underlap strips (which blended into dark
+  bands across open water), and gen.spawn() walks outward from (0,0)
+  until it finds dry land — one test seed spawned 20m under the sea
+  before that, because createWorld pre-seeded the player at x:0 and the
+  spawn finder never ran.
+- **Villages worth walking into.** Each house rolls its own footprint
+  (small square, classic, big square, or a rectangle either way round)
+  and 38% grow a second story: a real slab between floors, a hatch in a
+  back corner, a rope dropped through it to climb, upper windows.
+  Interiors are furnished by role — every house a bed (upstairs if there
+  is one) and a torch; the toolsmith a crafting table and a stove out
+  front, the broker a stocked chest, the arms dealer an armor stand, and
+  the electrician a hand crank wired to a wall lamp that lights when you
+  crank it.
+- **You can see your work.** Every active mission and accepted explore
+  contract projects a COD-style diamond marker into the world with a
+  live meter count; off-screen or behind you it clamps to the screen
+  edge as a dot so it always tells you which way to turn. The inventory
+  gained a MISSIONS panel on the right listing every active job with its
+  giver, village, description and distance.
+- **Creative is alive now.** Grazers and sheep spawn and wander in
+  creative too (nothing spawns in the sea), villages were already
+  streaming in but got a slightly more forgiving flatness check for
+  WG3's gentler slopes; free-roaming lurkers stay a survival thing,
+  while bounty targets still tick in creative so hunts work.
+
+Verified: aerial biome maps of four seeds old-vs-new (old: identical
+texture; new: four different geographies); watertight seam test 0/3503
+hole edges on WG3 terrain; height() at 0.98us/call vs 0.79 before;
+spawn dry on all four test seeds; two-story probes (slab solid, upper
+room open) on two villages; the crank-to-lamp wire carries power ids
+correctly; markers tick 18m -> 8m walking toward a hunt; 296 headless
+tests, smoke, and the full B8 village/mission/treasure suite green.
+
+Known issue: terrain under OLD saves shifts (the world is (seed, edits)
+and the generator changed) — the existing lift-out-of-ground guard
+handles the player, but pre-WG3 villages may sit oddly on the new
+ground. New worlds are the point of this build.
+
+## Build 8.5 — the twist, a real punch, and hands that hold the sheep up (2026-08-27)
+
+Opus patch pass #5. Three notes from the playtest, and the first one
+turned out to be a real bug my last round's verification had missed.
+
+- **The left arm really was twisted.** I checked the mirror last build by
+  projecting both hands and confirming they landed at exactly ±0.297 —
+  which they did, and which proved nothing, because a roll about the
+  arm's own axis does not move the fist. The cause: the viewmodel group
+  is yawed 24° inward for one-handed tools, and mirroring a pose's x
+  *inside* a yawed space gives you the right position with a residual
+  roll of a few degrees. The fix is structural rather than a fudge
+  factor: the fists group now cancels the group's offset AND its yaw, so
+  fist poses live in plain camera-aligned space and the left arm is the
+  right arm's exact mirror by construction. Measured by masking the arm
+  silhouettes against a flat sky and comparing the frame with its own
+  mirror: **0 of 37,820 silhouette pixels differ.** It was 15.4% before.
+- **The guard sits wider.** Both fists moved out; the gap went from 0.462
+  to 0.594 in screen units, about 29% further apart, with the arm angle
+  unchanged (both fist and shoulder moved by the same amount).
+- **A real punch.** The old one faded the guard toward a single extended
+  pose, so both arms drifted and neither read as throwing anything. Now
+  it is keyframed — guard, chamber down and back, drive up and across to
+  the crosshair and *closer* so it lands bigger, then a slower recovery —
+  with a small forward shove of the whole viewmodel on the hit. The off
+  hand holds its guard: measured across the swing, the right fist travels
+  0.53 in screen units and the left 0.017.
+  One dead end worth recording: aiming the arm straight down the camera's
+  axis at the moment of impact foreshortens beautifully for about one
+  frame and then sails the sleeve through the eye, filling the screen
+  with a blue wall. The drive sells itself by moving the fist, not by
+  pointing the arm away. There is now a test that walks each arm's axis
+  and fails if any on-screen point comes within 0.25m of the camera.
+- **Carrying an animal is locked to the world, not the view.** The arms
+  used to be posed in camera space, so they hung in front of you forever
+  and swung around as you looked. Now the pose takes the pitch back out:
+  the hands hold a fixed spot relative to *you*, so they stay put while
+  you look around and swing into frame when you look up at your
+  passenger. Verified by reading the hand's world position at four
+  pitches from 0.2 to 1.2 — drift 0.000m. Only upward pitch is cancelled;
+  look down and it falls back to view-relative, which is the identical
+  pose at level and avoids two forearms sliding past your eyes when you
+  stare at your feet.
+- **And it is an animation now.** Your arms reach out in front toward the
+  animal, it attaches, and then it comes up with your hands to the locked
+  overhead hold — the animal rides the same curve the arms do, so it sits
+  on them the whole way rather than teleporting overhead the instant you
+  grab it. The arms also carry the long shoulder section in every pose
+  now, so there is no cut-off edge to find at any angle.
+
+297 headless tests, smoke, and the 8.2/8.3/8.4 suites green.
+
 ## Build 8.4 — weapons, clothing, and hands that make a fist (2026-08-27)
 
 Opus patch pass #4. Two more menu categories, and the empty-hand pose
