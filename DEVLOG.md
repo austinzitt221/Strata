@@ -2,6 +2,50 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 9.1 — World Gen 3.1: rivers, ponds, and biomes that hurry up (2026-08-29)
+
+Playtest verdict on 9.0 was blunt and right: still flat, biomes still
+too long, worlds still cousins of each other. This pass was tuned
+against five reference screenshots until five fresh seeds each read as
+their own place.
+
+- **Rivers.** The zero-line of a warped noise field becomes a channel
+  carved to just below the water table, so every river actually holds
+  water; high ground gets pulled down to a gorge rim first, so a river
+  crossing a highland runs at the bottom of a canyon with banks 10m+
+  over the water. Density and width jitter per seed. On volcanic ground
+  the same channels fill with lava.
+- **Ponds.** Lowland ground is pocked with small lakes (a per-seed
+  threshold decides how pocked). Between rivers, ponds and the coasts,
+  water threads through everything the way the references do.
+- **Biomes at reference speed.** Region cells cut 520m -> 260m, climate
+  varied at ~600m instead of ~1.6km, the family-clustering that was
+  building mega-biomes removed, conquest weights narrowed, borders
+  sharpened (90m -> 60m blend). A desert is now a two-minute walk, not
+  thirty. Landmarks moved to their own 520m grid so shrinking the biome
+  cells didn't quadruple the volcano count (or break the footprint
+  bound the chunk quick-reject depends on).
+- **Nothing is billiard-flat.** The erosion spline's relief floor came
+  up 3x, flat archetypes roll harder, and a universal ~90m rolling
+  octave rides under every biome. The bare-rock band moved to 27..33m
+  and snow above 33m, and the mountain-family pool triggers only in
+  truly low-erosion zones, so snow reads as caps on actual crests
+  instead of blankets over whole biomes.
+- Acceptance run (the playtest's own bar): five worlds — seeds 1, 42,
+  7, 123, 555 — flown up and screenshotted. Alpine riverlands, a
+  lava-veined archipelago, an open sea with basalt headlands, volcano
+  country, a desert massif. Ground level: a grassy hill rolling over a
+  sand-banked river; a snow slope over a monolith and a lake.
+
+height() costs 1.44us (0.98 in 9.0 — rivers and ponds are two more
+field evaluations). 297 headless tests pass; two suites' hardcoded
+sample points were updated (the plains-coverage test now samples a
+LOW-altitude plain, since high plains wear the rock band by design; the
+village suite ring-searches for a candidate instead of assuming one at
+a fixed spot). Smoke and the full B8 village/mission/treasure loop are
+green on the new terrain, and villages are plentiful (23-54 candidates
+per 8.7km square across the five seeds).
+
 ## Build 9 — World Gen 3.0: every world its own place (2026-08-29)
 
 The big one. Three phases, all aimed at the same complaint: every world
