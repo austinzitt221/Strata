@@ -7212,7 +7212,8 @@ const villageSys = {
       }
     return out;
   },
-  // deterministic layout: 4 houses on a ring around the well
+  // deterministic layout: 4 houses on a ring around the well, each rolling
+  // its own footprint and story count so no two villages read the same
   layout(v){
     const rng = CORE.mulberry32(v.seed);
     const roles = ['broker', 'arms', 'tool', 'spark'];
@@ -7220,17 +7221,28 @@ const villageSys = {
     const houses = [];
     for (let i = 0; i < 4; i++){
       const a = base + i * Math.PI / 2 + (rng() - 0.5) * 0.5;
-      const r = 12 + rng() * 3;
+      // footprint: small square, the classic, a big square, or a rectangle
+      // either way round
+      const shape = rng();
+      let w = 5.4, d = 5.4;
+      if (shape < 0.24){ w = 4.6; d = 4.6; }
+      else if (shape < 0.44){ w = 6.6; d = 6.6; }
+      else if (shape < 0.68){ w = 7.6; d = 5.2; }
+      else if (shape < 0.86){ w = 5.2; d = 7.6; }
+      const two = rng() < 0.38;                     // some grow a second story
+      const r = 12.5 + Math.max(w, d) * 0.35 + rng() * 3;
       const hx = Math.round(v.x + Math.cos(a) * r);
       const hz = Math.round(v.z + Math.sin(a) * r);
       // door faces the well, snapped to a cardinal
       const dx = v.x - hx, dz = v.z - hz;
       const face = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? [1, 0] : [-1, 0])
                                                : (dz > 0 ? [0, 1] : [0, -1]);
-      houses.push({ x: hx, z: hz, role: roles[i], face });
+      houses.push({ x: hx, z: hz, role: roles[i], face, w, d, two: two ? 1 : 0 });
     }
     return houses;
   },
+  // half-extent of a house along its door axis (old saves lack w/d)
+  faceHalf(hrec){ return ((hrec.face[0] ? hrec.w : hrec.d) || 5.4) / 2; },
   stamp(v, rec){
     const MAT = CORE.MAT;
     const E = (op, x, y, z, size, sy, mat) => {
@@ -7238,32 +7250,95 @@ const villageSys = {
       e.sy = sy;
       applyEdit(e);
     };
+    // box edit with independent x/y/z extents
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, x, y, z, sx, mat, 0);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    let ropesAdded = false;
     for (const hrec of rec.houses){
+      const w = hrec.w || 5.4, d = hrec.d || 5.4, two = !!hrec.two;
       let g = game.gen.height(hrec.x, hrec.z);
-      for (const [cx2, cz2] of [[-2.4, -2.4], [2.4, -2.4], [-2.4, 2.4], [2.4, 2.4]])
+      for (const [cx2, cz2] of [[-w/2, -d/2], [w/2, -d/2], [-w/2, d/2], [w/2, d/2]])
         g = Math.max(g, game.gen.height(hrec.x + cx2, hrec.z + cz2));
       g = +g.toFixed(1);
       hrec.gy = g;
-      // shell (stonebrick) with a buried foundation, hollowed inside
-      E(1, hrec.x, g + 1.1, hrec.z, 5.4, 4.6, MAT.STONEBRICK);
-      E(0, hrec.x, g + 1.85, hrec.z, 4.6, 2.5, 0);
-      // door hole on the plaza side
       const [fx, fz] = hrec.face;
-      const doorE = CORE.makeEdit(0, 1, hrec.x + fx * 2.7, g + 1.75, hrec.z + fz * 2.7, 1.4, 0, 0);
-      doorE.sy = 2.3;
-      applyEdit(doorE);
-      // windows on the two side walls
-      const wx = fz, wz = fx;   // perpendicular
-      for (const s of [-1, 1]){
-        const win = CORE.makeEdit(0, 1, hrec.x + wx * 2.7 * s, g + 2.1, hrec.z + wz * 2.7 * s, 1.0, 0, 0);
-        win.sy = 0.9;
-        applyEdit(win);
+      const px2 = fz, pz2 = fx;                  // the perpendicular axis
+      // a point in house space: af meters toward the door, ap sideways
+      const at = (af, ap) => [hrec.x + fx * af + px2 * ap, hrec.z + fz * af + pz2 * ap];
+      const hf = (fx ? w : d) / 2;               // half-extent toward the door
+      const hp = (fx ? d : w) / 2;               // half-extent sideways
+      // shell (stonebrick) with a buried foundation, hollowed per story
+      const shellTop = two ? 6.7 : 3.4;
+      EB(1, hrec.x, g + (shellTop - 1.2) / 2, hrec.z, w, shellTop + 1.2, d, MAT.STONEBRICK);
+      EB(0, hrec.x, g + 1.85, hrec.z, w - 0.8, 2.5, d - 0.8);
+      if (two){
+        // upper room, with a solid 0.6m slab left between the stories
+        EB(0, hrec.x, g + 4.95, hrec.z, w - 0.8, 2.5, d - 0.8);
+        // hatch through the slab in a back corner, with a rope to climb
+        const [hx2, hz2] = at(-(hf - 1.55), hp - 1.55);
+        EB(0, hx2, g + 3.4, hz2, 1.4, 1.8, 1.4);
+        (game.ropes = game.ropes || []).push([+hx2.toFixed(2), +(g + 3.68).toFixed(2), +hz2.toFixed(2), 3.1]);
+        ropesAdded = true;
+        // upper windows on both side walls
+        for (const sgn of [-1, 1]){
+          const [ux, uz] = at(0, (hp - 0.2) * sgn);
+          EB(0, ux, g + 4.85, uz, 1.0, 0.9, 1.0);
+        }
+      }
+      // door hole on the plaza side
+      const [dx2, dz2] = at(hf - 0.2, 0);
+      EB(0, dx2, g + 1.75, dz2, fx ? 1.0 : 1.4, 2.3, fz ? 1.0 : 1.4);
+      // ground-floor windows on the two side walls
+      for (const sgn of [-1, 1]){
+        const [wx2, wz2] = at(0, (hp - 0.2) * sgn);
+        EB(0, wx2, g + 2.1, wz2, 1.0, 0.9, 1.0);
       }
       // plank roof cap
-      E(1, hrec.x, g + 3.65, hrec.z, 6.0, 0.5, MAT.PLANKS);
-      // a torch outside the door
-      game.torches.push([hrec.x + fx * 3.4, g + 0.1, hrec.z + fz * 3.4]);
+      EB(1, hrec.x, g + shellTop + 0.25, hrec.z, w + 0.6, 0.5, d + 0.6, MAT.PLANKS);
+      // a torch outside the door, and one inside on the back wall
+      const [tx2, tz2] = at(hf + 0.7, 0.9);
+      game.torches.push([tx2, g + 0.1, tz2]);
+      const [ti2, tzi] = at(-(hf - 1.2), -(hp - 1.2));
+      game.torches.push([ti2, g + 0.7, tzi]);
+      // ---- furnishings: what this villager's life looks like ----
+      const yawDoor = Math.atan2(fx, fz);        // facing the door
+      const floor1 = g + 0.6, floor2 = g + 3.7;
+      // the bed goes upstairs when there is an upstairs
+      const [bx2, bz2] = at(-(hf - 1.6), two ? -(hp - 1.5) : -(hp - 1.5));
+      bedSys.add(+bx2.toFixed(2), +(two ? floor2 : floor1).toFixed(2), +bz2.toFixed(2), yawDoor);
+      const [rx2, rz2] = at(-(hf - 1.4), hp - 1.4);
+      if (hrec.role === 'tool'){
+        tableSys.add(+rx2.toFixed(2), +floor1.toFixed(2), +rz2.toFixed(2), yawDoor);
+      } else if (hrec.role === 'broker'){
+        const n = pnodeSys.add('chest', +rx2.toFixed(2), floor1 + 0.35, +rz2.toFixed(2), yawDoor, { sc: 0.7 });
+        n.inv = new Array(chestSlots(0.7)).fill(null);
+        n.inv[0] = { kind: 'coin', count: 4 + (v.seed % 5) };
+        n.inv[1] = { kind: 'ironore', count: 2 };
+      } else if (hrec.role === 'arms'){
+        pnodeSys.add('astand', +rx2.toFixed(2), floor1, +rz2.toFixed(2), yawDoor, {});
+      } else if (hrec.role === 'spark'){
+        // the electrician's workshop: a hand crank wired to a wall bulb --
+        // crank it and the lamp lights
+        const crank = pnodeSys.add('crank', +rx2.toFixed(2), floor1, +rz2.toFixed(2), yawDoor, {});
+        // lamp on the opposite side wall, its face pointing into the room
+        const [lx2, lz2] = at(-(hf - 1.0), -(hp - 0.35));
+        bulbSys.add(+lx2.toFixed(2), g + 2.5, +lz2.toFixed(2), px2, 0, pz2);
+        const bulbId = game.bulbs[game.bulbs.length - 1][6];
+        game.wires.push({ a: 'n' + crank.id, b: 'b' + bulbId,
+                          pa: [+rx2.toFixed(2), floor1 + 0.8, +rz2.toFixed(2)],
+                          pb: [+lx2.toFixed(2), g + 2.5, +lz2.toFixed(2)] });
+      }
+      // the smith's stove stands outside the toolsmith's door
+      if (hrec.role === 'tool'){
+        const [ox2, oz2] = at(hf + 1.6, -1.6);
+        stoveSys.add(+ox2.toFixed(2), g, +oz2.toFixed(2), yawDoor + Math.PI);
+      }
     }
+    if (ropesAdded) ropeSys.rebuild();
+    wireSys.rebuild();
     // the bounty board, facing the well
     const bg = game.gen.height(v.x + 4.2, v.z + 3.2);
     pnodeSys.add('board', v.x + 4.2, +bg.toFixed(1), v.z + 3.2,
@@ -7319,10 +7394,11 @@ const villageSys = {
         const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
         if (alive) continue;
         const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
+        const off = this.faceHalf(hrec) + 1.8;
         const e = spawnEntity('villager',
-          hrec.x + hrec.face[0] * 4.2, hy, hrec.z + hrec.face[1] * 4.2);
+          hrec.x + hrec.face[0] * off, hy, hrec.z + hrec.face[1] * off);
         e.role = hrec.role; e.vkey = key; e.vi = i;
-        e.home = { x: hrec.x + hrec.face[0] * 4.2, y: hy, z: hrec.z + hrec.face[1] * 4.2 };
+        e.home = { x: hrec.x + hrec.face[0] * off, y: hy, z: hrec.z + hrec.face[1] * off };
       }
     }
   },
@@ -7459,7 +7535,8 @@ const missionSys = {
                        tz: Math.round(rec.z + Math.sin(a) * 30), done: false };
     } else if (type === 'expand'){
       const [fx, fz] = hrec.face;
-      hrec.mission = { type, x: hrec.x - fx * 4.4, z: hrec.z - fz * 4.4,
+      const off = villageSys.faceHalf(hrec) + 2.1;
+      hrec.mission = { type, x: hrec.x - fx * off, z: hrec.z - fz * off,
                        y: (hrec.gy || 0), done: false };
       this.sync();
     } else {
