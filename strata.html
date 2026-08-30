@@ -1274,6 +1274,7 @@ function makeGen(seed){
     const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
     const h = height(x, z);
     if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
+    if (inCity(x, z)) return null;                      // no tufts in the streets
     const arch = archAt(x, z);
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
@@ -1304,8 +1305,15 @@ function makeGen(seed){
     if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
+    if (inCity(x, z)) return null;                   // streets stay paved
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
+  }
+  // does this point land inside a mega-city footprint? (candidates keep
+  // 400m off their cell edge, so only the containing cell can claim it)
+  function inCity(x, z){
+    const c = cityAt(Math.floor(x / CITY_CELL), Math.floor(z / CITY_CELL));
+    return !!c && Math.abs(c.x - x) < 62 && Math.abs(c.z - z) < 62;
   }
   // ---- villages: one candidate per VILLAGE_CELL, flat friendly ground only
   function villageAt(cx, cz){
@@ -1352,12 +1360,58 @@ function makeGen(seed){
       }
     return { x: fx, z: fz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- mega-cities: one candidate per CITY_CELL (km-scale spacing), on
+  // gentle dry ground the foundation slab can iron flat, clear of both
+  // village and fort candidates
+  const cityCache = new Map();
+  function cityAt(cx, cz){
+    const ck = (cx + 32768) * 65536 + (cz + 32768);
+    if (cityCache.has(ck)) return cityCache.get(ck);
+    const r = cityAtRaw(cx, cz);
+    cityCache.set(ck, r);
+    return r;
+  }
+  function cityAtRaw(cx, cz){
+    const h0 = hashInt(sX ^ 0xC17C17 ^ hashInt((cx * 668904701) ^ hashInt(cz * 941083987)));
+    if ((h0 & 7) < 3) return null;                 // most cells hold no city
+    // the cell rolls several sites and keeps the first buildable one
+    let x = 0, z = 0, ok = false;
+    for (let k = 0; k < 5 && !ok; k++){
+      x = cx * CITY_CELL + 400 + (hashInt(h0 ^ (11 + k * 2)) % (CITY_CELL - 800));
+      z = cz * CITY_CELL + 400 + (hashInt(h0 ^ (13 + k * 2)) % (CITY_CELL - 800));
+      const hc = height(x, z);
+      if (hc < seaLevel + 3) continue;
+      const a = archAt(x, z);
+      if (a !== 0 && a !== 1 && a !== 4) continue;     // plains, hills, dunes
+      let mn = hc, mx = hc;
+      for (const [dx, dz] of [[-55, 0], [55, 0], [0, -55], [0, 55], [40, 40], [-40, -40], [40, -40], [-40, 40]]){
+        const hh = height(x + dx, z + dz);
+        if (hh < mn) mn = hh;
+        if (hh > mx) mx = hh;
+      }
+      if (mx - mn > 13 || mn < seaLevel + 1) continue;
+      ok = true;
+    }
+    if (!ok) return null;
+    for (let vx = Math.floor((x - 220) / VILLAGE_CELL); vx <= Math.floor((x + 220) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((z - 220) / VILLAGE_CELL); vz <= Math.floor((z + 220) / VILLAGE_CELL); vz++){
+        const v = villageAt(vx, vz);
+        if (v && Math.hypot(v.x - x, v.z - z) < 220) return null;
+      }
+    for (let fx2 = Math.floor((x - 220) / FORT_CELL); fx2 <= Math.floor((x + 220) / FORT_CELL); fx2++)
+      for (let fz2 = Math.floor((z - 220) / FORT_CELL); fz2 <= Math.floor((z + 220) / FORT_CELL); fz2++){
+        const f = fortAt(fx2, fz2);
+        if (f && Math.hypot(f.x - x, f.z - z) < 220) return null;
+      }
+    return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
+  }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, cityAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
+const CITY_CELL = 2600;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
@@ -2462,7 +2516,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, CITY_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -3164,6 +3218,7 @@ const game = {
   armor: { head: null, chest: null, feet: null, back: null },
   villages: {},
   forts: {},
+  cities: {},
   bossKills: {},
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
@@ -7342,6 +7397,7 @@ const ENT_DEF = {
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
+  cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
@@ -7353,6 +7409,9 @@ const VROLE = {
   arms:    { name: 'arms dealer',  coat: 0x7a2f2f, hat: 0x4a1c1c },
   tool:    { name: 'toolsmith',    coat: 0x2f5a7a, hat: 0x1c3a4a },
   spark:   { name: 'electrician',  coat: 0x3f7a3f, hat: 0x245224 },
+  food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
+  mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
+  walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
 };
 function entMesh(type, ent){
   const g = new THREE.Group();
@@ -7474,6 +7533,25 @@ function entMesh(type, ent){
     (parent || g).add(m);
     return m;
   };
+  if (type === 'cab'){
+    // a boxy electric cab; each one rolls its own paint job
+    const paint = new THREE.MeshBasicMaterial({ color: [0xc94b3f, 0x3f6fc9, 0xd8b45e, 0x4fae5c][(Math.random() * 4) | 0] });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const glass = new THREE.MeshBasicMaterial({ color: 0xbfe2ef });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 3.1), paint);
+    body.position.y = 0.62;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.6), paint);
+    cabin.position.set(0, 1.12, 0.15);
+    const wind = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.34, 0.06), glass);
+    wind.position.set(0, 1.12, -0.68);
+    g.add(body, cabin, wind);
+    for (const [wx2, wz2] of [[-0.8, -1.0], [0.8, -1.0], [-0.8, 1.0], [0.8, 1.0]]){
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.5, 0.5), dark);
+      wh.position.set(wx2, 0.28, wz2);
+      g.add(wh);
+    }
+    return g;
+  }
   if (type === 'villager'){
     const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
@@ -7908,7 +7986,7 @@ const villageSys = {
     }
   },
   villagerRec(e){
-    const rec = game.villages[e.vkey];
+    const rec = e.ckey ? (game.cities || {})[e.ckey] : game.villages[e.vkey];
     return rec ? rec.houses[e.vi] : null;
   },
   offend(e){
@@ -7952,6 +8030,43 @@ const objectiveSys = {
         if (c.type === 'explore' && c.on && !c.done)
           out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec });
       });
+    }
+    // city missions project markers just like village ones
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped || !rec.houses) continue;
+      rec.houses.forEach((hrec, vi) => {
+        const m = hrec.mission;
+        if (!m) return;
+        const id = key + ':' + vi;
+        if (m.type === 'hunt')
+          out.push(m.done ? { id, x: hrec.x, z: hrec.z, label: 'COLLECT', rec, hrec }
+                          : { id, x: m.tx, z: m.tz, label: 'HUNT', rec, hrec });
+        else if (m.type === 'expand')
+          out.push({ id, x: m.x, z: m.z, y: m.y + 3, label: 'BUILD', rec, hrec });
+        else if (m.type === 'steal'){
+          const vh = rec.houses[m.victim];
+          out.push({ id, x: vh.x, z: vh.z, label: 'STEAL', rec, hrec });
+        }
+      });
+    }
+    // cities advertise from a long way out — the nearest known skyline
+    // shows even before it's stamped
+    {
+      let best = null, bd = 1e9;
+      for (const key in (game.cities || {})){
+        const rec = game.cities[key];
+        if (!rec.stamped) continue;
+        const d = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+        if (d >= 70 && d < bd){ bd = d; best = { id: 'city' + key, x: rec.x, z: rec.z,
+          y: (rec.gy != null ? rec.gy : 0) + 22, label: rec.name || 'CITY', rec: { name: rec.name || 'city' } }; }
+      }
+      if (!best) for (const c of citySys.known){
+        const d = Math.hypot(c.x - game.pos.x, c.z - game.pos.z);
+        if (d >= 70 && d < bd){ bd = d; best = { id: 'cityc' + c.key, x: c.x, z: c.z,
+          y: c.y + 22, label: citySys.nameFor(c.seed), rec: { name: 'city' } }; }
+      }
+      if (best) out.push(best);
     }
     // discovered forts advertise themselves until their vault is looted
     for (const key in (game.forts || {})){
@@ -8152,9 +8267,9 @@ const missionSys = {
   },
   // keep bounty lurkers alive near their hunting grounds
   tick(){
-    for (const key in game.villages){
-      const rec = game.villages[key];
-      if (!rec.stamped) continue;
+    for (const key in Object.assign({}, game.villages, game.cities)){
+      const rec = game.villages[key] || game.cities[key];
+      if (!rec.stamped || !rec.houses) continue;
       rec.houses.forEach((hrec, vi) => {
         const m = hrec.mission;
         if (!m || m.type !== 'hunt' || m.done) return;
@@ -8170,7 +8285,7 @@ const missionSys = {
   },
   bountyKilled(e){
     const [key, vi] = e.bountyTag.split(':');
-    const rec = game.villages[key];
+    const rec = game.villages[key] || (game.cities || {})[key];
     if (!rec) return;
     const hrec = rec.houses[+vi];
     if (hrec && hrec.mission && hrec.mission.type === 'hunt'){
@@ -8270,6 +8385,19 @@ const tradeSys = {
       { buy: { make: 'drill', tier: 3 }, price: 340, rep: 25 },
       { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
     ];
+    if (role === 'food') return [   // grocer: the city eats
+      { buy: { k: 'cookedmeat', n: 4 }, price: 10, rep: 0 },
+      { buy: { k: 'meat', n: 6 }, price: 8, rep: 0 },
+      { sell: { k: 'meat', n: 4 }, price: 6, rep: 0 },
+      { sell: { k: 'wool', n: 3 }, price: 5, rep: 0 },
+      { buy: { k: 'coal', n: 8 }, price: 14, rep: 10 },
+    ];
+    if (role === 'mayor') return [   // civic works pay well
+      { sell: { k: 'torch', n: 10 }, price: 8, rep: 0 },
+      { sell: { k: 'bulb', n: 6 }, price: 18, rep: 0 },
+      { sell: { k: 'diamond', n: 1 }, price: 40, rep: 10 },
+      { buy: { k: 'mcharge', n: 4 }, price: 30, rep: 25 },
+    ];
     return [   // spark: the mad-scientist electrician
       { buy: { k: 'wire', n: 8 }, price: 12, rep: 0 },
       { buy: { k: 'bulb', n: 4 }, price: 14, rep: 0 },
@@ -8320,7 +8448,7 @@ const tradeSys = {
     list.innerHTML = '';
     // ---- the mission block sits above the offers ----
     {
-      const rec = game.villages[T.e.vkey];
+      const rec = T.e.ckey ? game.cities[T.e.ckey] : game.villages[T.e.vkey];
       const vi = T.e.vi;
       const mrow = document.createElement('div');
       mrow.className = 'craftrow';
@@ -8410,7 +8538,7 @@ const tradeSys = {
       const item = this.offerItem(o);
       if (item.kind === 'tmap'){
         // mint the X when the map is bought: a ring around this village
-        const rec = game.villages[T.e.vkey];
+        const rec = T.e.ckey ? game.cities[T.e.ckey] : game.villages[T.e.vkey];
         const a = Math.random() * Math.PI * 2;
         const r = 140 + Math.random() * 120;
         item.x = Math.round(rec.x + Math.cos(a) * r);
@@ -8964,6 +9092,226 @@ const raidBaseSys = {
   },
 };
 
+// ---------- mega-cities: rare skylines a box-CSG world can afford ----------
+// One candidate per 2.6km cell (and half the cells roll none), stamped on
+// approach like forts: a deep foundation slab irons the site flat, basalt
+// avenues cross it in a 3x3 grid, and eight towers rise from procedural
+// floor/facade modules -- hollow shells, real floor slabs, window bands
+// punched through the walls, a street door, and a corner rope shaft that
+// makes every floor climbable. The center block is a plaza.
+const citySys = {
+  accT: 0, scanT: 99, known: [],
+  nameFor(seed){
+    const A = ['NOVA', 'PORT', 'HIGH', 'GRAND', 'FORT', 'NEW', 'OLD', 'EAST', 'WEST', 'STONE'];
+    const B = ['REND', 'KAREL', 'MASSIF', 'VELDT', 'ORREN', 'DENN', 'SOLIS', 'HARROW', 'BRINT', 'CALE'];
+    const t = seed >>> 0;
+    return A[t % A.length] + ' ' + B[(t >>> 5) % B.length];
+  },
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.cityAt) return [];
+    const C = CORE.CITY_CELL, out = [];
+    const c0x = Math.floor((x - r) / C), c1x = Math.floor((x + r) / C);
+    const c0z = Math.floor((z - r) / C), c1z = Math.floor((z + r) / C);
+    for (let cz = c0z; cz <= c1z; cz++)
+      for (let cx = c0x; cx <= c1x; cx++){
+        const c = game.gen.cityAt(cx, cz);
+        if (c && Math.hypot(c.x - x, c.z - z) < r) out.push(c);
+      }
+    return out;
+  },
+  // deterministic tower roll for the 3x3 blocks (center = plaza)
+  towers(c){
+    const rng = CORE.mulberry32(c.seed ^ 0x7157);
+    const mats = [CORE.MAT.STONEBRICK, CORE.MAT.ROCK, CORE.MAT.BASALT, CORE.MAT.STONEBRICK];
+    const out = [];
+    for (let bi = 0; bi < 9; bi++){
+      const bx = (bi % 3) - 1, bz = ((bi / 3) | 0) - 1;
+      const w = [10, 13, 16][(rng() * 3) | 0];
+      const floors = 3 + ((rng() * 7) | 0);          // 3..9 stories
+      const mat = mats[(rng() * mats.length) | 0];
+      const shop = rng() < 0.5;
+      if (bx === 0 && bz === 0) continue;            // plaza block
+      out.push({ bx, bz, w, floors, mat: mat, shop });
+    }
+    return out;
+  },
+  stamp(c, rec){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    let g = game.gen.height(c.x, c.z);
+    for (const [dx, dz] of [[-48, -48], [48, -48], [-48, 48], [48, 48], [0, -48], [0, 48], [-48, 0], [48, 0]])
+      g = Math.max(g, game.gen.height(c.x + dx, c.z + dz));
+    g = +(g + 0.3).toFixed(1);
+    rec.gy = g;
+    // one deep foundation slab irons the whole site flat (top at g)
+    EB(1, c.x, g - 5.3, c.z, 116, 10.6, 116, MAT.STONEBRICK);
+    // basalt avenues: two north-south, two east-west
+    for (const rx of [-18, 18]){
+      EB(1, c.x + rx, g + 0.15, c.z, 8, 0.5, 116, MAT.BASALT);
+      EB(1, c.x, g + 0.15, c.z + rx, 116, 0.5, 8, MAT.BASALT);
+    }
+    const P = 36;
+    const T = this.towers(c);
+    rec.towers = T;
+    let shops = 0;
+    for (const t of T){
+      const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
+      const H = t.floors * 3.2 + 1.6;
+      // shell, hollowed
+      EB(1, tx, g + H / 2, tz, t.w, H, t.w, t.mat);
+      EB(0, tx, g + H / 2 + 0.45, tz, t.w - 1.7, H - 1.5, t.w - 1.7);
+      // real floor slabs
+      for (let f = 1; f < t.floors; f++)
+        EB(1, tx, g + f * 3.2, tz, t.w - 1.5, 0.45, t.w - 1.5, t.mat);
+      // window bands punched through both wall pairs, every story
+      for (let f = 0; f < t.floors; f++){
+        const wy = g + f * 3.2 + 2.05;
+        EB(0, tx, wy, tz, t.w + 0.6, 1.15, t.w - 3.4);
+        EB(0, tx, wy, tz, t.w - 3.4, 1.15, t.w + 0.6);
+      }
+      // street door facing the city center
+      const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
+      const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      EB(0, tx + fx * (t.w / 2), g + 1.75, tz + fz * (t.w / 2),
+         fx ? 2.2 : 2.0, 2.7, fz ? 2.2 : 2.0);
+      // roof rim
+      EB(1, tx, g + H + 0.2, tz, t.w + 1.0, 0.5, t.w + 1.0, t.mat);
+      // corner shaft + rope: every floor is climbable
+      const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
+      EB(0, cxr, g + H / 2 + 0.45, czr, 1.8, H - 1.5, 1.8);
+      (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
+      // some ground floors are stocked shops (city life arrives in phase B)
+      if (t.shop && shops < 2){
+        shops++;
+        const ch = pnodeSys.add('chest', tx - (t.w / 2 - 2.2) * (fx || 1), g + 0.95, tz - (t.w / 2 - 2.2) * (fz || (fx ? 0 : 1)), 0, { sc: 0.7 });
+        ch.inv = new Array(chestSlots(0.7)).fill(null);
+        ch.inv[0] = { kind: 'coin', count: 14 + (c.seed % 21) };
+        ch.inv[1] = { kind: 'cookedmeat', count: 3 };
+        ch.inv[2] = { kind: 'rounds', count: 24 };
+      }
+    }
+    // the plaza: an obelisk, plank benches, torch-lit corners
+    EB(1, c.x, g + 6.5, c.z, 3, 13, 3, MAT.OBSIDIAN);
+    EB(1, c.x, g + 13.9, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
+    for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
+      EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS);
+    // ---- the people: five shopfronts + the mayor at the plaza ----
+    const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
+    const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
+    const idxs = T.map((_, i) => i);
+    for (let i = idxs.length - 1; i > 0; i--){
+      const j = (rng2() * (i + 1)) | 0;
+      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    }
+    rec.houses = [];
+    for (let k = 0; k < 5; k++){
+      const t = T[idxs[k]];
+      const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
+      const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
+      const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      rec.houses.push({
+        x: +(tx + fx * (t.w / 2 + 2.2)).toFixed(1), z: +(tz + fz * (t.w / 2 + 2.2)).toFixed(1),
+        role: roles[k], face: [fx, fz], w: t.w, d: t.w, gy: g, rep: 0,
+        vname: villageSys.nameFor((Math.imul(c.seed, 37) + k * 101) >>> 0),
+      });
+    }
+    rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
+                      w: 6, d: 6, gy: g, rep: 0,
+                      vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
+    for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13], [-18, -40], [18, 40], [-40, 18], [40, -18]])
+      game.torches.push([c.x + tx2, g + 0.4, c.z + tz2]);
+    torchSys.rebuild();
+    ropeSys.rebuild();
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const c of this.candidatesNear(game.pos.x, game.pos.z, 320)){
+      const key = 'c' + c.key;
+      let rec = (game.cities = game.cities || {})[key];
+      if (!rec){
+        rec = { key, x: c.x, z: c.z, seed: c.seed, name: this.nameFor(c.seed), stamped: false };
+        game.cities[key] = rec;
+      }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(c, rec);
+        toast('the towers of ' + rec.name + ' rise ahead');
+        AudioSys.sfx('boom');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    this.scanT += dt;
+    if (this.scanT > 6){
+      this.scanT = 0;
+      // a slow wide sweep so the nearest skyline shows on the compass long
+      // before it's stamped
+      this.known = game.gen ? this.candidatesNear(game.pos.x, game.pos.z, 3000) : [];
+    }
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    const night = game.dayF < 0.25;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 220){
+        // far away: the transient street life packs up
+        for (let i = game.entities.length - 1; i >= 0; i--){
+          const e = game.entities[i];
+          if (e.ckey === key && (e.walker || e.type === 'cab')){
+            if (e.mesh) game.scene.remove(e.mesh);
+            game.entities.splice(i, 1);
+          }
+        }
+        continue;
+      }
+      if (pd > 110) continue;
+      // shopkeepers man their doors
+      (rec.houses || []).forEach((hrec, i) => {
+        const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
+        if (alive) return;
+        const e = spawnEntity('villager', hrec.x, (hrec.gy || 0) + 0.7, hrec.z);
+        e.role = hrec.role; e.ckey = key; e.vi = i;
+        e.home = { x: hrec.x, y: (hrec.gy || 0) + 0.7, z: hrec.z };
+      });
+      // pedestrians walk the avenues by day and head in at night
+      const walkers = game.entities.filter(e => e.walker && e.ckey === key);
+      if (night){
+        for (const e of walkers){
+          if (e.mesh) game.scene.remove(e.mesh);
+          game.entities.splice(game.entities.indexOf(e), 1);
+        }
+      } else if (walkers.length < 4){
+        const lane = Math.random() < 0.5 ? -18 : 18;
+        const along = (Math.random() - 0.5) * 100;
+        const ax = Math.random() < 0.5;
+        const e = spawnEntity('villager',
+          rec.x + (ax ? lane : along), (rec.gy || 0) + 0.7, rec.z + (ax ? along : lane));
+        e.role = 'walker'; e.walker = true; e.ckey = key; e.vi = -1; e.stroll = rec;
+      }
+      // light traffic: two cabs working the avenues
+      const cabs = game.entities.filter(e => e.type === 'cab' && e.ckey === key);
+      if (cabs.length < 2){
+        const ax = cabs.length === 0 ? 'x' : 'z';
+        const lane = Math.random() < 0.5 ? -18 : 18;
+        const e = spawnEntity('cab',
+          ax === 'x' ? rec.x - 40 : rec.x + lane + 2,
+          (rec.gy || 0) + 0.7,
+          ax === 'x' ? rec.z + lane + 2 : rec.z - 40);
+        e.ckey = key; e.axis = ax; e.dir = 1; e.cabHome = { x: rec.x, z: rec.z };
+      }
+    }
+  },
+};
+
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0 };
@@ -9036,7 +9384,9 @@ function updateEntities(dt, now){
       }
       continue;
     }
-    if (pd > 70){                                  // too far — despawn
+    // city folk are bound to their city (citySys reaps them past 220m);
+    // everything else despawns on the usual 70m leash
+    if (pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -9061,6 +9411,20 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else if (e.type === 'cab'){
+      // drives its avenue end to end, flips at the edge, brakes for you
+      const R = e.cabHome || { x: e.x, z: e.z };
+      const t = e.axis === 'x' ? e.x - R.x : e.z - R.z;
+      if (t > 52) e.dir = -1;
+      else if (t < -52) e.dir = 1;
+      const aheadX = e.axis === 'x' ? e.x + e.dir * 4 : e.x;
+      const aheadZ = e.axis === 'x' ? e.z : e.z + e.dir * 4;
+      const brake = Math.hypot(game.pos.x - aheadX, game.pos.z - aheadZ) < 3.0;
+      sx = brake ? 0 : (e.axis === 'x' ? e.dir : 0);
+      sz = brake ? 0 : (e.axis === 'x' ? 0 : e.dir);
+      if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
+        ? (e.dir > 0 ? -Math.PI / 2 : Math.PI / 2)
+        : (e.dir > 0 ? Math.PI : 0);
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
         sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
@@ -9071,9 +9435,18 @@ function updateEntities(dt, now){
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
-          const H = e.home || e;
-          e.tx = H.x + (Math.random() - 0.5) * 9;
-          e.tz = H.z + (Math.random() - 0.5) * 9;
+          if (e.stroll){
+            // pedestrians pick their next spot along one of the avenues
+            const R = e.stroll;
+            const lane = (Math.random() < 0.5 ? -18 : 18) + (Math.random() - 0.5) * 5;
+            const along = (Math.random() - 0.5) * 100;
+            if (Math.random() < 0.5){ e.tx = R.x + lane; e.tz = R.z + along; }
+            else { e.tx = R.x + along; e.tz = R.z + lane; }
+          } else {
+            const H = e.home || e;
+            e.tx = H.x + (Math.random() - 0.5) * 9;
+            e.tz = H.z + (Math.random() - 0.5) * 9;
+          }
         }
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
@@ -9535,9 +9908,15 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){
+        if (vent.walker){
+          toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
+                 'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
+          return;
+        }
         tradeSys.open(vent);
         return;
       }
+      if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
       const selDrone = selectedItem();
       if (selDrone && selDrone.kind === 'drone'){
         if ((selDrone.charge || 0) < 5) toast('drone battery too low — charge it near a powered grid with spare watts');
@@ -13784,6 +14163,7 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    cities: game.cities || {},
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
@@ -13804,7 +14184,7 @@ function saveNow(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && !e.bountyTag)
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag)
       .map(e => [e.type, e.x, e.y, e.z, e.hp]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
@@ -13828,6 +14208,7 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.cities = data.cities || {};
   game.bossKills = data.bossKills || {};
   if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
@@ -14581,6 +14962,7 @@ function frame(now){
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
+  citySys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
@@ -14755,9 +15137,9 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
-  villageSys, tradeSys, missionSys, boardSys };
+  villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
 </body>
 </html>
