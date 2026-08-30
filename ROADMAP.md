@@ -173,7 +173,7 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
 - **Raid bases**: walled forts and whole enemy towns to clear — better loot
   behind higher difficulty, a miniboss holding the vault key.
 
-## Build 10 — Bosses & endgame
+## Build 10 — Bosses & endgame (DONE)
 Every STRATA boss does something only a CSG world allows. Unique unlock
 drops, not just loot.
 - **The Burrower**: a worm that carves real tunnels as it hunts you, deep

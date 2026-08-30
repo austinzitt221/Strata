@@ -200,6 +200,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>GOD RAYS</label><input type="range" id="optRays" min="0" max="1" step="1"><span class="val" id="optRaysV"></span></div>
     <div class="optrow"><label>FPS CAP</label><input type="range" id="optFps" min="0" max="7" step="1"><span class="val" id="optFpsV"></span></div>
     <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
+    <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
@@ -2065,7 +2066,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2306,6 +2307,9 @@ const RECIPES = [];
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
+  // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
+  RECIPES.push({ kind: 'sigil', yields: 1, station: true,
+    costs: [{ item: 'diamond', n: 4 }, { mat: MAT.OBSIDIAN, n: 12 }, { mat: MAT.CRYSTAL, n: 6 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
   RECIPES.push({ kind: 'beacon', yields: 1, station: true,
     costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 4 }, { mat: MAT.PLANKS, n: 4 }] });
@@ -3117,7 +3121,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, shadows: 1, rays: 1, fpsCap: 0, skin: 0 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -4462,7 +4466,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -4787,6 +4791,64 @@ const AudioSys = {
     }
   },
   setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
+  // ---------- procedural music: three moods, one tiny scheduler ----------
+  // surface = slow major-pentatonic plucks; cave = sparse low drones over
+  // the noise ambience; boss = a driving pulse with a minor arpeggio.
+  musicGain: null, musicNext: 0, musicStep: 0, musicMode: 'off', musicWalk: 3,
+  ensureMusic(){
+    if (!this.ctx || this.musicGain) return;
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9;
+    this.musicGain.connect(this.ctx.destination);
+  },
+  setMusicVolume(v){ this.ensureMusic(); if (this.musicGain) this.musicGain.gain.value = v / 100 * 0.9; },
+  note(freq, at, dur, gain, type){
+    const osc = this.ctx.createOscillator();
+    osc.type = type; osc.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(gain, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+    osc.connect(g); g.connect(this.musicGain);
+    osc.start(at); osc.stop(at + dur + 0.05);
+  },
+  music(mode){
+    if (!this.ctx) return;
+    this.ensureMusic();
+    if (mode !== this.musicMode){ this.musicMode = mode; this.musicStep = 0; }
+    if (mode === 'off' || (game.opts.music != null && game.opts.music <= 0)) return;
+    const t = this.ctx.currentTime;
+    if (this.musicNext < t) this.musicNext = t + 0.08;
+    const SUR = [262, 294, 330, 392, 440, 523, 587, 659];
+    const CAV = [110, 131, 147, 165, 196, 220];
+    const BOS = [220, 262, 294, 330, 392, 440];
+    // keep just under a second of music scheduled ahead
+    while (this.musicNext < t + 0.9){
+      const at = this.musicNext, st = this.musicStep++;
+      const walk = arr => {
+        this.musicWalk = Math.max(0, Math.min(arr.length - 1,
+          this.musicWalk + ((Math.random() * 3) | 0) - 1));
+        return arr[this.musicWalk];
+      };
+      if (mode === 'boss'){
+        this.note(110, at, 0.16, 0.07, 'square');                       // the pulse
+        this.note(BOS[(st * 2) % BOS.length], at, 0.3, 0.035, 'sawtooth');
+        if (st % 8 === 7) this.note(880, at, 0.12, 0.03, 'square');     // accent
+        this.musicNext += 0.44;
+      } else if (mode === 'cave'){
+        if (st % 4 === 0) this.note(55, at, 3.4, 0.05, 'sine');         // sub floor
+        if (Math.random() < 0.65) this.note(walk(CAV), at, 2.4, 0.05, 'sine');
+        this.musicNext += 1.8;
+      } else {                                                          // surface
+        if (Math.random() < 0.8){
+          const f = walk(SUR);
+          this.note(f, at, 1.3, 0.04, 'triangle');
+          if (st % 4 === 2) this.note(f * 1.5, at + 0.1, 1.1, 0.02, 'triangle');
+        }
+        this.musicNext += 0.8;
+      }
+    }
+  },
   burst(o){
     if (!this.ctx) return;
     const { dur = 0.25, freq = 900, gain = 0.22, drop = 0 } = o || {};
@@ -7327,6 +7389,29 @@ function entMesh(type, ent){
     g.userData.chunks = chunks;
     return g;
   }
+  if (type === 'architect'){
+    // a slender builder-wraith: an obsidian shell around crystal light,
+    // one white drafting eye, floating crystal hands that stamp and erase
+    const obs = vmMatMaterial(CORE.MAT.OBSIDIAN);
+    const cry = vmMatMaterial(CORE.MAT.CRYSTAL);
+    const white = new THREE.MeshBasicMaterial({ color: 0xeef2ff });
+    const robe = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.7, 0.7), obs);
+    robe.position.y = 1.05;
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), cry);
+    chest.position.y = 1.75;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), obs);
+    head.position.y = 2.35;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.08), white);
+    eye.position.set(0, 2.38, -0.32);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.14, 0.72), cry);
+    crown.position.y = 2.72;
+    const handL = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), cry);
+    handL.position.set(-0.85, 1.5, -0.2);
+    const handR = handL.clone(); handR.position.x = 0.85;
+    g.add(robe, chest, head, eye, crown, handL, handR);
+    g.userData.handL = handL; g.userData.handR = handR;
+    return g;
+  }
   if (type === 'tyrant'){
     // a brute of cooling basalt around a molten core: lava glows through
     // the chest crack and the fists, obsidian horns crown the head
@@ -7544,6 +7629,18 @@ function killEntity(e, byPlayer){
       } else {
         addStackItem('coin', 150); CORE.addMat(game.slots, CORE.MAT.OBSIDIAN, 8); addStackItem('diamond', 2);
         toast('THE MAGMA TYRANT bursts — +150 coins · +8 obsidian · +2 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'architect'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.architect){
+        game.bossKills.architect = true;
+        addStackItem('aseal', 1); addStackItem('coin', 200);
+        toast('THE ARCHITECT unravels — the ARCHITECT\'S SEAL is yours (+200 coins)');
+      } else {
+        addStackItem('coin', 200); addStackItem('diamond', 4);
+        toast('THE ARCHITECT unravels — +200 coins · +4 diamond');
       }
       markSave();
     }
@@ -8451,6 +8548,7 @@ const bossSys = {
     if (e.bossType === 'burrower') this.burrower(e, dt);
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
     else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
+    else if (e.bossType === 'architect'){ this.architect(e, dt); return; }
     // record the path for the trailing segments
     e.trail.unshift([e.x, e.y, e.z]);
     if (e.trail.length > 40) e.trail.pop();
@@ -8642,6 +8740,94 @@ function bossSysTyrant(){
       Particles.burst(px, vy, pz, 1.6, [0xff7a30, 0xffb347, 0x2b2119], 30, 6);
       AudioSys.sfx('boom');
       toast('the Tyrant ROARS — the ground under you tears open into magma');
+    }
+  };
+}
+
+// (bossSys continues) THE ARCHITECT: the endgame, summoned by a crafted
+// sigil. It fights with the player's own verbs -- stamping walls (union),
+// erasing the floor under you (subtract), and replaying corrupted obsidian
+// copies of YOUR OWN builds from the edit list.
+bossSysArchitect();
+function bossSysArchitect(){
+  bossSys.architect = function(e, dt){
+    const def = ENT_DEF.architect;
+    e.stateT = (e.stateT || 0) + dt;
+    e.wallT = Math.max(0, (e.wallT == null ? 2.5 : e.wallT) - dt);
+    e.pitT  = Math.max(0, (e.pitT  == null ? 6.0 : e.pitT)  - dt);
+    e.echoT = Math.max(0, (e.echoT == null ? 9.0 : e.echoT) - dt);
+    e.zapT  = Math.max(0, (e.zapT  || 0) - dt);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    // it circles you at drafting distance, hovering a hand off the ground
+    if (!e.orbitDir) e.orbitDir = Math.random() < 0.5 ? 1 : -1;
+    const ang = Math.atan2(e.z - pz, e.x - px) + e.orbitDir * dt * 0.55;
+    const gx = px + Math.cos(ang) * 11, gz = pz + Math.sin(ang) * 11;
+    const dx = gx - e.x, dz = gz - e.z, L = Math.hypot(dx, dz) || 1;
+    const step = Math.min(L, def.speed * dt);
+    e.x += (dx / L) * step; e.z += (dz / L) * step;
+    e.y = game.gen.height(e.x, e.z) + 0.9 + Math.sin(e.stateT * 2.1) * 0.25;
+    if (e.mesh){
+      e.mesh.rotation.y = Math.atan2(-(px - e.x), -(pz - e.z));
+      const h = e.mesh.userData;
+      if (h && h.handL){
+        h.handL.position.y = 1.5 + Math.sin(e.stateT * 3.1) * 0.18;
+        h.handR.position.y = 1.5 + Math.cos(e.stateT * 2.7) * 0.18;
+      }
+    }
+    // cornered: a shove of force, then it BLINKS away to keep drafting
+    if (pd < 3.4 && e.zapT <= 0){
+      e.zapT = 2.5;
+      damagePlayer(10, (px - e.x) * 3, (pz - e.z) * 3);
+      Particles.burst(e.x, e.y + 1.2, e.z, 1.2, [0xb9a7ff, 0xeef2ff], 20, 5);
+      const a = Math.random() * Math.PI * 2;
+      e.x = px + Math.cos(a) * 12; e.z = pz + Math.sin(a) * 12;
+      e.y = game.gen.height(e.x, e.z) + 0.9;
+      Particles.burst(e.x, e.y + 1.2, e.z, 1.2, [0xb9a7ff, 0xeef2ff], 20, 5);
+      AudioSys.sfx('laser');
+    }
+    // WALL: a stonebrick slab stamped across your line of approach
+    if (e.wallT <= 0 && pd > 5){
+      e.wallT = 5.5;
+      const mx = (e.x + px) / 2, mz = (e.z + pz) / 2;
+      const my = Math.min(game.gen.height(mx, mz), py + 0.5);
+      const ed = CORE.makeEdit(1, 1, +mx.toFixed(1), +(my + 1.2).toFixed(1), +mz.toFixed(1), 1, CORE.MAT.STONEBRICK, 0);
+      if (Math.abs(px - e.x) > Math.abs(pz - e.z)){ ed.sx = 0.8; ed.sy = 2.6; ed.sz = 4.6; }
+      else { ed.sx = 4.6; ed.sy = 2.6; ed.sz = 0.8; }
+      applyEdit(ed);
+      Particles.burst(mx, my + 2, mz, 1.4, [0x9a9aa5, 0xb9a7ff], 24, 5);
+      AudioSys.sfx('boom');
+      toast('the Architect DRAFTS — a wall slams up out of nothing');
+    }
+    // PIT: it erases the floor out from under you
+    if (e.pitT <= 0 && pd < 30 && game.grounded){
+      e.pitT = 8;
+      applyEdit(CORE.makeEdit(0, 0, +px.toFixed(1), +(py - 2.6).toFixed(1), +pz.toFixed(1), 3.2, 0, 0));
+      Particles.burst(px, py - 1, pz, 1.4, [0x51484f, 0xb9a7ff], 24, 5);
+      AudioSys.sfx('boom');
+      toast('the Architect ERASES the floor under you');
+    }
+    // ECHO: replays one of YOUR OWN union edits back at you in dead obsidian
+    if (e.echoT <= 0){
+      e.echoT = 9;
+      const unions = game.edits.filter(x => x.op === 1 && x.mat !== CORE.MAT.LAVA);
+      if (unions.length){
+        const src = unions[(Math.random() * unions.length) | 0];
+        const a = Math.random() * Math.PI * 2, d = 5 + Math.random() * 5;
+        const cx = px + Math.cos(a) * d, cz = pz + Math.sin(a) * d;
+        const cy = game.gen.height(cx, cz) + Math.min(3, src.size);
+        const ed = CORE.makeEdit(1, src.shape, +cx.toFixed(1), +cy.toFixed(1), +cz.toFixed(1),
+                                 src.size, CORE.MAT.OBSIDIAN, src.rot || 0);
+        if (src.rx) ed.rx = src.rx;
+        if (src.rz) ed.rz = src.rz;
+        if (src.sx) ed.sx = src.sx;
+        if (src.sy) ed.sy = src.sy;
+        if (src.sz) ed.sz = src.sz;
+        applyEdit(ed);
+        Particles.burst(cx, cy, cz, 1.5, [0x3a3242, 0xb9a7ff], 26, 6);
+        AudioSys.sfx('boom');
+        toast('the Architect REPLAYS your own work in dead obsidian');
+      }
     }
   };
 }
@@ -9809,6 +9995,7 @@ function activeTool(){
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
   if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
+  if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
@@ -10378,7 +10565,7 @@ const wrenchSys = {
     // (stove, machine) stops surfaceHit on its own collider before the ray
     // reaches its center, so also take a prop whose center is within its own
     // radius past the hit — unless an actual edit sits at the hit point
-    const prop = wrenchProps.rayPick(Math.min(hitT + 2.5, PLAYER.reach + 2));
+    const prop = wrenchProps.rayPick(Math.min(hitT + 2.5, PLAYER.reach * sealReach() + 2));
     if (prop && prop.t < hitT - 0.02){ this.selectProp(prop, add); return; }
     if (prop && hit && prop.t < hitT + prop.r + 0.4){
       const dir0 = new THREE.Vector3();
@@ -11416,6 +11603,23 @@ function tryAction(dt, now){
   }
   // explosives: set the charge on any surface, then RUN. TNT is a crater;
   // the shaped mining charge is a drill you light -- it pays its ore out.
+  if (tool.kind === 'sigil'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      if (game.mode !== 'survival'){ toast('the sigil only answers in survival'); return; }
+      if (bossSys.anyBoss()){ toast('a boss already walks this world'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      const ax = game.pos.x - Math.sin(game.yaw) * 14;
+      const az = game.pos.z - Math.cos(game.yaw) * 14;
+      const e = bossSys.spawn('architect', ax, game.gen.height(ax, az) + 0.9, az);
+      e.summoned = true;
+      toast('THE ARCHITECT answers the sigil');
+      AudioSys.sfx('boom');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
   if (tool.kind === 'boom'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -11644,14 +11848,21 @@ function tryAction(dt, now){
 }
 
 // raymarch the view ray to the first surface within reach
+// the architect's seal quadruples the wrench's reach while it's in the pack
+function sealReach(){
+  const tl = activeTool();
+  return tl && tl.kind === 'wrench' && CORE.countItem(game.slots, 'aseal') > 0 ? 4 : 1;
+}
 function surfaceHit(){
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
-  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const R = PLAYER.reach * sealReach() + 1;
+  const segBox = [o.x - R, o.y - R, o.z - R, o.x + R, o.y + R, o.z + R];
   const edits = nearEdits(segBox);
   let t = 0.4 + (game.camBack || 0);
-  for (let i = 0; i < 96 && t < PLAYER.reach + (game.camBack || 0); i++){
+  const maxT = PLAYER.reach * sealReach() + (game.camBack || 0);
+  for (let i = 0; i < 96 * sealReach() && t < maxT; i++){
     const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
     const d = sdfWorld(x, y, z, edits);
     if (d < 0.02) return [x, y, z];
@@ -11720,7 +11931,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -11794,6 +12005,15 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'sigil'){
+    c.fillStyle = '#2a2333'; c.fillRect(3, 3, 10, 10);
+    c.fillStyle = '#7f6fd6'; c.fillRect(7, 4, 2, 8); c.fillRect(4, 7, 8, 2);
+    c.fillStyle = '#c9beff'; c.fillRect(7, 7, 2, 2);
+  } else if (it.kind === 'aseal'){
+    c.fillStyle = '#d9b25a'; c.fillRect(4, 4, 8, 8);
+    c.fillStyle = '#8f6f2c'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#eef2ff'; c.fillRect(7, 7, 2, 2);
+    c.fillStyle = '#d9b25a'; c.fillRect(7, 2, 2, 2); c.fillRect(7, 12, 2, 2);
   } else if (it.kind === 'mheart'){
     c.fillStyle = '#3a1f16'; c.fillRect(4, 4, 9, 9);
     c.fillStyle = '#c9401f'; c.fillRect(5, 5, 7, 7);
@@ -12131,6 +12351,8 @@ function itemLabel(it){
   if (it.kind === 'tcore') return 'tunneler core';
   if (it.kind === 'wfist') return 'warden fist';
   if (it.kind === 'mheart') return 'magma heart';
+  if (it.kind === 'sigil') return 'architect sigil';
+  if (it.kind === 'aseal') return "architect's seal";
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -12294,7 +12516,7 @@ const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
 const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
@@ -12874,6 +13096,10 @@ function refreshToolHUD(){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'sigil'){
+    html = '<div class="t1">architect sigil</div><div class="t2">left click to summon THE ARCHITECT — the endgame. Craft it when you are ready.</div>';
+  } else if (it.kind === 'aseal'){
+    html = '<div class="t1">architect\'s seal</div><div class="t2">the Architect\'s drafting mark — while it rides in your pack, the wrench reaches four times as far</div>';
   } else if (it.kind === 'mheart'){
     html = '<div class="t1">magma heart</div><div class="t2">the Tyrant\'s still-beating core — while it rides in your pack, lava cannot burn you</div>';
   } else if (it.kind === 'tcore'){
@@ -13428,6 +13654,7 @@ function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
   $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
+  $('optMus').value = o.music == null ? 45 : o.music;
   $('optShad').value = o.shadows; $('optRays').value = o.rays;
   const fi = FPS_STOPS.indexOf(o.fpsCap);
   $('optFps').value = fi < 0 ? 7 : fi;
@@ -13443,6 +13670,7 @@ function syncOptLabels(){
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = ($('optRd').value * CORE.CHUNK_M) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
+  $('optMusV').textContent = $('optMus').value + '%';
   $('optShadV').textContent = +$('optShad').value ? 'on' : 'off';
   $('optRaysV').textContent = +$('optRays').value ? 'on' : 'off';
   const fc = FPS_STOPS[+$('optFps').value];
@@ -13454,12 +13682,14 @@ function applyOptions(){
   game.opts.fov = +$('optFov').value;
   game.opts.rd = +$('optRd').value;
   game.opts.vol = +$('optVol').value;
+  game.opts.music = +$('optMus').value;
   game.opts.shadows = +$('optShad').value;
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
   game.opts.skin = +$('optSkin').value;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
+  AudioSys.setMusicVolume(game.opts.music);
   saveOpts(game.opts);
   if (game.camera){
     game.camera.fov = game.opts.fov; game.camera.updateProjectionMatrix();
@@ -14359,6 +14589,7 @@ function frame(now){
       const d = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
       if (d < bd){ bd = d; bb = e; }
     }
+    game.bossNear = bb;
     const el = $('bossbar');
     if (bb && game.ui === 'none'){
       el.classList.remove('hidden');
@@ -14414,6 +14645,7 @@ function frame(now){
     game.navT = 0;
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
+    AudioSys.music(game.bossNear ? 'boss' : depth > 14 ? 'cave' : 'surface');
     if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
     // drone batteries charge near a powered circuit with watts to spare
     if (powerSys.surplus.length && powerSys.surplusNear(game.pos.x, game.pos.y + 1, game.pos.z, 6)){
@@ -14494,7 +14726,7 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optMus', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
   $('btnSignSave').addEventListener('click', closeSign);
   $('signtext').addEventListener('keydown', e => {
     if (e.code === 'Enter' && !e.shiftKey){ e.preventDefault(); closeSign(); }
@@ -14523,7 +14755,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
