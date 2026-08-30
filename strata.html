@@ -2361,6 +2361,9 @@ const RECIPES = [];
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
+  // the electric car ships as a kit: place it, drive it, charge it
+  RECIPES.push({ kind: 'car', station: true,
+    costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }] });
   // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
   RECIPES.push({ kind: 'sigil', yields: 1, station: true,
     costs: [{ item: 'diamond', n: 4 }, { mat: MAT.OBSIDIAN, n: 12 }, { mat: MAT.CRYSTAL, n: 6 }] });
@@ -2407,6 +2410,7 @@ function craft(slots, r, free){
                   : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
+                  : r.kind === 'car' ? { kind: 'car', charge: 20 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -4521,7 +4525,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7398,6 +7402,7 @@ const ENT_DEF = {
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
+  car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
@@ -7533,6 +7538,28 @@ function entMesh(type, ent){
     (parent || g).add(m);
     return m;
   };
+  if (type === 'car'){
+    // the electric car: white coupe, teal charge strip, glass canopy
+    const paint = new THREE.MeshBasicMaterial({ color: 0xe8ecf2 });
+    const trim = new THREE.MeshBasicMaterial({ color: 0x35d1c0 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 3.4), paint);
+    body.position.y = 0.6;
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.34, 0.8), paint);
+    nose.position.set(0, 0.52, -1.9);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.52, 1.7), glass);
+    canopy.position.set(0, 1.1, 0.1);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.1, 3.0), trim);
+    strip.position.y = 0.34;
+    g.add(body, nose, canopy, strip);
+    for (const [wx2, wz2] of [[-0.85, -1.15], [0.85, -1.15], [-0.85, 1.15], [0.85, 1.15]]){
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.56, 0.56), dark);
+      wh.position.set(wx2, 0.3, wz2);
+      g.add(wh);
+    }
+    return g;
+  }
   if (type === 'cab'){
     // a boxy electric cab; each one rolls its own paint job
     const paint = new THREE.MeshBasicMaterial({ color: [0xc94b3f, 0x3f6fc9, 0xd8b45e, 0x4fae5c][(Math.random() * 4) | 0] });
@@ -7663,6 +7690,17 @@ function killEntity(e, byPlayer){
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
     [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
+  if (e.type === 'car'){
+    if (game.driving === e) game.driving = null;
+    const i2 = game.slots.findIndex(sl => !sl);
+    if (i2 >= 0){
+      game.slots[i2] = { kind: 'car', charge: Math.round((e.charge || 0) / 2) };
+      toast('the wreck folds back into a kit (half the charge lost)');
+      refreshHotbar();
+    } else toast('the car is wrecked — no pack space to recover the kit');
+    markSave();
+    return;
+  }
   if (byPlayer){
     if (e.type === 'grazer'){ addStackItem('meat', 2); toast('+2 meat'); }
     else if (e.type === 'sheep'){
@@ -8406,6 +8444,7 @@ const tradeSys = {
       { buy: { k: 'pad', n: 1 }, price: 130, rep: 10 },
       { buy: { k: 'tesla', n: 1 }, price: 220, rep: 25 },
       { buy: { make: 'jetpack' }, price: 420, rep: 25 },
+      { buy: { make: 'car' }, price: 650, rep: 10 },
       { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
     ];
   },
@@ -8419,6 +8458,7 @@ const tradeSys = {
     if (s.make === 'wrench') return CORE.makeWrench();
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
+    if (s.make === 'car') return { kind: 'car', charge: 100 };
     if (s.make === 'tmap') return { kind: 'tmap' };
     return { kind: s.k, count: s.n };
   },
@@ -9384,9 +9424,10 @@ function updateEntities(dt, now){
       }
       continue;
     }
+    if (e === game.driving) continue;            // driveCar owns it this frame
     // city folk are bound to their city (citySys reaps them past 220m);
-    // everything else despawns on the usual 70m leash
-    if (pd > (e.ckey ? 180 : 70)){
+    // cars never despawn (they're yours); everything else: the 70m leash
+    if (e.type !== 'car' && pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -9411,6 +9452,9 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else if (e.type === 'car'){
+      sx = 0; sz = 0;                              // parked
+      if (e.mesh) e.mesh.rotation.y = e.heading || 0;
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -9802,6 +9846,7 @@ function bindInput(){
         refreshToolHUD();
         return;
       }
+      if (game.driving){ exitCar(); return; }
       if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
       if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
       // wrench RMB always selects — tables, stoves and machines included
@@ -9917,6 +9962,21 @@ function bindInput(){
         return;
       }
       if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
+      if (vent && vent.type === 'car'){
+        if (game.keys['KeyC']){
+          // crouch-grab folds it back into a kit, charge intact
+          const i2 = game.slots.findIndex(sl => !sl);
+          if (i2 < 0){ toast('no pack space for the car kit'); return; }
+          game.slots[i2] = { kind: 'car', charge: Math.round(vent.charge || 0) };
+          if (vent.mesh) game.scene.remove(vent.mesh);
+          game.entities.splice(game.entities.indexOf(vent), 1);
+          refreshHotbar(); markSave();
+          toast('car packed up (' + Math.round(vent.charge || 0) + '% charge)');
+          return;
+        }
+        enterCar(vent);
+        return;
+      }
       const selDrone = selectedItem();
       if (selDrone && selDrone.kind === 'drone'){
         if ((selDrone.charge || 0) < 5) toast('drone battery too low — charge it near a powered grid with spare watts');
@@ -10167,7 +10227,85 @@ function collidePlayer(edits, still){
   }
 }
 
+// ---------- the electric car: fast travel that drinks from your grid ----------
+function enterCar(e){
+  if (game.driving) return;
+  game.driving = e;
+  game.vel.set(0, 0, 0);
+  toast('driving — W/S throttle · A/D steer · right click to step out' +
+        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a powered grid' : ''));
+  AudioSys.sfx('toggle');
+  refreshToolHUD();
+}
+function exitCar(){
+  const e = game.driving;
+  game.driving = null;
+  AudioSys.setHum(false, 0, 0);
+  if (e){
+    // step out on the driver's side
+    game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
+    e.speed = 0;
+    toast('parked' + ((e.charge || 0) < 25 ? ' — charge it near a powered grid (' + Math.round(e.charge || 0) + '%)' : ''));
+  }
+  game.vel.set(0, 0, 0);
+  markSave();
+  refreshToolHUD();
+}
+function driveCar(dt){
+  const e = game.driving;
+  if (!e || e.hp <= 0 || game.entities.indexOf(e) < 0){ game.driving = null; return; }
+  const k = game.keys;
+  const canMove = game.ui === 'none' && isLocked();
+  let thr = 0, steer = 0;
+  if (canMove){
+    if (k['KeyW']) thr += 1;
+    if (k['KeyS']) thr -= 1;
+    if (k['KeyD']) steer += 1;
+    if (k['KeyA']) steer -= 1;
+  }
+  e.heading = e.heading || 0;
+  e.speed = e.speed || 0;
+  const dead = (e.charge || 0) <= 0;
+  const top = dead ? 0 : 13.5, rev = dead ? 0 : 5;
+  const target = thr > 0 ? top : thr < 0 ? -rev : 0;
+  const accel = thr !== 0 ? 9 : 7;
+  e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
+  if (Math.abs(e.speed) > 0.3)
+    e.heading -= steer * dt * 1.7 * Math.sign(e.speed) * Math.min(1, 0.35 + Math.abs(e.speed) / 6);
+  if (thr !== 0 && !dead) e.charge = Math.max(0, (e.charge || 0) - dt * 0.65);
+  // roll forward under gravity; a sphere-vs-SDF pass keeps it on the ground
+  const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
+  e.vy = (e.vy || 0) - 22 * dt;
+  e.x += fx * e.speed * dt;
+  e.z += fz * e.speed * dt;
+  e.y += e.vy * dt;
+  const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
+  const le = nearEdits(box);
+  for (let it = 0; it < 3; it++){
+    const cy = e.y + 0.85;
+    const dd = sdfWorld(e.x, cy, e.z, le);
+    if (dd < 0.85){
+      const g2 = gradWorld(e.x, cy, e.z, le);
+      const push = 0.85 - dd / g2[3];
+      e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+      if (g2[1] > 0.5) e.vy = Math.max(e.vy, 0);
+      else e.speed *= 0.55;                        // clipped a wall
+    }
+  }
+  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; }
+  if (inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  // the motor hums with speed
+  AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / 13.5));
+  // the driver rides along
+  game.pos.set(e.x, e.y + 0.4, e.z);
+  game.vel.set(0, 0, 0);
+  game.grounded = true;
+  if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = e.heading; }
+  game.carHudT = (game.carHudT || 0) + dt;
+  if (game.carHudT > 0.4){ game.carHudT = 0; refreshToolHUD(); }
+}
 function updatePlayer(dt){
+  if (game.driving){ driveCar(dt); return; }
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
   game.crouch = !!(canMove && k['KeyC'] && !game.fly);
@@ -10375,6 +10513,7 @@ function activeTool(){
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
   if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
   if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
+  if (it.kind === 'car') return { kind: 'carkit', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
@@ -11982,6 +12121,21 @@ function tryAction(dt, now){
   }
   // explosives: set the charge on any surface, then RUN. TNT is a crater;
   // the shaped mining charge is a drill you light -- it pays its ore out.
+  if (tool.kind === 'carkit'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const px = game.pos.x - Math.sin(game.yaw) * 4.2;
+      const pz = game.pos.z - Math.cos(game.yaw) * 4.2;
+      const e = spawnEntity('car', px, game.pos.y + 0.6, pz);
+      e.charge = tool.item.charge || 0;
+      e.heading = game.yaw;
+      game.slots[game.hotSel] = null;
+      refreshHotbar(); refreshToolHUD();
+      toast('car deployed — right click to drive · crouch + right click to pack it up');
+      AudioSys.sfx('craft');
+    }
+    return;
+  }
   if (tool.kind === 'sigil'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -12310,7 +12464,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -12384,6 +12538,11 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'car'){
+    c.fillStyle = '#e8ecf2'; c.fillRect(2, 8, 12, 3);
+    c.fillStyle = '#9fd4e8'; c.fillRect(5, 6, 6, 2);
+    c.fillStyle = '#35d1c0'; c.fillRect(2, 10, 12, 1);
+    c.fillStyle = '#23232a'; c.fillRect(3, 11, 2, 2); c.fillRect(11, 11, 2, 2);
   } else if (it.kind === 'sigil'){
     c.fillStyle = '#2a2333'; c.fillRect(3, 3, 10, 10);
     c.fillStyle = '#7f6fd6'; c.fillRect(7, 4, 2, 8); c.fillRect(4, 7, 8, 2);
@@ -12732,6 +12891,7 @@ function itemLabel(it){
   if (it.kind === 'mheart') return 'magma heart';
   if (it.kind === 'sigil') return 'architect sigil';
   if (it.kind === 'aseal') return "architect's seal";
+  if (it.kind === 'car') return 'electric car';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -12889,7 +13049,7 @@ function buildInvUI(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone'];
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'car'];
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -13446,6 +13606,13 @@ function refreshToolHUD(){
   const tool = activeTool();
   const el = $('toolinfo');
   let html = '';
+  if (game.driving){
+    const e = game.driving;
+    el.innerHTML = '<div class="t1">electric car</div>' +
+      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s</div>' +
+      '<div class="t2">W/S throttle · A/D steer · right click to step out</div>';
+    return;
+  }
   if (!it){
     html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
       (game.carried
@@ -13475,6 +13642,8 @@ function refreshToolHUD(){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'car'){
+    html = '<div class="t1">electric car ·' + Math.round(it.charge || 0) + '% charge</div><div class="t2">left click to deploy · right click the car to drive · it recharges parked on a powered grid</div>';
   } else if (it.kind === 'sigil'){
     html = '<div class="t1">architect sigil</div><div class="t2">left click to summon THE ARCHITECT — the endgame. Craft it when you are ready.</div>';
   } else if (it.kind === 'aseal'){
@@ -14185,7 +14354,9 @@ function saveNow(){
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
     entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag)
-      .map(e => [e.type, e.x, e.y, e.z, e.hp]),
+      .map(e => [e.type, e.x, e.y, e.z, e.hp,
+                 e.charge != null ? +(+e.charge).toFixed(1) : 0,
+                 e.heading != null ? +(+e.heading).toFixed(2) : 0]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -14253,7 +14424,13 @@ function startWorld(id){
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.decorRemovedSet = new Set(data.removedDecor || []);
   game.decorPlaced = data.placedDecor || [];
-  game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
+  game.entities = (data.entities || []).map(r => {
+    const e = reviveEntity(r[0], r[1], r[2], r[3], r[4]);
+    if (r[5]) e.charge = r[5];
+    if (r[6]) e.heading = r[6];
+    return e;
+  });
+  game.driving = null;
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
   game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
@@ -15030,6 +15207,15 @@ function frame(now){
     AudioSys.music(game.bossNear ? 'boss' : depth > 14 ? 'cave' : 'surface');
     if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
     // drone batteries charge near a powered circuit with watts to spare
+    if (powerSys.surplus.length){
+      for (const en of game.entities){
+        if (en.type === 'car' && (en.charge || 0) < 100 &&
+            powerSys.surplusNear(en.x, en.y + 1, en.z, 6)){
+          en.charge = Math.min(100, (en.charge || 0) + 0.9);
+          markSave();
+        }
+      }
+    }
     if (powerSys.surplus.length && powerSys.surplusNear(game.pos.x, game.pos.y + 1, game.pos.z, 6)){
       for (const s of game.slots){
         if (s && s.kind === 'drone' && (s.charge || 0) < 100){
@@ -15137,7 +15323,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
