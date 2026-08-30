@@ -191,7 +191,7 @@ drops, not just loot.
 - Music + audio expansion; options expansion; perf pass (worker meshing
   via blob if continuous mining needs it).
 
-## Build 11 — Cities & vehicles (the far future, but a real one)
+## Build 11 — Cities & vehicles (DONE)
 STRATA buildings are box CSG, so distant skylines LOD almost perfectly —
 cities are feasible where block games choke.
 - **Tier 1**: rare mega-cities (one per several km) — road grids, towers

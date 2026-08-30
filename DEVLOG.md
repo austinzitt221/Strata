@@ -2,6 +2,52 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 12 — Cities & vehicles (roadmap build 11) (2026-08-30)
+
+Box-CSG makes cities affordable where block games choke. Four phases.
+
+- **MEGA-CITIES.** Rare km-spaced skylines: one candidate per 2.6km cell
+  (half the cells roll none; each cell tries five sites and keeps the
+  first buildable one, clear of villages and forts). Stamped on approach
+  like forts: a deep foundation slab irons the site flat, basalt avenues
+  cross it in a 3x3 grid, and eight towers rise from procedural
+  floor/facade modules — hollow shells, real floor slabs, window bands
+  punched through every story, a street door, a roof rim, and a corner
+  rope shaft so every floor is climbable. Torch-lit plaza with an
+  obsidian obelisk in the center block. ~190 edits per city; procedural
+  names (NOVA REND, EAST HARROW…); the nearest known skyline shows on
+  the compass from up to 3km; trees keep off the pavement.
+- **City life.** The stamp mints the city's people: five shopkeepers on
+  the trade system (the four village trades + a new GROCER dealing in
+  food) and the MAYOR at the plaza buying civic works. All give missions
+  through the same engine as villages, markers included. Citizens stroll
+  the avenues by day and head in at night; two electric cabs work the
+  avenues end to end and brake for pedestrians.
+- **THE ELECTRIC CAR.** Ships as a kit — 650 coins at the city
+  electrician, or craft it (14 iron + 4 ruby ingots + 8 wire). Deploy,
+  right-click to drive: W/S throttle, A/D steer, 13.5 m/s, real
+  gravity + sphere-vs-SDF ground physics, motor hum, dashboard HUD.
+  Full throttle drains ~0.65%/s; a dead battery won't move; parked near
+  a powered grid it recharges at drone rate. Crouch+RMB folds it back
+  into a kit; wrecks fold into a half-charged kit. Never despawns,
+  saves with battery and heading.
+- **RAILS & TRAINS.** Rails craft 8-a-batch from iron and sticks (the
+  toolsmith sells bundles). Left click plants spikes into a line (1 rail
+  per 4m of span, spikes up to 60m apart), right click finishes it —
+  twin rails, ties, and a gold post at each end. Power either end (any
+  live grid within 8m) and right-clicking an end post boards a cart
+  that runs the whole polyline at 16 m/s; space bails out. Fast travel
+  you BUILD: string a line from your base to the city and wire one end.
+- **Property.** The mayor sells the PROPERTY DEED (900 coins, the coin
+  sink). Left click inside a city claims its nearest tower — furnished
+  on the spot with a strongbox, a bed (spawn point!) and a light. One
+  deed per city.
+- **Also:** projectile src fix carried; city folk live on a 180m leash
+  instead of the 70m wildlife despawn so cabs survive their own routes.
+- **Known issues:** stamping a whole city queues a few hundred chunk
+  remeshes — on a mid-range machine it fills in over a couple of
+  seconds as you approach; rail lines have no wrench-delete yet.
+
 ## Build 11 — Bosses & endgame (roadmap build 10) (2026-08-30)
 
 Four bosses, each built on a verb only a CSG world has. Boss framework:

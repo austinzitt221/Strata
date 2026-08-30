@@ -2120,7 +2120,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2361,6 +2361,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
+  // rails bolt together from smelted stock
+  RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
   // the electric car ships as a kit: place it, drive it, charge it
   RECIPES.push({ kind: 'car', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }] });
@@ -4525,7 +4527,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8421,6 +8423,7 @@ const tradeSys = {
       { buy: { make: 'disp', tier: 1 }, price: 55, rep: 0 },
       { buy: { make: 'drill', tier: 2 }, price: 170, rep: 10 },
       { buy: { make: 'drill', tier: 3 }, price: 340, rep: 25 },
+      { buy: { k: 'rail', n: 16 }, price: 30, rep: 0 },
       { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
     ];
     if (role === 'food') return [   // grocer: the city eats
@@ -8435,6 +8438,7 @@ const tradeSys = {
       { sell: { k: 'bulb', n: 6 }, price: 18, rep: 0 },
       { sell: { k: 'diamond', n: 1 }, price: 40, rep: 10 },
       { buy: { k: 'mcharge', n: 4 }, price: 30, rep: 25 },
+      { buy: { make: 'deed' }, price: 900, rep: 10 },
     ];
     return [   // spark: the mad-scientist electrician
       { buy: { k: 'wire', n: 8 }, price: 12, rep: 0 },
@@ -8459,6 +8463,7 @@ const tradeSys = {
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
     if (s.make === 'car') return { kind: 'car', charge: 100 };
+    if (s.make === 'deed') return { kind: 'deed', count: 1 };
     if (s.make === 'tmap') return { kind: 'tmap' };
     return { kind: s.k, count: s.n };
   },
@@ -9129,6 +9134,134 @@ const raidBaseSys = {
         }
       }
     }
+  },
+};
+
+// ---------- rails: fast travel you BUILD, not teleports ----------
+// A rail line is a chain of ground spikes. Power either end (any live
+// grid within 8m of an end post) and the line runs: right-click an end
+// post to ride a cart down the line at speed.
+const railSys = {
+  group: null,
+  rebuild(){
+    if (this.group) game.scene.remove(this.group);
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    const railM = new THREE.MeshBasicMaterial({ color: 0x8a8f9a });
+    const tieM = new THREE.MeshBasicMaterial({ color: 0x6b5233 });
+    const postM = new THREE.MeshBasicMaterial({ color: 0xd9b25a });
+    const lines = (game.rails || []).slice();
+    if (game.railDraft && game.railDraft.pts.length) lines.push(game.railDraft);
+    for (const L of lines){
+      const pts = L.pts;
+      for (let i = 0; i + 1 < pts.length; i++){
+        const a = pts[i], b = pts[i + 1];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        const seg = new THREE.Group();
+        seg.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 0.12, (a[2] + b[2]) / 2);
+        seg.lookAt(b[0], b[1] + 0.12, b[2]);
+        for (const off of [-0.5, 0.5]){
+          const r = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, len), railM);
+          r.position.x = off;
+          seg.add(r);
+        }
+        for (let t = 1.2; t < len; t += 2.6){
+          const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.5), tieM);
+          tie.position.set(0, -0.07, len / 2 - t);
+          seg.add(tie);
+        }
+        this.group.add(seg);
+      }
+      for (const end of [pts[0], pts[pts.length - 1]]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.6, 0.3), postM);
+        post.position.set(end[0], end[1] + 0.8, end[2]);
+        this.group.add(post);
+      }
+    }
+    game.scene.add(this.group);
+  },
+  finish(){
+    const L = game.railDraft;
+    game.railDraft = null;
+    if (L && L.pts.length >= 2){
+      (game.rails = game.rails || []).push(L);
+      toast('rail line laid — power either end, then right-click an end post to ride');
+    } else if (L) toast('rail line discarded — a line needs at least two spikes');
+    this.rebuild(); markSave();
+  },
+  endpointNear(x, y, z, r){
+    for (const L of game.rails || []){
+      const pts = L.pts;
+      for (const end of [0, 1]){
+        const p = end === 0 ? pts[0] : pts[pts.length - 1];
+        if (Math.hypot(p[0] - x, p[1] - y, p[2] - z) < r) return { line: L, end };
+      }
+    }
+    return null;
+  },
+  powered(L){
+    const pts = L.pts;
+    for (const p of [pts[0], pts[pts.length - 1]])
+      for (const t of powerSys.gridSites || [])
+        if (Math.hypot(t.x - p[0], t.z - p[2]) < 8) return true;
+    return false;
+  },
+  board(L, end){
+    const cart = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2.4),
+      new THREE.MeshBasicMaterial({ color: 0x7a4f2c }));
+    base.position.y = 0.45;
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.2, 2.56),
+      new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
+    rim.position.y = 0.75;
+    cart.add(base, rim);
+    game.scene.add(cart);
+    game.riding = { L, dir: end === 0 ? 1 : -1, mesh: cart };
+    game.vel.set(0, 0, 0);
+    toast('rolling — space to bail out');
+    AudioSys.sfx('toggle');
+  },
+  dismount(msg){
+    const R = game.riding;
+    if (R && R.mesh) game.scene.remove(R.mesh);
+    game.riding = null;
+    game.vel.set(0, 0, 0);
+    if (msg) toast(msg);
+  },
+  ride(dt){
+    const R = game.riding;
+    if (!R) return;
+    const pts = R.L.pts;
+    if (R.cum == null){
+      R.cum = [0];
+      for (let i = 1; i < pts.length; i++)
+        R.cum.push(R.cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0],
+          pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]));
+      R.d = R.dir > 0 ? 0 : R.cum[R.cum.length - 1];
+    }
+    R.d += R.dir * 16 * dt;
+    const total = R.cum[R.cum.length - 1];
+    if (R.d <= 0 || R.d >= total){
+      const p = R.d <= 0 ? pts[0] : pts[pts.length - 1];
+      game.pos.set(p[0], p[1] + 1.0, p[2]);
+      this.dismount('end of the line');
+      return;
+    }
+    let i = 0;
+    while (R.cum[i + 1] < R.d) i++;
+    const f = (R.d - R.cum[i]) / (R.cum[i + 1] - R.cum[i]);
+    const a = pts[i], b = pts[i + 1];
+    const x = a[0] + (b[0] - a[0]) * f;
+    const y = a[1] + (b[1] - a[1]) * f;
+    const z = a[2] + (b[2] - a[2]) * f;
+    game.pos.set(x, y + 0.9, z);
+    game.vel.set(0, 0, 0);
+    game.grounded = true;
+    if (R.mesh){
+      R.mesh.position.set(x, y, z);
+      R.mesh.lookAt(x + (b[0] - a[0]) * R.dir, y + (b[1] - a[1]) * R.dir, z + (b[2] - a[2]) * R.dir);
+    }
+    if ((game.keys || {})['Space']) this.dismount('bailed out');
   },
 };
 
@@ -9847,6 +9980,10 @@ function bindInput(){
         return;
       }
       if (game.driving){ exitCar(); return; }
+      if (game.railDraft){
+        const tl2 = activeTool();
+        if (tl2 && tl2.kind === 'rail'){ railSys.finish(); return; }
+      }
       if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
       if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
       // wrench RMB always selects — tables, stoves and machines included
@@ -9976,6 +10113,15 @@ function bindInput(){
         }
         enterCar(vent);
         return;
+      }
+      {
+        const tl3 = activeTool();
+        const rle = railSys.endpointNear(game.pos.x, game.pos.y, game.pos.z, 3.5);
+        if (rle && !(tl3 && tl3.kind === 'rail')){
+          if (!railSys.powered(rle.line)) toast('dead line — build a live grid within 8m of an end post');
+          else railSys.board(rle.line, rle.end);
+          return;
+        }
       }
       const selDrone = selectedItem();
       if (selDrone && selDrone.kind === 'drone'){
@@ -10305,6 +10451,7 @@ function driveCar(dt){
   if (game.carHudT > 0.4){ game.carHudT = 0; refreshToolHUD(); }
 }
 function updatePlayer(dt){
+  if (game.riding){ railSys.ride(dt); return; }
   if (game.driving){ driveCar(dt); return; }
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
@@ -10514,6 +10661,8 @@ function activeTool(){
   if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
   if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
   if (it.kind === 'car') return { kind: 'carkit', tier: 0, item: it };
+  if (it.kind === 'rail') return { kind: 'rail', tier: 0, item: it };
+  if (it.kind === 'deed') return { kind: 'deedtool', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
@@ -12121,6 +12270,69 @@ function tryAction(dt, now){
   }
   // explosives: set the charge on any surface, then RUN. TNT is a crater;
   // the shaped mining charge is a drill you light -- it pays its ore out.
+  if (tool.kind === 'rail'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('aim the next spike at the ground'); return; }
+      const p = [+hit[0].toFixed(1), +(hit[1] + 0.12).toFixed(1), +hit[2].toFixed(1)];
+      const D = game.railDraft;
+      if (!D){
+        tool.item.count--;
+        game.railDraft = { pts: [p] };
+        toast('rail started — left click extends spike by spike · right click finishes the line');
+      } else {
+        const last = D.pts[D.pts.length - 1];
+        const d = Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]);
+        if (d < 2){ toast('too close to the last spike'); return; }
+        if (d > 60){ toast('too far — plant the next spike within 60m'); return; }
+        const cost = Math.max(1, Math.ceil(d / 4));
+        if (tool.item.count < cost){ toast('that span needs ' + cost + ' rails — you have ' + tool.item.count); return; }
+        tool.item.count -= cost;
+        D.pts.push(p);
+        AudioSys.sfx('craft');
+      }
+      if (tool.item.count <= 0){
+        game.slots[game.hotSel] = null;
+        railSys.finish();               // out of rails: the line ends here
+      }
+      railSys.rebuild();
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  if (tool.kind === 'deedtool'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      let rec = null;
+      for (const key in (game.cities || {})){
+        const r2 = game.cities[key];
+        if (r2.stamped && Math.hypot(r2.x - game.pos.x, r2.z - game.pos.z) < 70){ rec = r2; break; }
+      }
+      if (!rec){ toast('the deed only means something inside a city'); return; }
+      if (rec.owned != null){ toast('you already hold the deed to a ' + (rec.name || 'city') + ' tower'); return; }
+      let bi = 0, bd = 1e9;
+      rec.towers.forEach((t2, i) => {
+        const d = Math.hypot(rec.x + t2.bx * 36 - game.pos.x, rec.z + t2.bz * 36 - game.pos.z);
+        if (d < bd){ bd = d; bi = i; }
+      });
+      const t2 = rec.towers[bi];
+      const tx = rec.x + t2.bx * 36, tz = rec.z + t2.bz * 36, gy = rec.gy;
+      // the ground floor comes furnished: strongbox, bed, light
+      const ch = pnodeSys.add('chest', tx - t2.w / 2 + 2.0, gy + 0.95, tz, 0, { sc: 1.0 });
+      ch.inv = new Array(chestSlots(1.0)).fill(null);
+      bedSys.add(+(tx - t2.w / 2 + 2.2).toFixed(1), +(gy + 0.55).toFixed(1), +(tz + t2.w / 2 - 2.4).toFixed(1), 0);
+      game.torches.push([tx, gy + 0.4, tz - t2.w / 2 + 1.4]);
+      torchSys.rebuild();
+      rec.owned = bi;
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      refreshHotbar(); refreshToolHUD(); markSave();
+      toast('the deed is yours — a ' + (rec.name || 'city') + ' tower, furnished: strongbox, bed, light');
+      AudioSys.sfx('craft');
+    }
+    return;
+  }
   if (tool.kind === 'carkit'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -12464,7 +12676,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -12538,6 +12750,13 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'rail'){
+    c.fillStyle = '#6b5233'; c.fillRect(2, 4, 12, 2); c.fillRect(2, 10, 12, 2);
+    c.fillStyle = '#8a8f9a'; c.fillRect(4, 2, 2, 12); c.fillRect(10, 2, 2, 12);
+  } else if (it.kind === 'deed'){
+    c.fillStyle = '#e8e0d0'; c.fillRect(3, 2, 10, 12);
+    c.fillStyle = '#8a8477'; c.fillRect(5, 4, 6, 1); c.fillRect(5, 6, 6, 1); c.fillRect(5, 8, 4, 1);
+    c.fillStyle = '#c9401f'; c.fillRect(9, 10, 3, 3);
   } else if (it.kind === 'car'){
     c.fillStyle = '#e8ecf2'; c.fillRect(2, 8, 12, 3);
     c.fillStyle = '#9fd4e8'; c.fillRect(5, 6, 6, 2);
@@ -12892,6 +13111,8 @@ function itemLabel(it){
   if (it.kind === 'sigil') return 'architect sigil';
   if (it.kind === 'aseal') return "architect's seal";
   if (it.kind === 'car') return 'electric car';
+  if (it.kind === 'rail') return 'rails';
+  if (it.kind === 'deed') return 'property deed';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -13055,7 +13276,7 @@ const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
 const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'rail', 'deed'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
@@ -13642,6 +13863,10 @@ function refreshToolHUD(){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'rail'){
+    html = '<div class="t1">rails ×' + it.count + '</div><div class="t2">left click plants spikes into a line (1 rail per 4m) · right click finishes it · power an end post and right-click it to ride</div>';
+  } else if (it.kind === 'deed'){
+    html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
   } else if (it.kind === 'car'){
     html = '<div class="t1">electric car ·' + Math.round(it.charge || 0) + '% charge</div><div class="t2">left click to deploy · right click the car to drive · it recharges parked on a powered grid</div>';
   } else if (it.kind === 'sigil'){
@@ -14345,6 +14570,7 @@ function saveNow(){
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     ropes: game.ropes || [],
+    rails: game.rails || [],
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -14380,6 +14606,9 @@ function startWorld(id){
   game.villages = data.villages || {};
   game.forts = data.forts || {};
   game.cities = data.cities || {};
+  game.rails = data.rails || [];
+  game.railDraft = null;
+  game.riding = null;
   game.bossKills = data.bossKills || {};
   if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
@@ -14460,6 +14689,7 @@ function startWorld(id){
   game.terrain.edits = game.edits;
   torchSys.rebuild();
   ropeSys.rebuild();
+  railSys.rebuild();
   pnodeSys.rebuild();
   beaconSys.rebuild();
   bedSys.rebuild();
@@ -15323,7 +15553,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
