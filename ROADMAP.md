@@ -205,3 +205,61 @@ cities are feasible where block games choke.
 
 Rule: no phase starts until the previous phase's mechanics feel right in
 playtest.
+
+## The idea pool (unscheduled — to be shaped into future builds)
+
+### World & terrain
+- **Weather**: rain that fills carve-holes into real puddles, snowstorms
+  that paint snow, lightning that starts fires on wood, fog mornings.
+- **Seasons**: a slow world clock that recolors biomes, freezes lakes
+  walkable in winter, boosts food yields in summer.
+- **Floating sky islands**: jetpack/drone-reachable, unique ore; the SDF
+  already supports overhangs.
+- **The Underdark**: a second surface at y=-150 — bioluminescent forest,
+  its own villages, its own boss.
+- **Ocean update**: diving, shipwreck vaults, a BOAT (the car's water
+  sibling), island-chain archetype.
+
+### CSG-native mechanics
+- **Fluid-ish flow**: carving next to a lava/water pool lets it slump
+  into the hole (cheap cellular pass on edits, not real fluid).
+- **Structural collapse**: mine out a tower's base and the disconnected
+  top converts to falling debris + drops.
+- **The Terraformer**: endgame wrench upgrade — spline sculpting,
+  mirror-mode building, terrain smoothing brush.
+- **Blueprint marketplace**: cities sell famous building blueprints;
+  your saved blueprints sell for coin.
+
+### Cities & civilization
+- **Districts & city reputation**: industrial / old town / harbor;
+  city-wide rep gates the best shops.
+- **City sieges**: raids target the city; defend with the garrison for
+  rep/coin or let it burn (real subtract damage, repaired over days).
+- **Interior furnishing pass**: offices/apartments in towers, elevators
+  in tall towers.
+- **Highways**: auto-generated roads linking neighbor cities, road
+  signs, cruise-control speed boost on them.
+- **Train network v2**: pre-built city stations, buy tickets between
+  connected cities, junction your own rails into the network.
+
+### Combat & progression
+- **The Leviathan**: an ocean boss that surfaces under your boat.
+- **Trinket slots + armor set bonuses**: the boss relics become
+  equippable trinkets with visible models.
+- **Turrets & base defense**: powered wall guns that eat watts; pairs
+  with sieges.
+- **Difficulty tiers per world**: peaceful / normal / apocalypse.
+
+### Toys & traversal
+- **The hoverbike**: flies 2m over anything including water, drains
+  fast; crafted from car + jetpack parts.
+- **Cannon / launch pads**: aimable player-launcher, pairs with the
+  mid-air grapple.
+- **Fishing**: rod, biome fish, a city fish market — quiet-time content.
+
+### Systems
+- **Photo album + full-screen world map** built from explored-chunk data.
+- **Sound pass**: footstep materials, city ambience, interior reverb,
+  boss themes.
+- **Performance: worker meshing** — dual contouring in a Web Worker via
+  embedded blob; makes mega-city stamping seamless. (IN PROGRESS)

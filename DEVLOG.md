@@ -2,6 +2,48 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 12.2 — the performance build (2026-08-30)
+
+"Chunks that load quick and a game that runs butter smooth." The whole
+build is measured, and the graphics are provably untouched: every mesher
+change was verified bit-identical against a hash oracle (FNV over every
+output buffer of 125 benchmark chunks — 100 in a stamped mega-city, 25
+wilderness — recorded before the first change and re-checked after every
+step).
+
+- **THE MESHING POOL.** Dual contouring is off the main thread. CORE is
+  now a named factory (`CORE_FACTORY`) whose full source stringifies into
+  a Web Worker blob; a pool of min(4, cores−1) workers each runs its own
+  CORE + world generator and chews the dirty-chunk queue at full
+  throughput while the main thread only assembles finished
+  BufferGeometry. Measured in the headless harness: **199 chunks/s pooled
+  vs 13 chunks/s on the old budgeted sync path (~16×)** — a freshly
+  streamed mega-city backlog of ~2,400 chunks fully meshed in under 12
+  seconds. Worker output verified bit-identical to the sync mesher.
+  Stale results (chunk re-dirtied or scrolled out mid-flight) are
+  discarded; a finished worker immediately re-pumps the queue instead of
+  waiting for the next frame; no Worker support ⇒ clean fallback to the
+  old synchronous path.
+- **The hot lane.** Freshly-edited chunks (your mining/placing) go into a
+  priority set that jumps the streaming backlog in both the pool and the
+  sync fallback — carving feels instant even while a city is pouring in.
+- **Mesher surgery (bit-identical, −14% per chunk in node: 6.64 →
+  5.70 ms).** Per-chunk spatial bucket index over the edit list so field
+  sampling, hermite crossings, and vertex AO only touch edits whose AABBs
+  can matter; the terrain height grid is memoized per column footprint
+  (all 46 vertical chunks of a column share one build); all per-chunk
+  scratch (field lattice, hermite cache, AO cache, output streams) moved
+  to reused module-level typed arrays — near-zero allocation per chunk.
+- **Render scale option.** Device pixel ratio now caps at 1.5 (was 2 —
+  invisible at pixel-art texture density, big fill-rate win on hiDPI),
+  and a RENDER SCALE slider (50–150%) in Options scales the internal
+  resolution for more fps or extra crispness.
+- **Small leaks plugged.** Objective/compass markers rebuilt their
+  candidate list every frame with allocations; now cached at 4 Hz with
+  only the screen projection per frame.
+- Roadmap: the full idea pool (24 ideas) is now in ROADMAP.md under
+  "The idea pool", grouped by system, unscheduled.
+
 ## Build 12.1 — playtest fixes: real driving, mega cities, scopes (2026-08-30)
 
 Everything from the Cities & vehicles playtest notes.
