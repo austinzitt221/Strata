@@ -104,6 +104,17 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- boss bar ---------- */
 #bossbar{position:fixed; top:52px; left:50%; transform:translateX(-50%); width:430px; z-index:6; text-align:center;}
+#xhair{position:fixed; left:50%; top:50%; width:18px; height:18px; transform:translate(-50%,-50%); z-index:5; pointer-events:none;}
+#xhair::before{content:''; position:absolute; left:8px; top:0; width:2px; height:18px; background:#e8ecf2; box-shadow:0 0 2px #000;}
+#xhair::after{content:''; position:absolute; top:8px; left:0; height:2px; width:18px; background:#e8ecf2; box-shadow:0 0 2px #000;}
+#scope{position:fixed; inset:0; z-index:6; pointer-events:none;}
+#scope .ring{position:absolute; left:50%; top:50%; width:80vmin; height:80vmin; transform:translate(-50%,-50%); border-radius:50%; box-shadow:0 0 0 200vmax #04050a; border:7px solid #14161c;}
+#scope .cl{position:absolute; background:#0c0e12;}
+#scope .clh{left:10vw; right:10vw; top:50%; height:3px; transform:translateY(-50%);}
+#scope .clv{top:5vh; bottom:5vh; left:50%; width:3px; transform:translateX(-50%);}
+#scope .dot{position:absolute; left:50%; top:50%; width:9px; height:9px; transform:translate(-50%,-50%); border-radius:50%; background:#d84a4a; box-shadow:0 0 4px #000;}
+#scope .tick{position:absolute; background:#0c0e12;}
+#scope .zl{position:absolute; left:50%; bottom:12vh; transform:translateX(-50%); color:#8fe6dc; font:14px monospace; text-shadow:0 1px 3px #000;}
 #bossname{font-size:13px; letter-spacing:4px; color:#ffb0a0; text-shadow:0 1px 3px #000; margin-bottom:4px;}
 
 /* ---------- objective markers ---------- */
@@ -266,6 +277,16 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 <div id="objlayer"></div>
 
+<div id="xhair" class="hidden"></div>
+<div id="scope" class="hidden">
+  <div class="ring"></div>
+  <div class="cl clh"></div>
+  <div class="cl clv"></div>
+  <div class="tick" style="left:50%; top:calc(50% + 60px); width:26px; height:3px; transform:translateX(-50%)"></div>
+  <div class="tick" style="left:50%; top:calc(50% + 120px); width:40px; height:3px; transform:translateX(-50%)"></div>
+  <div class="dot"></div>
+  <div class="zl" id="scopezoom">4.0x</div>
+</div>
 <div id="bossbar" class="hidden">
   <div id="bossname">BOSS</div>
   <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
@@ -1313,7 +1334,7 @@ function makeGen(seed){
   // 400m off their cell edge, so only the containing cell can claim it)
   function inCity(x, z){
     const c = cityAt(Math.floor(x / CITY_CELL), Math.floor(z / CITY_CELL));
-    return !!c && Math.abs(c.x - x) < 62 && Math.abs(c.z - z) < 62;
+    return !!c && Math.abs(c.x - x) < 138 && Math.abs(c.z - z) < 138;
   }
   // ---- villages: one candidate per VILLAGE_CELL, flat friendly ground only
   function villageAt(cx, cz){
@@ -1373,10 +1394,10 @@ function makeGen(seed){
   }
   function cityAtRaw(cx, cz){
     const h0 = hashInt(sX ^ 0xC17C17 ^ hashInt((cx * 668904701) ^ hashInt(cz * 941083987)));
-    if ((h0 & 7) < 3) return null;                 // most cells hold no city
+    if ((h0 & 7) < 2) return null;                 // three quarters of cells hold one
     // the cell rolls several sites and keeps the first buildable one
     let x = 0, z = 0, ok = false;
-    for (let k = 0; k < 5 && !ok; k++){
+    for (let k = 0; k < 8 && !ok; k++){
       x = cx * CITY_CELL + 400 + (hashInt(h0 ^ (11 + k * 2)) % (CITY_CELL - 800));
       z = cz * CITY_CELL + 400 + (hashInt(h0 ^ (13 + k * 2)) % (CITY_CELL - 800));
       const hc = height(x, z);
@@ -1389,19 +1410,19 @@ function makeGen(seed){
         if (hh < mn) mn = hh;
         if (hh > mx) mx = hh;
       }
-      if (mx - mn > 13 || mn < seaLevel + 1) continue;
+      if (mx - mn > 16 || mn < seaLevel + 1) continue;
       ok = true;
     }
     if (!ok) return null;
-    for (let vx = Math.floor((x - 220) / VILLAGE_CELL); vx <= Math.floor((x + 220) / VILLAGE_CELL); vx++)
-      for (let vz = Math.floor((z - 220) / VILLAGE_CELL); vz <= Math.floor((z + 220) / VILLAGE_CELL); vz++){
+    for (let vx = Math.floor((x - 190) / VILLAGE_CELL); vx <= Math.floor((x + 190) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((z - 190) / VILLAGE_CELL); vz <= Math.floor((z + 190) / VILLAGE_CELL); vz++){
         const v = villageAt(vx, vz);
-        if (v && Math.hypot(v.x - x, v.z - z) < 220) return null;
+        if (v && Math.hypot(v.x - x, v.z - z) < 190) return null;
       }
-    for (let fx2 = Math.floor((x - 220) / FORT_CELL); fx2 <= Math.floor((x + 220) / FORT_CELL); fx2++)
-      for (let fz2 = Math.floor((z - 220) / FORT_CELL); fz2 <= Math.floor((z + 220) / FORT_CELL); fz2++){
+    for (let fx2 = Math.floor((x - 190) / FORT_CELL); fx2 <= Math.floor((x + 190) / FORT_CELL); fx2++)
+      for (let fz2 = Math.floor((z - 190) / FORT_CELL); fz2 <= Math.floor((z + 190) / FORT_CELL); fz2++){
         const f = fortAt(fx2, fz2);
-        if (f && Math.hypot(f.x - x, f.z - z) < 220) return null;
+        if (f && Math.hypot(f.x - x, f.z - z) < 190) return null;
       }
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
@@ -1411,7 +1432,7 @@ function makeGen(seed){
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
-const CITY_CELL = 2600;
+const CITY_CELL = 1800;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
@@ -2315,6 +2336,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'gen', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'meter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.GLOWSHROOM, n: 2 }] });
   RECIPES.push({ kind: 'drone', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 2 }, { item: 'diamond', n: 1 }] });
+  // the teleport drone: the camera drone's expensive sibling
+  RECIPES.push({ kind: 'tdrone', station: true, costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 4 }, { item: 'diamond', n: 3 }, { mat: MAT.CRYSTAL, n: 6 }] });
   // phase B machines + phase C exotics
   RECIPES.push({ kind: 'tube', yields: 4, costs: [{ item: 'ironingot', n: 2 }, { mat: MAT.ROCK, n: 2 }] });
   RECIPES.push({ kind: 'hopper', yields: 1, station: true, costs: [{ item: 'ironingot', n: 5 }] });
@@ -2410,6 +2433,7 @@ function craft(slots, r, free){
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
                   : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
+                  : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 0 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'car' ? { kind: 'car', charge: 20 }
@@ -3834,6 +3858,22 @@ const playerBody = {
     const A = game.armor || {};
     const sig = (A.head ? A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
+    if (game.driving){
+      // seated at the wheel: butt in the left seat, knees forward
+      const e2 = game.driving;
+      const fdx = -Math.sin(e2.heading || 0), fdz = -Math.cos(e2.heading || 0);
+      const rdx = -fdz, rdz = fdx;
+      this.root.position.set(
+        e2.x + rdx * -0.45 - fdx * 0.55,
+        e2.y + 0.06,
+        e2.z + rdz * -0.45 - fdz * 0.55);
+      this.root.rotation.y = e2.heading || 0;
+      this.upper.position.y = -0.42;
+      this.legL.rotation.x = 1.45; this.legR.rotation.x = 1.45;
+      this.armL.rotation.x = 0.85; this.armR.rotation.x = 0.85;
+      this.head.rotation.x = 0;
+      return;
+    }
     this.root.position.set(game.pos.x, game.pos.y, game.pos.z);
     this.root.rotation.y = game.yaw;
     const speed = Math.hypot(game.vel.x, game.vel.z);
@@ -4491,7 +4531,7 @@ function buildViewmodel(cam){
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
-  v.root.visible = !game.photo && game.camView !== 1;
+  v.root.visible = !game.photo && game.camView !== 1 && !game.driving && !game.riding;
   if (!v.root.visible) return;
   const it = selectedItem();
   const tool = activeTool();
@@ -4527,7 +4567,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7541,39 +7581,118 @@ function entMesh(type, ent){
     return m;
   };
   if (type === 'car'){
-    // the electric car: white coupe, teal charge strip, glass canopy
-    const paint = new THREE.MeshBasicMaterial({ color: 0xe8ecf2 });
-    const trim = new THREE.MeshBasicMaterial({ color: 0x35d1c0 });
-    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
-    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8 });
+    // the electric car v2: pixel-textured panels and a real interior --
+    // seats, a wheel, and a dash cluster with a live speedo + battery
+    const paintT = PixTex.make('carpaint', (c, w, h, rng) => {
+      pxSpeckle(c, rng, '#e8ecf2', '#d7dde6', '#f4f7fb', 20);
+      c.fillStyle = '#c3cbd8'; c.fillRect(0, 7, w, 1);
+      c.fillStyle = '#35d1c0'; c.fillRect(0, 11, w, 1);
+    });
+    const paint = new THREE.MeshBasicMaterial({ map: paintT });
+    const darkT = PixTex.make('cardark', (c, w, h, rng) => pxSpeckle(c, rng, '#23232a', '#191920', '#31313a', 14));
+    const dark = new THREE.MeshBasicMaterial({ map: darkT });
+    const seatT = PixTex.make('carseat', (c, w, h, rng) => {
+      pxSpeckle(c, rng, '#3d4450', '#333944', '#49515f', 12);
+      c.fillStyle = '#2c313b'; c.fillRect(0, 5, w, 1); c.fillRect(0, 10, w, 1);
+    });
+    const seatM = new THREE.MeshBasicMaterial({ map: seatT });
+    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.32, side: THREE.DoubleSide });
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 3.4), paint);
     body.position.y = 0.6;
     const nose = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.34, 0.8), paint);
     nose.position.set(0, 0.52, -1.9);
-    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.52, 1.7), glass);
-    canopy.position.set(0, 1.1, 0.1);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.1, 3.0), trim);
-    strip.position.y = 0.34;
-    g.add(body, nose, canopy, strip);
+    const floorPan = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 1.9), dark);
+    floorPan.position.set(0, 0.86, 0.25);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.72, 2.1), glass);
+    canopy.position.set(0, 1.24, 0.2);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 2.14), paint);
+    roof.position.set(0, 1.62, 0.2);
+    g.add(body, nose, floorPan, canopy, roof);
+    const hlM = new THREE.MeshBasicMaterial({ color: 0xfff4c9 });
+    const tlM = new THREE.MeshBasicMaterial({ color: 0xd84a4a });
+    for (const sxx of [-0.55, 0.55]){
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.06), hlM);
+      hl.position.set(sxx, 0.55, -2.31);
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.06), tlM);
+      tl.position.set(sxx, 0.66, 1.72);
+      g.add(hl, tl);
+    }
+    // interior: two seats, dash, wheel
+    for (const sxx of [-0.45, 0.45]){
+      const sb = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.14, 0.62), seatM);
+      sb.position.set(sxx, 0.95, 0.55);
+      const sk = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.62, 0.14), seatM);
+      sk.position.set(sxx, 1.26, 0.88);
+      g.add(sb, sk);
+    }
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.26, 0.34), dark);
+    dash.position.set(0, 1.06, -0.62);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.045, 12), dark);
+    wheel.rotation.x = Math.PI / 2 - 0.5;
+    wheel.position.set(-0.45, 1.16, -0.44);
+    const hub = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.1), seatM);
+    hub.position.set(-0.45, 1.16, -0.44);
+    g.add(dash, wheel, hub);
+    // the live gauge cluster, angled at the driver
+    const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+    const gtex = new THREE.CanvasTexture(gcv);
+    gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+    const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.26),
+      new THREE.MeshBasicMaterial({ map: gtex }));
+    gauges.position.set(-0.45, 1.33, -0.5);
+    gauges.rotation.x = -0.3;
+    g.add(gauges);
+    g.userData.gauge = { cv: gcv, tex: gtex };
     for (const [wx2, wz2] of [[-0.85, -1.15], [0.85, -1.15], [-0.85, 1.15], [0.85, 1.15]]){
       const wh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.56, 0.56), dark);
       wh.position.set(wx2, 0.3, wz2);
-      g.add(wh);
+      const hubc = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.2, 0.2),
+        new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
+      hubc.position.set(wx2, 0.3, wz2);
+      g.add(wh, hubc);
     }
     return g;
   }
   if (type === 'cab'){
-    // a boxy electric cab; each one rolls its own paint job
-    const paint = new THREE.MeshBasicMaterial({ color: [0xc94b3f, 0x3f6fc9, 0xd8b45e, 0x4fae5c][(Math.random() * 4) | 0] });
+    // a boxy electric cab: painted pixel shell, taxi stripe, roof sign,
+    // and a visible driver at the wheel
+    const palettes = [['#c94b3f', '#a93c33', '#e06355'], ['#3f6fc9', '#3359a9', '#5586e0'],
+                      ['#d8b45e', '#b8964a', '#e8cc82'], ['#4fae5c', '#3f8e4a', '#66c974']];
+    const pi = (Math.random() * palettes.length) | 0;
+    const pal = palettes[pi];
+    const paintT = PixTex.make('cabpaint' + pi, (c, w, h, rng) => {
+      pxSpeckle(c, rng, pal[0], pal[1], pal[2], 18);
+      c.fillStyle = '#f4f0e4'; c.fillRect(0, 6, w, 2);
+    });
+    const paint = new THREE.MeshBasicMaterial({ map: paintT });
     const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
-    const glass = new THREE.MeshBasicMaterial({ color: 0xbfe2ef });
+    const glass = new THREE.MeshBasicMaterial({ color: 0xbfe2ef, transparent: true, opacity: 0.42, side: THREE.DoubleSide });
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 3.1), paint);
     body.position.y = 0.62;
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.6), paint);
-    cabin.position.set(0, 1.12, 0.15);
-    const wind = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.34, 0.06), glass);
-    wind.position.set(0, 1.12, -0.68);
-    g.add(body, cabin, wind);
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 1.6), glass);
+    cabin.position.set(0, 1.16, 0.15);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.08, 1.64), paint);
+    roof.position.set(0, 1.48, 0.15);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.16, 0.3),
+      new THREE.MeshBasicMaterial({ color: 0xffd75e }));
+    sign.position.set(0, 1.6, 0.15);
+    g.add(body, cabin, roof, sign);
+    const drv = new THREE.Group();
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.42, 0.24),
+      new THREE.MeshBasicMaterial({ color: 0x6a6a72 }));
+    torso.position.y = 1.08;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8),
+      new THREE.MeshBasicMaterial({ color: 0xecd2b7 }));
+    head.position.y = 1.42;
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.26), dark);
+    cap.position.y = 1.53;
+    drv.add(torso, head, cap);
+    drv.position.set(-0.4, 0, 0.15);
+    g.add(drv);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 10), dark);
+    wheel.rotation.x = Math.PI / 2 - 0.5;
+    wheel.position.set(-0.4, 1.14, -0.45);
+    g.add(wheel);
     for (const [wx2, wz2] of [[-0.8, -1.0], [0.8, -1.0], [-0.8, 1.0], [0.8, 1.0]]){
       const wh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.5, 0.5), dark);
       wh.position.set(wx2, 0.28, wz2);
@@ -8449,6 +8568,7 @@ const tradeSys = {
       { buy: { k: 'tesla', n: 1 }, price: 220, rep: 25 },
       { buy: { make: 'jetpack' }, price: 420, rep: 25 },
       { buy: { make: 'car' }, price: 650, rep: 10 },
+      { buy: { make: 'tdrone' }, price: 950, rep: 25 },
       { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
     ];
   },
@@ -8463,6 +8583,7 @@ const tradeSys = {
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
     if (s.make === 'car') return { kind: 'car', charge: 100 };
+    if (s.make === 'tdrone') return { kind: 'tdrone', charge: 100 };
     if (s.make === 'deed') return { kind: 'deed', count: 1 };
     if (s.make === 'tmap') return { kind: 'tmap' };
     return { kind: s.k, count: s.n };
@@ -9225,6 +9346,7 @@ const railSys = {
     const R = game.riding;
     if (R && R.mesh) game.scene.remove(R.mesh);
     game.riding = null;
+    game.chase = null;
     game.vel.set(0, 0, 0);
     if (msg) toast(msg);
   },
@@ -9261,6 +9383,9 @@ const railSys = {
       R.mesh.position.set(x, y, z);
       R.mesh.lookAt(x + (b[0] - a[0]) * R.dir, y + (b[1] - a[1]) * R.dir, z + (b[2] - a[2]) * R.dir);
     }
+    // the camera rides the cart (standing in it in first person)
+    const hdg = Math.atan2(-(b[0] - a[0]) * R.dir, -(b[2] - a[2]) * R.dir);
+    vehicleCamera(x, y + 0.5, z, hdg, dt, { seatX: 0, seatY: 1.55, seatZ: 0, back: 6.5, up: 2.6, look: 1.2 });
     if ((game.keys || {})['Space']) this.dismount('bailed out');
   },
 };
@@ -9292,21 +9417,27 @@ const citySys = {
       }
     return out;
   },
-  // deterministic tower roll for the 3x3 blocks (center = plaza)
-  towers(c){
+  // deterministic block plan: the city rolls its SIZE first (leaning hard
+  // toward the very large), then every block rolls what it is — most are
+  // towers, the rest are parks, markets and open lots so the grid breathes
+  plan(c){
     const rng = CORE.mulberry32(c.seed ^ 0x7157);
+    const roll = rng();
+    const n = roll < 0.15 ? 3 : roll < 0.45 ? 5 : 7;     // blocks per side
+    const half = (n - 1) / 2;
     const mats = [CORE.MAT.STONEBRICK, CORE.MAT.ROCK, CORE.MAT.BASALT, CORE.MAT.STONEBRICK];
     const out = [];
-    for (let bi = 0; bi < 9; bi++){
-      const bx = (bi % 3) - 1, bz = ((bi / 3) | 0) - 1;
-      const w = [10, 13, 16][(rng() * 3) | 0];
-      const floors = 3 + ((rng() * 7) | 0);          // 3..9 stories
+    for (let bz = -half; bz <= half; bz++) for (let bx = -half; bx <= half; bx++){
+      if (bx === 0 && bz === 0) continue;                // central plaza
+      const kr = rng();
+      const w = [10, 13, 16, 18][(rng() * 4) | 0];
+      const floors = 4 + ((rng() * 11) | 0);             // 4..14 stories
       const mat = mats[(rng() * mats.length) | 0];
-      const shop = rng() < 0.5;
-      if (bx === 0 && bz === 0) continue;            // plaza block
-      out.push({ bx, bz, w, floors, mat: mat, shop });
+      const shop = rng() < 0.4;
+      const kind = kr < 0.62 ? 'tower' : kr < 0.78 ? 'park' : kr < 0.9 ? 'market' : 'lot';
+      out.push({ bx, bz, w, floors, mat, shop, kind });
     }
-    return out;
+    return { n, blocks: out };
   },
   stamp(c, rec){
     const MAT = CORE.MAT;
@@ -9315,50 +9446,86 @@ const citySys = {
       e.sy = sy; e.sz = sz;
       applyEdit(e);
     };
+    const PLAN = this.plan(c);
+    const n = PLAN.n, half2 = (n - 1) / 2;
+    const P = 36;
+    const span = n * 36 + 8;                 // blocks + a road margin all round
+    rec.n = n;
     let g = game.gen.height(c.x, c.z);
-    for (const [dx, dz] of [[-48, -48], [48, -48], [-48, 48], [48, 48], [0, -48], [0, 48], [-48, 0], [48, 0]])
+    const rim = span / 2 - 6;
+    for (const [dx, dz] of [[-rim, -rim], [rim, -rim], [-rim, rim], [rim, rim], [0, -rim], [0, rim], [-rim, 0], [rim, 0], [0, 0]])
       g = Math.max(g, game.gen.height(c.x + dx, c.z + dz));
     g = +(g + 0.3).toFixed(1);
     rec.gy = g;
     // one deep foundation slab irons the whole site flat (top at g)
-    EB(1, c.x, g - 5.3, c.z, 116, 10.6, 116, MAT.STONEBRICK);
-    // basalt avenues: two north-south, two east-west
-    for (const rx of [-18, 18]){
-      EB(1, c.x + rx, g + 0.15, c.z, 8, 0.5, 116, MAT.BASALT);
-      EB(1, c.x, g + 0.15, c.z + rx, 116, 0.5, 8, MAT.BASALT);
+    EB(1, c.x, g - 5.3, c.z, span + 6, 10.6, span + 6, MAT.STONEBRICK);
+    // basalt avenues between every block row and column
+    const offs = [];
+    for (let m = -half2; m < half2; m++) offs.push((m + 0.5) * P);
+    rec.lanes = offs.map(o => +o.toFixed(1));
+    for (const rx of offs){
+      EB(1, c.x + rx, g + 0.15, c.z, 8, 0.5, span, MAT.BASALT);
+      EB(1, c.x, g + 0.15, c.z + rx, span, 0.5, 8, MAT.BASALT);
     }
-    const P = 36;
-    const T = this.towers(c);
+    const T = PLAN.blocks;
     rec.towers = T;
     let shops = 0;
+    const S = 4.0;                           // story height: real headroom
     for (const t of T){
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
-      const H = t.floors * 3.2 + 1.6;
-      // shell, hollowed
-      EB(1, tx, g + H / 2, tz, t.w, H, t.w, t.mat);
-      EB(0, tx, g + H / 2 + 0.45, tz, t.w - 1.7, H - 1.5, t.w - 1.7);
-      // real floor slabs
-      for (let f = 1; f < t.floors; f++)
-        EB(1, tx, g + f * 3.2, tz, t.w - 1.5, 0.45, t.w - 1.5, t.mat);
-      // window bands punched through both wall pairs, every story
-      for (let f = 0; f < t.floors; f++){
-        const wy = g + f * 3.2 + 2.05;
-        EB(0, tx, wy, tz, t.w + 0.6, 1.15, t.w - 3.4);
-        EB(0, tx, wy, tz, t.w - 3.4, 1.15, t.w + 0.6);
-      }
-      // street door facing the city center
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
       const fz = fx === 0 ? -Math.sign(t.bz) : 0;
-      EB(0, tx + fx * (t.w / 2), g + 1.75, tz + fz * (t.w / 2),
-         fx ? 2.2 : 2.0, 2.7, fz ? 2.2 : 2.0);
-      // roof rim
+      if (t.kind === 'park'){
+        // a lawn painted onto the pavement, benches, one lamp
+        const pk = CORE.makeEdit(2, 1, +tx.toFixed(1), +(g - 0.4).toFixed(1), +tz.toFixed(1), 24, MAT.GRASS, 0);
+        pk.sy = 1.6; pk.sz = 24;
+        applyEdit(pk);
+        for (const [ox, oz] of [[-6, 0], [6, 0]])
+          EB(1, tx + ox, g + 0.6, tz + oz, 1.0, 0.6, 3.0, MAT.PLANKS);
+        game.torches.push([tx, g + 0.4, tz]);
+        continue;
+      }
+      if (t.kind === 'lot'){
+        // an open working lot: painted basalt, corner lights
+        const lt = CORE.makeEdit(2, 1, +tx.toFixed(1), +(g - 0.4).toFixed(1), +tz.toFixed(1), 24, MAT.BASALT, 0);
+        lt.sy = 1.6; lt.sz = 24;
+        applyEdit(lt);
+        game.torches.push([tx - 10, g + 0.4, tz - 10], [tx + 10, g + 0.4, tz + 10]);
+        continue;
+      }
+      if (t.kind === 'market'){
+        // a low market hall: one tall open story, doors on two sides
+        const MH = 5.6;
+        EB(1, tx, g + MH / 2, tz, 20, MH, 14, t.mat);
+        EB(0, tx, g + 0.35 + (MH - 1.1) / 2, tz, 18.4, MH - 1.1, 12.4);
+        EB(0, tx, g + 1.9, tz - 7, 3.2, 3.0, 2.2);
+        EB(0, tx, g + 1.9, tz + 7, 3.2, 3.0, 2.2);
+        EB(1, tx, g + MH + 0.2, tz, 21, 0.5, 15, t.mat);
+        const mc = pnodeSys.add('chest', tx + 6, g + 0.95, tz, 0, { sc: 0.7 });
+        mc.inv = new Array(chestSlots(0.7)).fill(null);
+        mc.inv[0] = { kind: 'meat', count: 4 };
+        mc.inv[1] = { kind: 'coal', count: 8 };
+        continue;
+      }
+      // ---- a tower ----
+      const H = t.floors * S + 1.8;
+      EB(1, tx, g + H / 2, tz, t.w, H, t.w, t.mat);
+      // hollow reaches the pavement: full-height ground floor, no head bumps
+      EB(0, tx, g + 0.35 + (H - 1.15) / 2, tz, t.w - 1.7, H - 1.15, t.w - 1.7);
+      for (let f = 1; f < t.floors; f++)
+        EB(1, tx, g + f * S, tz, t.w - 1.5, 0.5, t.w - 1.5, t.mat);
+      for (let f = 0; f < t.floors; f++){
+        const wy = g + f * S + 2.55;
+        EB(0, tx, wy, tz, t.w + 0.6, 1.3, t.w - 3.4);
+        EB(0, tx, wy, tz, t.w - 3.4, 1.3, t.w + 0.6);
+      }
+      EB(0, tx + fx * (t.w / 2), g + 1.9, tz + fz * (t.w / 2),
+         fx ? 2.2 : 2.0, 3.0, fz ? 2.2 : 2.0);
       EB(1, tx, g + H + 0.2, tz, t.w + 1.0, 0.5, t.w + 1.0, t.mat);
-      // corner shaft + rope: every floor is climbable
       const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
-      EB(0, cxr, g + H / 2 + 0.45, czr, 1.8, H - 1.5, 1.8);
+      EB(0, cxr, g + 0.35 + (H - 1.15) / 2, czr, 1.8, H - 1.15, 1.8);
       (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
-      // some ground floors are stocked shops (city life arrives in phase B)
-      if (t.shop && shops < 2){
+      if (t.shop && shops < n - 1){
         shops++;
         const ch = pnodeSys.add('chest', tx - (t.w / 2 - 2.2) * (fx || 1), g + 0.95, tz - (t.w / 2 - 2.2) * (fz || (fx ? 0 : 1)), 0, { sc: 0.7 });
         ch.inv = new Array(chestSlots(0.7)).fill(null);
@@ -9367,19 +9534,21 @@ const citySys = {
         ch.inv[2] = { kind: 'rounds', count: 24 };
       }
     }
-    // the plaza: an obelisk, plank benches, torch-lit corners
-    EB(1, c.x, g + 6.5, c.z, 3, 13, 3, MAT.OBSIDIAN);
-    EB(1, c.x, g + 13.9, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
+    // the plaza: an obelisk scaled to the city, benches, torch-lit corners
+    EB(1, c.x, g + (11 + n * 2) / 2, c.z, 3, 11 + n * 2, 3, MAT.OBSIDIAN);
+    EB(1, c.x, g + 11 + n * 2 + 1.0, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
     for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
       EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS);
     // ---- the people: five shopfronts + the mayor at the plaza ----
     const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
     const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
-    const idxs = T.map((_, i) => i);
+    const idxs = [];
+    T.forEach((t2, i) => { if (t2.kind === 'tower') idxs.push(i); });
     for (let i = idxs.length - 1; i > 0; i--){
       const j = (rng2() * (i + 1)) | 0;
       const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
     }
+    while (idxs.length < 5) idxs.push(idxs[idxs.length % Math.max(1, idxs.length)] || 0);
     rec.houses = [];
     for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
@@ -9395,7 +9564,9 @@ const citySys = {
     rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
                       w: 6, d: 6, gy: g, rep: 0,
                       vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
-    for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13], [-18, -40], [18, 40], [-40, 18], [40, -18]])
+    for (const ox of offs) for (const oz of offs)
+      game.torches.push([c.x + ox + 4.6, g + 0.4, c.z + oz + 4.6]);
+    for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13]])
       game.torches.push([c.x + tx2, g + 0.4, c.z + tz2]);
     torchSys.rebuild();
     ropeSys.rebuild();
@@ -9446,7 +9617,7 @@ const citySys = {
         }
         continue;
       }
-      if (pd > 110) continue;
+      if (pd > (rec.n || 3) * 20 + 80) continue;
       // shopkeepers man their doors
       (rec.houses || []).forEach((hrec, i) => {
         const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
@@ -9462,24 +9633,30 @@ const citySys = {
           if (e.mesh) game.scene.remove(e.mesh);
           game.entities.splice(game.entities.indexOf(e), 1);
         }
-      } else if (walkers.length < 4){
-        const lane = Math.random() < 0.5 ? -18 : 18;
-        const along = (Math.random() - 0.5) * 100;
+      } else if (walkers.length < ((rec.n || 3) + 1)){
+        const lanes = rec.lanes && rec.lanes.length ? rec.lanes : [-18, 18];
+        const reach = (rec.n || 3) * 18;
+        const lane = lanes[(Math.random() * lanes.length) | 0];
+        const along = (Math.random() - 0.5) * reach * 2;
         const ax = Math.random() < 0.5;
         const e = spawnEntity('villager',
           rec.x + (ax ? lane : along), (rec.gy || 0) + 0.7, rec.z + (ax ? along : lane));
         e.role = 'walker'; e.walker = true; e.ckey = key; e.vi = -1; e.stroll = rec;
       }
-      // light traffic: two cabs working the avenues
+      // light traffic scales with the city
       const cabs = game.entities.filter(e => e.type === 'cab' && e.ckey === key);
-      if (cabs.length < 2){
-        const ax = cabs.length === 0 ? 'x' : 'z';
-        const lane = Math.random() < 0.5 ? -18 : 18;
+      const wantCabs = Math.min(4, Math.max(1, (rec.n || 3) - 2));
+      if (cabs.length < wantCabs){
+        const lanes = rec.lanes && rec.lanes.length ? rec.lanes : [-18, 18];
+        const reach = (rec.n || 3) * 18 + 4;
+        const ax = cabs.length % 2 === 0 ? 'x' : 'z';
+        const lane = lanes[(Math.random() * lanes.length) | 0];
         const e = spawnEntity('cab',
-          ax === 'x' ? rec.x - 40 : rec.x + lane + 2,
+          ax === 'x' ? rec.x - reach + 4 : rec.x + lane + 2,
           (rec.gy || 0) + 0.7,
-          ax === 'x' ? rec.z + lane + 2 : rec.z - 40);
+          ax === 'x' ? rec.z + lane + 2 : rec.z - reach + 4);
         e.ckey = key; e.axis = ax; e.dir = 1; e.cabHome = { x: rec.x, z: rec.z };
+        e.cabReach = reach;
       }
     }
   },
@@ -9591,9 +9768,10 @@ function updateEntities(dt, now){
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
+      const lim = e.cabReach || 52;
       const t = e.axis === 'x' ? e.x - R.x : e.z - R.z;
-      if (t > 52) e.dir = -1;
-      else if (t < -52) e.dir = 1;
+      if (t > lim) e.dir = -1;
+      else if (t < -lim) e.dir = 1;
       const aheadX = e.axis === 'x' ? e.x + e.dir * 4 : e.x;
       const aheadZ = e.axis === 'x' ? e.z : e.z + e.dir * 4;
       const brake = Math.hypot(game.pos.x - aheadX, game.pos.z - aheadZ) < 3.0;
@@ -9615,8 +9793,9 @@ function updateEntities(dt, now){
           if (e.stroll){
             // pedestrians pick their next spot along one of the avenues
             const R = e.stroll;
-            const lane = (Math.random() < 0.5 ? -18 : 18) + (Math.random() - 0.5) * 5;
-            const along = (Math.random() - 0.5) * 100;
+            const lanes = R.lanes && R.lanes.length ? R.lanes : [-18, 18];
+            const lane = lanes[(Math.random() * lanes.length) | 0] + (Math.random() - 0.5) * 5;
+            const along = (Math.random() - 0.5) * ((R.n || 3) * 34);
             if (Math.random() < 0.5){ e.tx = R.x + lane; e.tz = R.z + along; }
             else { e.tx = R.x + along; e.tz = R.z + lane; }
           } else {
@@ -9903,7 +10082,8 @@ function bindInput(){
       return;
     }
     if (wrenchSys.drag){ wrenchSys.dragMove(e.movementX, e.movementY); return; }
-    const s = game.opts.sens / 100 * 0.0022;
+    const s = game.opts.sens / 100 * 0.0022 *
+      (game.scope ? Math.max(0.02, game.scope.fov / (game.opts.fov || 80)) : 1);
     game.yaw -= e.movementX * s;
     game.pitch -= e.movementY * s;
     game.pitch = Math.max(-Math.PI/2 + 0.001, Math.min(Math.PI/2 - 0.001, game.pitch));
@@ -9980,6 +10160,19 @@ function bindInput(){
         return;
       }
       if (game.driving){ exitCar(); return; }
+      {
+        // glass: hold RMB with a scoped rifle
+        const tlS = activeTool();
+        if (!game.scope && tlS && tlS.kind === 'fw' && CORE.GUNS[tlS.g] && CORE.GUNS[tlS.g].zoom){
+          game.scope = { fov: game.scopeFov || 20 };
+          game.camera.fov = game.scope.fov; game.camera.updateProjectionMatrix();
+          $('scope').classList.remove('hidden');
+          $('scopezoom').textContent = ((game.opts.fov || 80) / game.scope.fov).toFixed(1) + 'x';
+          if (game.vm) game.vm.root.visible = false;
+          AudioSys.sfx('toggle');
+          return;
+        }
+      }
       if (game.railDraft){
         const tl2 = activeTool();
         if (tl2 && tl2.kind === 'rail'){ railSys.finish(); return; }
@@ -10124,7 +10317,7 @@ function bindInput(){
         }
       }
       const selDrone = selectedItem();
-      if (selDrone && selDrone.kind === 'drone'){
+      if (selDrone && (selDrone.kind === 'drone' || selDrone.kind === 'tdrone')){
         if ((selDrone.charge || 0) < 5) toast('drone battery too low — charge it near a powered grid with spare watts');
         else enterPhoto(selDrone);
         return;
@@ -10168,11 +10361,22 @@ function bindInput(){
       }
     }
   });
-  document.addEventListener('mouseup', e => { if (e.button === 0){ wrenchSys.endDrag(); game.mouseL = false; } });
+  document.addEventListener('mouseup', e => {
+    if (e.button === 0){ wrenchSys.endDrag(); game.mouseL = false; }
+    if (e.button === 2) unscope();
+  });
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
     const dir = e.deltaY < 0 ? 1 : -1;
+    if (game.scope){
+      // scroll walks the magnification — up to a very long glass
+      game.scope.fov = Math.min(40, Math.max(1.2, game.scope.fov * (dir > 0 ? 0.78 : 1.28)));
+      game.scopeFov = game.scope.fov;
+      game.camera.fov = game.scope.fov; game.camera.updateProjectionMatrix();
+      $('scopezoom').textContent = ((game.opts.fov || 80) / game.scope.fov).toFixed(1) + 'x';
+      return;
+    }
     if (game.photo){
       game.photo.speed = Math.min(60, Math.max(1, game.photo.speed * (dir > 0 ? 1.25 : 0.8)));
       toast('camera speed ' + game.photo.speed.toFixed(0));
@@ -10373,6 +10577,77 @@ function collidePlayer(edits, still){
   }
 }
 
+// shared vehicle camera: first person = in the seat with free mouse look;
+// third person (F5) = a smoothed GTA-style chase cam behind the vehicle
+function vehicleCamera(x, y, z, heading, dt, o){
+  const fx = -Math.sin(heading), fz = -Math.cos(heading);
+  const rx = -fz, rz = fx;
+  if (game.camView === 1){
+    const tx = x - fx * o.back, ty = y + o.up, tz = z - fz * o.back;
+    if (!game.chase) game.chase = new THREE.Vector3(tx, ty, tz);
+    const k = Math.min(1, 7 * dt);
+    game.chase.x += (tx - game.chase.x) * k;
+    game.chase.y += (ty - game.chase.y) * k;
+    game.chase.z += (tz - game.chase.z) * k;
+    game.camera.position.copy(game.chase);
+    game.camera.lookAt(x, y + o.look, z);
+    game.camBack = o.back;
+  } else {
+    game.chase = null;
+    game.camera.position.set(
+      x + rx * o.seatX - fx * o.seatZ,
+      y + o.seatY,
+      z + rz * o.seatX - fz * o.seatZ);
+    game.camera.rotation.set(game.pitch, game.yaw, 0);
+    game.camBack = 0;
+  }
+}
+// the dash cluster: an analog speedo (0-50 km/h) and a battery gauge
+function drawCarGauge(e){
+  const G = e.mesh && e.mesh.userData.gauge;
+  if (!G) return;
+  const c = G.cv.getContext('2d');
+  c.fillStyle = '#101216'; c.fillRect(0, 0, 128, 64);
+  const cx = 34, cy = 36, R = 26;
+  c.strokeStyle = '#3a3f4a'; c.lineWidth = 3;
+  c.beginPath(); c.arc(cx, cy, R, Math.PI * 0.75, Math.PI * 2.25); c.stroke();
+  c.textAlign = 'center';
+  for (let k = 0; k <= 5; k++){
+    const a = Math.PI * 0.75 + (k / 5) * Math.PI * 1.5;
+    c.strokeStyle = '#cfd6e2'; c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(cx + Math.cos(a) * (R - 1), cy + Math.sin(a) * (R - 1));
+    c.lineTo(cx + Math.cos(a) * (R - 5), cy + Math.sin(a) * (R - 5));
+    c.stroke();
+    c.fillStyle = '#cfd6e2'; c.font = '7px monospace';
+    c.fillText(String(k * 10), cx + Math.cos(a) * (R - 10), cy + Math.sin(a) * (R - 10) + 2);
+  }
+  const kmh = Math.min(50, Math.abs(e.speed || 0) * 3.6);
+  const na = Math.PI * 0.75 + (kmh / 50) * Math.PI * 1.5;
+  c.strokeStyle = '#ff5a4e'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(na) * (R - 7), cy + Math.sin(na) * (R - 7)); c.stroke();
+  c.fillStyle = '#ff5a4e'; c.beginPath(); c.arc(cx, cy, 3, 0, 7); c.fill();
+  c.fillStyle = '#8fe6dc'; c.font = '9px monospace';
+  c.fillText(kmh.toFixed(0) + ' km/h', cx, 62);
+  const b = Math.max(0, Math.min(100, e.charge || 0));
+  c.strokeStyle = '#3a3f4a'; c.lineWidth = 2;
+  c.strokeRect(78, 10, 40, 16);
+  c.fillStyle = b > 50 ? '#4fae5c' : b > 20 ? '#d8b45e' : '#d84a4a';
+  c.fillRect(80, 12, 36 * b / 100, 12);
+  c.fillStyle = '#3a3f4a'; c.fillRect(118, 14, 3, 8);
+  c.fillStyle = '#cfd6e2'; c.font = '9px monospace';
+  c.fillText(Math.round(b) + '%', 98, 40);
+  c.fillStyle = '#8a8f9a'; c.font = '7px monospace';
+  c.fillText('CHARGE', 98, 52);
+  G.tex.needsUpdate = true;
+}
+function unscope(){
+  if (!game.scope) return;
+  game.scope = null;
+  game.camera.fov = game.opts.fov; game.camera.updateProjectionMatrix();
+  $('scope').classList.add('hidden');
+  if (game.vm) game.vm.root.visible = true;
+}
 // ---------- the electric car: fast travel that drinks from your grid ----------
 function enterCar(e){
   if (game.driving) return;
@@ -10386,6 +10661,7 @@ function enterCar(e){
 function exitCar(){
   const e = game.driving;
   game.driving = null;
+  game.chase = null;
   AudioSys.setHum(false, 0, 0);
   if (e){
     // step out on the driver's side
@@ -10447,8 +10723,13 @@ function driveCar(dt){
   game.vel.set(0, 0, 0);
   game.grounded = true;
   if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = e.heading; }
+  // the camera is IN the car: driver's seat, or a chase cam on F5
+  vehicleCamera(e.x, e.y, e.z, e.heading, dt,
+    { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 });
   game.carHudT = (game.carHudT || 0) + dt;
-  if (game.carHudT > 0.4){ game.carHudT = 0; refreshToolHUD(); }
+  if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
+  game.carHud2T = (game.carHud2T || 0) + dt;
+  if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
 }
 function updatePlayer(dt){
   if (game.riding){ railSys.ride(dt); return; }
@@ -12307,12 +12588,13 @@ function tryAction(dt, now){
       let rec = null;
       for (const key in (game.cities || {})){
         const r2 = game.cities[key];
-        if (r2.stamped && Math.hypot(r2.x - game.pos.x, r2.z - game.pos.z) < 70){ rec = r2; break; }
+        if (r2.stamped && Math.hypot(r2.x - game.pos.x, r2.z - game.pos.z) < (r2.n || 3) * 20 + 15){ rec = r2; break; }
       }
       if (!rec){ toast('the deed only means something inside a city'); return; }
       if (rec.owned != null){ toast('you already hold the deed to a ' + (rec.name || 'city') + ' tower'); return; }
       let bi = 0, bd = 1e9;
       rec.towers.forEach((t2, i) => {
+        if (t2.kind && t2.kind !== 'tower') return;
         const d = Math.hypot(rec.x + t2.bx * 36 - game.pos.x, rec.z + t2.bz * 36 - game.pos.z);
         if (d < bd){ bd = d; bi = i; }
       });
@@ -12676,7 +12958,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -12750,6 +13032,12 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'tdrone'){
+    c.fillStyle = '#7f6fd6'; c.fillRect(5, 6, 6, 5);
+    c.fillStyle = '#b9a7ff'; c.fillRect(2, 4, 3, 2); c.fillRect(11, 4, 3, 2);
+    c.fillStyle = '#4a4258'; c.fillRect(4, 5, 1, 2); c.fillRect(11, 5, 1, 2);
+    c.fillStyle = '#8fe6dc'; c.fillRect(7, 8, 2, 2);
+    c.fillStyle = '#eef2ff'; c.fillRect(7, 12, 2, 1); c.fillRect(6, 13, 4, 1);
   } else if (it.kind === 'rail'){
     c.fillStyle = '#6b5233'; c.fillRect(2, 4, 12, 2); c.fillRect(2, 10, 12, 2);
     c.fillStyle = '#8a8f9a'; c.fillRect(4, 2, 2, 12); c.fillRect(10, 2, 2, 12);
@@ -13112,6 +13400,7 @@ function itemLabel(it){
   if (it.kind === 'aseal') return "architect's seal";
   if (it.kind === 'car') return 'electric car';
   if (it.kind === 'rail') return 'rails';
+  if (it.kind === 'tdrone') return 'teleport drone';
   if (it.kind === 'deed') return 'property deed';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
@@ -13270,7 +13559,7 @@ function buildInvUI(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'car'];
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'car'];
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -13863,6 +14152,8 @@ function refreshToolHUD(){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'tdrone'){
+    html = '<div class="t1">teleport drone · ' + Math.round(it.charge || 0) + '%</div><div class="t2">right click to fly it (90m tether) — land it and you BLINK to where it was. Charges near a powered grid.</div>';
   } else if (it.kind === 'rail'){
     html = '<div class="t1">rails ×' + it.count + '</div><div class="t2">left click plants spikes into a line (1 rail per 4m) · right click finishes it · power an end post and right-click it to ride</div>';
   } else if (it.kind === 'deed'){
@@ -15192,6 +15483,8 @@ function enterPhoto(drone){
     pos: game.camera.position.clone(),
     yaw: game.yaw, pitch: game.pitch, speed: drone ? 8 : 10,
     drone: drone || null,
+    tele: !!(drone && drone.kind === 'tdrone'),
+    range: drone && drone.kind === 'tdrone' ? 90 : 45,
     home: drone ? { x: game.camera.position.x, y: game.camera.position.y, z: game.camera.position.z } : null,
   };
   document.body.classList.add('photo');
@@ -15204,11 +15497,28 @@ function enterPhoto(drone){
   placePreview.hide();
   if (game.gridViz) game.gridViz.visible = false;
   toast(drone
-    ? 'drone up · ' + Math.round(drone.charge) + '% — WASD fly · 45m range · F2 snapshot · right click or P to land'
+    ? (drone.kind === 'tdrone'
+      ? 'teleport drone up · ' + Math.round(drone.charge) + '% — WASD fly · 90m range · right click or P to BLINK there'
+      : 'drone up · ' + Math.round(drone.charge) + '% — WASD fly · 45m range · F2 snapshot · right click or P to land')
     : 'photo mode — WASD fly · scroll speed · , . time of day · F2 snapshot · P exit');
 }
 function exitPhoto(){
-  if (game.photo && game.photo.drone) toast('drone landed · ' + Math.round(game.photo.drone.charge) + '% charge');
+  if (game.photo && game.photo.tele && game.photo.drone){
+    // THE BLINK: you step out of your own body and into the drone's spot
+    const p = game.photo.pos;
+    let ty = p.y;
+    const box = [p.x - 2, p.y - 3, p.z - 2, p.x + 2, p.y + 4, p.z + 2];
+    const led = nearEdits(box);
+    // nudge up out of anything solid so you never blink into rock
+    for (let i = 0; i < 8 && CORE.evalSDF(p.x, ty + 0.9, p.z, led, game.gen) < 0.45; i++) ty += 0.8;
+    game.pos.set(p.x, ty - 0.6, p.z);
+    game.vel.set(0, 0, 0);
+    game.photo.drone.charge = Math.max(0, game.photo.drone.charge - 12);
+    Particles.burst(game.pos.x, game.pos.y + 1, game.pos.z, 1.4, [0xb9a7ff, 0x8fe6dc, 0xeef2ff], 26, 5);
+    AudioSys.sfx('laser');
+    toast('BLINK — teleported to the drone (' + Math.round(game.photo.drone.charge) + '% charge)');
+    markSave();
+  } else if (game.photo && game.photo.drone) toast('drone landed · ' + Math.round(game.photo.drone.charge) + '% charge');
   game.photo = null;
   document.body.classList.remove('photo');
   if (game.vm) game.vm.root.visible = true;
@@ -15234,12 +15544,13 @@ function updatePhoto(dt){
     ph.pos.z += mz / L * sp * dt;
   }
   if (ph.drone){
-    // tethered to the pilot: 45m radius, battery drains while airborne
+    // tethered to the pilot; battery drains while airborne
+    const RNG = ph.range || 45;
     const H = ph.home;
     const dx = ph.pos.x - H.x, dy = ph.pos.y - H.y, dz = ph.pos.z - H.z;
     const d = Math.hypot(dx, dy, dz);
-    if (d > 45){
-      const s = 45 / d;
+    if (d > RNG){
+      const s = RNG / d;
       ph.pos.set(H.x + dx * s, H.y + dy * s, H.z + dz * s);
     }
     ph.drone.charge = Math.max(0, ph.drone.charge - dt * 1.1);
@@ -15379,6 +15690,14 @@ function frame(now){
       if (d < bd){ bd = d; bb = e; }
     }
     game.bossNear = bb;
+    // firearm crosshair + scope upkeep
+    {
+      const tl = activeTool();
+      const gunUp = tl && (tl.kind === 'fw' || tl.kind === 'gun') &&
+        game.ui === 'none' && !game.photo && !game.driving && !game.riding;
+      if (game.scope && (!gunUp || !(tl.kind === 'fw' && CORE.GUNS[tl.g] && CORE.GUNS[tl.g].zoom))) unscope();
+      $('xhair').classList.toggle('hidden', !gunUp || !!game.scope);
+    }
     const el = $('bossbar');
     if (bb && game.ui === 'none'){
       el.classList.remove('hidden');
@@ -15448,7 +15767,7 @@ function frame(now){
     }
     if (powerSys.surplus.length && powerSys.surplusNear(game.pos.x, game.pos.y + 1, game.pos.z, 6)){
       for (const s of game.slots){
-        if (s && s.kind === 'drone' && (s.charge || 0) < 100){
+        if (s && (s.kind === 'drone' || s.kind === 'tdrone') && (s.charge || 0) < 100){
           s.charge = Math.min(100, (s.charge || 0) + 0.9);   // ~4.5%/s beside the grid
           markSave();
         }
@@ -15553,7 +15872,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
