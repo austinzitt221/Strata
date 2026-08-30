@@ -2,6 +2,48 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 12.1 — playtest fixes: real driving, mega cities, scopes (2026-08-30)
+
+Everything from the Cities & vehicles playtest notes.
+
+- **You are IN the car now.** The camera used to freeze where you stood
+  (updatePlayer returned before the camera block while driving — you were
+  remote-controlling the car). Fixed with a shared vehicle camera: first
+  person puts your eyes in the driver's seat behind the wheel with free
+  mouse look; F5 gives a smoothed GTA-style chase cam behind the car with
+  your third-person model visibly seated at the wheel, knees bent, head
+  under the roofline. The rail cart had the same frozen-camera bug and
+  got the same treatment.
+- **Car detail.** No more solid colors: pixel-textured panels with a
+  trim stripe, headlights/taillights, glass canopy you can see through
+  from inside, seats, dashboard, steering wheel — and a live gauge
+  cluster drawn to a canvas: a real analog speedometer (0–50 km/h with
+  a needle) and a battery gauge, both readable from the driver's seat.
+  NPC cabs got painted pixel shells, taxi stripes, roof signs, and a
+  visible villager driver at the wheel.
+- **Mega cities.** Cells shrank 2600m -> 1800m and three quarters of
+  cells now hold a city (typical nearest skyline ~1.2-1.7km; several can
+  share one view). Cities roll their SIZE: 3x3 (15%), 5x5 (30%), 7x7
+  (40% + the rest) blocks — up to ~260m across, 4x+ the old footprint —
+  and every block rolls what it is: towers (up to 14 stories now),
+  parks (painted lawns + benches), market halls, open lots. Avenues
+  between every block row, torch-lit intersections, population and
+  traffic scale with size.
+- **Headroom fix.** Tower ground floors were 1.78m tall (the hollow
+  started 1.2m above the pavement — that's why only SOME towers hit
+  your head: it was every ground floor, upper floors were fine).
+  Stories are 4m now and the hollow reaches the pavement; the whole
+  ground story is verified walkable air to 3.3m.
+- **THE TELEPORT DRONE.** The camera drone's expensive sibling (8 iron
+  + 4 ruby ingots + 3 diamond + 6 crystal, or 950 coins from the city
+  electrician at 25 goodwill). Fly it like the camera drone on a 90m
+  tether; landing it BLINKS you to where it was (12% charge per blink,
+  never into solid rock — it nudges you up out of anything solid).
+- **Crosshair + scope.** All firearms show a crosshair. The Longeye
+  .338: hold right click to glass — cartoon scope reticle with drop
+  ticks and a red dot, scroll to zoom 2x-66x, mouse sensitivity scales
+  with magnification, release to drop the glass.
+
 ## Build 12 — Cities & vehicles (roadmap build 11) (2026-08-30)
 
 Box-CSG makes cities affordable where block games choke. Four phases.
