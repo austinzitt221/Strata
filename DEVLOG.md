@@ -2,6 +2,103 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 12 — Cities & vehicles (roadmap build 11) (2026-08-30)
+
+Box-CSG makes cities affordable where block games choke. Four phases.
+
+- **MEGA-CITIES.** Rare km-spaced skylines: one candidate per 2.6km cell
+  (half the cells roll none; each cell tries five sites and keeps the
+  first buildable one, clear of villages and forts). Stamped on approach
+  like forts: a deep foundation slab irons the site flat, basalt avenues
+  cross it in a 3x3 grid, and eight towers rise from procedural
+  floor/facade modules — hollow shells, real floor slabs, window bands
+  punched through every story, a street door, a roof rim, and a corner
+  rope shaft so every floor is climbable. Torch-lit plaza with an
+  obsidian obelisk in the center block. ~190 edits per city; procedural
+  names (NOVA REND, EAST HARROW…); the nearest known skyline shows on
+  the compass from up to 3km; trees keep off the pavement.
+- **City life.** The stamp mints the city's people: five shopkeepers on
+  the trade system (the four village trades + a new GROCER dealing in
+  food) and the MAYOR at the plaza buying civic works. All give missions
+  through the same engine as villages, markers included. Citizens stroll
+  the avenues by day and head in at night; two electric cabs work the
+  avenues end to end and brake for pedestrians.
+- **THE ELECTRIC CAR.** Ships as a kit — 650 coins at the city
+  electrician, or craft it (14 iron + 4 ruby ingots + 8 wire). Deploy,
+  right-click to drive: W/S throttle, A/D steer, 13.5 m/s, real
+  gravity + sphere-vs-SDF ground physics, motor hum, dashboard HUD.
+  Full throttle drains ~0.65%/s; a dead battery won't move; parked near
+  a powered grid it recharges at drone rate. Crouch+RMB folds it back
+  into a kit; wrecks fold into a half-charged kit. Never despawns,
+  saves with battery and heading.
+- **RAILS & TRAINS.** Rails craft 8-a-batch from iron and sticks (the
+  toolsmith sells bundles). Left click plants spikes into a line (1 rail
+  per 4m of span, spikes up to 60m apart), right click finishes it —
+  twin rails, ties, and a gold post at each end. Power either end (any
+  live grid within 8m) and right-clicking an end post boards a cart
+  that runs the whole polyline at 16 m/s; space bails out. Fast travel
+  you BUILD: string a line from your base to the city and wire one end.
+- **Property.** The mayor sells the PROPERTY DEED (900 coins, the coin
+  sink). Left click inside a city claims its nearest tower — furnished
+  on the spot with a strongbox, a bed (spawn point!) and a light. One
+  deed per city.
+- **Also:** projectile src fix carried; city folk live on a 180m leash
+  instead of the 70m wildlife despawn so cabs survive their own routes.
+- **Known issues:** stamping a whole city queues a few hundred chunk
+  remeshes — on a mid-range machine it fills in over a couple of
+  seconds as you approach; rail lines have no wrench-delete yet.
+
+## Build 11 — Bosses & endgame (roadmap build 10) (2026-08-30)
+
+Four bosses, each built on a verb only a CSG world has. Boss framework:
+`e.bossType` entities run their own physics, never despawn by distance,
+take no knockback, and the nearest one within 90m owns a boss HP bar at
+the top of the screen. First kills pay a unique unlock; repeat kills pay
+coins and gems. Kill flags save per world.
+
+- **THE BURROWER** (hp 340, the deep). Go 25m under the surface and it
+  can smell you. A chitin worm that swims through solid rock, carving a
+  REAL tunnel behind it (subtract spheres, SDF-gated so it only carves
+  where there's stone) — burrows under your feet, lunges up through the
+  floor, dives, repeats. You hear the rumble grow before it hits. First
+  kill: the TUNNELER CORE — with it in your pack, any held drill bores a
+  continuous corridor as you walk.
+- **THE WARDEN** (hp 520, citadel forts). Every 5th raid fort is a
+  citadel: richer vault, and the keeper is a golem of stonebrick, rock
+  and obsidian instead of a warlord. Damage blasts mineable boulder
+  chunks visibly off its hide (+rock +iron ore); at range it throws a
+  rock that craters where it lands; wounded below 65% it EATS the ground
+  — carving a real crater — to heal. Drops a vault key every kill; first
+  kill drops the WARDEN FIST (swords hit 2x, punches land like hammers).
+- **THE MAGMA TYRANT** (hp 650, volcano calderas). Climb into a crater
+  and it hauls itself out of the melt. Lava bombs whose blast cup fills
+  with a REAL molten pool (union MAT.LAVA); every quarter-health lost it
+  rips a magma vent open under your feet. The battlefield floods as the
+  fight runs long — you terraform to keep footing. First kill: the MAGMA
+  HEART — lava cannot burn you while it rides in your pack.
+- **THE ARCHITECT** (hp 620, the endgame — summoned, not found). Craft
+  the ARCHITECT SIGIL (4 diamond + 12 obsidian + 6 crystal, station) and
+  left-click to call it. A builder-wraith that fights with YOUR verbs:
+  stamps stonebrick walls across your line of approach, ERASES the floor
+  under you, and replays corrupted obsidian copies of structures you
+  actually built in that world (it reads the edit list). Blinks away
+  when cornered. First kill: the ARCHITECT'S SEAL — the wrench reaches
+  4x as far while it's in your pack.
+- **Music.** Tiny procedural scheduler in AudioSys, three moods that
+  follow play state: surface (slow major-pentatonic plucks), cave (low
+  drones over the depth ambience), boss (driving pulse + minor
+  arpeggio). New MUSIC volume slider in options (separate from SFX).
+- **Fixes.** Boss projectiles used to spawn inside the thrower's own
+  collision radius and detonate on it — projectiles now carry `src` and
+  never explode on their thrower. Removed a stale phase-A tyrant stat
+  stub that shadowed the real stats.
+- **Verification.** All four bosses have headless Playwright suites
+  (spawn triggers, every attack verb SDF-verified against the edit list,
+  drops, flags, no-respawn rules, seal/heart/core item effects) plus
+  screenshot review. 297 CORE tests green; smoke, explosives, Burrower
+  and Warden suites re-run green. height() 1.2us/call — no gen
+  regression.
+
 ## Build 10 — Arms Race (roadmap build 9) (2026-08-29)
 
 Guns, bombs, and reasons to use them. Four phases.

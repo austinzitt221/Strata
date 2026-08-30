@@ -102,6 +102,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .craftrow .ccost{font-size:12px; color:var(--ui-hi);}
 .craftrow .ccost.ok{color:#7dff9b;}
 
+/* ---------- boss bar ---------- */
+#bossbar{position:fixed; top:52px; left:50%; transform:translateX(-50%); width:430px; z-index:6; text-align:center;}
+#bossname{font-size:13px; letter-spacing:4px; color:#ffb0a0; text-shadow:0 1px 3px #000; margin-bottom:4px;}
+
 /* ---------- objective markers ---------- */
 #objlayer{position:fixed; inset:0; pointer-events:none; z-index:5;}
 .objmark{position:absolute; left:0; top:0; width:64px; text-align:center; will-change:transform;}
@@ -196,6 +200,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>GOD RAYS</label><input type="range" id="optRays" min="0" max="1" step="1"><span class="val" id="optRaysV"></span></div>
     <div class="optrow"><label>FPS CAP</label><input type="range" id="optFps" min="0" max="7" step="1"><span class="val" id="optFpsV"></span></div>
     <div class="optrow"><label>VOLUME</label><input type="range" id="optVol" min="0" max="100" step="5"><span class="val" id="optVolV"></span></div>
+    <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
@@ -260,6 +265,11 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 </div>
 
 <div id="objlayer"></div>
+
+<div id="bossbar" class="hidden">
+  <div id="bossname">BOSS</div>
+  <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
+</div>
 
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
@@ -1264,6 +1274,7 @@ function makeGen(seed){
     const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
     const h = height(x, z);
     if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
+    if (inCity(x, z)) return null;                      // no tufts in the streets
     const arch = archAt(x, z);
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
@@ -1294,8 +1305,15 @@ function makeGen(seed){
     if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
+    if (inCity(x, z)) return null;                   // streets stay paved
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
     return { x, z, y: h, s, key: cx + ',' + cz };
+  }
+  // does this point land inside a mega-city footprint? (candidates keep
+  // 400m off their cell edge, so only the containing cell can claim it)
+  function inCity(x, z){
+    const c = cityAt(Math.floor(x / CITY_CELL), Math.floor(z / CITY_CELL));
+    return !!c && Math.abs(c.x - x) < 62 && Math.abs(c.z - z) < 62;
   }
   // ---- villages: one candidate per VILLAGE_CELL, flat friendly ground only
   function villageAt(cx, cz){
@@ -1342,12 +1360,58 @@ function makeGen(seed){
       }
     return { x: fx, z: fz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- mega-cities: one candidate per CITY_CELL (km-scale spacing), on
+  // gentle dry ground the foundation slab can iron flat, clear of both
+  // village and fort candidates
+  const cityCache = new Map();
+  function cityAt(cx, cz){
+    const ck = (cx + 32768) * 65536 + (cz + 32768);
+    if (cityCache.has(ck)) return cityCache.get(ck);
+    const r = cityAtRaw(cx, cz);
+    cityCache.set(ck, r);
+    return r;
+  }
+  function cityAtRaw(cx, cz){
+    const h0 = hashInt(sX ^ 0xC17C17 ^ hashInt((cx * 668904701) ^ hashInt(cz * 941083987)));
+    if ((h0 & 7) < 3) return null;                 // most cells hold no city
+    // the cell rolls several sites and keeps the first buildable one
+    let x = 0, z = 0, ok = false;
+    for (let k = 0; k < 5 && !ok; k++){
+      x = cx * CITY_CELL + 400 + (hashInt(h0 ^ (11 + k * 2)) % (CITY_CELL - 800));
+      z = cz * CITY_CELL + 400 + (hashInt(h0 ^ (13 + k * 2)) % (CITY_CELL - 800));
+      const hc = height(x, z);
+      if (hc < seaLevel + 3) continue;
+      const a = archAt(x, z);
+      if (a !== 0 && a !== 1 && a !== 4) continue;     // plains, hills, dunes
+      let mn = hc, mx = hc;
+      for (const [dx, dz] of [[-55, 0], [55, 0], [0, -55], [0, 55], [40, 40], [-40, -40], [40, -40], [-40, 40]]){
+        const hh = height(x + dx, z + dz);
+        if (hh < mn) mn = hh;
+        if (hh > mx) mx = hh;
+      }
+      if (mx - mn > 13 || mn < seaLevel + 1) continue;
+      ok = true;
+    }
+    if (!ok) return null;
+    for (let vx = Math.floor((x - 220) / VILLAGE_CELL); vx <= Math.floor((x + 220) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((z - 220) / VILLAGE_CELL); vz <= Math.floor((z + 220) / VILLAGE_CELL); vz++){
+        const v = villageAt(vx, vz);
+        if (v && Math.hypot(v.x - x, v.z - z) < 220) return null;
+      }
+    for (let fx2 = Math.floor((x - 220) / FORT_CELL); fx2 <= Math.floor((x + 220) / FORT_CELL); fx2++)
+      for (let fz2 = Math.floor((z - 220) / FORT_CELL); fz2 <= Math.floor((z + 220) / FORT_CELL); fz2++){
+        const f = fortAt(fx2, fz2);
+        if (f && Math.hypot(f.x - x, f.z - z) < 220) return null;
+      }
+    return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
+  }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, cityAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
+const CITY_CELL = 2600;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
@@ -2056,7 +2120,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -2297,6 +2361,14 @@ const RECIPES = [];
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
+  // rails bolt together from smelted stock
+  RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
+  // the electric car ships as a kit: place it, drive it, charge it
+  RECIPES.push({ kind: 'car', station: true,
+    costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }] });
+  // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
+  RECIPES.push({ kind: 'sigil', yields: 1, station: true,
+    costs: [{ item: 'diamond', n: 4 }, { mat: MAT.OBSIDIAN, n: 12 }, { mat: MAT.CRYSTAL, n: 6 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
   RECIPES.push({ kind: 'beacon', yields: 1, station: true,
     costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 4 }, { mat: MAT.PLANKS, n: 4 }] });
@@ -2340,6 +2412,7 @@ function craft(slots, r, free){
                   : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
+                  : r.kind === 'car' ? { kind: 'car', charge: 20 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -2449,7 +2522,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, CITY_CELL,
   HARDNESS, mineDuration, placeDuration, volFactor,
 };
 })();
@@ -3108,7 +3181,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, shadows: 1, rays: 1, fpsCap: 0, skin: 0 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -3151,6 +3224,8 @@ const game = {
   armor: { head: null, chest: null, feet: null, back: null },
   villages: {},
   forts: {},
+  cities: {},
+  bossKills: {},
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -4452,7 +4527,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -4777,6 +4852,64 @@ const AudioSys = {
     }
   },
   setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
+  // ---------- procedural music: three moods, one tiny scheduler ----------
+  // surface = slow major-pentatonic plucks; cave = sparse low drones over
+  // the noise ambience; boss = a driving pulse with a minor arpeggio.
+  musicGain: null, musicNext: 0, musicStep: 0, musicMode: 'off', musicWalk: 3,
+  ensureMusic(){
+    if (!this.ctx || this.musicGain) return;
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9;
+    this.musicGain.connect(this.ctx.destination);
+  },
+  setMusicVolume(v){ this.ensureMusic(); if (this.musicGain) this.musicGain.gain.value = v / 100 * 0.9; },
+  note(freq, at, dur, gain, type){
+    const osc = this.ctx.createOscillator();
+    osc.type = type; osc.frequency.value = freq;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(gain, at + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.001, at + dur);
+    osc.connect(g); g.connect(this.musicGain);
+    osc.start(at); osc.stop(at + dur + 0.05);
+  },
+  music(mode){
+    if (!this.ctx) return;
+    this.ensureMusic();
+    if (mode !== this.musicMode){ this.musicMode = mode; this.musicStep = 0; }
+    if (mode === 'off' || (game.opts.music != null && game.opts.music <= 0)) return;
+    const t = this.ctx.currentTime;
+    if (this.musicNext < t) this.musicNext = t + 0.08;
+    const SUR = [262, 294, 330, 392, 440, 523, 587, 659];
+    const CAV = [110, 131, 147, 165, 196, 220];
+    const BOS = [220, 262, 294, 330, 392, 440];
+    // keep just under a second of music scheduled ahead
+    while (this.musicNext < t + 0.9){
+      const at = this.musicNext, st = this.musicStep++;
+      const walk = arr => {
+        this.musicWalk = Math.max(0, Math.min(arr.length - 1,
+          this.musicWalk + ((Math.random() * 3) | 0) - 1));
+        return arr[this.musicWalk];
+      };
+      if (mode === 'boss'){
+        this.note(110, at, 0.16, 0.07, 'square');                       // the pulse
+        this.note(BOS[(st * 2) % BOS.length], at, 0.3, 0.035, 'sawtooth');
+        if (st % 8 === 7) this.note(880, at, 0.12, 0.03, 'square');     // accent
+        this.musicNext += 0.44;
+      } else if (mode === 'cave'){
+        if (st % 4 === 0) this.note(55, at, 3.4, 0.05, 'sine');         // sub floor
+        if (Math.random() < 0.65) this.note(walk(CAV), at, 2.4, 0.05, 'sine');
+        this.musicNext += 1.8;
+      } else {                                                          // surface
+        if (Math.random() < 0.8){
+          const f = walk(SUR);
+          this.note(f, at, 1.3, 0.04, 'triangle');
+          if (st % 4 === 2) this.note(f * 1.5, at + 0.1, 1.1, 0.02, 'triangle');
+        }
+        this.musicNext += 0.8;
+      }
+    }
+  },
   burst(o){
     if (!this.ctx) return;
     const { dur = 0.25, freq = 900, gain = 0.22, drop = 0 } = o || {};
@@ -7270,22 +7403,184 @@ const ENT_DEF = {
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
+  cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
+  car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
+  // bosses: big hp, custom AI in bossSys, exempt from generic physics
+  burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
+  warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
+  tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
+  architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
 };
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
   arms:    { name: 'arms dealer',  coat: 0x7a2f2f, hat: 0x4a1c1c },
   tool:    { name: 'toolsmith',    coat: 0x2f5a7a, hat: 0x1c3a4a },
   spark:   { name: 'electrician',  coat: 0x3f7a3f, hat: 0x245224 },
+  food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
+  mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
+  walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
 };
 function entMesh(type, ent){
   const g = new THREE.Group();
   const legs = [];
+  if (type === 'warden'){
+    // a vault golem assembled from the ground itself: stonebrick torso,
+    // rock limbs, an obsidian head. The boulders bolted to it are the
+    // chunks damage blasts off -- bossSys hides them as its hp drops.
+    const mat = m2 => vmMatMaterial(m2);
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.7, 1.1), mat(CORE.MAT.STONEBRICK));
+    torso.position.y = 1.7;
+    const hips = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.6, 0.9), mat(CORE.MAT.ROCK));
+    hips.position.y = 0.75;
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.6), mat(CORE.MAT.ROCK));
+    legL.position.set(-0.45, 0.45, 0);
+    const legR = legL.clone(); legR.position.x = 0.45;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.8), mat(CORE.MAT.OBSIDIAN));
+    head.position.y = 2.9;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.14, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0xffd75e }));
+    eye.position.set(0, 2.95, -0.42);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.6), mat(CORE.MAT.ROCK));
+    armL.position.set(-1.25, 1.65, 0);
+    const armR = armL.clone(); armR.position.x = 1.25;
+    g.add(torso, hips, legL, legR, head, eye, armL, armR);
+    const chunks = [];
+    for (const [cx2, cy2, cz2, sc] of [[-0.95, 2.5, 0.15, 0.8], [0.95, 2.5, 0.15, 0.8],
+                                       [0, 1.9, 0.75, 0.9], [-0.6, 1.1, 0.6, 0.6], [0.6, 1.1, 0.6, 0.6]]){
+      const c2 = new THREE.Mesh(new THREE.BoxGeometry(sc, sc, sc), mat(CORE.MAT.ROCK));
+      c2.position.set(cx2, cy2, cz2);
+      c2.rotation.set(0.4, 0.6, 0.2);
+      g.add(c2); chunks.push(c2);
+    }
+    g.userData.chunks = chunks;
+    return g;
+  }
+  if (type === 'architect'){
+    // a slender builder-wraith: an obsidian shell around crystal light,
+    // one white drafting eye, floating crystal hands that stamp and erase
+    const obs = vmMatMaterial(CORE.MAT.OBSIDIAN);
+    const cry = vmMatMaterial(CORE.MAT.CRYSTAL);
+    const white = new THREE.MeshBasicMaterial({ color: 0xeef2ff });
+    const robe = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.7, 0.7), obs);
+    robe.position.y = 1.05;
+    const chest = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.5), cry);
+    chest.position.y = 1.75;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), obs);
+    head.position.y = 2.35;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.08), white);
+    eye.position.set(0, 2.38, -0.32);
+    const crown = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.14, 0.72), cry);
+    crown.position.y = 2.72;
+    const handL = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.5, 0.34), cry);
+    handL.position.set(-0.85, 1.5, -0.2);
+    const handR = handL.clone(); handR.position.x = 0.85;
+    g.add(robe, chest, head, eye, crown, handL, handR);
+    g.userData.handL = handL; g.userData.handR = handR;
+    return g;
+  }
+  if (type === 'tyrant'){
+    // a brute of cooling basalt around a molten core: lava glows through
+    // the chest crack and the fists, obsidian horns crown the head
+    const bas = m2 => vmMatMaterial(m2);
+    const glow = new THREE.MeshBasicMaterial({ color: 0xff7a30 });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.9, 1.3), bas(CORE.MAT.BASALT));
+    torso.position.y = 1.95;
+    const core = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.9, 0.16), bas(CORE.MAT.LAVA));
+    core.position.set(0, 2.0, -0.68);
+    const hips = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 1.0), bas(CORE.MAT.BASALT));
+    hips.position.y = 0.85;
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.0, 0.68), bas(CORE.MAT.BASALT));
+    legL.position.set(-0.52, 0.5, 0);
+    const legR = legL.clone(); legR.position.x = 0.52;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 0.9), bas(CORE.MAT.BASALT));
+    head.position.y = 3.28;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 0.1), glow);
+    eye.position.set(0, 3.33, -0.47);
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.6, 0.22), bas(CORE.MAT.OBSIDIAN));
+    hornL.position.set(-0.42, 3.75, 0); hornL.rotation.z = 0.35;
+    const hornR = hornL.clone(); hornR.position.x = 0.42; hornR.rotation.z = -0.35;
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.66, 1.8, 0.75), bas(CORE.MAT.BASALT));
+    armL.position.set(-1.5, 1.75, 0);
+    const armR = armL.clone(); armR.position.x = 1.5;
+    const fistL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.55, 0.85), bas(CORE.MAT.LAVA));
+    fistL.position.set(-1.5, 0.72, 0);
+    const fistR = fistL.clone(); fistR.position.x = 1.5;
+    g.add(torso, core, hips, legL, legR, head, eye, hornL, hornR, armL, armR, fistL, fistR);
+    return g;
+  }
+  if (type === 'burrower'){
+    // a chitin worm: armored head with a glowing maw, body segments trail
+    // behind along its real path (positioned each frame from ent.trail)
+    const chitin = new THREE.MeshBasicMaterial({ color: 0x4a4058 });
+    const chitin2 = new THREE.MeshBasicMaterial({ color: 0x635875 });
+    const head = new THREE.Group();
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 2.2), chitin);
+    const maw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 0.5),
+      new THREE.MeshBasicMaterial({ color: 0xff7a30 }));
+    maw.position.z = -1.05;
+    const jawT = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
+    jawT.position.set(0, 0.85, -0.9);
+    const jawB = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
+    jawB.position.set(0, -0.85, -0.9);
+    head.add(skull, maw, jawT, jawB);
+    g.add(head);
+    g.userData.head = head;
+    g.userData.segs = [];
+    for (let i = 0; i < 7; i++){
+      const sc = 1.5 - i * 0.14;
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(sc, sc, 1.4), i % 2 ? chitin : chitin2);
+      g.add(seg);
+      g.userData.segs.push(seg);
+    }
+    return g;
+  }
   const box = (w, h, d, color, x, y, z, parent) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
     m.position.set(x, y, z);
     (parent || g).add(m);
     return m;
   };
+  if (type === 'car'){
+    // the electric car: white coupe, teal charge strip, glass canopy
+    const paint = new THREE.MeshBasicMaterial({ color: 0xe8ecf2 });
+    const trim = new THREE.MeshBasicMaterial({ color: 0x35d1c0 });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 3.4), paint);
+    body.position.y = 0.6;
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.34, 0.8), paint);
+    nose.position.set(0, 0.52, -1.9);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.52, 1.7), glass);
+    canopy.position.set(0, 1.1, 0.1);
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.1, 3.0), trim);
+    strip.position.y = 0.34;
+    g.add(body, nose, canopy, strip);
+    for (const [wx2, wz2] of [[-0.85, -1.15], [0.85, -1.15], [-0.85, 1.15], [0.85, 1.15]]){
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.56, 0.56), dark);
+      wh.position.set(wx2, 0.3, wz2);
+      g.add(wh);
+    }
+    return g;
+  }
+  if (type === 'cab'){
+    // a boxy electric cab; each one rolls its own paint job
+    const paint = new THREE.MeshBasicMaterial({ color: [0xc94b3f, 0x3f6fc9, 0xd8b45e, 0x4fae5c][(Math.random() * 4) | 0] });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const glass = new THREE.MeshBasicMaterial({ color: 0xbfe2ef });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.55, 3.1), paint);
+    body.position.y = 0.62;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.6), paint);
+    cabin.position.set(0, 1.12, 0.15);
+    const wind = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.34, 0.06), glass);
+    wind.position.set(0, 1.12, -0.68);
+    g.add(body, cabin, wind);
+    for (const [wx2, wz2] of [[-0.8, -1.0], [0.8, -1.0], [-0.8, 1.0], [0.8, 1.0]]){
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.5, 0.5), dark);
+      wh.position.set(wx2, 0.28, wz2);
+      g.add(wh);
+    }
+    return g;
+  }
   if (type === 'villager'){
     const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
@@ -7397,12 +7692,75 @@ function killEntity(e, byPlayer){
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
     [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
+  if (e.type === 'car'){
+    if (game.driving === e) game.driving = null;
+    const i2 = game.slots.findIndex(sl => !sl);
+    if (i2 >= 0){
+      game.slots[i2] = { kind: 'car', charge: Math.round((e.charge || 0) / 2) };
+      toast('the wreck folds back into a kit (half the charge lost)');
+      refreshHotbar();
+    } else toast('the car is wrecked — no pack space to recover the kit');
+    markSave();
+    return;
+  }
   if (byPlayer){
     if (e.type === 'grazer'){ addStackItem('meat', 2); toast('+2 meat'); }
     else if (e.type === 'sheep'){
       const n = 2 + ((Math.random() * 2) | 0);
       addStackItem('wool', n); addStackItem('meat', 1);
       toast('+' + n + ' wool  ·  +1 meat');
+    }
+    else if (e.bossType === 'warden'){
+      const rec = game.forts && game.forts[e.fortKey];
+      if (rec) rec.bossDead = true;
+      game.bossKills = game.bossKills || {};
+      addStackItem('vkey', 1);
+      if (!game.bossKills.warden){
+        game.bossKills.warden = true;
+        addStackItem('wfist', 1); addStackItem('coin', 120);
+        toast('THE WARDEN crumbles — the WARDEN FIST is yours (+1 vault key · +120 coins)');
+      } else {
+        addStackItem('coin', 120); addStackItem('diamond', 3);
+        toast('THE WARDEN crumbles — +1 vault key · +120 coins · +3 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'burrower'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.burrower){
+        game.bossKills.burrower = true;
+        addStackItem('tcore', 1); addStackItem('coin', 80);
+        toast('THE BURROWER is slain — the TUNNELER CORE is yours (+80 coins)');
+      } else {
+        addStackItem('coin', 80); addStackItem('diamond', 2);
+        toast('THE BURROWER is slain again — +80 coins · +2 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'tyrant'){
+      game.bossKills = game.bossKills || {};
+      if (e.volcKey) bossSys.tyrantDone.add(e.volcKey);
+      if (!game.bossKills.tyrant){
+        game.bossKills.tyrant = true;
+        addStackItem('mheart', 1); addStackItem('coin', 150);
+        toast('THE MAGMA TYRANT bursts — the MAGMA HEART is yours (+150 coins)');
+      } else {
+        addStackItem('coin', 150); CORE.addMat(game.slots, CORE.MAT.OBSIDIAN, 8); addStackItem('diamond', 2);
+        toast('THE MAGMA TYRANT bursts — +150 coins · +8 obsidian · +2 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'architect'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.architect){
+        game.bossKills.architect = true;
+        addStackItem('aseal', 1); addStackItem('coin', 200);
+        toast('THE ARCHITECT unravels — the ARCHITECT\'S SEAL is yours (+200 coins)');
+      } else {
+        addStackItem('coin', 200); addStackItem('diamond', 4);
+        toast('THE ARCHITECT unravels — +200 coins · +4 diamond');
+      }
+      markSave();
     }
     else if (e.warlord){
       const rec = game.forts && game.forts[e.fortKey];
@@ -7427,6 +7785,13 @@ function hurtEntity(e, dmg, kx, kz){
     e.flash = 0.15; e.fleeT = 5;
     villageSys.offend(e);
     AudioSys.sfx('hit');
+    return;
+  }
+  if (e.bossType){
+    e.hp -= dmg;
+    e.flash = 0.15;
+    AudioSys.sfx('hit');
+    if (e.hp <= 0) killEntity(e, true);
     return;
   }
   e.hp -= dmg;
@@ -7661,7 +8026,7 @@ const villageSys = {
     }
   },
   villagerRec(e){
-    const rec = game.villages[e.vkey];
+    const rec = e.ckey ? (game.cities || {})[e.ckey] : game.villages[e.vkey];
     return rec ? rec.houses[e.vi] : null;
   },
   offend(e){
@@ -7705,6 +8070,43 @@ const objectiveSys = {
         if (c.type === 'explore' && c.on && !c.done)
           out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec });
       });
+    }
+    // city missions project markers just like village ones
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped || !rec.houses) continue;
+      rec.houses.forEach((hrec, vi) => {
+        const m = hrec.mission;
+        if (!m) return;
+        const id = key + ':' + vi;
+        if (m.type === 'hunt')
+          out.push(m.done ? { id, x: hrec.x, z: hrec.z, label: 'COLLECT', rec, hrec }
+                          : { id, x: m.tx, z: m.tz, label: 'HUNT', rec, hrec });
+        else if (m.type === 'expand')
+          out.push({ id, x: m.x, z: m.z, y: m.y + 3, label: 'BUILD', rec, hrec });
+        else if (m.type === 'steal'){
+          const vh = rec.houses[m.victim];
+          out.push({ id, x: vh.x, z: vh.z, label: 'STEAL', rec, hrec });
+        }
+      });
+    }
+    // cities advertise from a long way out — the nearest known skyline
+    // shows even before it's stamped
+    {
+      let best = null, bd = 1e9;
+      for (const key in (game.cities || {})){
+        const rec = game.cities[key];
+        if (!rec.stamped) continue;
+        const d = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+        if (d >= 70 && d < bd){ bd = d; best = { id: 'city' + key, x: rec.x, z: rec.z,
+          y: (rec.gy != null ? rec.gy : 0) + 22, label: rec.name || 'CITY', rec: { name: rec.name || 'city' } }; }
+      }
+      if (!best) for (const c of citySys.known){
+        const d = Math.hypot(c.x - game.pos.x, c.z - game.pos.z);
+        if (d >= 70 && d < bd){ bd = d; best = { id: 'cityc' + c.key, x: c.x, z: c.z,
+          y: c.y + 22, label: citySys.nameFor(c.seed), rec: { name: 'city' } }; }
+      }
+      if (best) out.push(best);
     }
     // discovered forts advertise themselves until their vault is looted
     for (const key in (game.forts || {})){
@@ -7905,9 +8307,9 @@ const missionSys = {
   },
   // keep bounty lurkers alive near their hunting grounds
   tick(){
-    for (const key in game.villages){
-      const rec = game.villages[key];
-      if (!rec.stamped) continue;
+    for (const key in Object.assign({}, game.villages, game.cities)){
+      const rec = game.villages[key] || game.cities[key];
+      if (!rec.stamped || !rec.houses) continue;
       rec.houses.forEach((hrec, vi) => {
         const m = hrec.mission;
         if (!m || m.type !== 'hunt' || m.done) return;
@@ -7923,7 +8325,7 @@ const missionSys = {
   },
   bountyKilled(e){
     const [key, vi] = e.bountyTag.split(':');
-    const rec = game.villages[key];
+    const rec = game.villages[key] || (game.cities || {})[key];
     if (!rec) return;
     const hrec = rec.houses[+vi];
     if (hrec && hrec.mission && hrec.mission.type === 'hunt'){
@@ -8021,7 +8423,22 @@ const tradeSys = {
       { buy: { make: 'disp', tier: 1 }, price: 55, rep: 0 },
       { buy: { make: 'drill', tier: 2 }, price: 170, rep: 10 },
       { buy: { make: 'drill', tier: 3 }, price: 340, rep: 25 },
+      { buy: { k: 'rail', n: 16 }, price: 30, rep: 0 },
       { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
+    ];
+    if (role === 'food') return [   // grocer: the city eats
+      { buy: { k: 'cookedmeat', n: 4 }, price: 10, rep: 0 },
+      { buy: { k: 'meat', n: 6 }, price: 8, rep: 0 },
+      { sell: { k: 'meat', n: 4 }, price: 6, rep: 0 },
+      { sell: { k: 'wool', n: 3 }, price: 5, rep: 0 },
+      { buy: { k: 'coal', n: 8 }, price: 14, rep: 10 },
+    ];
+    if (role === 'mayor') return [   // civic works pay well
+      { sell: { k: 'torch', n: 10 }, price: 8, rep: 0 },
+      { sell: { k: 'bulb', n: 6 }, price: 18, rep: 0 },
+      { sell: { k: 'diamond', n: 1 }, price: 40, rep: 10 },
+      { buy: { k: 'mcharge', n: 4 }, price: 30, rep: 25 },
+      { buy: { make: 'deed' }, price: 900, rep: 10 },
     ];
     return [   // spark: the mad-scientist electrician
       { buy: { k: 'wire', n: 8 }, price: 12, rep: 0 },
@@ -8031,6 +8448,7 @@ const tradeSys = {
       { buy: { k: 'pad', n: 1 }, price: 130, rep: 10 },
       { buy: { k: 'tesla', n: 1 }, price: 220, rep: 25 },
       { buy: { make: 'jetpack' }, price: 420, rep: 25 },
+      { buy: { make: 'car' }, price: 650, rep: 10 },
       { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
     ];
   },
@@ -8044,6 +8462,8 @@ const tradeSys = {
     if (s.make === 'wrench') return CORE.makeWrench();
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
+    if (s.make === 'car') return { kind: 'car', charge: 100 };
+    if (s.make === 'deed') return { kind: 'deed', count: 1 };
     if (s.make === 'tmap') return { kind: 'tmap' };
     return { kind: s.k, count: s.n };
   },
@@ -8073,7 +8493,7 @@ const tradeSys = {
     list.innerHTML = '';
     // ---- the mission block sits above the offers ----
     {
-      const rec = game.villages[T.e.vkey];
+      const rec = T.e.ckey ? game.cities[T.e.ckey] : game.villages[T.e.vkey];
       const vi = T.e.vi;
       const mrow = document.createElement('div');
       mrow.className = 'craftrow';
@@ -8163,7 +8583,7 @@ const tradeSys = {
       const item = this.offerItem(o);
       if (item.kind === 'tmap'){
         // mint the X when the map is bought: a ring around this village
-        const rec = game.villages[T.e.vkey];
+        const rec = T.e.ckey ? game.cities[T.e.ckey] : game.villages[T.e.vkey];
         const a = Math.random() * Math.PI * 2;
         const r = 140 + Math.random() * 120;
         item.x = Math.round(rec.x + Math.cos(a) * r);
@@ -8240,6 +8660,351 @@ const raidSys = {
   },
 };
 
+// ---------- bosses: fights only a CSG world can host ----------
+// Bosses are entities with their own physics. The framework: e.bossType set,
+// generic steering skipped, a boss HP bar when one is near, kill flags per
+// world, unique unlock drops.
+const bossSys = {
+  accT: 0, rumbleT: 0, tyrantDone: new Set(),
+  spawn(type, x, y, z){
+    const e = spawnEntity(type, x, y, z);
+    e.bossType = type;
+    e.state = 'burrow'; e.stateT = 0; e.carveAt = null;
+    e.trail = [];
+    if (!e.mesh){ e.mesh = entMesh(type, e); game.scene.add(e.mesh); }
+    return e;
+  },
+  anyBoss(){ return game.entities.find(e => e.bossType); },
+  // ---- encounter triggers ----
+  tick(dt){
+    if (game.mode !== 'survival' || !game.running) return;
+    this.accT += dt;
+    if (this.accT < 2) return;
+    this.accT = 0;
+    if (this.anyBoss()) return;
+    // THE BURROWER stalks the deep: far under the surface, it can smell you
+    const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
+    if (depth > 25 && Math.random() < 0.05){
+      const a = Math.random() * Math.PI * 2;
+      const e = this.spawn('burrower',
+        game.pos.x + Math.cos(a) * 34, game.pos.y - 6, game.pos.z + Math.sin(a) * 34);
+      toast('something HUGE is moving through the stone…');
+      AudioSys.sfx('boom');
+      return;
+    }
+    // THE MAGMA TYRANT: every caldera has a keeper. Climb into a volcano's
+    // crater and it hauls itself out of the melt (once per crater per session)
+    const L = game.gen.lmAt(game.pos.x, game.pos.z);
+    if (L && L.type === 'volcano'){
+      const dv = Math.hypot(game.pos.x - L.x, game.pos.z - L.z);
+      const key = L.x + ',' + L.z;
+      if (dv < L.crR + 8 && !this.tyrantDone.has(key) &&
+          game.pos.y > game.gen.height(L.x, L.z) - 5){
+        const sx = L.x + 3, sz = L.z + 3;
+        const e = this.spawn('tyrant', sx, game.gen.height(sx, sz) + 0.3, sz);
+        e.volcKey = key;
+        toast('THE MAGMA TYRANT hauls itself out of the melt…');
+        AudioSys.sfx('boom');
+      }
+    }
+  },
+  // low rumble that gets louder as the thing gets closer
+  rumble(e, dt){
+    this.rumbleT -= dt;
+    if (this.rumbleT > 0) return;
+    const d = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+    this.rumbleT = 0.55;
+    if (d < 60) AudioSys.tone({ freq: 36 + Math.random() * 8, dur: 0.5,
+      gain: Math.min(0.4, 8 / Math.max(6, d)), type: 'triangle' });
+  },
+  updateBoss(e, dt, now){
+    if (e.bossType === 'burrower') this.burrower(e, dt);
+    else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
+    else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
+    else if (e.bossType === 'architect'){ this.architect(e, dt); return; }
+    // record the path for the trailing segments
+    e.trail.unshift([e.x, e.y, e.z]);
+    if (e.trail.length > 40) e.trail.pop();
+    if (e.mesh && e.mesh.userData.segs){
+      const segs = e.mesh.userData.segs;
+      for (let i = 0; i < segs.length; i++){
+        const t = e.trail[Math.min(e.trail.length - 1, (i + 1) * 3)];
+        segs[i].position.set(t[0] - e.x, t[1] - e.y, t[2] - e.z);
+      }
+      // the head looks where it is going
+      const t1 = e.trail[Math.min(e.trail.length - 1, 2)];
+      const dx = e.x - t1[0], dy = e.y - t1[1], dz = e.z - t1[2];
+      if (dx * dx + dy * dy + dz * dz > 0.001){
+        e.mesh.userData.head.rotation.order = 'YXZ';
+        e.mesh.userData.head.rotation.set(
+          Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(-dx, -dz), 0);
+      }
+    }
+  },
+  // THE BURROWER: swims through solid rock, carving a REAL tunnel behind it.
+  // It dives under you, lunges up through the floor, sails, and dives again.
+  // The arena is destroyed as you fight -- that is the point.
+  burrower(e, dt){
+    this.rumble(e, dt);
+    const def = ENT_DEF.burrower;
+    e.stateT = (e.stateT || 0) + dt;
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const d3 = Math.hypot(e.x - px, e.y - py, e.z - pz);
+    let tx, ty, tz, sp = def.speed;
+    if (e.state === 'burrow'){
+      // aim for a spot 5m under the player's feet
+      tx = px; ty = py - 5; tz = pz;
+      if (d3 < 7 && e.stateT > 1.2){ e.state = 'lunge'; e.stateT = 0; }
+    } else if (e.state === 'lunge'){
+      tx = px; ty = py + 1.0; tz = pz; sp = def.speed * 1.7;
+      if (d3 < def.r + 1.1){
+        damagePlayer(14, (px - e.x) * 3, (pz - e.z) * 3);
+        e.state = 'dive'; e.stateT = 0;
+        e.diveA = Math.random() * Math.PI * 2;
+      } else if (e.stateT > 2.2){ e.state = 'dive'; e.stateT = 0; e.diveA = Math.random() * Math.PI * 2; }
+    } else {   // dive: swing wide and go deep before the next pass
+      tx = px + Math.cos(e.diveA || 0) * 22;
+      tz = pz + Math.sin(e.diveA || 0) * 22;
+      ty = py - 12;
+      if (e.stateT > 2.4){ e.state = 'burrow'; e.stateT = 0; }
+    }
+    let dx = tx - e.x, dy = ty - e.y, dz = tz - e.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    e.x += (dx / L) * sp * dt;
+    e.y += (dy / L) * sp * dt;
+    e.z += (dz / L) * sp * dt;
+    e.y = Math.max(e.y, CORE.BEDROCK_Y + 3);
+    // carve where it swims -- spaced, so the edit list stays sane
+    const c = e.carveAt;
+    if (!c || Math.hypot(e.x - c[0], e.y - c[1], e.z - c[2]) > 3.4){
+      e.carveAt = [e.x, e.y, e.z];
+      const eds = nearEdits([e.x - 2, e.y - 2, e.z - 2, e.x + 2, e.y + 2, e.z + 2]);
+      if (CORE.evalSDF(e.x, e.y, e.z, eds, game.gen) < 1.2){
+        applyEdit(CORE.makeEdit(0, 0, +e.x.toFixed(1), +e.y.toFixed(1), +e.z.toFixed(1), 6.0, 0, 0));
+        Particles.burst(e.x, e.y, e.z, 1.2, [0x51484f, 0x77747f, 0x2b2430], 10, 3);
+      }
+    }
+  },
+};
+
+// (bossSys continues) THE WARDEN: a vault golem built from the ground.
+// Shooting it blasts mineable chunks off its hide; wound it enough and it
+// EATS the ground -- carving a real crater beside itself -- to heal.
+bossSysWarden();
+function bossSysWarden(){
+  bossSys.warden = function(e, dt){
+    const def = ENT_DEF.warden;
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.eatT = Math.max(0, (e.eatT || 0) - dt);
+    const px = game.pos.x, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    // stays home: never chases past 40m from its post
+    e.home = e.home || { x: e.x, z: e.z };
+    const hd = Math.hypot(e.x - e.home.x, e.z - e.home.z);
+    let tx = px, tz = pz;
+    if (hd > 40 || pd > 45){ tx = e.home.x; tz = e.home.z; }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    if (L > 2.4){
+      e.x += (dx / L) * def.speed * dt;
+      e.z += (dz / L) * def.speed * dt;
+    }
+    // grounded, always
+    e.y = game.gen.height(e.x, e.z);
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(px - e.x), -(pz - e.z));
+    // SLAM up close
+    if (pd < 3.2 && e.atkT <= 0){
+      e.atkT = 1.6;
+      damagePlayer(18, (px - e.x) * 4, (pz - e.z) * 4);
+      Particles.burst(e.x, e.y + 1, e.z, 1, [0x9a9aa5, 0x77747f], 14, 4);
+      AudioSys.sfx('boom');
+    }
+    // ROCK THROW at range: a real projectile that craters where it lands
+    if (pd > 6 && pd < 34 && e.atkT <= 0){
+      e.atkT = 3.2;
+      const dy = (game.pos.y + 1) - (e.y + 2.6);
+      const t = pd / 16;
+      (game.projectiles = game.projectiles || []).push({
+        x: e.x, y: e.y + 2.8, z: e.z,
+        vx: (px - e.x) / t, vy: dy / t + 1.75 * t, vz: (pz - e.z) / t,
+        t: 5, dmg: 20, r: 1.8, src: e });
+      AudioSys.sfx('rocket');
+    }
+    // chunks blast off as it takes damage
+    if (e.lastChunkHp == null) e.lastChunkHp = e.hp;
+    while (e.hp < e.lastChunkHp - 100){
+      e.lastChunkHp -= 100;
+      const chunks = e.mesh && e.mesh.userData.chunks;
+      const c = chunks && chunks.find(x => x.visible);
+      if (c) c.visible = false;
+      Particles.burst(e.x, e.y + 2, e.z, 1.2, [0x9a9aa5, 0x7d7d84], 20, 5);
+      CORE.addMat(game.slots, CORE.MAT.ROCK, 6);
+      addStackItem('ironore', 2);
+      toast('a chunk BLASTS off the Warden — +6 rock · +2 iron ore');
+      refreshHotbar();
+    }
+    // wounded and rested: EAT THE GROUND to heal
+    if (e.hp < ENT_DEF.warden.hp * 0.65 && e.eatT <= 0){
+      e.eatT = 9;
+      const a = Math.random() * Math.PI * 2;
+      const cx = e.x + Math.cos(a) * 3.4, cz = e.z + Math.sin(a) * 3.4;
+      const cy = game.gen.height(cx, cz);
+      applyEdit(CORE.makeEdit(0, 0, +cx.toFixed(1), +(cy - 0.5).toFixed(1), +cz.toFixed(1), 6.4, 0, 0));
+      e.hp = Math.min(ENT_DEF.warden.hp, e.hp + 70);
+      e.lastChunkHp = Math.max(e.lastChunkHp, e.hp);
+      Particles.burst(cx, cy, cz, 1.5, [0x77747f, 0x51484f, 0x9a9aa5], 30, 6);
+      AudioSys.sfx('boom');
+      toast('the Warden EATS the ground and knits itself back together');
+    }
+  };
+}
+
+// (bossSys continues) THE MAGMA TYRANT: keeper of the volcano caldera.
+// It fights with the world's own magma -- lava bombs that flood the arena
+// with REAL molten pools, and vents it tears open under your feet.
+bossSysTyrant();
+function bossSysTyrant(){
+  bossSys.tyrant = function(e, dt){
+    const def = ENT_DEF.tyrant;
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.bombT = Math.max(0, (e.bombT || 0) - dt);
+    const px = game.pos.x, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    // bound to its caldera: never wanders far down the cone
+    e.home = e.home || { x: e.x, z: e.z };
+    const hd = Math.hypot(e.x - e.home.x, e.z - e.home.z);
+    let tx = px, tz = pz;
+    if (hd > 55 || pd > 60){ tx = e.home.x; tz = e.home.z; }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    if (L > 2.6){ e.x += (dx / L) * def.speed * dt; e.z += (dz / L) * def.speed * dt; }
+    e.y = game.gen.height(e.x, e.z);
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(px - e.x), -(pz - e.z));
+    // it sheds embers as it walks
+    if (Math.random() < dt * 6)
+      Particles.burst(e.x, e.y + 2 + Math.random(), e.z, 0.5, [0xff7a30, 0xffb347], 2, 1.5);
+    // SLAM up close
+    if (pd < 3.6 && e.atkT <= 0){
+      e.atkT = 1.5;
+      damagePlayer(16, (px - e.x) * 4.5, (pz - e.z) * 4.5);
+      Particles.burst(e.x, e.y + 1, e.z, 1, [0xff7a30, 0x2b2119], 16, 4);
+      AudioSys.sfx('boom');
+    }
+    // LAVA BOMB at range: an arcing gobbet whose blast cup fills with a
+    // REAL molten pool -- the battlefield floods as the fight runs long
+    if (pd > 5 && pd < 44 && e.bombT <= 0){
+      e.bombT = 3.6;
+      const t = pd / 15;
+      const dy = (game.pos.y + 0.5) - (e.y + 3.2);
+      (game.projectiles = game.projectiles || []).push({
+        x: e.x, y: e.y + 3.4, z: e.z,
+        vx: (px - e.x) / t, vy: dy / t + 1.75 * t, vz: (pz - e.z) / t,
+        t: 5, dmg: 12, r: 1.6, lava: true, src: e });
+      AudioSys.sfx('rocket');
+    }
+    // every quarter of its health lost, it ROARS and rips a vent open
+    // under your feet: a pit that floods with magma
+    if (e.ventHp == null) e.ventHp = e.hp;
+    if (e.hp < e.ventHp - 162){
+      e.ventHp = e.hp;
+      const vy = game.gen.height(px, pz);
+      applyEdit(CORE.makeEdit(0, 0, +px.toFixed(1), +(vy - 1.4).toFixed(1), +pz.toFixed(1), 3.4, 0, 0));
+      applyEdit(CORE.makeEdit(1, 0, +px.toFixed(1), +(vy - 3.0).toFixed(1), +pz.toFixed(1), 2.8, CORE.MAT.LAVA, 0));
+      Particles.burst(px, vy, pz, 1.6, [0xff7a30, 0xffb347, 0x2b2119], 30, 6);
+      AudioSys.sfx('boom');
+      toast('the Tyrant ROARS — the ground under you tears open into magma');
+    }
+  };
+}
+
+// (bossSys continues) THE ARCHITECT: the endgame, summoned by a crafted
+// sigil. It fights with the player's own verbs -- stamping walls (union),
+// erasing the floor under you (subtract), and replaying corrupted obsidian
+// copies of YOUR OWN builds from the edit list.
+bossSysArchitect();
+function bossSysArchitect(){
+  bossSys.architect = function(e, dt){
+    const def = ENT_DEF.architect;
+    e.stateT = (e.stateT || 0) + dt;
+    e.wallT = Math.max(0, (e.wallT == null ? 2.5 : e.wallT) - dt);
+    e.pitT  = Math.max(0, (e.pitT  == null ? 6.0 : e.pitT)  - dt);
+    e.echoT = Math.max(0, (e.echoT == null ? 9.0 : e.echoT) - dt);
+    e.zapT  = Math.max(0, (e.zapT  || 0) - dt);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    // it circles you at drafting distance, hovering a hand off the ground
+    if (!e.orbitDir) e.orbitDir = Math.random() < 0.5 ? 1 : -1;
+    const ang = Math.atan2(e.z - pz, e.x - px) + e.orbitDir * dt * 0.55;
+    const gx = px + Math.cos(ang) * 11, gz = pz + Math.sin(ang) * 11;
+    const dx = gx - e.x, dz = gz - e.z, L = Math.hypot(dx, dz) || 1;
+    const step = Math.min(L, def.speed * dt);
+    e.x += (dx / L) * step; e.z += (dz / L) * step;
+    e.y = game.gen.height(e.x, e.z) + 0.9 + Math.sin(e.stateT * 2.1) * 0.25;
+    if (e.mesh){
+      e.mesh.rotation.y = Math.atan2(-(px - e.x), -(pz - e.z));
+      const h = e.mesh.userData;
+      if (h && h.handL){
+        h.handL.position.y = 1.5 + Math.sin(e.stateT * 3.1) * 0.18;
+        h.handR.position.y = 1.5 + Math.cos(e.stateT * 2.7) * 0.18;
+      }
+    }
+    // cornered: a shove of force, then it BLINKS away to keep drafting
+    if (pd < 3.4 && e.zapT <= 0){
+      e.zapT = 2.5;
+      damagePlayer(10, (px - e.x) * 3, (pz - e.z) * 3);
+      Particles.burst(e.x, e.y + 1.2, e.z, 1.2, [0xb9a7ff, 0xeef2ff], 20, 5);
+      const a = Math.random() * Math.PI * 2;
+      e.x = px + Math.cos(a) * 12; e.z = pz + Math.sin(a) * 12;
+      e.y = game.gen.height(e.x, e.z) + 0.9;
+      Particles.burst(e.x, e.y + 1.2, e.z, 1.2, [0xb9a7ff, 0xeef2ff], 20, 5);
+      AudioSys.sfx('laser');
+    }
+    // WALL: a stonebrick slab stamped across your line of approach
+    if (e.wallT <= 0 && pd > 5){
+      e.wallT = 5.5;
+      const mx = (e.x + px) / 2, mz = (e.z + pz) / 2;
+      const my = Math.min(game.gen.height(mx, mz), py + 0.5);
+      const ed = CORE.makeEdit(1, 1, +mx.toFixed(1), +(my + 1.2).toFixed(1), +mz.toFixed(1), 1, CORE.MAT.STONEBRICK, 0);
+      if (Math.abs(px - e.x) > Math.abs(pz - e.z)){ ed.sx = 0.8; ed.sy = 2.6; ed.sz = 4.6; }
+      else { ed.sx = 4.6; ed.sy = 2.6; ed.sz = 0.8; }
+      applyEdit(ed);
+      Particles.burst(mx, my + 2, mz, 1.4, [0x9a9aa5, 0xb9a7ff], 24, 5);
+      AudioSys.sfx('boom');
+      toast('the Architect DRAFTS — a wall slams up out of nothing');
+    }
+    // PIT: it erases the floor out from under you
+    if (e.pitT <= 0 && pd < 30 && game.grounded){
+      e.pitT = 8;
+      applyEdit(CORE.makeEdit(0, 0, +px.toFixed(1), +(py - 2.6).toFixed(1), +pz.toFixed(1), 3.2, 0, 0));
+      Particles.burst(px, py - 1, pz, 1.4, [0x51484f, 0xb9a7ff], 24, 5);
+      AudioSys.sfx('boom');
+      toast('the Architect ERASES the floor under you');
+    }
+    // ECHO: replays one of YOUR OWN union edits back at you in dead obsidian
+    if (e.echoT <= 0){
+      e.echoT = 9;
+      const unions = game.edits.filter(x => x.op === 1 && x.mat !== CORE.MAT.LAVA);
+      if (unions.length){
+        const src = unions[(Math.random() * unions.length) | 0];
+        const a = Math.random() * Math.PI * 2, d = 5 + Math.random() * 5;
+        const cx = px + Math.cos(a) * d, cz = pz + Math.sin(a) * d;
+        const cy = game.gen.height(cx, cz) + Math.min(3, src.size);
+        const ed = CORE.makeEdit(1, src.shape, +cx.toFixed(1), +cy.toFixed(1), +cz.toFixed(1),
+                                 src.size, CORE.MAT.OBSIDIAN, src.rot || 0);
+        if (src.rx) ed.rx = src.rx;
+        if (src.rz) ed.rz = src.rz;
+        if (src.sx) ed.sx = src.sx;
+        if (src.sy) ed.sy = src.sy;
+        if (src.sz) ed.sz = src.sz;
+        applyEdit(ed);
+        Particles.burst(cx, cy, cz, 1.5, [0x3a3242, 0xb9a7ff], 26, 6);
+        AudioSys.sfx('boom');
+        toast('the Architect REPLAYS your own work in dead obsidian');
+      }
+    }
+  };
+}
+
 // ---------- raid bases: walled forts worth shooting your way into ----------
 // Stamped like villages: approach one and the walls, towers, bunkers and an
 // obsidian vault land in the edit list. A garrison of day-proof raiders
@@ -8298,11 +9063,13 @@ const raidBaseSys = {
     const vc = pnodeSys.add('chest', f.x, g + 0.95, f.z + 10 + 1.3, 0, { sc: 1.0 });
     vc.inv = new Array(chestSlots(1.0)).fill(null);
     const rng = CORE.mulberry32(f.seed);
-    vc.inv[0] = { kind: 'coin', count: 90 + ((rng() * 70) | 0) };
-    vc.inv[1] = { kind: 'diamond', count: 2 + ((rng() * 3) | 0) };
-    vc.inv[2] = CORE.makeFirearm(3 + ((rng() * 4) | 0));           // DMR..lance
-    vc.inv[3] = { kind: 'rounds', count: 60 };
-    vc.inv[4] = { kind: 'mcharge', count: 3 };
+    const cit = (f.seed % 5) === 0;
+    vc.inv[0] = { kind: 'coin', count: (cit ? 220 : 90) + ((rng() * 70) | 0) };
+    vc.inv[1] = { kind: 'diamond', count: (cit ? 5 : 2) + ((rng() * 3) | 0) };
+    vc.inv[2] = CORE.makeFirearm(cit ? 6 + ((rng() * 4) | 0) : 3 + ((rng() * 4) | 0));
+    vc.inv[3] = { kind: 'rounds', count: cit ? 120 : 60 };
+    vc.inv[4] = { kind: 'mcharge', count: cit ? 6 : 3 };
+    if (cit) vc.inv[5] = { kind: 'cells', count: 60 };
     vc.locked = true;
     vc.fkey = rec.key;
     // torches flank the gate
@@ -8316,13 +9083,15 @@ const raidBaseSys = {
       const key = 'f' + f.key;
       let rec = (game.forts = game.forts || {})[key];
       if (!rec){
-        rec = { key, x: f.x, z: f.z, seed: f.seed, stamped: false, bossDead: false, looted: false };
+        rec = { key, x: f.x, z: f.z, seed: f.seed, stamped: false, bossDead: false, looted: false,
+                citadel: (f.seed % 5) === 0 };
         game.forts[key] = rec;
       }
       if (!rec.stamped){
         rec.stamped = true;
         this.stamp(f, rec);
-        toast('a RAID FORT looms ahead — its warlord holds the vault key');
+        toast(rec.citadel ? 'a CITADEL looms ahead — THE WARDEN guards its vault'
+                          : 'a RAID FORT looms ahead — its warlord holds the vault key');
         AudioSys.sfx('boom');
         markSave();
       }
@@ -8347,15 +9116,370 @@ const raidBaseSys = {
         e.raider = true; e.noburn = true; e.fortKey = key; e.hp = 55;
         if (e.mesh) e.mesh.scale.setScalar(1.18);
       }
-      const bossAlive = game.entities.some(e => e.fortKey === key && e.warlord);
+      const bossAlive = rec.citadel
+        ? game.entities.some(e => e.fortKey === key && e.bossType === 'warden')
+        : game.entities.some(e => e.fortKey === key && e.warlord);
       if (!bossAlive){
-        const e = spawnEntity('lurker', rec.x, gy + 0.7, rec.z + 6);
-        e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260;
-        if (e.mesh){
-          e.mesh.scale.setScalar(1.65);
-          e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = o.material.clone(); });
-          e.mesh.traverse(o => { if (o.isMesh && o.material.color) o.material.color.offsetHSL(0, 0.15, 0.06); });
+        if (rec.citadel){
+          const e = bossSys.spawn('warden', rec.x, gy + 0.3, rec.z + 6);
+          e.fortKey = key;
+        } else {
+          const e = spawnEntity('lurker', rec.x, gy + 0.7, rec.z + 6);
+          e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260;
+          if (e.mesh){
+            e.mesh.scale.setScalar(1.65);
+            e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = o.material.clone(); });
+            e.mesh.traverse(o => { if (o.isMesh && o.material.color) o.material.color.offsetHSL(0, 0.15, 0.06); });
+          }
         }
+      }
+    }
+  },
+};
+
+// ---------- rails: fast travel you BUILD, not teleports ----------
+// A rail line is a chain of ground spikes. Power either end (any live
+// grid within 8m of an end post) and the line runs: right-click an end
+// post to ride a cart down the line at speed.
+const railSys = {
+  group: null,
+  rebuild(){
+    if (this.group) game.scene.remove(this.group);
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    const railM = new THREE.MeshBasicMaterial({ color: 0x8a8f9a });
+    const tieM = new THREE.MeshBasicMaterial({ color: 0x6b5233 });
+    const postM = new THREE.MeshBasicMaterial({ color: 0xd9b25a });
+    const lines = (game.rails || []).slice();
+    if (game.railDraft && game.railDraft.pts.length) lines.push(game.railDraft);
+    for (const L of lines){
+      const pts = L.pts;
+      for (let i = 0; i + 1 < pts.length; i++){
+        const a = pts[i], b = pts[i + 1];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+        const seg = new THREE.Group();
+        seg.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + 0.12, (a[2] + b[2]) / 2);
+        seg.lookAt(b[0], b[1] + 0.12, b[2]);
+        for (const off of [-0.5, 0.5]){
+          const r = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, len), railM);
+          r.position.x = off;
+          seg.add(r);
+        }
+        for (let t = 1.2; t < len; t += 2.6){
+          const tie = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.5), tieM);
+          tie.position.set(0, -0.07, len / 2 - t);
+          seg.add(tie);
+        }
+        this.group.add(seg);
+      }
+      for (const end of [pts[0], pts[pts.length - 1]]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.6, 0.3), postM);
+        post.position.set(end[0], end[1] + 0.8, end[2]);
+        this.group.add(post);
+      }
+    }
+    game.scene.add(this.group);
+  },
+  finish(){
+    const L = game.railDraft;
+    game.railDraft = null;
+    if (L && L.pts.length >= 2){
+      (game.rails = game.rails || []).push(L);
+      toast('rail line laid — power either end, then right-click an end post to ride');
+    } else if (L) toast('rail line discarded — a line needs at least two spikes');
+    this.rebuild(); markSave();
+  },
+  endpointNear(x, y, z, r){
+    for (const L of game.rails || []){
+      const pts = L.pts;
+      for (const end of [0, 1]){
+        const p = end === 0 ? pts[0] : pts[pts.length - 1];
+        if (Math.hypot(p[0] - x, p[1] - y, p[2] - z) < r) return { line: L, end };
+      }
+    }
+    return null;
+  },
+  powered(L){
+    const pts = L.pts;
+    for (const p of [pts[0], pts[pts.length - 1]])
+      for (const t of powerSys.gridSites || [])
+        if (Math.hypot(t.x - p[0], t.z - p[2]) < 8) return true;
+    return false;
+  },
+  board(L, end){
+    const cart = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 2.4),
+      new THREE.MeshBasicMaterial({ color: 0x7a4f2c }));
+    base.position.y = 0.45;
+    const rim = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.2, 2.56),
+      new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
+    rim.position.y = 0.75;
+    cart.add(base, rim);
+    game.scene.add(cart);
+    game.riding = { L, dir: end === 0 ? 1 : -1, mesh: cart };
+    game.vel.set(0, 0, 0);
+    toast('rolling — space to bail out');
+    AudioSys.sfx('toggle');
+  },
+  dismount(msg){
+    const R = game.riding;
+    if (R && R.mesh) game.scene.remove(R.mesh);
+    game.riding = null;
+    game.vel.set(0, 0, 0);
+    if (msg) toast(msg);
+  },
+  ride(dt){
+    const R = game.riding;
+    if (!R) return;
+    const pts = R.L.pts;
+    if (R.cum == null){
+      R.cum = [0];
+      for (let i = 1; i < pts.length; i++)
+        R.cum.push(R.cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0],
+          pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]));
+      R.d = R.dir > 0 ? 0 : R.cum[R.cum.length - 1];
+    }
+    R.d += R.dir * 16 * dt;
+    const total = R.cum[R.cum.length - 1];
+    if (R.d <= 0 || R.d >= total){
+      const p = R.d <= 0 ? pts[0] : pts[pts.length - 1];
+      game.pos.set(p[0], p[1] + 1.0, p[2]);
+      this.dismount('end of the line');
+      return;
+    }
+    let i = 0;
+    while (R.cum[i + 1] < R.d) i++;
+    const f = (R.d - R.cum[i]) / (R.cum[i + 1] - R.cum[i]);
+    const a = pts[i], b = pts[i + 1];
+    const x = a[0] + (b[0] - a[0]) * f;
+    const y = a[1] + (b[1] - a[1]) * f;
+    const z = a[2] + (b[2] - a[2]) * f;
+    game.pos.set(x, y + 0.9, z);
+    game.vel.set(0, 0, 0);
+    game.grounded = true;
+    if (R.mesh){
+      R.mesh.position.set(x, y, z);
+      R.mesh.lookAt(x + (b[0] - a[0]) * R.dir, y + (b[1] - a[1]) * R.dir, z + (b[2] - a[2]) * R.dir);
+    }
+    if ((game.keys || {})['Space']) this.dismount('bailed out');
+  },
+};
+
+// ---------- mega-cities: rare skylines a box-CSG world can afford ----------
+// One candidate per 2.6km cell (and half the cells roll none), stamped on
+// approach like forts: a deep foundation slab irons the site flat, basalt
+// avenues cross it in a 3x3 grid, and eight towers rise from procedural
+// floor/facade modules -- hollow shells, real floor slabs, window bands
+// punched through the walls, a street door, and a corner rope shaft that
+// makes every floor climbable. The center block is a plaza.
+const citySys = {
+  accT: 0, scanT: 99, known: [],
+  nameFor(seed){
+    const A = ['NOVA', 'PORT', 'HIGH', 'GRAND', 'FORT', 'NEW', 'OLD', 'EAST', 'WEST', 'STONE'];
+    const B = ['REND', 'KAREL', 'MASSIF', 'VELDT', 'ORREN', 'DENN', 'SOLIS', 'HARROW', 'BRINT', 'CALE'];
+    const t = seed >>> 0;
+    return A[t % A.length] + ' ' + B[(t >>> 5) % B.length];
+  },
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.cityAt) return [];
+    const C = CORE.CITY_CELL, out = [];
+    const c0x = Math.floor((x - r) / C), c1x = Math.floor((x + r) / C);
+    const c0z = Math.floor((z - r) / C), c1z = Math.floor((z + r) / C);
+    for (let cz = c0z; cz <= c1z; cz++)
+      for (let cx = c0x; cx <= c1x; cx++){
+        const c = game.gen.cityAt(cx, cz);
+        if (c && Math.hypot(c.x - x, c.z - z) < r) out.push(c);
+      }
+    return out;
+  },
+  // deterministic tower roll for the 3x3 blocks (center = plaza)
+  towers(c){
+    const rng = CORE.mulberry32(c.seed ^ 0x7157);
+    const mats = [CORE.MAT.STONEBRICK, CORE.MAT.ROCK, CORE.MAT.BASALT, CORE.MAT.STONEBRICK];
+    const out = [];
+    for (let bi = 0; bi < 9; bi++){
+      const bx = (bi % 3) - 1, bz = ((bi / 3) | 0) - 1;
+      const w = [10, 13, 16][(rng() * 3) | 0];
+      const floors = 3 + ((rng() * 7) | 0);          // 3..9 stories
+      const mat = mats[(rng() * mats.length) | 0];
+      const shop = rng() < 0.5;
+      if (bx === 0 && bz === 0) continue;            // plaza block
+      out.push({ bx, bz, w, floors, mat: mat, shop });
+    }
+    return out;
+  },
+  stamp(c, rec){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    let g = game.gen.height(c.x, c.z);
+    for (const [dx, dz] of [[-48, -48], [48, -48], [-48, 48], [48, 48], [0, -48], [0, 48], [-48, 0], [48, 0]])
+      g = Math.max(g, game.gen.height(c.x + dx, c.z + dz));
+    g = +(g + 0.3).toFixed(1);
+    rec.gy = g;
+    // one deep foundation slab irons the whole site flat (top at g)
+    EB(1, c.x, g - 5.3, c.z, 116, 10.6, 116, MAT.STONEBRICK);
+    // basalt avenues: two north-south, two east-west
+    for (const rx of [-18, 18]){
+      EB(1, c.x + rx, g + 0.15, c.z, 8, 0.5, 116, MAT.BASALT);
+      EB(1, c.x, g + 0.15, c.z + rx, 116, 0.5, 8, MAT.BASALT);
+    }
+    const P = 36;
+    const T = this.towers(c);
+    rec.towers = T;
+    let shops = 0;
+    for (const t of T){
+      const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
+      const H = t.floors * 3.2 + 1.6;
+      // shell, hollowed
+      EB(1, tx, g + H / 2, tz, t.w, H, t.w, t.mat);
+      EB(0, tx, g + H / 2 + 0.45, tz, t.w - 1.7, H - 1.5, t.w - 1.7);
+      // real floor slabs
+      for (let f = 1; f < t.floors; f++)
+        EB(1, tx, g + f * 3.2, tz, t.w - 1.5, 0.45, t.w - 1.5, t.mat);
+      // window bands punched through both wall pairs, every story
+      for (let f = 0; f < t.floors; f++){
+        const wy = g + f * 3.2 + 2.05;
+        EB(0, tx, wy, tz, t.w + 0.6, 1.15, t.w - 3.4);
+        EB(0, tx, wy, tz, t.w - 3.4, 1.15, t.w + 0.6);
+      }
+      // street door facing the city center
+      const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
+      const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      EB(0, tx + fx * (t.w / 2), g + 1.75, tz + fz * (t.w / 2),
+         fx ? 2.2 : 2.0, 2.7, fz ? 2.2 : 2.0);
+      // roof rim
+      EB(1, tx, g + H + 0.2, tz, t.w + 1.0, 0.5, t.w + 1.0, t.mat);
+      // corner shaft + rope: every floor is climbable
+      const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
+      EB(0, cxr, g + H / 2 + 0.45, czr, 1.8, H - 1.5, 1.8);
+      (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
+      // some ground floors are stocked shops (city life arrives in phase B)
+      if (t.shop && shops < 2){
+        shops++;
+        const ch = pnodeSys.add('chest', tx - (t.w / 2 - 2.2) * (fx || 1), g + 0.95, tz - (t.w / 2 - 2.2) * (fz || (fx ? 0 : 1)), 0, { sc: 0.7 });
+        ch.inv = new Array(chestSlots(0.7)).fill(null);
+        ch.inv[0] = { kind: 'coin', count: 14 + (c.seed % 21) };
+        ch.inv[1] = { kind: 'cookedmeat', count: 3 };
+        ch.inv[2] = { kind: 'rounds', count: 24 };
+      }
+    }
+    // the plaza: an obelisk, plank benches, torch-lit corners
+    EB(1, c.x, g + 6.5, c.z, 3, 13, 3, MAT.OBSIDIAN);
+    EB(1, c.x, g + 13.9, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
+    for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
+      EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS);
+    // ---- the people: five shopfronts + the mayor at the plaza ----
+    const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
+    const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
+    const idxs = T.map((_, i) => i);
+    for (let i = idxs.length - 1; i > 0; i--){
+      const j = (rng2() * (i + 1)) | 0;
+      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    }
+    rec.houses = [];
+    for (let k = 0; k < 5; k++){
+      const t = T[idxs[k]];
+      const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
+      const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
+      const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      rec.houses.push({
+        x: +(tx + fx * (t.w / 2 + 2.2)).toFixed(1), z: +(tz + fz * (t.w / 2 + 2.2)).toFixed(1),
+        role: roles[k], face: [fx, fz], w: t.w, d: t.w, gy: g, rep: 0,
+        vname: villageSys.nameFor((Math.imul(c.seed, 37) + k * 101) >>> 0),
+      });
+    }
+    rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
+                      w: 6, d: 6, gy: g, rep: 0,
+                      vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
+    for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13], [-18, -40], [18, 40], [-40, 18], [40, -18]])
+      game.torches.push([c.x + tx2, g + 0.4, c.z + tz2]);
+    torchSys.rebuild();
+    ropeSys.rebuild();
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const c of this.candidatesNear(game.pos.x, game.pos.z, 320)){
+      const key = 'c' + c.key;
+      let rec = (game.cities = game.cities || {})[key];
+      if (!rec){
+        rec = { key, x: c.x, z: c.z, seed: c.seed, name: this.nameFor(c.seed), stamped: false };
+        game.cities[key] = rec;
+      }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(c, rec);
+        toast('the towers of ' + rec.name + ' rise ahead');
+        AudioSys.sfx('boom');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    this.scanT += dt;
+    if (this.scanT > 6){
+      this.scanT = 0;
+      // a slow wide sweep so the nearest skyline shows on the compass long
+      // before it's stamped
+      this.known = game.gen ? this.candidatesNear(game.pos.x, game.pos.z, 3000) : [];
+    }
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    const night = game.dayF < 0.25;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 220){
+        // far away: the transient street life packs up
+        for (let i = game.entities.length - 1; i >= 0; i--){
+          const e = game.entities[i];
+          if (e.ckey === key && (e.walker || e.type === 'cab')){
+            if (e.mesh) game.scene.remove(e.mesh);
+            game.entities.splice(i, 1);
+          }
+        }
+        continue;
+      }
+      if (pd > 110) continue;
+      // shopkeepers man their doors
+      (rec.houses || []).forEach((hrec, i) => {
+        const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
+        if (alive) return;
+        const e = spawnEntity('villager', hrec.x, (hrec.gy || 0) + 0.7, hrec.z);
+        e.role = hrec.role; e.ckey = key; e.vi = i;
+        e.home = { x: hrec.x, y: (hrec.gy || 0) + 0.7, z: hrec.z };
+      });
+      // pedestrians walk the avenues by day and head in at night
+      const walkers = game.entities.filter(e => e.walker && e.ckey === key);
+      if (night){
+        for (const e of walkers){
+          if (e.mesh) game.scene.remove(e.mesh);
+          game.entities.splice(game.entities.indexOf(e), 1);
+        }
+      } else if (walkers.length < 4){
+        const lane = Math.random() < 0.5 ? -18 : 18;
+        const along = (Math.random() - 0.5) * 100;
+        const ax = Math.random() < 0.5;
+        const e = spawnEntity('villager',
+          rec.x + (ax ? lane : along), (rec.gy || 0) + 0.7, rec.z + (ax ? along : lane));
+        e.role = 'walker'; e.walker = true; e.ckey = key; e.vi = -1; e.stroll = rec;
+      }
+      // light traffic: two cabs working the avenues
+      const cabs = game.entities.filter(e => e.type === 'cab' && e.ckey === key);
+      if (cabs.length < 2){
+        const ax = cabs.length === 0 ? 'x' : 'z';
+        const lane = Math.random() < 0.5 ? -18 : 18;
+        const e = spawnEntity('cab',
+          ax === 'x' ? rec.x - 40 : rec.x + lane + 2,
+          (rec.gy || 0) + 0.7,
+          ax === 'x' ? rec.z + lane + 2 : rec.z - 40);
+        e.ckey = key; e.axis = ax; e.dir = 1; e.cabHome = { x: rec.x, z: rec.z };
       }
     }
   },
@@ -8421,7 +9545,22 @@ function updateEntities(dt, now){
       continue;
     }
     const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
-    if (pd > 70){                                  // too far — despawn
+    if (e.bossType){
+      // bosses run their own physics and never despawn by distance
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+      bossSys.updateBoss(e, dt, now);
+      e.flash = Math.max(0, (e.flash || 0) - dt);
+      if (e.mesh){
+        e.mesh.position.set(e.x, e.y, e.z);
+        e.mesh.traverse(o => { if (o.isMesh && o.material.emissive)
+          o.material.emissive.setHex(e.flash > 0 ? 0x772222 : 0); });
+      }
+      continue;
+    }
+    if (e === game.driving) continue;            // driveCar owns it this frame
+    // city folk are bound to their city (citySys reaps them past 220m);
+    // cars never despawn (they're yours); everything else: the 70m leash
+    if (e.type !== 'car' && pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -8446,6 +9585,23 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+    } else if (e.type === 'car'){
+      sx = 0; sz = 0;                              // parked
+      if (e.mesh) e.mesh.rotation.y = e.heading || 0;
+    } else if (e.type === 'cab'){
+      // drives its avenue end to end, flips at the edge, brakes for you
+      const R = e.cabHome || { x: e.x, z: e.z };
+      const t = e.axis === 'x' ? e.x - R.x : e.z - R.z;
+      if (t > 52) e.dir = -1;
+      else if (t < -52) e.dir = 1;
+      const aheadX = e.axis === 'x' ? e.x + e.dir * 4 : e.x;
+      const aheadZ = e.axis === 'x' ? e.z : e.z + e.dir * 4;
+      const brake = Math.hypot(game.pos.x - aheadX, game.pos.z - aheadZ) < 3.0;
+      sx = brake ? 0 : (e.axis === 'x' ? e.dir : 0);
+      sz = brake ? 0 : (e.axis === 'x' ? 0 : e.dir);
+      if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
+        ? (e.dir > 0 ? -Math.PI / 2 : Math.PI / 2)
+        : (e.dir > 0 ? Math.PI : 0);
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
         sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
@@ -8456,9 +9612,18 @@ function updateEntities(dt, now){
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
-          const H = e.home || e;
-          e.tx = H.x + (Math.random() - 0.5) * 9;
-          e.tz = H.z + (Math.random() - 0.5) * 9;
+          if (e.stroll){
+            // pedestrians pick their next spot along one of the avenues
+            const R = e.stroll;
+            const lane = (Math.random() < 0.5 ? -18 : 18) + (Math.random() - 0.5) * 5;
+            const along = (Math.random() - 0.5) * 100;
+            if (Math.random() < 0.5){ e.tx = R.x + lane; e.tz = R.z + along; }
+            else { e.tx = R.x + along; e.tz = R.z + lane; }
+          } else {
+            const H = e.home || e;
+            e.tx = H.x + (Math.random() - 0.5) * 9;
+            e.tz = H.z + (Math.random() - 0.5) * 9;
+          }
         }
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
@@ -8699,6 +9864,7 @@ function updateProjectiles(dt){
       const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
       if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
       if (!done) for (const en of game.entities){
+        if (en === p.src) continue;          // never detonate on the thrower
         const def = ENT_DEF[en.type];
         if (Math.hypot(en.x - p.x, en.y + def.h * 0.5 - p.y, en.z - p.z) < def.r + 0.5){ done = true; break; }
       }
@@ -8707,6 +9873,11 @@ function updateProjectiles(dt){
     Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
     if (done || p.t <= 0){
       explode(p.x, p.y, p.z, p.r, p.dmg);
+      if (p.lava){
+        // the payload settles into the blast cup as a real molten pool
+        applyEdit(CORE.makeEdit(1, 0, +p.x.toFixed(1), +(p.y - 1.0).toFixed(1), +p.z.toFixed(1), 2.1, CORE.MAT.LAVA, 0));
+        Particles.burst(p.x, p.y, p.z, 1.2, [0xff7a30, 0xffb347], 18, 4);
+      }
       ps.splice(i, 1);
     }
   }
@@ -8807,6 +9978,11 @@ function bindInput(){
         toast('tube cancelled');
         refreshToolHUD();
         return;
+      }
+      if (game.driving){ exitCar(); return; }
+      if (game.railDraft){
+        const tl2 = activeTool();
+        if (tl2 && tl2.kind === 'rail'){ railSys.finish(); return; }
       }
       if (wrenchSys.paste){ wrenchSys.cancelPaste(); toast('paste cancelled'); return; }
       if (wrenchSys.held() && e.shiftKey){ wrenchSys.select(true); return; }
@@ -8914,8 +10090,38 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){
+        if (vent.walker){
+          toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
+                 'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
+          return;
+        }
         tradeSys.open(vent);
         return;
+      }
+      if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
+      if (vent && vent.type === 'car'){
+        if (game.keys['KeyC']){
+          // crouch-grab folds it back into a kit, charge intact
+          const i2 = game.slots.findIndex(sl => !sl);
+          if (i2 < 0){ toast('no pack space for the car kit'); return; }
+          game.slots[i2] = { kind: 'car', charge: Math.round(vent.charge || 0) };
+          if (vent.mesh) game.scene.remove(vent.mesh);
+          game.entities.splice(game.entities.indexOf(vent), 1);
+          refreshHotbar(); markSave();
+          toast('car packed up (' + Math.round(vent.charge || 0) + '% charge)');
+          return;
+        }
+        enterCar(vent);
+        return;
+      }
+      {
+        const tl3 = activeTool();
+        const rle = railSys.endpointNear(game.pos.x, game.pos.y, game.pos.z, 3.5);
+        if (rle && !(tl3 && tl3.kind === 'rail')){
+          if (!railSys.powered(rle.line)) toast('dead line — build a live grid within 8m of an end post');
+          else railSys.board(rle.line, rle.end);
+          return;
+        }
       }
       const selDrone = selectedItem();
       if (selDrone && selDrone.kind === 'drone'){
@@ -9167,7 +10373,86 @@ function collidePlayer(edits, still){
   }
 }
 
+// ---------- the electric car: fast travel that drinks from your grid ----------
+function enterCar(e){
+  if (game.driving) return;
+  game.driving = e;
+  game.vel.set(0, 0, 0);
+  toast('driving — W/S throttle · A/D steer · right click to step out' +
+        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a powered grid' : ''));
+  AudioSys.sfx('toggle');
+  refreshToolHUD();
+}
+function exitCar(){
+  const e = game.driving;
+  game.driving = null;
+  AudioSys.setHum(false, 0, 0);
+  if (e){
+    // step out on the driver's side
+    game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
+    e.speed = 0;
+    toast('parked' + ((e.charge || 0) < 25 ? ' — charge it near a powered grid (' + Math.round(e.charge || 0) + '%)' : ''));
+  }
+  game.vel.set(0, 0, 0);
+  markSave();
+  refreshToolHUD();
+}
+function driveCar(dt){
+  const e = game.driving;
+  if (!e || e.hp <= 0 || game.entities.indexOf(e) < 0){ game.driving = null; return; }
+  const k = game.keys;
+  const canMove = game.ui === 'none' && isLocked();
+  let thr = 0, steer = 0;
+  if (canMove){
+    if (k['KeyW']) thr += 1;
+    if (k['KeyS']) thr -= 1;
+    if (k['KeyD']) steer += 1;
+    if (k['KeyA']) steer -= 1;
+  }
+  e.heading = e.heading || 0;
+  e.speed = e.speed || 0;
+  const dead = (e.charge || 0) <= 0;
+  const top = dead ? 0 : 13.5, rev = dead ? 0 : 5;
+  const target = thr > 0 ? top : thr < 0 ? -rev : 0;
+  const accel = thr !== 0 ? 9 : 7;
+  e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
+  if (Math.abs(e.speed) > 0.3)
+    e.heading -= steer * dt * 1.7 * Math.sign(e.speed) * Math.min(1, 0.35 + Math.abs(e.speed) / 6);
+  if (thr !== 0 && !dead) e.charge = Math.max(0, (e.charge || 0) - dt * 0.65);
+  // roll forward under gravity; a sphere-vs-SDF pass keeps it on the ground
+  const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
+  e.vy = (e.vy || 0) - 22 * dt;
+  e.x += fx * e.speed * dt;
+  e.z += fz * e.speed * dt;
+  e.y += e.vy * dt;
+  const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
+  const le = nearEdits(box);
+  for (let it = 0; it < 3; it++){
+    const cy = e.y + 0.85;
+    const dd = sdfWorld(e.x, cy, e.z, le);
+    if (dd < 0.85){
+      const g2 = gradWorld(e.x, cy, e.z, le);
+      const push = 0.85 - dd / g2[3];
+      e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+      if (g2[1] > 0.5) e.vy = Math.max(e.vy, 0);
+      else e.speed *= 0.55;                        // clipped a wall
+    }
+  }
+  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; }
+  if (inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  // the motor hums with speed
+  AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / 13.5));
+  // the driver rides along
+  game.pos.set(e.x, e.y + 0.4, e.z);
+  game.vel.set(0, 0, 0);
+  game.grounded = true;
+  if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = e.heading; }
+  game.carHudT = (game.carHudT || 0) + dt;
+  if (game.carHudT > 0.4){ game.carHudT = 0; refreshToolHUD(); }
+}
 function updatePlayer(dt){
+  if (game.riding){ railSys.ride(dt); return; }
+  if (game.driving){ driveCar(dt); return; }
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
   game.crouch = !!(canMove && k['KeyC'] && !game.fly);
@@ -9311,7 +10596,12 @@ function updatePlayer(dt){
       const led = nearEdits(lbox);
       if (CORE.materialAt(game.pos.x, game.pos.y - 0.2, game.pos.z, led, game.gen) === CORE.MAT.LAVA ||
           CORE.materialAt(game.pos.x, game.pos.y + 0.1, game.pos.z, led, game.gen) === CORE.MAT.LAVA){
-        damagePlayer(6, 0, 0);
+        if (CORE.countItem(game.slots, 'mheart') > 0){
+          if (!game.mhToastT || performance.now() - game.mhToastT > 8000){
+            game.mhToastT = performance.now();
+            toast('the magma heart drinks the burn');
+          }
+        } else damagePlayer(6, 0, 0);
       }
     }
   }
@@ -9369,6 +10659,10 @@ function activeTool(){
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
   if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
+  if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
+  if (it.kind === 'car') return { kind: 'carkit', tier: 0, item: it };
+  if (it.kind === 'rail') return { kind: 'rail', tier: 0, item: it };
+  if (it.kind === 'deed') return { kind: 'deedtool', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
@@ -9938,7 +11232,7 @@ const wrenchSys = {
     // (stove, machine) stops surfaceHit on its own collider before the ray
     // reaches its center, so also take a prop whose center is within its own
     // radius past the hit — unless an actual edit sits at the hit point
-    const prop = wrenchProps.rayPick(Math.min(hitT + 2.5, PLAYER.reach + 2));
+    const prop = wrenchProps.rayPick(Math.min(hitT + 2.5, PLAYER.reach * sealReach() + 2));
     if (prop && prop.t < hitT - 0.02){ this.selectProp(prop, add); return; }
     if (prop && hit && prop.t < hitT + prop.r + 0.4){
       const dir0 = new THREE.Vector3();
@@ -10785,7 +12079,8 @@ function tryAction(dt, now){
         game.lastMelee = now; game.punchT = now;
         AudioSys.burst({ dur: 0.05, freq: 900, gain: 0.05 });
         const ent = entityOnRay(2.6);
-        if (ent) hurtEntity(ent, 3, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
+        const pdm = CORE.countItem(game.slots, 'wfist') > 0 ? 15 : 3;
+        if (ent) hurtEntity(ent, pdm, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
       }
     } else if (edge){
       // fists down: gather — wires, power props, ropes, decor, then animals
@@ -10876,7 +12171,8 @@ function tryAction(dt, now){
       game.swingT = now;
       AudioSys.burst({ dur: 0.08, freq: 1400, gain: 0.08 });
       const ent = entityOnRay(3.6);
-      if (ent) hurtEntity(ent, 10 + tool.tier * 4, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
+      const sdm = (10 + tool.tier * 4) * (CORE.countItem(game.slots, 'wfist') > 0 ? 2 : 1);
+      if (ent) hurtEntity(ent, sdm, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
     }
     return;
   }
@@ -10974,6 +12270,101 @@ function tryAction(dt, now){
   }
   // explosives: set the charge on any surface, then RUN. TNT is a crater;
   // the shaped mining charge is a drill you light -- it pays its ore out.
+  if (tool.kind === 'rail'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const hit = surfaceHit();
+      if (!hit){ toast('aim the next spike at the ground'); return; }
+      const p = [+hit[0].toFixed(1), +(hit[1] + 0.12).toFixed(1), +hit[2].toFixed(1)];
+      const D = game.railDraft;
+      if (!D){
+        tool.item.count--;
+        game.railDraft = { pts: [p] };
+        toast('rail started — left click extends spike by spike · right click finishes the line');
+      } else {
+        const last = D.pts[D.pts.length - 1];
+        const d = Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]);
+        if (d < 2){ toast('too close to the last spike'); return; }
+        if (d > 60){ toast('too far — plant the next spike within 60m'); return; }
+        const cost = Math.max(1, Math.ceil(d / 4));
+        if (tool.item.count < cost){ toast('that span needs ' + cost + ' rails — you have ' + tool.item.count); return; }
+        tool.item.count -= cost;
+        D.pts.push(p);
+        AudioSys.sfx('craft');
+      }
+      if (tool.item.count <= 0){
+        game.slots[game.hotSel] = null;
+        railSys.finish();               // out of rails: the line ends here
+      }
+      railSys.rebuild();
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
+  if (tool.kind === 'deedtool'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      let rec = null;
+      for (const key in (game.cities || {})){
+        const r2 = game.cities[key];
+        if (r2.stamped && Math.hypot(r2.x - game.pos.x, r2.z - game.pos.z) < 70){ rec = r2; break; }
+      }
+      if (!rec){ toast('the deed only means something inside a city'); return; }
+      if (rec.owned != null){ toast('you already hold the deed to a ' + (rec.name || 'city') + ' tower'); return; }
+      let bi = 0, bd = 1e9;
+      rec.towers.forEach((t2, i) => {
+        const d = Math.hypot(rec.x + t2.bx * 36 - game.pos.x, rec.z + t2.bz * 36 - game.pos.z);
+        if (d < bd){ bd = d; bi = i; }
+      });
+      const t2 = rec.towers[bi];
+      const tx = rec.x + t2.bx * 36, tz = rec.z + t2.bz * 36, gy = rec.gy;
+      // the ground floor comes furnished: strongbox, bed, light
+      const ch = pnodeSys.add('chest', tx - t2.w / 2 + 2.0, gy + 0.95, tz, 0, { sc: 1.0 });
+      ch.inv = new Array(chestSlots(1.0)).fill(null);
+      bedSys.add(+(tx - t2.w / 2 + 2.2).toFixed(1), +(gy + 0.55).toFixed(1), +(tz + t2.w / 2 - 2.4).toFixed(1), 0);
+      game.torches.push([tx, gy + 0.4, tz - t2.w / 2 + 1.4]);
+      torchSys.rebuild();
+      rec.owned = bi;
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      refreshHotbar(); refreshToolHUD(); markSave();
+      toast('the deed is yours — a ' + (rec.name || 'city') + ' tower, furnished: strongbox, bed, light');
+      AudioSys.sfx('craft');
+    }
+    return;
+  }
+  if (tool.kind === 'carkit'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      const px = game.pos.x - Math.sin(game.yaw) * 4.2;
+      const pz = game.pos.z - Math.cos(game.yaw) * 4.2;
+      const e = spawnEntity('car', px, game.pos.y + 0.6, pz);
+      e.charge = tool.item.charge || 0;
+      e.heading = game.yaw;
+      game.slots[game.hotSel] = null;
+      refreshHotbar(); refreshToolHUD();
+      toast('car deployed — right click to drive · crouch + right click to pack it up');
+      AudioSys.sfx('craft');
+    }
+    return;
+  }
+  if (tool.kind === 'sigil'){
+    AudioSys.setHum(false, 0, 0);
+    if (edge){
+      if (game.mode !== 'survival'){ toast('the sigil only answers in survival'); return; }
+      if (bossSys.anyBoss()){ toast('a boss already walks this world'); return; }
+      tool.item.count--;
+      if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+      const ax = game.pos.x - Math.sin(game.yaw) * 14;
+      const az = game.pos.z - Math.cos(game.yaw) * 14;
+      const e = bossSys.spawn('architect', ax, game.gen.height(ax, az) + 0.9, az);
+      e.summoned = true;
+      toast('THE ARCHITECT answers the sigil');
+      AudioSys.sfx('boom');
+      refreshHotbar(); refreshToolHUD();
+    }
+    return;
+  }
   if (tool.kind === 'boom'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -11143,6 +12534,23 @@ function tryAction(dt, now){
     }
   }
 
+  // TUNNELER CORE (the Burrower's drop): with the core in your pack, a held
+  // drill bores a walking-pace corridor straight ahead -- no aiming, just go
+  if (tool.kind === 'drill' && game.mouseL && CORE.countItem(game.slots, 'tcore') > 0){
+    if (now - (game.tunnelT || 0) > 450){
+      const dir = new THREE.Vector3();
+      game.camera.getWorldDirection(dir);
+      const o = game.camera.position;
+      const cx = o.x + dir.x * 3.0, cy = o.y + dir.y * 3.0 - 0.3, cz = o.z + dir.z * 3.0;
+      const eds = nearEdits([cx - 3, cy - 3, cz - 3, cx + 3, cy + 3, cz + 3]);
+      if (CORE.evalSDF(cx, cy, cz, eds, game.gen) < 2.0){
+        game.tunnelT = now;
+        doMine(tool, { x: +cx.toFixed(2), y: +cy.toFixed(2), z: +cz.toFixed(2) }, 0, 2.3);
+        AudioSys.setHum(true, tool.tier, 1);
+      }
+    }
+  }
+
   const usable = game.ghostPos;
   if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
@@ -11185,14 +12593,21 @@ function tryAction(dt, now){
 }
 
 // raymarch the view ray to the first surface within reach
+// the architect's seal quadruples the wrench's reach while it's in the pack
+function sealReach(){
+  const tl = activeTool();
+  return tl && tl.kind === 'wrench' && CORE.countItem(game.slots, 'aseal') > 0 ? 4 : 1;
+}
 function surfaceHit(){
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
-  const segBox = [o.x - 10, o.y - 10, o.z - 10, o.x + 10, o.y + 10, o.z + 10];
+  const R = PLAYER.reach * sealReach() + 1;
+  const segBox = [o.x - R, o.y - R, o.z - R, o.x + R, o.y + R, o.z + R];
   const edits = nearEdits(segBox);
   let t = 0.4 + (game.camBack || 0);
-  for (let i = 0; i < 96 && t < PLAYER.reach + (game.camBack || 0); i++){
+  const maxT = PLAYER.reach * sealReach() + (game.camBack || 0);
+  for (let i = 0; i < 96 * sealReach() && t < maxT; i++){
     const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
     const d = sdfWorld(x, y, z, edits);
     if (d < 0.02) return [x, y, z];
@@ -11261,7 +12676,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -11330,6 +12745,42 @@ function itemIconURL(it){
     c.fillStyle = '#2b2119'; c.fillRect(7, 9, 2, 1);
     c.fillStyle = '#5a4632'; c.fillRect(7, 2, 2, 3);
     c.fillStyle = '#ffb347'; c.fillRect(7, 1, 2, 1);
+  } else if (it.kind === 'wfist'){
+    c.fillStyle = '#7d7d84'; c.fillRect(4, 4, 9, 9);
+    c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
+    c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
+    c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'rail'){
+    c.fillStyle = '#6b5233'; c.fillRect(2, 4, 12, 2); c.fillRect(2, 10, 12, 2);
+    c.fillStyle = '#8a8f9a'; c.fillRect(4, 2, 2, 12); c.fillRect(10, 2, 2, 12);
+  } else if (it.kind === 'deed'){
+    c.fillStyle = '#e8e0d0'; c.fillRect(3, 2, 10, 12);
+    c.fillStyle = '#8a8477'; c.fillRect(5, 4, 6, 1); c.fillRect(5, 6, 6, 1); c.fillRect(5, 8, 4, 1);
+    c.fillStyle = '#c9401f'; c.fillRect(9, 10, 3, 3);
+  } else if (it.kind === 'car'){
+    c.fillStyle = '#e8ecf2'; c.fillRect(2, 8, 12, 3);
+    c.fillStyle = '#9fd4e8'; c.fillRect(5, 6, 6, 2);
+    c.fillStyle = '#35d1c0'; c.fillRect(2, 10, 12, 1);
+    c.fillStyle = '#23232a'; c.fillRect(3, 11, 2, 2); c.fillRect(11, 11, 2, 2);
+  } else if (it.kind === 'sigil'){
+    c.fillStyle = '#2a2333'; c.fillRect(3, 3, 10, 10);
+    c.fillStyle = '#7f6fd6'; c.fillRect(7, 4, 2, 8); c.fillRect(4, 7, 8, 2);
+    c.fillStyle = '#c9beff'; c.fillRect(7, 7, 2, 2);
+  } else if (it.kind === 'aseal'){
+    c.fillStyle = '#d9b25a'; c.fillRect(4, 4, 8, 8);
+    c.fillStyle = '#8f6f2c'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#eef2ff'; c.fillRect(7, 7, 2, 2);
+    c.fillStyle = '#d9b25a'; c.fillRect(7, 2, 2, 2); c.fillRect(7, 12, 2, 2);
+  } else if (it.kind === 'mheart'){
+    c.fillStyle = '#3a1f16'; c.fillRect(4, 4, 9, 9);
+    c.fillStyle = '#c9401f'; c.fillRect(5, 5, 7, 7);
+    c.fillStyle = '#ff7a30'; c.fillRect(6, 6, 5, 5);
+    c.fillStyle = '#ffd75e'; c.fillRect(7, 7, 3, 3);
+  } else if (it.kind === 'tcore'){
+    c.fillStyle = '#2c2a33'; c.fillRect(4, 4, 8, 8);
+    c.fillStyle = '#c96a2a'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#ffb347'; c.fillRect(7, 7, 2, 2);
+    c.fillStyle = '#5b5964'; c.fillRect(3, 7, 1, 2); c.fillRect(12, 7, 1, 2); c.fillRect(7, 3, 2, 1); c.fillRect(7, 12, 2, 1);
   } else if (it.kind === 'vkey'){
     c.fillStyle = '#d9b25a'; c.fillRect(3, 6, 6, 6); c.fillRect(9, 8, 5, 2);
     c.fillStyle = '#8f6f2c'; c.fillRect(5, 8, 2, 2);
@@ -11654,6 +13105,14 @@ function itemLabel(it){
   if (it.kind === 'tnt') return 'TNT';
   if (it.kind === 'mcharge') return 'mining charge';
   if (it.kind === 'vkey') return 'vault key';
+  if (it.kind === 'tcore') return 'tunneler core';
+  if (it.kind === 'wfist') return 'warden fist';
+  if (it.kind === 'mheart') return 'magma heart';
+  if (it.kind === 'sigil') return 'architect sigil';
+  if (it.kind === 'aseal') return "architect's seal";
+  if (it.kind === 'car') return 'electric car';
+  if (it.kind === 'rail') return 'rails';
+  if (it.kind === 'deed') return 'property deed';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -11811,13 +13270,13 @@ function buildInvUI(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone'];
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'car'];
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
 const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'rail', 'deed'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
@@ -12368,6 +13827,13 @@ function refreshToolHUD(){
   const tool = activeTool();
   const el = $('toolinfo');
   let html = '';
+  if (game.driving){
+    const e = game.driving;
+    el.innerHTML = '<div class="t1">electric car</div>' +
+      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s</div>' +
+      '<div class="t2">W/S throttle · A/D steer · right click to step out</div>';
+    return;
+  }
   if (!it){
     html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
       (game.carried
@@ -12395,6 +13861,22 @@ function refreshToolHUD(){
     }
   } else if (it.kind === 'gun'){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'wfist'){
+    html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'rail'){
+    html = '<div class="t1">rails ×' + it.count + '</div><div class="t2">left click plants spikes into a line (1 rail per 4m) · right click finishes it · power an end post and right-click it to ride</div>';
+  } else if (it.kind === 'deed'){
+    html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
+  } else if (it.kind === 'car'){
+    html = '<div class="t1">electric car ·' + Math.round(it.charge || 0) + '% charge</div><div class="t2">left click to deploy · right click the car to drive · it recharges parked on a powered grid</div>';
+  } else if (it.kind === 'sigil'){
+    html = '<div class="t1">architect sigil</div><div class="t2">left click to summon THE ARCHITECT — the endgame. Craft it when you are ready.</div>';
+  } else if (it.kind === 'aseal'){
+    html = '<div class="t1">architect\'s seal</div><div class="t2">the Architect\'s drafting mark — while it rides in your pack, the wrench reaches four times as far</div>';
+  } else if (it.kind === 'mheart'){
+    html = '<div class="t1">magma heart</div><div class="t2">the Tyrant\'s still-beating core — while it rides in your pack, lava cannot burn you</div>';
+  } else if (it.kind === 'tcore'){
+    html = '<div class="t1">tunneler core</div><div class="t2">the Burrower\'s heart — while it rides in your pack, any held drill bores a corridor as you walk (hold left click)</div>';
   } else if (it.kind === 'tnt'){
     html = '<div class="t1">TNT ×' + it.count + '</div><div class="t2">left click to set the charge · 3s fuse · RUN</div>';
   } else if (it.kind === 'mcharge'){
@@ -12945,6 +14427,7 @@ function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
   $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
+  $('optMus').value = o.music == null ? 45 : o.music;
   $('optShad').value = o.shadows; $('optRays').value = o.rays;
   const fi = FPS_STOPS.indexOf(o.fpsCap);
   $('optFps').value = fi < 0 ? 7 : fi;
@@ -12960,6 +14443,7 @@ function syncOptLabels(){
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = ($('optRd').value * CORE.CHUNK_M) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
+  $('optMusV').textContent = $('optMus').value + '%';
   $('optShadV').textContent = +$('optShad').value ? 'on' : 'off';
   $('optRaysV').textContent = +$('optRays').value ? 'on' : 'off';
   const fc = FPS_STOPS[+$('optFps').value];
@@ -12971,12 +14455,14 @@ function applyOptions(){
   game.opts.fov = +$('optFov').value;
   game.opts.rd = +$('optRd').value;
   game.opts.vol = +$('optVol').value;
+  game.opts.music = +$('optMus').value;
   game.opts.shadows = +$('optShad').value;
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
   game.opts.skin = +$('optSkin').value;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
+  AudioSys.setMusicVolume(game.opts.music);
   saveOpts(game.opts);
   if (game.camera){
     game.camera.fov = game.opts.fov; game.camera.updateProjectionMatrix();
@@ -13071,6 +14557,8 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    cities: game.cities || {},
+    bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
     torches: game.torches,
@@ -13082,6 +14570,7 @@ function saveNow(){
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2]),
     tables: game.tables,
     ropes: game.ropes || [],
+    rails: game.rails || [],
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -13090,8 +14579,10 @@ function saveNow(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && !e.bountyTag)
-      .map(e => [e.type, e.x, e.y, e.z, e.hp]),
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag)
+      .map(e => [e.type, e.x, e.y, e.z, e.hp,
+                 e.charge != null ? +(+e.charge).toFixed(1) : 0,
+                 e.heading != null ? +(+e.heading).toFixed(2) : 0]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -13114,6 +14605,11 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.cities = data.cities || {};
+  game.rails = data.rails || [];
+  game.railDraft = null;
+  game.riding = null;
+  game.bossKills = data.bossKills || {};
   if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
@@ -13157,7 +14653,13 @@ function startWorld(id){
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.decorRemovedSet = new Set(data.removedDecor || []);
   game.decorPlaced = data.placedDecor || [];
-  game.entities = (data.entities || []).map(r => reviveEntity(r[0], r[1], r[2], r[3], r[4]));
+  game.entities = (data.entities || []).map(r => {
+    const e = reviveEntity(r[0], r[1], r[2], r[3], r[4]);
+    if (r[5]) e.charge = r[5];
+    if (r[6]) e.heading = r[6];
+    return e;
+  });
+  game.driving = null;
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
   game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
@@ -13187,6 +14689,7 @@ function startWorld(id){
   game.terrain.edits = game.edits;
   torchSys.rebuild();
   ropeSys.rebuild();
+  railSys.rebuild();
   pnodeSys.rebuild();
   beaconSys.rebuild();
   bedSys.rebuild();
@@ -13866,6 +15369,23 @@ function frame(now){
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
+  citySys.tick(dt);
+  bossSys.tick(dt);
+  // boss HP bar: the nearest live boss within 90m owns the top of the screen
+  {
+    let bb = null, bd = 90;
+    for (const e of game.entities) if (e.bossType){
+      const d = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+      if (d < bd){ bd = d; bb = e; }
+    }
+    game.bossNear = bb;
+    const el = $('bossbar');
+    if (bb && game.ui === 'none'){
+      el.classList.remove('hidden');
+      $('bossname').textContent = ENT_DEF[bb.bossType].boss;
+      $('bossfill').style.width = Math.max(0, 100 * bb.hp / ENT_DEF[bb.bossType].hp).toFixed(1) + '%';
+    } else el.classList.add('hidden');
+  }
   game.missionT = (game.missionT || 0) + dt;
   if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
@@ -13914,8 +15434,18 @@ function frame(now){
     game.navT = 0;
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
+    AudioSys.music(game.bossNear ? 'boss' : depth > 14 ? 'cave' : 'surface');
     if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
     // drone batteries charge near a powered circuit with watts to spare
+    if (powerSys.surplus.length){
+      for (const en of game.entities){
+        if (en.type === 'car' && (en.charge || 0) < 100 &&
+            powerSys.surplusNear(en.x, en.y + 1, en.z, 6)){
+          en.charge = Math.min(100, (en.charge || 0) + 0.9);
+          markSave();
+        }
+      }
+    }
     if (powerSys.surplus.length && powerSys.surplusNear(game.pos.x, game.pos.y + 1, game.pos.z, 6)){
       for (const s of game.slots){
         if (s && s.kind === 'drone' && (s.charge || 0) < 100){
@@ -13994,7 +15524,7 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optMus', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
   $('btnSignSave').addEventListener('click', closeSign);
   $('signtext').addEventListener('keydown', e => {
     if (e.code === 'Enter' && !e.shiftKey){ e.preventDefault(); closeSign(); }
@@ -14023,9 +15553,9 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
-  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys,
-  villageSys, tradeSys, missionSys, boardSys };
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
+  villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
 </body>
 </html>

@@ -173,7 +173,7 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
 - **Raid bases**: walled forts and whole enemy towns to clear — better loot
   behind higher difficulty, a miniboss holding the vault key.
 
-## Build 10 — Bosses & endgame
+## Build 10 — Bosses & endgame (DONE)
 Every STRATA boss does something only a CSG world allows. Unique unlock
 drops, not just loot.
 - **The Burrower**: a worm that carves real tunnels as it hunts you, deep
@@ -191,7 +191,7 @@ drops, not just loot.
 - Music + audio expansion; options expansion; perf pass (worker meshing
   via blob if continuous mining needs it).
 
-## Build 11 — Cities & vehicles (the far future, but a real one)
+## Build 11 — Cities & vehicles (DONE)
 STRATA buildings are box CSG, so distant skylines LOD almost perfectly —
 cities are feasible where block games choke.
 - **Tier 1**: rare mega-cities (one per several km) — road grids, towers
