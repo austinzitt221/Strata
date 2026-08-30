@@ -102,6 +102,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .craftrow .ccost{font-size:12px; color:var(--ui-hi);}
 .craftrow .ccost.ok{color:#7dff9b;}
 
+/* ---------- boss bar ---------- */
+#bossbar{position:fixed; top:52px; left:50%; transform:translateX(-50%); width:430px; z-index:6; text-align:center;}
+#bossname{font-size:13px; letter-spacing:4px; color:#ffb0a0; text-shadow:0 1px 3px #000; margin-bottom:4px;}
+
 /* ---------- objective markers ---------- */
 #objlayer{position:fixed; inset:0; pointer-events:none; z-index:5;}
 .objmark{position:absolute; left:0; top:0; width:64px; text-align:center; will-change:transform;}
@@ -260,6 +264,11 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 </div>
 
 <div id="objlayer"></div>
+
+<div id="bossbar" class="hidden">
+  <div id="bossname">BOSS</div>
+  <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
+</div>
 
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
@@ -2056,7 +2065,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -3151,6 +3160,7 @@ const game = {
   armor: { head: null, chest: null, feet: null, back: null },
   villages: {},
   forts: {},
+  bossKills: {},
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -4452,7 +4462,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7270,6 +7280,11 @@ const ENT_DEF = {
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
+  // bosses: big hp, custom AI in bossSys, exempt from generic physics
+  burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
+  warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
+  tyrant:    { hp: 460, speed: 2.6, r: 1.3, h: 3.0, cap: 0, boss: 'THE MAGMA TYRANT' },
+  architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
 };
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
@@ -7280,6 +7295,32 @@ const VROLE = {
 function entMesh(type, ent){
   const g = new THREE.Group();
   const legs = [];
+  if (type === 'burrower'){
+    // a chitin worm: armored head with a glowing maw, body segments trail
+    // behind along its real path (positioned each frame from ent.trail)
+    const chitin = new THREE.MeshBasicMaterial({ color: 0x4a4058 });
+    const chitin2 = new THREE.MeshBasicMaterial({ color: 0x635875 });
+    const head = new THREE.Group();
+    const skull = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 2.2), chitin);
+    const maw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 0.5),
+      new THREE.MeshBasicMaterial({ color: 0xff7a30 }));
+    maw.position.z = -1.05;
+    const jawT = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
+    jawT.position.set(0, 0.85, -0.9);
+    const jawB = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
+    jawB.position.set(0, -0.85, -0.9);
+    head.add(skull, maw, jawT, jawB);
+    g.add(head);
+    g.userData.head = head;
+    g.userData.segs = [];
+    for (let i = 0; i < 7; i++){
+      const sc = 1.5 - i * 0.14;
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(sc, sc, 1.4), i % 2 ? chitin : chitin2);
+      g.add(seg);
+      g.userData.segs.push(seg);
+    }
+    return g;
+  }
   const box = (w, h, d, color, x, y, z, parent) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
     m.position.set(x, y, z);
@@ -7404,6 +7445,18 @@ function killEntity(e, byPlayer){
       addStackItem('wool', n); addStackItem('meat', 1);
       toast('+' + n + ' wool  ·  +1 meat');
     }
+    else if (e.bossType === 'burrower'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.burrower){
+        game.bossKills.burrower = true;
+        addStackItem('tcore', 1); addStackItem('coin', 80);
+        toast('THE BURROWER is slain — the TUNNELER CORE is yours (+80 coins)');
+      } else {
+        addStackItem('coin', 80); addStackItem('diamond', 2);
+        toast('THE BURROWER is slain again — +80 coins · +2 diamond');
+      }
+      markSave();
+    }
     else if (e.warlord){
       const rec = game.forts && game.forts[e.fortKey];
       if (rec) rec.bossDead = true;
@@ -7427,6 +7480,13 @@ function hurtEntity(e, dmg, kx, kz){
     e.flash = 0.15; e.fleeT = 5;
     villageSys.offend(e);
     AudioSys.sfx('hit');
+    return;
+  }
+  if (e.bossType){
+    e.hp -= dmg;
+    e.flash = 0.15;
+    AudioSys.sfx('hit');
+    if (e.hp <= 0) killEntity(e, true);
     return;
   }
   e.hp -= dmg;
@@ -8240,6 +8300,114 @@ const raidSys = {
   },
 };
 
+// ---------- bosses: fights only a CSG world can host ----------
+// Bosses are entities with their own physics. The framework: e.bossType set,
+// generic steering skipped, a boss HP bar when one is near, kill flags per
+// world, unique unlock drops.
+const bossSys = {
+  accT: 0, rumbleT: 0,
+  spawn(type, x, y, z){
+    const e = spawnEntity(type, x, y, z);
+    e.bossType = type;
+    e.state = 'burrow'; e.stateT = 0; e.carveAt = null;
+    e.trail = [];
+    if (!e.mesh){ e.mesh = entMesh(type, e); game.scene.add(e.mesh); }
+    return e;
+  },
+  anyBoss(){ return game.entities.find(e => e.bossType); },
+  // ---- encounter triggers ----
+  tick(dt){
+    if (game.mode !== 'survival' || !game.running) return;
+    this.accT += dt;
+    if (this.accT < 2) return;
+    this.accT = 0;
+    if (this.anyBoss()) return;
+    // THE BURROWER stalks the deep: far under the surface, it can smell you
+    const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
+    if (depth > 25 && Math.random() < 0.05){
+      const a = Math.random() * Math.PI * 2;
+      const e = this.spawn('burrower',
+        game.pos.x + Math.cos(a) * 34, game.pos.y - 6, game.pos.z + Math.sin(a) * 34);
+      toast('something HUGE is moving through the stone…');
+      AudioSys.sfx('boom');
+    }
+  },
+  // low rumble that gets louder as the thing gets closer
+  rumble(e, dt){
+    this.rumbleT -= dt;
+    if (this.rumbleT > 0) return;
+    const d = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+    this.rumbleT = 0.55;
+    if (d < 60) AudioSys.tone({ freq: 36 + Math.random() * 8, dur: 0.5,
+      gain: Math.min(0.4, 8 / Math.max(6, d)), type: 'triangle' });
+  },
+  updateBoss(e, dt, now){
+    if (e.bossType === 'burrower') this.burrower(e, dt);
+    // record the path for the trailing segments
+    e.trail.unshift([e.x, e.y, e.z]);
+    if (e.trail.length > 40) e.trail.pop();
+    if (e.mesh && e.mesh.userData.segs){
+      const segs = e.mesh.userData.segs;
+      for (let i = 0; i < segs.length; i++){
+        const t = e.trail[Math.min(e.trail.length - 1, (i + 1) * 3)];
+        segs[i].position.set(t[0] - e.x, t[1] - e.y, t[2] - e.z);
+      }
+      // the head looks where it is going
+      const t1 = e.trail[Math.min(e.trail.length - 1, 2)];
+      const dx = e.x - t1[0], dy = e.y - t1[1], dz = e.z - t1[2];
+      if (dx * dx + dy * dy + dz * dz > 0.001){
+        e.mesh.userData.head.rotation.order = 'YXZ';
+        e.mesh.userData.head.rotation.set(
+          Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(-dx, -dz), 0);
+      }
+    }
+  },
+  // THE BURROWER: swims through solid rock, carving a REAL tunnel behind it.
+  // It dives under you, lunges up through the floor, sails, and dives again.
+  // The arena is destroyed as you fight -- that is the point.
+  burrower(e, dt){
+    this.rumble(e, dt);
+    const def = ENT_DEF.burrower;
+    e.stateT = (e.stateT || 0) + dt;
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const d3 = Math.hypot(e.x - px, e.y - py, e.z - pz);
+    let tx, ty, tz, sp = def.speed;
+    if (e.state === 'burrow'){
+      // aim for a spot 5m under the player's feet
+      tx = px; ty = py - 5; tz = pz;
+      if (d3 < 7 && e.stateT > 1.2){ e.state = 'lunge'; e.stateT = 0; }
+    } else if (e.state === 'lunge'){
+      tx = px; ty = py + 1.0; tz = pz; sp = def.speed * 1.7;
+      if (d3 < def.r + 1.1){
+        damagePlayer(14, (px - e.x) * 3, (pz - e.z) * 3);
+        e.state = 'dive'; e.stateT = 0;
+        e.diveA = Math.random() * Math.PI * 2;
+      } else if (e.stateT > 2.2){ e.state = 'dive'; e.stateT = 0; e.diveA = Math.random() * Math.PI * 2; }
+    } else {   // dive: swing wide and go deep before the next pass
+      tx = px + Math.cos(e.diveA || 0) * 22;
+      tz = pz + Math.sin(e.diveA || 0) * 22;
+      ty = py - 12;
+      if (e.stateT > 2.4){ e.state = 'burrow'; e.stateT = 0; }
+    }
+    let dx = tx - e.x, dy = ty - e.y, dz = tz - e.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    e.x += (dx / L) * sp * dt;
+    e.y += (dy / L) * sp * dt;
+    e.z += (dz / L) * sp * dt;
+    e.y = Math.max(e.y, CORE.BEDROCK_Y + 3);
+    // carve where it swims -- spaced, so the edit list stays sane
+    const c = e.carveAt;
+    if (!c || Math.hypot(e.x - c[0], e.y - c[1], e.z - c[2]) > 3.4){
+      e.carveAt = [e.x, e.y, e.z];
+      const eds = nearEdits([e.x - 2, e.y - 2, e.z - 2, e.x + 2, e.y + 2, e.z + 2]);
+      if (CORE.evalSDF(e.x, e.y, e.z, eds, game.gen) < 1.2){
+        applyEdit(CORE.makeEdit(0, 0, +e.x.toFixed(1), +e.y.toFixed(1), +e.z.toFixed(1), 6.0, 0, 0));
+        Particles.burst(e.x, e.y, e.z, 1.2, [0x51484f, 0x77747f, 0x2b2430], 10, 3);
+      }
+    }
+  },
+};
+
 // ---------- raid bases: walled forts worth shooting your way into ----------
 // Stamped like villages: approach one and the walls, towers, bunkers and an
 // obsidian vault land in the edit list. A garrison of day-proof raiders
@@ -8421,6 +8589,18 @@ function updateEntities(dt, now){
       continue;
     }
     const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    if (e.bossType){
+      // bosses run their own physics and never despawn by distance
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+      bossSys.updateBoss(e, dt, now);
+      e.flash = Math.max(0, (e.flash || 0) - dt);
+      if (e.mesh){
+        e.mesh.position.set(e.x, e.y, e.z);
+        e.mesh.traverse(o => { if (o.isMesh && o.material.emissive)
+          o.material.emissive.setHex(e.flash > 0 ? 0x772222 : 0); });
+      }
+      continue;
+    }
     if (pd > 70){                                  // too far — despawn
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
@@ -11143,6 +11323,23 @@ function tryAction(dt, now){
     }
   }
 
+  // TUNNELER CORE (the Burrower's drop): with the core in your pack, a held
+  // drill bores a walking-pace corridor straight ahead -- no aiming, just go
+  if (tool.kind === 'drill' && game.mouseL && CORE.countItem(game.slots, 'tcore') > 0){
+    if (now - (game.tunnelT || 0) > 450){
+      const dir = new THREE.Vector3();
+      game.camera.getWorldDirection(dir);
+      const o = game.camera.position;
+      const cx = o.x + dir.x * 3.0, cy = o.y + dir.y * 3.0 - 0.3, cz = o.z + dir.z * 3.0;
+      const eds = nearEdits([cx - 3, cy - 3, cz - 3, cx + 3, cy + 3, cz + 3]);
+      if (CORE.evalSDF(cx, cy, cz, eds, game.gen) < 2.0){
+        game.tunnelT = now;
+        doMine(tool, { x: +cx.toFixed(2), y: +cy.toFixed(2), z: +cz.toFixed(2) }, 0, 2.3);
+        AudioSys.setHum(true, tool.tier, 1);
+      }
+    }
+  }
+
   const usable = game.ghostPos;
   if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
@@ -11261,7 +11458,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -11330,6 +11527,11 @@ function itemIconURL(it){
     c.fillStyle = '#2b2119'; c.fillRect(7, 9, 2, 1);
     c.fillStyle = '#5a4632'; c.fillRect(7, 2, 2, 3);
     c.fillStyle = '#ffb347'; c.fillRect(7, 1, 2, 1);
+  } else if (it.kind === 'tcore'){
+    c.fillStyle = '#2c2a33'; c.fillRect(4, 4, 8, 8);
+    c.fillStyle = '#c96a2a'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#ffb347'; c.fillRect(7, 7, 2, 2);
+    c.fillStyle = '#5b5964'; c.fillRect(3, 7, 1, 2); c.fillRect(12, 7, 1, 2); c.fillRect(7, 3, 2, 1); c.fillRect(7, 12, 2, 1);
   } else if (it.kind === 'vkey'){
     c.fillStyle = '#d9b25a'; c.fillRect(3, 6, 6, 6); c.fillRect(9, 8, 5, 2);
     c.fillStyle = '#8f6f2c'; c.fillRect(5, 8, 2, 2);
@@ -11654,6 +11856,7 @@ function itemLabel(it){
   if (it.kind === 'tnt') return 'TNT';
   if (it.kind === 'mcharge') return 'mining charge';
   if (it.kind === 'vkey') return 'vault key';
+  if (it.kind === 'tcore') return 'tunneler core';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -12395,6 +12598,8 @@ function refreshToolHUD(){
     }
   } else if (it.kind === 'gun'){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
+  } else if (it.kind === 'tcore'){
+    html = '<div class="t1">tunneler core</div><div class="t2">the Burrower\'s heart — while it rides in your pack, any held drill bores a corridor as you walk (hold left click)</div>';
   } else if (it.kind === 'tnt'){
     html = '<div class="t1">TNT ×' + it.count + '</div><div class="t2">left click to set the charge · 3s fuse · RUN</div>';
   } else if (it.kind === 'mcharge'){
@@ -13071,6 +13276,7 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
     torches: game.torches,
@@ -13114,6 +13320,7 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.bossKills = data.bossKills || {};
   if (missionSys.group) missionSys.sync();
   if (data.dispSlot !== undefined){
     game.dispSlot = data.dispSlot;
@@ -13866,6 +14073,21 @@ function frame(now){
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
+  bossSys.tick(dt);
+  // boss HP bar: the nearest live boss within 90m owns the top of the screen
+  {
+    let bb = null, bd = 90;
+    for (const e of game.entities) if (e.bossType){
+      const d = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+      if (d < bd){ bd = d; bb = e; }
+    }
+    const el = $('bossbar');
+    if (bb && game.ui === 'none'){
+      el.classList.remove('hidden');
+      $('bossname').textContent = ENT_DEF[bb.bossType].boss;
+      $('bossfill').style.width = Math.max(0, 100 * bb.hp / ENT_DEF[bb.bossType].hp).toFixed(1) + '%';
+    } else el.classList.add('hidden');
+  }
   game.missionT = (game.missionT || 0) + dt;
   if (game.missionT > 2){ game.missionT = 0; missionSys.tick(); boardSys.tick(); }
   wrenchSys.frame();
@@ -14024,7 +14246,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
   itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose,
-  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys,
+  fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys };
 </script>
 </body>
