@@ -2065,7 +2065,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
@@ -4462,7 +4462,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7283,7 +7283,7 @@ const ENT_DEF = {
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
-  tyrant:    { hp: 460, speed: 2.6, r: 1.3, h: 3.0, cap: 0, boss: 'THE MAGMA TYRANT' },
+  tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
   architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
 };
 const VROLE = {
@@ -7325,6 +7325,36 @@ function entMesh(type, ent){
       g.add(c2); chunks.push(c2);
     }
     g.userData.chunks = chunks;
+    return g;
+  }
+  if (type === 'tyrant'){
+    // a brute of cooling basalt around a molten core: lava glows through
+    // the chest crack and the fists, obsidian horns crown the head
+    const bas = m2 => vmMatMaterial(m2);
+    const glow = new THREE.MeshBasicMaterial({ color: 0xff7a30 });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.9, 1.3), bas(CORE.MAT.BASALT));
+    torso.position.y = 1.95;
+    const core = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.9, 0.16), bas(CORE.MAT.LAVA));
+    core.position.set(0, 2.0, -0.68);
+    const hips = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.6, 1.0), bas(CORE.MAT.BASALT));
+    hips.position.y = 0.85;
+    const legL = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.0, 0.68), bas(CORE.MAT.BASALT));
+    legL.position.set(-0.52, 0.5, 0);
+    const legR = legL.clone(); legR.position.x = 0.52;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.75, 0.9), bas(CORE.MAT.BASALT));
+    head.position.y = 3.28;
+    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.16, 0.1), glow);
+    eye.position.set(0, 3.33, -0.47);
+    const hornL = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.6, 0.22), bas(CORE.MAT.OBSIDIAN));
+    hornL.position.set(-0.42, 3.75, 0); hornL.rotation.z = 0.35;
+    const hornR = hornL.clone(); hornR.position.x = 0.42; hornR.rotation.z = -0.35;
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.66, 1.8, 0.75), bas(CORE.MAT.BASALT));
+    armL.position.set(-1.5, 1.75, 0);
+    const armR = armL.clone(); armR.position.x = 1.5;
+    const fistL = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.55, 0.85), bas(CORE.MAT.LAVA));
+    fistL.position.set(-1.5, 0.72, 0);
+    const fistR = fistL.clone(); fistR.position.x = 1.5;
+    g.add(torso, core, hips, legL, legR, head, eye, hornL, hornR, armL, armR, fistL, fistR);
     return g;
   }
   if (type === 'burrower'){
@@ -7501,6 +7531,19 @@ function killEntity(e, byPlayer){
       } else {
         addStackItem('coin', 80); addStackItem('diamond', 2);
         toast('THE BURROWER is slain again — +80 coins · +2 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'tyrant'){
+      game.bossKills = game.bossKills || {};
+      if (e.volcKey) bossSys.tyrantDone.add(e.volcKey);
+      if (!game.bossKills.tyrant){
+        game.bossKills.tyrant = true;
+        addStackItem('mheart', 1); addStackItem('coin', 150);
+        toast('THE MAGMA TYRANT bursts — the MAGMA HEART is yours (+150 coins)');
+      } else {
+        addStackItem('coin', 150); CORE.addMat(game.slots, CORE.MAT.OBSIDIAN, 8); addStackItem('diamond', 2);
+        toast('THE MAGMA TYRANT bursts — +150 coins · +8 obsidian · +2 diamond');
       }
       markSave();
     }
@@ -8352,7 +8395,7 @@ const raidSys = {
 // generic steering skipped, a boss HP bar when one is near, kill flags per
 // world, unique unlock drops.
 const bossSys = {
-  accT: 0, rumbleT: 0,
+  accT: 0, rumbleT: 0, tyrantDone: new Set(),
   spawn(type, x, y, z){
     const e = spawnEntity(type, x, y, z);
     e.bossType = type;
@@ -8377,6 +8420,22 @@ const bossSys = {
         game.pos.x + Math.cos(a) * 34, game.pos.y - 6, game.pos.z + Math.sin(a) * 34);
       toast('something HUGE is moving through the stone…');
       AudioSys.sfx('boom');
+      return;
+    }
+    // THE MAGMA TYRANT: every caldera has a keeper. Climb into a volcano's
+    // crater and it hauls itself out of the melt (once per crater per session)
+    const L = game.gen.lmAt(game.pos.x, game.pos.z);
+    if (L && L.type === 'volcano'){
+      const dv = Math.hypot(game.pos.x - L.x, game.pos.z - L.z);
+      const key = L.x + ',' + L.z;
+      if (dv < L.crR + 8 && !this.tyrantDone.has(key) &&
+          game.pos.y > game.gen.height(L.x, L.z) - 5){
+        const sx = L.x + 3, sz = L.z + 3;
+        const e = this.spawn('tyrant', sx, game.gen.height(sx, sz) + 0.3, sz);
+        e.volcKey = key;
+        toast('THE MAGMA TYRANT hauls itself out of the melt…');
+        AudioSys.sfx('boom');
+      }
     }
   },
   // low rumble that gets louder as the thing gets closer
@@ -8391,6 +8450,7 @@ const bossSys = {
   updateBoss(e, dt, now){
     if (e.bossType === 'burrower') this.burrower(e, dt);
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
+    else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
     // record the path for the trailing segments
     e.trail.unshift([e.x, e.y, e.z]);
     if (e.trail.length > 40) e.trail.pop();
@@ -8496,7 +8556,7 @@ function bossSysWarden(){
       (game.projectiles = game.projectiles || []).push({
         x: e.x, y: e.y + 2.8, z: e.z,
         vx: (px - e.x) / t, vy: dy / t + 1.75 * t, vz: (pz - e.z) / t,
-        t: 5, dmg: 20, r: 1.8 });
+        t: 5, dmg: 20, r: 1.8, src: e });
       AudioSys.sfx('rocket');
     }
     // chunks blast off as it takes damage
@@ -8524,6 +8584,64 @@ function bossSysWarden(){
       Particles.burst(cx, cy, cz, 1.5, [0x77747f, 0x51484f, 0x9a9aa5], 30, 6);
       AudioSys.sfx('boom');
       toast('the Warden EATS the ground and knits itself back together');
+    }
+  };
+}
+
+// (bossSys continues) THE MAGMA TYRANT: keeper of the volcano caldera.
+// It fights with the world's own magma -- lava bombs that flood the arena
+// with REAL molten pools, and vents it tears open under your feet.
+bossSysTyrant();
+function bossSysTyrant(){
+  bossSys.tyrant = function(e, dt){
+    const def = ENT_DEF.tyrant;
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.bombT = Math.max(0, (e.bombT || 0) - dt);
+    const px = game.pos.x, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    // bound to its caldera: never wanders far down the cone
+    e.home = e.home || { x: e.x, z: e.z };
+    const hd = Math.hypot(e.x - e.home.x, e.z - e.home.z);
+    let tx = px, tz = pz;
+    if (hd > 55 || pd > 60){ tx = e.home.x; tz = e.home.z; }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    if (L > 2.6){ e.x += (dx / L) * def.speed * dt; e.z += (dz / L) * def.speed * dt; }
+    e.y = game.gen.height(e.x, e.z);
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(px - e.x), -(pz - e.z));
+    // it sheds embers as it walks
+    if (Math.random() < dt * 6)
+      Particles.burst(e.x, e.y + 2 + Math.random(), e.z, 0.5, [0xff7a30, 0xffb347], 2, 1.5);
+    // SLAM up close
+    if (pd < 3.6 && e.atkT <= 0){
+      e.atkT = 1.5;
+      damagePlayer(16, (px - e.x) * 4.5, (pz - e.z) * 4.5);
+      Particles.burst(e.x, e.y + 1, e.z, 1, [0xff7a30, 0x2b2119], 16, 4);
+      AudioSys.sfx('boom');
+    }
+    // LAVA BOMB at range: an arcing gobbet whose blast cup fills with a
+    // REAL molten pool -- the battlefield floods as the fight runs long
+    if (pd > 5 && pd < 44 && e.bombT <= 0){
+      e.bombT = 3.6;
+      const t = pd / 15;
+      const dy = (game.pos.y + 0.5) - (e.y + 3.2);
+      (game.projectiles = game.projectiles || []).push({
+        x: e.x, y: e.y + 3.4, z: e.z,
+        vx: (px - e.x) / t, vy: dy / t + 1.75 * t, vz: (pz - e.z) / t,
+        t: 5, dmg: 12, r: 1.6, lava: true, src: e });
+      AudioSys.sfx('rocket');
+    }
+    // every quarter of its health lost, it ROARS and rips a vent open
+    // under your feet: a pit that floods with magma
+    if (e.ventHp == null) e.ventHp = e.hp;
+    if (e.hp < e.ventHp - 162){
+      e.ventHp = e.hp;
+      const vy = game.gen.height(px, pz);
+      applyEdit(CORE.makeEdit(0, 0, +px.toFixed(1), +(vy - 1.4).toFixed(1), +pz.toFixed(1), 3.4, 0, 0));
+      applyEdit(CORE.makeEdit(1, 0, +px.toFixed(1), +(vy - 3.0).toFixed(1), +pz.toFixed(1), 2.8, CORE.MAT.LAVA, 0));
+      Particles.burst(px, vy, pz, 1.6, [0xff7a30, 0xffb347, 0x2b2119], 30, 6);
+      AudioSys.sfx('boom');
+      toast('the Tyrant ROARS — the ground under you tears open into magma');
     }
   };
 }
@@ -9010,6 +9128,7 @@ function updateProjectiles(dt){
       const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
       if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
       if (!done) for (const en of game.entities){
+        if (en === p.src) continue;          // never detonate on the thrower
         const def = ENT_DEF[en.type];
         if (Math.hypot(en.x - p.x, en.y + def.h * 0.5 - p.y, en.z - p.z) < def.r + 0.5){ done = true; break; }
       }
@@ -9018,6 +9137,11 @@ function updateProjectiles(dt){
     Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
     if (done || p.t <= 0){
       explode(p.x, p.y, p.z, p.r, p.dmg);
+      if (p.lava){
+        // the payload settles into the blast cup as a real molten pool
+        applyEdit(CORE.makeEdit(1, 0, +p.x.toFixed(1), +(p.y - 1.0).toFixed(1), +p.z.toFixed(1), 2.1, CORE.MAT.LAVA, 0));
+        Particles.burst(p.x, p.y, p.z, 1.2, [0xff7a30, 0xffb347], 18, 4);
+      }
       ps.splice(i, 1);
     }
   }
@@ -9622,7 +9746,12 @@ function updatePlayer(dt){
       const led = nearEdits(lbox);
       if (CORE.materialAt(game.pos.x, game.pos.y - 0.2, game.pos.z, led, game.gen) === CORE.MAT.LAVA ||
           CORE.materialAt(game.pos.x, game.pos.y + 0.1, game.pos.z, led, game.gen) === CORE.MAT.LAVA){
-        damagePlayer(6, 0, 0);
+        if (CORE.countItem(game.slots, 'mheart') > 0){
+          if (!game.mhToastT || performance.now() - game.mhToastT > 8000){
+            game.mhToastT = performance.now();
+            toast('the magma heart drinks the burn');
+          }
+        } else damagePlayer(6, 0, 0);
       }
     }
   }
@@ -11591,7 +11720,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -11665,6 +11794,11 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'mheart'){
+    c.fillStyle = '#3a1f16'; c.fillRect(4, 4, 9, 9);
+    c.fillStyle = '#c9401f'; c.fillRect(5, 5, 7, 7);
+    c.fillStyle = '#ff7a30'; c.fillRect(6, 6, 5, 5);
+    c.fillStyle = '#ffd75e'; c.fillRect(7, 7, 3, 3);
   } else if (it.kind === 'tcore'){
     c.fillStyle = '#2c2a33'; c.fillRect(4, 4, 8, 8);
     c.fillStyle = '#c96a2a'; c.fillRect(6, 6, 4, 4);
@@ -11996,6 +12130,7 @@ function itemLabel(it){
   if (it.kind === 'vkey') return 'vault key';
   if (it.kind === 'tcore') return 'tunneler core';
   if (it.kind === 'wfist') return 'warden fist';
+  if (it.kind === 'mheart') return 'magma heart';
   if (it.kind === 'torch') return 'torches';
   if (it.kind === 'rope') return 'rope anchor';
   if (it.kind === 'wire') return 'wire';
@@ -12739,6 +12874,8 @@ function refreshToolHUD(){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'mheart'){
+    html = '<div class="t1">magma heart</div><div class="t2">the Tyrant\'s still-beating core — while it rides in your pack, lava cannot burn you</div>';
   } else if (it.kind === 'tcore'){
     html = '<div class="t1">tunneler core</div><div class="t2">the Burrower\'s heart — while it rides in your pack, any held drill bores a corridor as you walk (hold left click)</div>';
   } else if (it.kind === 'tnt'){
