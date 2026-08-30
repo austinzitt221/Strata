@@ -161,7 +161,7 @@ Power is continuous wattage, not on/off — machines scale with supply, no cap.
 - **Treasure maps**: bought from villagers; X marks buried loot via the
   compass.
 
-## Build 9 — Arms race
+## Build 9 — Arms race (DONE)
 - Weapon table: crafted at a crafting table, requires power to operate.
 - Gun arsenal (real-model-inspired, renamed): full-auto AR, SMG, semi-auto
   AR, handgun, heavy pistol, sniper, RPG, laser rifle, gatling, laser
