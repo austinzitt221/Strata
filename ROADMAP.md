@@ -225,7 +225,7 @@ Everything below is scheduled. Builds 13–21 finish Earth; 22–25 leave it.
 The rule stands: no phase starts until the previous one feels right in
 playtest.
 
-## Build 13 — THE HORIZON (streaming & LOD 2.0)
+## Build 13 — THE HORIZON (streaming & LOD 2.0) (DONE)
 The top complaint and the top priority: the world still arrives too
 slowly, and what you see at distance lies to you. 12.2 made meshing 16x
 faster; this build makes the *pipeline* fast and makes the far view
