@@ -2,6 +2,60 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 13.1 — the LOD actually gets to run (2026-08-31)
+
+Playtest of Build 13: nothing changed. The F3 overlay handed over the
+diagnosis in one line — **tiles 0** at every distance, lod queue pinned at
+~4500, chunk queue 37,425 and climbing.
+
+**The bug.** `meshPool.pump()` drained its sources strictly in order, with
+full-detail terrain first. Terrain's queue NEVER empties, so the LOD rings
+never received a single worker in a real session — the entire Build 13
+system was correct and completely starved. My headless test missed it
+because the test helper force-pumped the rings by hand; the test proved
+the mesher worked and proved nothing about whether the game would ever
+call it. Lesson recorded: a test that drives the system under test is not
+a test of the system.
+
+**Three fixes, compounding.**
+
+- **Fair dispatch.** Weighted round-robin instead of in-order draining:
+  terrain keeps half of every rotation, the rings split the rest, and the
+  terrain hot lane still preempts everything so mining feedback stays
+  instant.
+- **A visibility band on full detail.** A surface player was queueing every
+  cave chunk 200m below every column in render distance — tens of
+  thousands of chunks that cannot be seen from anywhere. Now: full
+  vertical within 64m, and past that a column meshes only its surface band
+  plus whatever is BUILT on it (city towers, your base). Deferred chunks
+  are marked and queue the instant you come near, so caves still mesh when
+  you go down. **Chunk queue 37,425 -> 0.**
+- **A third, fine ring at 1m voxels (0-176m).** A ruin wall is ~1m thick;
+  at 2m voxels dual contouring misses it entirely and the ruin renders as
+  a flat stone floor — exactly the playtest report. At 1m voxels the walls
+  stand: vertices above the ruin base went 6 -> 98. Rings are now 1m/2m/4m
+  voxels out to 176m / 448m / 1152m.
+
+**No more floating props.** Cities stamp from 1.4km, so their ropes and
+street torches were rendering in mid-air over terrain that had not meshed
+yet (and eating draw calls). Both systems now cull to 150m and rebuild as
+you cross chunks; their geometry is shared instead of rebuilt per prop.
+**Draw calls 1900 -> ~260.**
+
+Measured, 280m from a mega-city, standing on the ground at default render
+distance, with NO test-side pumping (headless software rendering, so real
+hardware is several times faster): chunk queue 0 the whole time; the LOD
+horizon drains 3192 -> 0 and the full skyline is standing.
+
+### Known issue (pre-existing, cosmetic)
+Worker-meshed chunks match the synchronous mesher bit-for-bit in
+GEOMETRY, but a handful of vertices in city-edge chunks differ in baked
+**AO** by a shading fraction (~21 of 264 vertices in one chunk). Verified
+present on Build 13 and earlier — not introduced here. The pool test now
+asserts geometry identity and reports AO drift separately rather than
+conflating the two. Worth chasing when the AO edit-set pad is next
+touched.
+
 ## Build 13 — THE HORIZON: the LOD stops lying (2026-08-31)
 
 The playtest complaint was two things wearing one coat: the world loads
