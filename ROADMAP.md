@@ -206,60 +206,281 @@ cities are feasible where block games choke.
 Rule: no phase starts until the previous phase's mechanics feel right in
 playtest.
 
-## The idea pool (unscheduled — to be shaped into future builds)
 
-### World & terrain
-- **Weather**: rain that fills carve-holes into real puddles, snowstorms
-  that paint snow, lightning that starts fires on wood, fog mornings.
-- **Seasons**: a slow world clock that recolors biomes, freezes lakes
-  walkable in winter, boosts food yields in summer.
-- **Floating sky islands**: jetpack/drone-reachable, unique ore; the SDF
-  already supports overhangs.
-- **The Underdark**: a second surface at y=-150 — bioluminescent forest,
-  its own villages, its own boss.
-- **Ocean update**: diving, shipwreck vaults, a BOAT (the car's water
-  sibling), island-chain archetype.
+## Build 12 — Playtest fixes & performance (DONE)
+- **12.1**: real in-car camera (first person at the wheel, GTA chase cam
+  with a seated third-person model), detailed cars with interiors +
+  analog gauges, mega-city overhaul (4x+ footprints, tighter spacing,
+  4m story headroom), the teleport drone, gun crosshair, sniper scope.
+- **12.2 — the performance build**: dual contouring moved into a Web
+  Worker pool (~16x chunk throughput, bit-identical geometry), mesher
+  surgery (spatial edit index, memoized height grids, zero-alloc
+  scratch), pixel-ratio cap + RENDER SCALE option, throttled markers.
 
-### CSG-native mechanics
-- **Fluid-ish flow**: carving next to a lava/water pool lets it slump
-  into the hole (cheap cellular pass on edits, not real fluid).
-- **Structural collapse**: mine out a tower's base and the disconnected
-  top converts to falling debris + drops.
-- **The Terraformer**: endgame wrench upgrade — spline sculpting,
-  mirror-mode building, terrain smoothing brush.
-- **Blueprint marketplace**: cities sell famous building blueprints;
-  your saved blueprints sell for coin.
+---
 
-### Cities & civilization
-- **Districts & city reputation**: industrial / old town / harbor;
-  city-wide rep gates the best shops.
-- **City sieges**: raids target the city; defend with the garrison for
-  rep/coin or let it burn (real subtract damage, repaired over days).
-- **Interior furnishing pass**: offices/apartments in towers, elevators
-  in tall towers.
-- **Highways**: auto-generated roads linking neighbor cities, road
-  signs, cruise-control speed boost on them.
-- **Train network v2**: pre-built city stations, buy tickets between
-  connected cities, junction your own rails into the network.
+# THE BUILD ORDER FROM HERE
 
-### Combat & progression
-- **The Leviathan**: an ocean boss that surfaces under your boat.
-- **Trinket slots + armor set bonuses**: the boss relics become
-  equippable trinkets with visible models.
-- **Turrets & base defense**: powered wall guns that eat watts; pairs
-  with sieges.
-- **Difficulty tiers per world**: peaceful / normal / apocalypse.
+Everything below is scheduled. Builds 13–21 finish Earth; 22–25 leave it.
+The rule stands: no phase starts until the previous one feels right in
+playtest.
 
-### Toys & traversal
-- **The hoverbike**: flies 2m over anything including water, drains
-  fast; crafted from car + jetpack parts.
-- **Cannon / launch pads**: aimable player-launcher, pairs with the
-  mid-air grapple.
-- **Fishing**: rod, biome fish, a city fish market — quiet-time content.
+## Build 13 — THE HORIZON (streaming & LOD 2.0) (DONE)
+The top complaint and the top priority: the world still arrives too
+slowly, and what you see at distance lies to you. 12.2 made meshing 16x
+faster; this build makes the *pipeline* fast and makes the far view
+honest. Nothing else ships until this does.
 
-### Systems
-- **Photo album + full-screen world map** built from explored-chunk data.
-- **Sound pass**: footstep materials, city ambience, interior reverb,
-  boss themes.
-- **Performance: worker meshing** — dual contouring in a Web Worker via
-  embedded blob; makes mega-city stamping seamless. (IN PROGRESS)
+- **Phase A — streaming that keeps up.**
+  - Priority by where you're LOOKING, not just distance: chunks inside
+    the view frustum stream first, then the ring behind you. Nothing
+    should ever pop in directly in front of your face.
+  - Predictive prefetch along your velocity vector (walking, driving,
+    flying, and especially the car and rails).
+  - Chunk mesh cache: chunks that scroll out keep their geometry until
+    memory pressure evicts them, so backtracking is instant.
+  - Cheaper columns: the 46-chunk vertical stack per column is mostly
+    empty air/solid rock — early-out on trivially-uniform chunks before
+    they ever reach a worker.
+  - City stamps cached per city (generate the edit list once, reuse it)
+    so walking back into a city costs nothing.
+  - Progressive detail: a chunk can come back coarse first and refine —
+    ground under your feet is never missing.
+
+- **Phase B — the LOD tells the truth (geometry, not heightfield).**
+  The current far rings are a heightfield clipmap; a heightfield
+  *cannot* represent a cave, an overhang, a hole you dug, or a
+  building. That's exactly why flat ground opens into a cave in your
+  face. Fix: a real coarse-voxel mesh ring between full detail and the
+  clipmap — the same dual contourer at 2m/4m voxels, run on the worker
+  pool, fed the same edit list. Caves, sinkholes, canyons, YOUR holes
+  and YOUR builds all appear at range, in the right shape, just coarser.
+  - Cave mouths and overhangs read correctly from any distance.
+  - Player edits (your house, your tunnels, your pits) survive into
+    every LOD level in view.
+  - The transition LOD -> full detail changes crispness only. Never
+    topology. No more false ground.
+
+- **Phase C — the skyline.**
+  - Whole cities render at range: every tower in view present as a LOD
+    box-cluster with facade texturing, so a mega-city reads as a
+    mega-city from a mountain 2km away.
+  - Building impostors are near-free — STRATA towers are box CSG, so
+    the LOD is literally their own boxes at lower detail.
+  - Villages, ruins, raid forts, rails and roads get the same
+    treatment.
+
+- **Phase D — squeeze pass 2.** Frustum + occlusion culling for props
+  and entities, instanced decor/props, entity update LOD (distant NPCs
+  tick at low rate), shadow-map cost scaling with render distance, and
+  a live perf overlay (F3) showing chunk queue depth, worker use, and
+  frame breakdown so future regressions are visible.
+
+## Build 14 — MENUS & MAKING THINGS
+Quality of life the whole game leans on.
+- **One inventory for both modes.** The creative catalog is deleted —
+  creative simply crafts everything for free from the normal crafting
+  screen. Same inventory, same crafting UI, survival and creative, no
+  parallel menu to maintain (and no more "the car isn't in creative").
+- **Craft any amount.** Six buttons: MAX (everything your materials
+  allow) / 1000 / 100 / 50 / 5 / 1, a vertical slider from 1 to 100,000
+  beside them, and a type-in box for an exact number. On every crafting
+  station, including auto-crafters.
+- **Categories, including VEHICLES.** Crafting gets proper tabs — tools,
+  weapons, power, decor, and a new **Vehicles** tab that will hold the
+  car, sports car, motorcycle, boats, plane, hoverbike and rocket as
+  they land. Rails and vehicle parts get homes too.
+- **Reach.** Blueprint ghosts, paste ghosts and the drill/dispenser
+  shape all push far out and pull back on the same controls, over a
+  much longer range — so you can put a whole copied build out in front
+  of you and line it up from outside instead of standing inside it.
+  Distance readout while you drag.
+- Inventory polish: search box, sort, and the vehicle sub-menu hook
+  that Build 15 fills in.
+
+## Build 15 — STORED POWER (batteries, pads, and a grid that makes sense)
+Charging a car by wiring it near a light bulb is nonsense. Power becomes
+portable.
+- **Batteries** — low / medium / high capacity, each a real item with
+  escalating material cost. They are the game's portable energy.
+- **The battery charger** — a powered bench; right-click to slot
+  batteries in and they fill from your grid over time. Bigger cells,
+  longer charge.
+- **The charging pad** — a wired platform big enough to drive onto. Park
+  a vehicle on it and it charges. Wire it like any other machine, watch
+  the meter, done.
+- **Vehicle menu.** Opening your inventory while in a vehicle shows the
+  vehicle's own panel with a battery slot (and cargo). Swap a fresh
+  battery in and drive on — this is how you cross a continent.
+- **Rails run on wire.** Powered rail segments join the normal wiring
+  rules; no more accidental-lightbulb archaeology. Rail battery boxes
+  for lines far from your grid.
+- Every existing chargeable (jetpack, drone, teleport drone) accepts
+  batteries too.
+
+## Build 16 — THE GARAGE (roads and the things that speed on them)
+- **The sports car** — coin only, sold in city dealerships. Fast, twitchy,
+  a pure money sink and a status object.
+- **The electric motorcycle** — crafted; quick, nimble, and dangerous:
+  crashing hurts YOU. Huge air off terrain, and WASD in the air does
+  tricks (flips, spins, whips) with a landing check — stick it or eat
+  the ground.
+- **Highways** — generated roads linking neighbouring cities, road signs,
+  and a cruise-control speed bonus for staying on the tarmac. Suddenly
+  the cities are a network, and vehicles have somewhere to go.
+- Garages/driveways on owned property; a repair bench for wrecked
+  vehicles.
+
+## Build 17 — BLUE WATER (the ocean update)
+- **The paddle boat** — no power, you row it. Cheap, early, honest.
+- **The motorboat** — electric, fast, battery-driven, planes across open
+  water.
+- **Ocean update** — proper diving (better breath gear), shipwreck vaults
+  with real loot, an island-chain region archetype, coral/kelp decor.
+- **Fishing** — rod, biome-specific fish, a city fish market. Quiet-time
+  content that pays.
+- **The Leviathan** — an ocean boss that surfaces underneath your boat.
+  The one fight where the arena is water and the floor is a long way
+  down.
+
+## Build 18 — WINGS (leaving the ground)
+- **The cargo plane** — a two-seat prop plane. Not fast, but it crosses
+  the map. Real takeoff and landing: come in too steep or too hot and
+  it explodes. You will carve runways, and that's the point.
+- **Floating sky islands** — reachable by plane, jetpack or drone, with
+  ore you can't get below.
+- **The hoverbike** — 2m over anything including water, drains fast;
+  built from car + jetpack parts.
+- **Cannon / launch pads** — aimable player launcher, pairs beautifully
+  with the grapple.
+- Hangars, airstrips and windsocks as buildable props; a simple
+  altimeter/artificial-horizon HUD while flying.
+
+## Build 19 — THE LIVING WORLD (weather, seasons, physics)
+- **Weather** — rain that fills your carve-holes into real puddles,
+  snowstorms that paint snow, lightning that starts fires on wood,
+  fog mornings.
+- **Seasons** — a slow world clock that recolors biomes, freezes lakes
+  walkable in winter, boosts summer food yields.
+- **Fluid slump** — carve next to a lava or water pool and it flows into
+  the hole (a cheap cellular pass over edits, not a full fluid sim).
+- **Structural collapse** — mine out a tower's base and the disconnected
+  top becomes falling debris and drops. The most CSG-native mechanic on
+  the list, and a genuine danger underground.
+
+## Build 20 — METROPOLIS (cities become places)
+- **Districts & city reputation** — industrial, old town, harbor; city-wide
+  rep gates the best shops and the best property.
+- **Interior furnishing pass** — offices and apartments inside towers,
+  working elevators in tall buildings, lit windows at night.
+- **City sieges** — raids target the city itself; defend alongside the
+  garrison for rep and coin, or let it burn (real subtract damage, which
+  the city slowly repairs).
+- **Turrets & base defense** — powered wall guns that eat watts; your
+  grid finally has a defensive use, and sieges give them a target.
+- **Train network v2** — pre-built city stations, buy tickets between
+  connected cities, junction your own rails into the public network.
+- **Blueprint marketplace** — cities sell famous building blueprints and
+  buy yours. Your saved builds become income.
+
+## Build 21 — THE DEEP & THE FINISHED GAME (Earth 1.0)
+The last Earth build. After this, Earth is done and we look up.
+- **The Underdark** — a second surface at ~y=-150: bioluminescent forest,
+  its own villages and economy, its own boss. The reward for going down
+  instead of out.
+- **The Terraformer** — endgame wrench upgrade: spline sculpting,
+  mirror-mode building, terrain smoothing brush. The tool the late game
+  deserves.
+- **Trinket slots & armor set bonuses** — every boss relic becomes an
+  equippable trinket with a visible model; full sets grant real bonuses.
+- **Difficulty tiers per world** — peaceful / normal / apocalypse, chosen
+  at world creation.
+- **Full-screen world map + photo album** built from explored-chunk data.
+- **Sound pass** — footstep materials, city ambience, interior reverb,
+  per-boss themes.
+
+---
+
+# THE SPACE ARC (Builds 22–25) — the endgame and the ending
+
+Earth first. Then the sky stops being a ceiling. Each planet is its own
+generator and its own edit list inside the same save file; travel between
+them is a real flown sequence, not a menu.
+
+## Build 22 — LIFTOFF (the rocket and the moon)
+- **Space suit** — breathe off-Earth. Crafted mid-late; a real armor-slot
+  item with its own visor overlay.
+- **The mech suit** — the upgrade: same protection plus strength, mining
+  and combat bonuses. Heavy, loud, and worth it.
+- **The rocket** — buildable pad, fuel/battery load, launch.
+- **The flight sequence** — you fly it in third person. Earth drops away,
+  becomes a LOD shell, then a model hanging in the black. You cross real
+  space with Earth behind and the Moon ahead as models, then the Moon
+  takes over: lowest LOD, then rings, then surface as you descend. Built
+  directly on the Build 13 LOD ladder — the same system, one scale up.
+- **The Moon** — low gravity movement, vacuum rules, grey regolith and
+  crater terrain, moon-only ores, abandoned moon bases to loot, a moon
+  boss. Buildable and mineable exactly like Earth.
+- Beacons work off-world; your first inter-planetary base.
+
+## Build 23 — STATION ONE (first contact)
+Halfway between Earth and the Moon — both hanging in the windows as
+models, neither loaded — a low-detail shape resolves into a space
+station. Land in it.
+- **True zero-G interior.** A new movement mode: no gravity, push off
+  surfaces, drift. Six shops and six living quarters spread out in every
+  direction, all connecting to the central hangar you land in. Glass
+  sections look out at Earth and the Moon.
+- **Fixed cast, generated layout** — the same six alien traders and the
+  leader exist in every world, guaranteed; the station's shape is rolled
+  per world.
+- **No suit required inside.**
+- **Gibberish first.** On landing, an objective marker in alien script
+  tracks the leader. Talking to them is a wall of nonsense words — then
+  you're sent off with a **translator**. Equip it and the whole station
+  opens up: dialogue, trade, missions.
+- **The story starts.** The leader wants their home planet back — it's
+  overrun, and something at the center of it is the reason. They buy
+  Moon-only goods, sell things found nowhere else, and hand out the main
+  story missions.
+
+## Build 24 — STATION TWO & THE CROSSING
+- **Build the second station** — a long main-story construction project
+  between the Moon and the alien planet, materials and labor, the
+  biggest build the game asks of you.
+- **The reward** — the leader grants an **upgraded rocket**, the only ship
+  that can make the crossing.
+- **The ambush** — the first time you fly the upgraded rocket out to
+  Station Two, the final boss appears behind it and tears a black hole
+  open. The station is destroyed. The leader teleports to your hull as
+  you're being pulled in, and throws you and the ship through — to the
+  alien planet's surface, crash-landed.
+- **Repair & rebuild** — on-surface repair of the busted ship from local
+  materials; build more once you can.
+- **Teleport bands** — the leader's parting gift: fast travel to any
+  beacon or spawn point on any world, skipping the flight sequence when
+  you don't want it. The rocket stays the scenic route.
+
+## Build 25 — THE ALIEN WORLD & THE END
+The last build. The final planet, the final boss, the credits.
+- **The planet** — genuinely alien terrain (arches, spires, wrong angles),
+  **two new fluids** (alien water, alien lava) flowing across it, low
+  gravity, roaming aliens hostile and otherwise, and alien structures to
+  raid.
+- **Endgame material & gear** — the laser-weapon material lives here.
+  This is where the best gear in the game is made.
+- **The final boss** — the thing that took the planet. Beat it and the
+  credits roll (your world keeps going).
+- **THE CREDITS** — every development role, all of them "Claude", one
+  after another. Last card: *special thanks for doing nothing —*
+  **Austin Zitterich**.
+- **If you lose**, the leader's message finds you first: the boss took
+  Earth and reshaped it in its image, stripped its terraforming tools —
+  the drills and dispensers — and left to do the same elsewhere. Tens of
+  thousands of years. They've watched humanity fall and rise and fall
+  and rise, and this round has eyes everywhere, and calls the year 2026,
+  which they find funny, because nobody down there knows how deep their
+  own history goes. Then: YOU DIED. Try again.
+- **Aftermath** — Station Two reappears, rebuilt. Moon-to-alien flights
+  land there instead: the biggest shop in the game, and the deals that
+  exist nowhere else.

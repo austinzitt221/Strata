@@ -2,6 +2,64 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 13 — THE HORIZON: the LOD stops lying (2026-08-31)
+
+The playtest complaint was two things wearing one coat: the world loads
+too slowly, AND what you see at distance isn't what's there — flat ground
+that splits open into a cave right in your face, a mega-city whose towers
+only exist once you fly to each block.
+
+**Why the old LOD lied.** The far rings were a geometry clipmap: a grid
+of heights. A heightfield mathematically CANNOT represent a cave, an
+overhang, a hole you dug, or a building. It wasn't a detail setting, it
+was a representation limit — no amount of resolution would have fixed it.
+
+**The fix: real geometry all the way out.** CORE's dual contourer now
+takes an LOD scale — the same mesher, the same edit list, with voxels 4x
+and 8x larger (2m voxels in 32m chunks to 448m; 4m voxels in 64m chunks
+to 1408m). Coarse chunks are world-anchored (moving only streams the
+frontier) and merge into 128m/256m supertiles, so the entire horizon is
+a few dozen draw calls. Caves, sinkholes, canyon walls, YOUR tunnels and
+YOUR buildings all stand at range with true topology; crossing into full
+detail changes crispness only, never what's there.
+
+- **Bit-identical at scale 1.** Every existing chunk still meshes exactly
+  as before — verified against the 125-chunk hash oracle after every step.
+- **Cities are LOD-native.** Interior detail (hollows, floor slabs, window
+  slits, doors, benches) is tagged `noLod` and drops out of coarse
+  meshes, so distant towers read as solid mass instead of aliasing into
+  swiss cheese. Cities now stamp from **1400m** (was 320m) — the whole
+  skyline is there before you arrive; the arrival fanfare waits until
+  340m. Measured at 700m: **210k triangles of city** standing in the LOD.
+- **Coverage handshake.** A two-level mask (255 = real chunks, 128 = LOD
+  geometry) lets the heightfield skin yield to LOD, and the LOD yield
+  per-pixel to real chunks. No z-fighting, no double-drawn ground, and
+  the water skin still comes from the clipmap where only it has water.
+- **Rings overlap 96m** with per-ring depth bias — different voxel sizes
+  can't share a watertight seam, so the coarser ring backs the finer one
+  instead of cracking against it.
+
+**Streaming that keeps up.** The worker pool became multi-source: full
+detail first, then each LOD ring. Chunk priority now weights by where
+you're LOOKING (behind-you chunks are deprioritized 6x, periphery 2.2x)
+and prefetches along your velocity — nothing should pop in directly in
+front of your face. Column band scans are amortized (2.5ms/frame) and
+tile merges are budgeted with a guaranteed-progress floor, so a fresh
+2,800-column horizon queues without a hitch.
+
+**Memory diet.** LOD vertex data is quantized (normals/axes Int8,
+material/sky/AO Uint8 — invisible at 2m+ coarseness), lightless
+underground triangles are dropped from merged tiles, and settled tiles
+shed their source chunk data. Full horizon load: **JS heap 1020MB ->
+527MB, tile geometry 459MB -> 95MB**, 3.3M -> 1.6M triangles resident.
+
+**F3 perf overlay** — chunk queue depth, workers busy/total, LOD queue
+and tile count, triangles and draw calls. Regressions become visible
+instead of vibes.
+
+Regression: 297 CORE tests, bit-identity oracle, smoke, pool (184
+chunks/s, 6/6 identical), city life, car, rails/deed — all green.
+
 ## Build 12.2 — the performance build (2026-08-30)
 
 "Chunks that load quick and a game that runs butter smooth." The whole

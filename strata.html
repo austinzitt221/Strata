@@ -61,6 +61,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #toolinfo .t2{color:var(--ui-hi);}
 #toolinfo .on{color:var(--accent);}
 #fpsbox{position:absolute; right:14px; top:12px; color:var(--ui-hi); font-size:12px; background:rgba(10,9,16,0.5); padding:3px 8px; border:2px solid rgba(74,68,88,0.5);}
+#fpsbox.wide{text-align:right; line-height:1.5; white-space:pre;}
 .mstack{display:flex; flex-direction:column; gap:16px; align-items:center; max-height:96vh; overflow:auto; padding:8px;}
 #coinbox{position:absolute; right:14px; top:44px; background:rgba(10,10,16,0.55); color:#f0e0b0;
   font:13px monospace; padding:5px 10px; border:1px solid rgba(255,255,255,0.12); border-radius:4px;}
@@ -457,6 +458,7 @@ const CORE_FACTORY = function(){
 const VOX = 0.5;              // voxel edge in meters
 const N = 16;                 // cells per chunk edge
 const CHUNK_M = N * VOX;      // chunk edge in meters (8)
+const MVOX = VOX, MCHUNK_M = CHUNK_M; // aliases: meshChunk shadows VOX/CHUNK_M at LOD scales
 const SURFACE_Y = 0.01;       // base rock plane (off-grid to avoid exact-zero samples)
 const BEDROCK_Y = -249.99;    // everything below is permanently solid
 const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) meters
@@ -1264,25 +1266,27 @@ function makeGen(seed){
   // one column of chunks (46 of them) asks for the same footprint over and
   // over; the base terrain never changes, so memoize the whole local gen
   const localCache = new Map();
-  function makeLocal(x0, z0, x1, z1){
-    const lk = x0 + ',' + z0 + ',' + x1 + ',' + z1;
+  function makeLocal(x0, z0, x1, z1, st){
+    st = st || VOX;
+    const lk = x0 + ',' + z0 + ',' + x1 + ',' + z1 + ',' + st;
     const hit = localCache.get(lk);
     if (hit) return hit;
-    const built = makeLocalRaw(x0, z0, x1, z1);
+    const built = makeLocalRaw(x0, z0, x1, z1, st);
     if (localCache.size > 64) localCache.clear();
     localCache.set(lk, built);
     return built;
   }
-  function makeLocalRaw(x0, z0, x1, z1){
-    x0 -= 2 * VOX; z0 -= 2 * VOX; x1 += 2 * VOX; z1 += 2 * VOX; // hermite margin
+  function makeLocalRaw(x0, z0, x1, z1, st){
+    st = st || VOX;
+    x0 -= 2 * st; z0 -= 2 * st; x1 += 2 * st; z1 += 2 * st; // hermite margin
     const lPrims = gatherBox(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
-    const nx = Math.round((x1 - x0) / VOX) + 1, nz = Math.round((z1 - z0) / VOX) + 1;
+    const nx = Math.round((x1 - x0) / st) + 1, nz = Math.round((z1 - z0) / st) + 1;
     const grid = new Float32Array(nx * nz);
     for (let j = 0; j < nz; j++)
       for (let i = 0; i < nx; i++)
-        grid[i + j * nx] = height(x0 + i * VOX, z0 + j * VOX);
+        grid[i + j * nx] = height(x0 + i * st, z0 + j * st);
     function lh(x, z){
-      let fx = (x - x0) / VOX, fz = (z - z0) / VOX;
+      let fx = (x - x0) / st, fz = (z - z0) / st;
       fx = Math.min(Math.max(fx, 0), nx - 1.001);
       fz = Math.min(Math.max(fz, 0), nz - 1.001);
       const i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j;
@@ -1761,8 +1765,20 @@ function msGrow(n){
   MS_P = g2(MS_P, 3); MS_N2 = g2(MS_N2, 3); MS_M = g2(MS_M, 1);
   MS_SK = g2(MS_SK, 1); MS_AO2 = g2(MS_AO2, 1); MS_AX2 = g2(MS_AX2, 3);
 }
-function meshChunk(cx, cy, cz, allEdits, gen){
+function meshChunk(cx, cy, cz, allEdits, gen, LSC){
   gen = gen || FLAT_GEN;
+  // LOD scale: the same dual contourer with voxels LSC times larger —
+  // chunk (cx,cy,cz) then addresses a CHUNK_M*LSC-meter cube. Edits tagged
+  // noLod (interior hollows, window slits — thinner than a coarse voxel)
+  // drop out so distant structures read as solid mass instead of aliasing
+  // into swiss cheese. LSC omitted/1 leaves every value bit-identical.
+  const SC = LSC || 1;
+  const VOX = MVOX * SC, CHUNK_M = MCHUNK_M * SC;
+  if (SC !== 1){
+    const keep = [];
+    for (let i = 0; i < allEdits.length; i++) if (!allEdits[i].noLod) keep.push(allEdits[i]);
+    allEdits = keep;
+  }
   MS_GEN++;
   const gx0 = cx * N, gy0 = cy * N, gz0 = cz * N; // global sample base
   const wx0 = gx0 * VOX, wy0 = gy0 * VOX, wz0 = gz0 * VOX;
@@ -1785,9 +1801,9 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   // ONE wide grid serves both meshing and AO — the grids share lattice
   // alignment, so the wide grid's values are bit-identical to the narrow
   // one everywhere the narrow one was valid
-  const aoLgen = gen.makeLocal(box[0] - 2, box[2] - 2, box[3] + 2, box[5] + 2);
+  const aoLgen = gen.makeLocal(box[0] - 2, box[2] - 2, box[3] + 2, box[5] + 2, VOX);
   const lgen = aoLgen;
-  const aoEdits = cullEdits(allEdits, box, 2.5);
+  const aoEdits = cullEdits(allEdits, box, 2.5 * SC);
   // ---- spatial bucket index over aoEdits (a superset of `edits`): the
   // per-crossing hot paths ask for tiny edit subsets thousands of times per
   // chunk. Bucketing turns each query from an O(all-edits) scan into a walk
@@ -1796,7 +1812,7 @@ function meshChunk(cx, cy, cz, allEdits, gen){
   // box, so signs, bisection, gradients, materials and AO are unchanged.
   const EBB = new Float64Array(aoEdits.length * 6);
   for (let i = 0; i < aoEdits.length; i++) EBB.set(editAABB(aoEdits[i]), i * 6);
-  const GC = 4, GPAD = 4.5;
+  const GC = 4 * SC, GPAD = 4.5 * SC;
   const gox = box[0] - GPAD, goy = box[1] - GPAD, goz = box[2] - GPAD;
   const GNX = Math.ceil((box[3] + GPAD - gox) / GC);
   const GNY = Math.ceil((box[4] + GPAD - goy) / GC);
@@ -2545,6 +2561,10 @@ function serializeEdits(edits){
     const row = [e.op, e.shape, e.x, e.y, e.z, e.size, e.mat, e.rot || 0];
     if (e.rx || e.rz || e.sx || e.sy || e.sz)
       row.push(e.rx || 0, e.rz || 0, e.sx || 0, e.sy || 0, e.sz || 0);
+    if (e.noLod){
+      while (row.length < 13) row.push(0);
+      row.push(1);
+    }
     a[i] = row;
   }
   return a;
@@ -2560,6 +2580,7 @@ function deserializeEdits(arr){
       if (r[10]) e.sx = r[10];
       if (r[11]) e.sy = r[11];
       if (r[12]) e.sz = r[12];
+      if (r[13]) e.noLod = 1;
     }
     out[i] = e;
   }
@@ -3096,7 +3117,7 @@ const CK = (cx, cy, cz) => cx + ',' + cy + ',' + cz;
 // falls back to the synchronous per-frame-budget mesher unchanged.
 const meshPool = {
   workers: [], idle: [], jobs: new Map(), inflight: new Set(),
-  seq: 0, ok: false, terrain: null,
+  seq: 0, ok: false, sources: [],
   init(){
     if (this.ok) return;
     if (typeof Worker === 'undefined' || typeof URL === 'undefined' || typeof Blob === 'undefined') return;
@@ -3108,7 +3129,7 @@ const meshPool = {
         '  const m = ev.data;\n' +
         '  if (m.t === "init"){ gen = CORE.makeGen(m.seed); return; }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
-        '  const d = CORE.meshChunk(m.cx, m.cy, m.cz, edits, gen);\n' +
+        '  const d = CORE.meshChunk(m.cx, m.cy, m.cz, edits, gen, m.sc || 1);\n' +
         '  if (!d){ postMessage({ id: m.id, d: null }); return; }\n' +
         '  postMessage({ id: m.id, d },\n' +
         '    [d.positions.buffer, d.normals.buffer, d.mats.buffer, d.skys.buffer, d.aos.buffer, d.axes.buffer]);\n' +
@@ -3139,48 +3160,66 @@ const meshPool = {
     this.idle = this.workers.slice();
     for (const w of this.workers) w.postMessage({ t: 'init', seed });
   },
-  // dispatch nearest dirty chunks onto idle workers
-  pump(terrain){
-    this.terrain = terrain;
-    while (this.idle.length && terrain.dirty.size > this.countInflightDirty(terrain)){
-      const pick = this.nearestDirty(terrain);
-      if (!pick) break;
-      const [key, c] = pick;
-      terrain.dirty.delete(key);
-      const M = CORE.CHUNK_M;
-      const box = [c[0] * M - 4, c[1] * M - 4, c[2] * M - 4,
-                   c[0] * M + M + 4, c[1] * M + M + 4, c[2] * M + M + 4];
-      const rows = CORE.serializeEdits(CORE.cullEdits(terrain.edits, box, 0));
-      const id = ++this.seq;
-      const w = this.idle.pop();
-      this.jobs.set(id, { key, c });
-      this.inflight.add(key);
-      w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows });
+  // dispatch dirty chunks onto idle workers. Sources are drained in
+  // priority order: full-detail terrain first, then each LOD ring.
+  pump(){
+    if (this.idle.length && typeof game !== 'undefined' && game.camera){
+      this._dir = this._dir || new THREE.Vector3();
+      game.camera.getWorldDirection(this._dir);
+      this.fwd = [this._dir.x, this._dir.y, this._dir.z];
+      this.vel = game.vel ? [game.vel.x, game.vel.y, game.vel.z] : null;
+    }
+    for (const src of this.sources){
+      if (!src || !src.dirty || !src.dirty.size) continue;
+      while (this.idle.length){
+        const pick = this.pick(src);
+        if (!pick) break;
+        const [key, c] = pick;
+        src.dirty.delete(key);
+        const M = src.chunkM || CORE.CHUNK_M;
+        const box = [c[0] * M - 4, c[1] * M - 4, c[2] * M - 4,
+                     c[0] * M + M + 4, c[1] * M + M + 4, c[2] * M + M + 4];
+        const rows = CORE.serializeEdits(CORE.cullEdits(src.edits, box, 0));
+        const id = ++this.seq;
+        const w = this.idle.pop();
+        this.jobs.set(id, { src, key, c });
+        this.inflight.add(src.id + '|' + key);
+        w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1 });
+      }
+      if (!this.idle.length) break;
     }
   },
-  countInflightDirty(terrain){
-    let n = 0;
-    for (const key of this.inflight) if (terrain.dirty.has(key)) n++;
-    return n;
-  },
-  nearestDirty(terrain){
-    const [px, py, pz] = terrain.center;
+  pick(src){
+    const M = src.chunkM || CORE.CHUNK_M;
+    // travel prefetch: score from where you'll BE in a second, and weight
+    // by look direction — chunks in front of the camera stream first, the
+    // ring behind you waits. Nothing should pop in right in your face.
+    const v = this.vel;
+    const px = src.center[0] + (v ? v[0] * 1.1 / M : 0);
+    const py = src.center[1] + (v ? v[1] * 0.5 / M : 0);
+    const pz = src.center[2] + (v ? v[2] * 1.1 / M : 0);
+    const f = this.fwd;
     let best = null, bd = Infinity;
     // hot lane first: chunks dirtied by a fresh edit (the hole you are
     // carving RIGHT NOW) jump the streaming backlog
-    if (terrain.hot && terrain.hot.size){
-      for (const key of terrain.hot){
-        const c = terrain.dirty.get(key);
-        if (!c){ terrain.hot.delete(key); continue; }
-        if (this.inflight.has(key)) continue;
+    if (src.hot && src.hot.size){
+      for (const key of src.hot){
+        const c = src.dirty.get(key);
+        if (!c){ src.hot.delete(key); continue; }
+        if (this.inflight.has(src.id + '|' + key)) continue;
         const d = (c[0] - px) * (c[0] - px) + (c[1] - py) * (c[1] - py) + (c[2] - pz) * (c[2] - pz);
         if (d < bd){ bd = d; best = [key, c]; }
       }
-      if (best){ terrain.hot.delete(best[0]); return best; }
+      if (best){ src.hot.delete(best[0]); return best; }
     }
-    for (const [key, c] of terrain.dirty){
-      if (this.inflight.has(key)) continue;     // wait for the stale result
-      const d = (c[0] - px) * (c[0] - px) + (c[1] - py) * (c[1] - py) + (c[2] - pz) * (c[2] - pz);
+    for (const [key, c] of src.dirty){
+      if (this.inflight.has(src.id + '|' + key)) continue;  // wait for the stale result
+      const dx = c[0] - px, dy = c[1] - py, dz = c[2] - pz;
+      let d = dx * dx + dy * dy + dz * dz;
+      if (f && d > 3){
+        const dot = (dx * f[0] + dy * f[1] + dz * f[2]) / Math.sqrt(d);
+        d *= dot < -0.2 ? 6 : dot < 0.25 ? 2.2 : 1;
+      }
       if (d < bd){ bd = d; best = [key, c]; }
     }
     return best;
@@ -3188,16 +3227,17 @@ const meshPool = {
   done(w, msg){
     this.idle.push(w);
     const job = this.jobs.get(msg.id);
-    const t = this.terrain;
     if (job){
       this.jobs.delete(msg.id);
-      this.inflight.delete(job.key);
-      if (t && !t.dirty.has(job.key))           // re-dirtied mid-flight: stale
-        t.applyResult(job.key, job.c[0], job.c[1], job.c[2], msg.d);
+      this.inflight.delete(job.src.id + '|' + job.key);
+      if (!job.src.dirty.has(job.key))          // re-dirtied mid-flight: stale
+        job.src.applyResult(job.key, job.c[0], job.c[1], job.c[2], msg.d);
     }
     // keep the pipeline full: the freed worker takes the next chunk NOW,
     // not on the next animation frame
-    if (t && t.dirty.size) this.pump(t);
+    for (const src of this.sources){
+      if (src && src.dirty && src.dirty.size){ this.pump(); break; }
+    }
   },
 };
 
@@ -3211,6 +3251,7 @@ class Terrain {
     this.dirty = new Map();          // key -> [cx,cy,cz], pending remesh
     this.center = [0, 0, 0];         // chunk coords of player (x,y,z)
     this.radius = 3;
+    this.id = 'T'; this.sc = 1; this.chunkM = CORE.CHUNK_M;   // pool source
   }
   chunkOfWorld(x, z){ return [Math.floor(x / CORE.CHUNK_M), Math.floor(z / CORE.CHUNK_M)]; }
 
@@ -3282,6 +3323,7 @@ class Terrain {
   // mark chunks overlapping an edit AABB dirty
   invalidate(e){
     this._envN = -1;   // edit list changed or an edit moved: envelope stale
+    if (lodTerrain.rings) lodTerrain.invalidate(e);
     const box = CORE.editAABB(e);
     const pad = CORE.VOX * 2;
     const x0 = Math.floor((box[0] - pad) / CORE.CHUNK_M), x1 = Math.floor((box[3] + pad) / CORE.CHUNK_M);
@@ -3302,7 +3344,8 @@ class Terrain {
   // throughput (the budget only ever gates the synchronous fallback).
   process(budgetMs){
     if (meshPool.ok){
-      if (this.dirty.size) meshPool.pump(this);
+      if (!meshPool.sources.length) meshPool.sources = [this];
+      meshPool.pump();
       return;
     }
     if (this.dirty.size === 0) return;
@@ -3776,6 +3819,7 @@ function buildScene(){
   bulbSys.init(scene);
   skySys.init(scene);
   farTerrain.init(scene);
+  lodTerrain.init(scene);
   godRays.init();
   wrenchSys.init(scene);
   treeSys.init(scene);
@@ -9675,9 +9719,10 @@ const citySys = {
   },
   stamp(c, rec){
     const MAT = CORE.MAT;
-    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
       const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
       e.sy = sy; e.sz = sz;
+      if (nl) e.noLod = 1;   // interior/thin detail: drops out of coarse LOD meshes
       applyEdit(e);
     };
     const PLAN = this.plan(c);
@@ -9715,7 +9760,7 @@ const citySys = {
         pk.sy = 1.6; pk.sz = 24;
         applyEdit(pk);
         for (const [ox, oz] of [[-6, 0], [6, 0]])
-          EB(1, tx + ox, g + 0.6, tz + oz, 1.0, 0.6, 3.0, MAT.PLANKS);
+          EB(1, tx + ox, g + 0.6, tz + oz, 1.0, 0.6, 3.0, MAT.PLANKS, 1);
         game.torches.push([tx, g + 0.4, tz]);
         continue;
       }
@@ -9731,9 +9776,9 @@ const citySys = {
         // a low market hall: one tall open story, doors on two sides
         const MH = 5.6;
         EB(1, tx, g + MH / 2, tz, 20, MH, 14, t.mat);
-        EB(0, tx, g + 0.35 + (MH - 1.1) / 2, tz, 18.4, MH - 1.1, 12.4);
-        EB(0, tx, g + 1.9, tz - 7, 3.2, 3.0, 2.2);
-        EB(0, tx, g + 1.9, tz + 7, 3.2, 3.0, 2.2);
+        EB(0, tx, g + 0.35 + (MH - 1.1) / 2, tz, 18.4, MH - 1.1, 12.4, 0, 1);
+        EB(0, tx, g + 1.9, tz - 7, 3.2, 3.0, 2.2, 0, 1);
+        EB(0, tx, g + 1.9, tz + 7, 3.2, 3.0, 2.2, 0, 1);
         EB(1, tx, g + MH + 0.2, tz, 21, 0.5, 15, t.mat);
         const mc = pnodeSys.add('chest', tx + 6, g + 0.95, tz, 0, { sc: 0.7 });
         mc.inv = new Array(chestSlots(0.7)).fill(null);
@@ -9745,19 +9790,19 @@ const citySys = {
       const H = t.floors * S + 1.8;
       EB(1, tx, g + H / 2, tz, t.w, H, t.w, t.mat);
       // hollow reaches the pavement: full-height ground floor, no head bumps
-      EB(0, tx, g + 0.35 + (H - 1.15) / 2, tz, t.w - 1.7, H - 1.15, t.w - 1.7);
+      EB(0, tx, g + 0.35 + (H - 1.15) / 2, tz, t.w - 1.7, H - 1.15, t.w - 1.7, 0, 1);
       for (let f = 1; f < t.floors; f++)
-        EB(1, tx, g + f * S, tz, t.w - 1.5, 0.5, t.w - 1.5, t.mat);
+        EB(1, tx, g + f * S, tz, t.w - 1.5, 0.5, t.w - 1.5, t.mat, 1);
       for (let f = 0; f < t.floors; f++){
         const wy = g + f * S + 2.55;
-        EB(0, tx, wy, tz, t.w + 0.6, 1.3, t.w - 3.4);
-        EB(0, tx, wy, tz, t.w - 3.4, 1.3, t.w + 0.6);
+        EB(0, tx, wy, tz, t.w + 0.6, 1.3, t.w - 3.4, 0, 1);
+        EB(0, tx, wy, tz, t.w - 3.4, 1.3, t.w + 0.6, 0, 1);
       }
       EB(0, tx + fx * (t.w / 2), g + 1.9, tz + fz * (t.w / 2),
-         fx ? 2.2 : 2.0, 3.0, fz ? 2.2 : 2.0);
+         fx ? 2.2 : 2.0, 3.0, fz ? 2.2 : 2.0, 0, 1);
       EB(1, tx, g + H + 0.2, tz, t.w + 1.0, 0.5, t.w + 1.0, t.mat);
       const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
-      EB(0, cxr, g + 0.35 + (H - 1.15) / 2, czr, 1.8, H - 1.15, 1.8);
+      EB(0, cxr, g + 0.35 + (H - 1.15) / 2, czr, 1.8, H - 1.15, 1.8, 0, 1);
       (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
       if (t.shop && shops < n - 1){
         shops++;
@@ -9772,7 +9817,7 @@ const citySys = {
     EB(1, c.x, g + (11 + n * 2) / 2, c.z, 3, 11 + n * 2, 3, MAT.OBSIDIAN);
     EB(1, c.x, g + 11 + n * 2 + 1.0, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
     for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
-      EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS);
+      EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS, 1);
     // ---- the people: five shopfronts + the mayor at the plaza ----
     const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
     const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
@@ -9807,7 +9852,9 @@ const citySys = {
   },
   ensure(){
     if (!game.running || !game.gen) return;
-    for (const c of this.candidatesNear(game.pos.x, game.pos.z, 320)){
+    // stamp far enough out that the LOD rings carry whole skylines;
+    // the fanfare waits until the towers are actually near
+    for (const c of this.candidatesNear(game.pos.x, game.pos.z, 1400)){
       const key = 'c' + c.key;
       let rec = (game.cities = game.cities || {})[key];
       if (!rec){
@@ -9817,9 +9864,12 @@ const citySys = {
       if (!rec.stamped){
         rec.stamped = true;
         this.stamp(c, rec);
+        markSave();
+      }
+      if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
+        rec.announced = true;
         toast('the towers of ' + rec.name + ' rise ahead');
         AudioSys.sfx('boom');
-        markSave();
       }
     }
   },
@@ -10700,6 +10750,13 @@ function bindInput(){
       } else {
         game.hotSel = DIGITS[code]; refreshHotbar(); refreshToolHUD();
       }
+      return;
+    }
+    if (code === 'F3'){
+      e.preventDefault();
+      game.perfHUD = !game.perfHUD;
+      $('fpsbox').classList.toggle('wide', game.perfHUD);
+      toast(game.perfHUD ? 'perf overlay on — F3 to hide' : 'perf overlay off');
       return;
     }
     if (code === 'F5'){
@@ -15251,6 +15308,7 @@ function quitToTitle(){
   game.running = false;
   hide('pausemenu'); hide('hud');
   if (game.terrain) game.terrain.disposeAll();
+  lodTerrain.teardown();
   if (game.scene){
     game.scene.clear();
   }
@@ -15275,7 +15333,7 @@ let lastChunk = null;
 const farTerrain = {
   scene: null, mat: null, job: null, dirty: true,
   levels: null,
-  maskN: 160, maskTex: null, maskData: null, maskFrame: 0,
+  maskN: 384, maskTex: null, maskData: null, maskFrame: 0,
   // half-extent (m), cell (m), sink below true surface (m)
   L: [
     { E: 64,   s: 1,  sink: 0.06 },
@@ -15326,7 +15384,7 @@ const farTerrain = {
         void main(){
           vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
           if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
-              texture2D(uMask, mi).r > 0.5) discard;
+              texture2D(uMask, mi).r > 0.7) discard;
           vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
           // real water goes deep-blue and opaque as the bed drops away --
           // with WG3's oceans, letting a dark seabed show through at 62%
@@ -15390,7 +15448,7 @@ const farTerrain = {
           // coverage mask: where real chunks are meshed, the LOD skin yields
           vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
           if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
-              texture2D(uMask, mi).r > 0.5) discard;
+              texture2D(uMask, mi).r > 0.45) discard;
           vec3 n = normalize(vN);
           vec3 an = abs(n);
           vec2 uv;
@@ -15494,6 +15552,31 @@ const farTerrain = {
         if (ok){
           const ix = cx - ox, iz = cz - oz;
           if (ix >= 1 && iz >= 1 && ix < n - 1 && iz < n - 1) data[iz * n + ix] = 255;
+        }
+      }
+    }
+    // truthful-LOD coverage: columns whose coarse chunks are all meshed
+    // and merged mark 128 — the skin yields there, the water skin stays
+    if (lodTerrain.rings){
+      for (const ring of lodTerrain.rings){
+        const span = ring.m / CORE.CHUNK_M;
+        for (const [ck, pend] of ring.cols){
+          if (pend.size) continue;
+          const ci = ck.indexOf(',');
+          const cx = +ck.slice(0, ci), cz = +ck.slice(ci + 1);
+          const t = ring.tiles.get(Math.floor(cx * ring.m / ring.tile) + ',' + Math.floor(cz * ring.m / ring.tile));
+          if (!t || t.stale || !t.mesh) continue;
+          const ix0 = cx * span - ox, iz0 = cz * span - oz;
+          for (let dz2 = 0; dz2 < span; dz2++){
+            const iz = iz0 + dz2;
+            if (iz < 1 || iz >= n - 1) continue;
+            for (let dx2 = 0; dx2 < span; dx2++){
+              const ix = ix0 + dx2;
+              if (ix < 1 || ix >= n - 1) continue;
+              const mi = iz * n + ix;
+              if (data[mi] < 128) data[mi] = 128;
+            }
+          }
         }
       }
     }
@@ -15624,6 +15707,350 @@ const farTerrain = {
     }
     lv.cx = j.cx; lv.cz = j.cz;
     this.job = null;
+  },
+};
+
+// ---------- truthful LOD: coarse dual-contoured rings ----------
+// The heightfield skin cannot represent a cave, an overhang, a hole you
+// dug, or a building — that's why flat land used to split open in your
+// face when real chunks arrived. These rings run the SAME dual contourer
+// at 2m voxels (32m chunks, to 448m) and 4m voxels (64m chunks, to
+// 1408m), on the worker pool, fed the same edit list — so caves, canyon
+// walls, YOUR builds and whole city skylines stand at range with true
+// topology; the switch to full detail changes crispness only. Chunks are
+// world-anchored (moving only streams the frontier) and merge into
+// 128m/256m supertiles so the whole horizon costs a few dozen draw calls.
+const lodTerrain = {
+  R: [
+    { id: 'L0', sc: 4, far: 448 },
+    { id: 'L1', sc: 8, far: 1408 },
+  ],
+  rings: null, editCols: new Map(), lastKey: '', mat: null,
+  init(scene){
+    this.scene = scene;
+    this.lastKey = '';
+    this.rings = this.R.map(r => {
+      const ring = {
+        id: r.id, sc: r.sc, m: CORE.CHUNK_M * r.sc, far: r.far,
+        tile: CORE.CHUNK_M * r.sc * 4,
+        chunks: new Map(),           // key -> {data|null}
+        cols: new Map(),             // 'cx,cz' -> Set(chunk keys not yet meshed)
+        tiles: new Map(),            // 'tx,tz' -> {mesh, stale, members:Set}
+        dirty: new Map(),
+        center: [0, 0, 0],
+        chunkM: CORE.CHUNK_M * r.sc,
+        edits: game.edits,
+        applyResult: null,
+      };
+      ring.applyResult = (key, cx, cy, cz, data) => this.applyResult(ring, key, cx, cy, cz, data);
+      return ring;
+    });
+    // 32m columns that hold edits, with their vertical envelope — new LOD
+    // columns then know to mesh around distant builds and stamped cities
+    this.editCols.clear();
+    for (const e of game.edits) this.noteEdit(e);
+    // the real terrain shader + a per-pixel yield where full-detail chunks
+    // are meshed (mask 255) — LOD never z-fights the real world
+    const tu = game.terrainMat.uniforms;
+    const u = {
+      uMask: { value: farTerrain.maskTex },
+      uMaskOrigin: farTerrain.uMaskOrigin,
+      uMaskSpan: { value: farTerrain.maskN * CORE.CHUNK_M },
+    };
+    for (const k in tu) u[k] = tu[k];            // share live uniform objects
+    const lodFrag = TERRAIN_FRAG
+      .replace('varying vec4 vShadowCoord;',
+        'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;\nvarying vec4 vShadowCoord;')
+      .replace('void main(){',
+        'void main(){\n' +
+        '  vec2 mi2 = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
+        '  if (mi2.x > 0.0 && mi2.x < 1.0 && mi2.y > 0.0 && mi2.y < 1.0 &&\n' +
+        '      texture2D(uMask, mi2).r > 0.72) discard;\n');
+    this.rings.forEach((ring, ri) => {
+      ring.mat = new THREE.ShaderMaterial({
+        vertexShader: TERRAIN_VERT,
+        fragmentShader: lodFrag,
+        uniforms: u,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1 + ri,
+        polygonOffsetUnits: 2 + ri * 4,
+      });
+    });
+    this.mat = this.rings[0].mat;
+    meshPool.sources = [game.terrain, ...this.rings];
+  },
+  teardown(){
+    if (!this.rings) return;
+    for (const ring of this.rings){
+      for (const [tk, t] of ring.tiles)
+        if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); }
+      if (ring.mat) ring.mat.dispose();
+    }
+    this.rings = null;
+    this.editCols.clear();
+    meshPool.sources = [];
+  },
+  noteEdit(e){
+    const b = CORE.editAABB(e);
+    for (let cz = Math.floor(b[2] / 32); cz <= Math.floor(b[5] / 32); cz++)
+      for (let cx = Math.floor(b[0] / 32); cx <= Math.floor(b[3] / 32); cx++){
+        const k = cx + ',' + cz;
+        const r = this.editCols.get(k);
+        if (r){ if (b[1] < r[0]) r[0] = b[1]; if (b[4] > r[1]) r[1] = b[4]; }
+        else this.editCols.set(k, [b[1], b[4]]);
+      }
+  },
+  tileKey(ring, cx, cz){
+    return Math.floor(cx * ring.m / ring.tile) + ',' + Math.floor(cz * ring.m / ring.tile);
+  },
+  update(px, py, pz){
+    if (!this.rings || !game.running) return;
+    const key = Math.floor(px / 32) + ',' + Math.floor(pz / 32);
+    if (key === this.lastKey) return;
+    this.lastKey = key;
+    const gen = game.gen;
+    for (let ri = 0; ri < this.rings.length; ri++){
+      const ring = this.rings[ri], m = ring.m;
+      ring.center = [px / m, py / m, pz / m];
+      const near = ri === 0 ? 0 : this.rings[ri - 1].far - 96;
+      // drop the frontier behind you
+      for (const [k, ch] of ring.chunks){
+        const p1 = k.indexOf(','), p2 = k.indexOf(',', p1 + 1);
+        const cx = +k.slice(0, p1), cz = +k.slice(p2 + 1);
+        const d = Math.hypot((cx + 0.5) * m - px, (cz + 0.5) * m - pz);
+        if (d < ring.far + m * 0.7 && d > near - m * 0.7) continue;
+        ring.chunks.delete(k);
+        ring.dirty.delete(k);
+        // membership shrinks but the mesh is NOT rebuilt: the stale strip
+        // behind you costs nothing and the tile dies whole soon after
+        const t = ring.tiles.get(this.tileKey(ring, cx, cz));
+        if (t) t.members.delete(k);
+      }
+      for (const [ck, pend] of ring.cols){
+        const ci = ck.indexOf(',');
+        const cx = +ck.slice(0, ci), cz = +ck.slice(ci + 1);
+        const d = Math.hypot((cx + 0.5) * m - px, (cz + 0.5) * m - pz);
+        if (d > ring.far + m * 0.7 || d < near - m * 0.7) ring.cols.delete(ck);
+      }
+      for (const [tk, t] of ring.tiles){
+        if (t.members.size) continue;
+        if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
+        ring.tiles.delete(tk);
+      }
+      // queue the newly-entered columns' surface band
+      const Rc = Math.ceil(ring.far / m), ccx = Math.floor(px / m), ccz = Math.floor(pz / m);
+      const cyLo = Math.floor(CORE.CY_MIN * CORE.CHUNK_M / m);
+      const cyHi = Math.floor((CORE.CY_MAX * CORE.CHUNK_M + CORE.CHUNK_M - 1) / m);
+      for (let dz = -Rc; dz <= Rc; dz++)
+        for (let dx = -Rc; dx <= Rc; dx++){
+          const cx = ccx + dx, cz = ccz + dz;
+          const d = Math.hypot((cx + 0.5) * m - px, (cz + 0.5) * m - pz);
+          if (d > ring.far || d < near) continue;
+          const ck = cx + ',' + cz;
+          if (ring.cols.has(ck)) continue;
+          // sentinel until the band scan runs (amortized in frame()) — an
+          // unscanned column can never read as covered
+          ring.cols.set(ck, new Set(['*']));
+          (ring.colQueue = ring.colQueue || []).push([cx, cz, d]);
+        }
+      if (ring.colQueue && ring.colQueue.length)
+        ring.colQueue.sort((a, b) => b[2] - a[2]);    // nearest at the end
+    }
+  },
+  // vertical band scan for queued columns, a slice per frame — 2800 columns
+  // of heightRange in one gulp would be a visible hitch
+  scanCols(budgetMs){
+    const t0 = performance.now();
+    const gen = game.gen;
+    for (const ring of this.rings){
+      const q = ring.colQueue;
+      if (!q || !q.length) continue;
+      const m = ring.m;
+      const cyLo = Math.floor(CORE.CY_MIN * CORE.CHUNK_M / m);
+      const cyHi = Math.floor((CORE.CY_MAX * CORE.CHUNK_M + CORE.CHUNK_M - 1) / m);
+      while (q.length){
+        const [cx, cz] = q.pop();
+        const ck = cx + ',' + cz;
+        const pend = ring.cols.get(ck);
+        if (!pend) continue;                       // dropped while queued
+        const wx0 = cx * m, wz0 = cz * m;
+        const hr = gen.heightRange(wx0, wz0, wx0 + m, wz0 + m);
+        let lo = hr[0] - 12, hi = hr[1] + 6;
+        // distant builds and stamped cities stretch the band
+        for (let ez = Math.floor((wz0 - 4) / 32); ez <= Math.floor((wz0 + m + 4) / 32); ez++)
+          for (let ex = Math.floor((wx0 - 4) / 32); ex <= Math.floor((wx0 + m + 4) / 32); ex++){
+            const er = this.editCols.get(ex + ',' + ez);
+            if (er){ if (er[0] - 3 < lo) lo = er[0] - 3; if (er[1] + 3 > hi) hi = er[1] + 3; }
+          }
+        const cy0 = Math.max(cyLo, Math.floor(lo / m));
+        const cy1 = Math.min(cyHi, Math.floor(hi / m));
+        for (let cy = cy0; cy <= cy1; cy++){
+          const kk = cx + ',' + cy + ',' + cz;
+          if (!ring.chunks.has(kk)){
+            ring.chunks.set(kk, { data: null });
+            ring.dirty.set(kk, [cx, cy, cz]);
+            pend.add(kk);
+          } else if (ring.dirty.has(kk)) pend.add(kk);
+        }
+        pend.delete('*');
+        if (performance.now() - t0 > budgetMs) return;
+      }
+    }
+  },
+  invalidate(e){
+    if (!this.rings) return;
+    this.noteEdit(e);
+    const box = CORE.editAABB(e);
+    for (const ring of this.rings){
+      const m = ring.m, pad = ring.sc;
+      const x0 = Math.floor((box[0] - pad) / m), x1 = Math.floor((box[3] + pad) / m);
+      const y0 = Math.floor((box[1] - pad) / m), y1 = Math.floor((box[4] + pad) / m);
+      const z0 = Math.floor((box[2] - pad) / m), z1 = Math.floor((box[5] + pad) / m);
+      for (let cz = z0; cz <= z1; cz++)
+        for (let cy = y0; cy <= y1; cy++)
+          for (let cx = x0; cx <= x1; cx++){
+            const k = cx + ',' + cy + ',' + cz;
+            if (ring.chunks.has(k)){
+              ring.dirty.set(k, [cx, cy, cz]);
+              // members whose source data was dropped after settling must
+              // re-mesh too, or the rebuilt tile would lose their geometry
+              const t = ring.tiles.get(this.tileKey(ring, cx, cz));
+              if (t) for (const mk of t.members){
+                const mch = ring.chunks.get(mk);
+                if (mch && !mch.data && !ring.dirty.has(mk)){
+                  const p1 = mk.indexOf(','), p2 = mk.indexOf(',', p1 + 1);
+                  ring.dirty.set(mk, [+mk.slice(0, p1), +mk.slice(p1 + 1, p2), +mk.slice(p2 + 1)]);
+                }
+              }
+            } else if (ring.cols.has(cx + ',' + cz)){
+              // an edit above/below the meshed band widens the column
+              ring.chunks.set(k, { data: null });
+              ring.dirty.set(k, [cx, cy, cz]);
+            }
+          }
+    }
+  },
+  quantize(d){
+    // 144 -> 63 bytes per triangle: normals/axes to Int8, mat/sky/AO to
+    // Uint8. At 2m+ voxel coarseness the precision loss is invisible.
+    if (!d || !(d.normals instanceof Float32Array)) return d;
+    const n = d.normals.length, v = d.mats.length;
+    const nq = new Int8Array(n), aq = new Int8Array(n);
+    for (let i = 0; i < n; i++){
+      nq[i] = Math.round(Math.max(-1, Math.min(1, d.normals[i])) * 127);
+      aq[i] = Math.round(Math.max(-1, Math.min(1, d.axes[i])) * 127);
+    }
+    const mq = new Uint8Array(v), sq = new Uint8Array(v), oq = new Uint8Array(v);
+    for (let i = 0; i < v; i++){
+      mq[i] = d.mats[i];
+      sq[i] = Math.round(Math.max(0, Math.min(1, d.skys[i])) * 255);
+      oq[i] = Math.round(Math.max(0, Math.min(1, d.aos[i])) * 255);
+    }
+    return { positions: d.positions, normals: nq, axes: aq, mats: mq, skys: sq, aos: oq };
+  },
+  applyResult(ring, key, cx, cy, cz, data){
+    const ch = ring.chunks.get(key);
+    if (!ch) return;                              // scrolled out mid-flight
+    ch.data = this.quantize(data);
+    const pend = ring.cols.get(cx + ',' + cz);
+    if (pend) pend.delete(key);
+    const tk = this.tileKey(ring, cx, cz);
+    let t = ring.tiles.get(tk);
+    if (!t){ t = { mesh: null, stale: false, members: new Set() }; ring.tiles.set(tk, t); }
+    if (data) t.members.add(key); else t.members.delete(key);
+    t.stale = true;
+  },
+  // merge finished chunks into supertile meshes, a couple per frame
+  frame(){
+    if (!this.rings) return;
+    this.scanCols(2.5);
+    if (meshPool.ok && meshPool.idle.length) meshPool.pump();
+    // per-tile cooldown so a tile mid-stream batches its arrivals instead
+    // of hogging the budget with rebuild-per-chunk — every tile progresses
+    const now = performance.now();
+    let did = 0;
+    for (const ring of this.rings){
+      for (const [tk, t] of ring.tiles){
+        if (!t.stale) continue;
+        if (did && performance.now() - now > 3) return;  // ≥1 build even on a slow frame
+        if (t.builtAt && now - t.builtAt < 350) continue;
+        t.stale = false; t.builtAt = now; t.shed = false;
+        this.buildTile(ring, t);
+        did++;
+      }
+    }
+    // settled tiles shed their source chunk data (the merged geometry is
+    // the render copy) — a later edit re-meshes the members via the pool
+    this._sweep = ((this._sweep || 0) + 1) % 90;
+    if (this._sweep === 0){
+      for (const ring of this.rings)
+        for (const [tk, t] of ring.tiles){
+          if (t.stale || !t.quietAt || now - t.quietAt < 5000 || t.shed) continue;
+          for (const mk of t.members){
+            const ch = ring.chunks.get(mk);
+            if (ch) ch.data = null;
+          }
+          t.shed = true;
+        }
+    }
+  },
+  buildTile(ring, t){
+    if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
+    t.quietAt = performance.now();
+    let np = 0;
+    const parts = [];
+    for (const k of t.members){
+      const ch = ring.chunks.get(k);
+      if (ch && ch.data){ parts.push(ch.data); np += ch.data.positions.length; }
+    }
+    if (!np) return;
+    const P = new Float32Array(np), Nr = new Int8Array(np), Ax = new Int8Array(np);
+    const nv = np / 3;
+    const Mt = new Uint8Array(nv), Sk = new Uint8Array(nv), Ao = new Uint8Array(nv);
+    let o3 = 0, o1 = 0;
+    for (const d of parts){
+      const dp = d.positions, dn = d.normals, da = d.axes, dm = d.mats, ds = d.skys, dao = d.aos;
+      const tn = dm.length / 3;
+      for (let ti = 0; ti < tn; ti++){
+        const v1 = ti * 3;
+        // a tri lightless underground is invisible from LOD range — skip it
+        // (real chunks own it up close)
+        if (ds[v1] < 8 && ds[v1 + 1] < 8 && ds[v1 + 2] < 8) continue;
+        const b9 = v1 * 3, w9 = o3, w3 = o1;
+        for (let j = 0; j < 9; j++){ P[w9 + j] = dp[b9 + j]; Nr[w9 + j] = dn[b9 + j]; Ax[w9 + j] = da[b9 + j]; }
+        for (let j = 0; j < 3; j++){ Mt[w3 + j] = dm[v1 + j]; Sk[w3 + j] = ds[v1 + j]; Ao[w3 + j] = dao[v1 + j]; }
+        o3 += 9; o1 += 3;
+      }
+    }
+    if (!o1) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(P.subarray(0, o3), 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(Nr.subarray(0, o3), 3, true));
+    g.setAttribute('aMat', new THREE.BufferAttribute(Mt.subarray(0, o1), 1));
+    g.setAttribute('aSky', new THREE.BufferAttribute(Sk.subarray(0, o1), 1, true));
+    g.setAttribute('aAO', new THREE.BufferAttribute(Ao.subarray(0, o1), 1, true));
+    g.setAttribute('aAxis', new THREE.BufferAttribute(Ax.subarray(0, o1 * 3), 3, true));
+    const mesh = new THREE.Mesh(g, ring.mat);
+    mesh.castShadow = ring.sc <= 4;
+    mesh.frustumCulled = true;
+    g.computeBoundingSphere();
+    this.scene.add(mesh);
+    t.mesh = mesh;
+  },
+  // no-worker fallback: mesh a little on the main thread once the real
+  // terrain queue is clear
+  processSync(budgetMs){
+    if (!this.rings || game.terrain.dirty.size) return;
+    const t0 = performance.now();
+    for (const ring of this.rings){
+      for (const [k, c] of ring.dirty){
+        ring.dirty.delete(k);
+        const d = CORE.meshChunk(c[0], c[1], c[2], game.edits, game.gen, ring.sc);
+        ring.applyResult(k, c[0], c[1], c[2], d);
+        if (performance.now() - t0 > budgetMs) return;
+      }
+    }
   },
 };
 
@@ -15909,6 +16336,9 @@ function frame(now){
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
+  lodTerrain.update(game.pos.x, game.pos.y, game.pos.z);
+  lodTerrain.frame();
+  if (!meshPool.ok) lodTerrain.processSync(2);
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
   updateDayNight(dt);
@@ -16055,7 +16485,23 @@ function frame(now){
   game.fpsAcc += dt; game.fpsN++;
   if (game.fpsAcc >= 0.5){
     game.fps = Math.round(game.fpsN / game.fpsAcc);
-    $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
+    if (game.perfHUD){
+      const mp = meshPool, ri = game.renderer.info;
+      let lodQ = 0, lodTiles = 0, lodTris = 0;
+      if (lodTerrain.rings)
+        for (const r of lodTerrain.rings){
+          lodQ += r.dirty.size + (r.colQueue ? r.colQueue.length : 0);
+          for (const t of r.tiles.values()) if (t.mesh){ lodTiles++; lodTris += t.mesh.geometry.getAttribute('position').count / 3; }
+        }
+      $('fpsbox').textContent =
+        game.fps + ' fps\n' +
+        'chunk queue ' + game.terrain.dirty.size + '  workers ' +
+          (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '\n' +
+        'lod queue ' + lodQ + '  tiles ' + lodTiles + '\n' +
+        'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls;
+    } else {
+      $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
+    }
     game.fpsAcc = 0; game.fpsN = 0;
   }
 }
@@ -16115,7 +16561,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
