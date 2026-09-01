@@ -3447,6 +3447,7 @@ class Terrain {
   applyResult(key, cx, cy, cz, data){
     const ch = this.chunks.get(key);
     if (!ch) return;                             // scrolled out mid-flight
+    ch.done = 1;                                 // meshed — even if it came back empty
     this.remeshWater(ch, cx, cy, cz);
     if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); ch.mesh = null; }
     if (!data) return;
@@ -15382,6 +15383,8 @@ function startWorld(id){
   buildHotbar(); refreshToolHUD();
   game.running = true;
   game.forceStream = true;
+  game.photo = null;          // never inherit photo mode from the last world
+  game.scope = 0;
   requestLock();
 }
 function reviveItem(it){
@@ -15389,6 +15392,8 @@ function reviveItem(it){
 }
 function quitToTitle(){
   saveNow();
+  game.photo = null;
+  game.scope = 0;
   for (const e of game.entities) e.mesh = null;
   game.running = false;
   hide('pausemenu'); hide('hud');
@@ -15587,7 +15592,7 @@ const farTerrain = {
       this.dirty = false;
       for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
     }
-    if (++this.maskFrame >= 20){ this.maskFrame = 0; this.updateMask(); }
+    if (++this.maskFrame >= 4){ this.maskFrame = 0; this.updateMask(); }
     if (!this.job){
       for (let k = 0; k < this.L.length; k++){
         if (this.needRebuild(k)){ this.startJob(k); break; }
@@ -15632,7 +15637,13 @@ const farTerrain = {
         let ok = true;
         for (let cy = range[0]; cy <= range[1] && ok; cy++){
           const key = cx + ',' + cy + ',' + cz;
-          if (!T.chunks.has(key) || T.dirty.has(key)) ok = false;
+          const ch = T.chunks.get(key);
+          // "covered" means the real chunk is actually STANDING there.
+          // Merely existing in the map is not enough: a chunk deferred by
+          // the visibility band, or still in flight, has no geometry — and
+          // claiming it made both the LOD and the horizon skin yield to
+          // empty space. That was the hole between LOD and real terrain.
+          if (!ch || T.dirty.has(key) || ch.banded || !(ch.done || ch.empty)) ok = false;
         }
         if (ok){
           const ix = cx - ox, iz = cz - oz;
@@ -16082,6 +16093,24 @@ const lodTerrain = {
     }
   },
   buildTile(ring, t){
+    // Settled tiles shed their source chunk data to save memory. If one is
+    // asked to rebuild later (a new chunk lands in it, or an edit lands
+    // nearby), rebuilding from the survivors would silently DROP every shed
+    // member's geometry — whole blocks of the world blinking out of the
+    // distance. Re-queue what's missing and keep the current mesh until it
+    // comes back.
+    let missing = 0;
+    for (const k of t.members){
+      const ch = ring.chunks.get(k);
+      if (ch && !ch.data){
+        missing++;
+        if (!ring.dirty.has(k)){
+          const p1 = k.indexOf(','), p2 = k.indexOf(',', p1 + 1);
+          ring.dirty.set(k, [+k.slice(0, p1), +k.slice(p1 + 1, p2), +k.slice(p2 + 1)]);
+        }
+      }
+    }
+    if (missing){ t.stale = true; t.shed = false; return; }
     if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
     t.quietAt = performance.now();
     let np = 0;
@@ -16408,6 +16437,7 @@ function frame(now){
   if (ck !== lastChunk || game.forceStream){
     lastChunk = ck; game.forceStream = false;
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
+    farTerrain.maskFrame = 99;     // crossed a chunk: re-cut the mask NOW
     treeSys.refresh();
     decorSys.refresh();
     torchSys.rebuild();
@@ -16649,7 +16679,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
