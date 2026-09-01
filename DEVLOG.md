@@ -2,6 +2,55 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 13.3 — the line is gone, and the treeline stops popping (2026-08-31)
+
+- **THE SEAM LINE.** The hairline of sky along the LOD/real boundary was a
+  literal see-through crack: the coverage mask discarded LOD *exactly* at
+  the column edge, so wherever the coarse and fine surfaces didn't meet to
+  the millimetre you looked straight through the join to the background.
+  Fix: erode the real-coverage region by two columns. A covered column that
+  touches an uncovered one is now a SEAM column — the horizon skin still
+  yields there, but the LOD keeps drawing UNDER the real chunk and backs
+  the join. Each ring is also sunk 0.18 voxels so its backing tucks beneath
+  the real surface instead of poking through as a ledge.
+
+  Measured with a pixel test — stand on flat treeless ground, pitch down at
+  the seam ring, and count sky-coloured pixels in the lower band where
+  there should be none: **127 -> 0**. (The 27 that still register are
+  shallow LOD water, whose tint (183,211,221) is close to sky (143,184,232)
+  — verified by averaging the flagged pixels rather than trusting the
+  count.) An earlier whole-frame version of this test read ~7900 both
+  before and after: it was counting sky through tree canopies, which is why
+  it is worth making a measurement specific before believing it.
+
+- **Trees carry into the distance.** treeAt() is a pure function of the
+  cell, so distant trees need no chunk data at all — they stand on
+  gen.height like the real ones. A new far-tree system draws them as two
+  InstancedMeshes (trunk + one canopy blob) out to 460m, skipping any cell
+  the near system is already drawing so there is exactly one tree per cell
+  on screen. **1399 distant trees for 2 draw calls**; the treeline now runs
+  to the horizon instead of materialising in front of you.
+
+- **Vegetation respects the night.** Grass, flowers, shrubs and trees all
+  use MeshBasicMaterial, which ignores lighting entirely — so they stayed
+  full-bright after dark. They are now tinted by the same day factor the
+  terrain shades with (0.20 at midnight, 1.0 at noon).
+
+- **Deeper underground cull.** The near-everything sphere shrinks 64m ->
+  48m, and a player whose eye is above ground stops meshing the deep
+  entirely past 96m — you cannot see into the dark from up there, however
+  far the render distance reaches. It still follows you down a shaft or
+  into a cave the moment your eye drops below the surface.
+
+### On the 800m building textures
+Now explained without a mesher bug: material assignment measures identical
+at every LOD scale over a fixed volume, and the skin only draws where the
+LOD has NOT finished. So grass/rock over a distant city is the heightfield
+skin showing through while that ring is still filling — which is why it
+corrected itself as the player closed to 300-400m. Faster ring drain makes
+the window smaller; if it still reads wrong once settled, that is a new
+bug and needs a fresh look.
+
 ## Build 13.2 — the seams close (2026-08-31)
 
 Playtest of 13.1: cities render whole, structures fixed, performance up.
