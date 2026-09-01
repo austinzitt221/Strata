@@ -2,6 +2,54 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 13.2 — the seams close (2026-08-31)
+
+Playtest of 13.1: cities render whole, structures fixed, performance up.
+Three bugs left.
+
+- **Photo mode leaked across worlds.** Quit to title while in photo mode
+  and the next world you created opened in photo mode. `game.photo` was
+  world state living on a global; it (and `game.scope`) now reset on both
+  quit and world start.
+
+- **Holes between LOD and real terrain — the mask was lying, twice.**
+  1. The coverage mask marked a column "real geometry covers this" if its
+     chunks merely EXISTED in the chunk map. After 13.1 that was wrong:
+     chunks deferred by the visibility band exist with no mesh, so the mask
+     told the LOD *and* the horizon skin to yield — to nothing. That is the
+     empty line at the boundary. A column now counts as covered only when
+     its chunks are actually meshed (`done`), empty, or in flight-free
+     state; anything deferred, dirty or airborne fails the test.
+  2. The mask was recomputed every 20 frames. Fly fast and it described
+     where you WERE — cutting holes at stale world positions, which is
+     exactly the "fly around and it gets out of sync" report. Now every 4
+     frames, and immediately on crossing a chunk. It is a few thousand map
+     lookups; it was never worth being stale.
+
+  Audited by walking the live mask against the chunk map: at settle, after
+  six long teleports, and after resting, **0 columns out of 177 claimed
+  coverage they did not have** (before the fix: 177 of 177 right after a
+  jump).
+
+- **Whole LOD chunks vanishing.** Settled tiles shed their source chunk
+  data to save memory (the merged mesh is the render copy). When such a
+  tile was later asked to rebuild — a new chunk landing in it as you moved
+  — it rebuilt from the survivors and silently DROPPED every shed member's
+  geometry. Blocks of the world blinking out of the distance. A tile that
+  needs a rebuild now re-queues its missing members and keeps its current
+  mesh until they come back.
+
+### Not reproduced: distant building textures
+Reported as grass/rock on skyscrapers around 800m, correcting by 300-400m.
+Histogramming face materials over a FIXED world volume at every LOD scale
+shows the same distribution at 1m, 2m, 4m and 8m voxels (id14 48%, id12
+37%, id0 14%) — the mesher assigns building materials correctly at every
+scale. A first attempt blamed the smeared coarse-voxel normal and probed
+deeper for the material; measurement showed that changed nothing, so it
+was reverted rather than shipped as an unverified cost. Needs a screenshot
+of the 800m case to localise; the likely remaining suspect is the
+heightfield skin showing through where a ring is still filling.
+
 ## Build 13.1 — the LOD actually gets to run (2026-08-31)
 
 Playtest of Build 13: nothing changed. The F3 overlay handed over the
