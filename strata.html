@@ -3169,25 +3169,51 @@ const meshPool = {
       this.fwd = [this._dir.x, this._dir.y, this._dir.z];
       this.vel = game.vel ? [game.vel.x, game.vel.y, game.vel.z] : null;
     }
-    for (const src of this.sources){
-      if (!src || !src.dirty || !src.dirty.size) continue;
-      while (this.idle.length){
-        const pick = this.pick(src);
-        if (!pick) break;
-        const [key, c] = pick;
-        src.dirty.delete(key);
-        const M = src.chunkM || CORE.CHUNK_M;
-        const box = [c[0] * M - 4, c[1] * M - 4, c[2] * M - 4,
-                     c[0] * M + M + 4, c[1] * M + M + 4, c[2] * M + M + 4];
-        const rows = CORE.serializeEdits(CORE.cullEdits(src.edits, box, 0));
-        const id = ++this.seq;
-        const w = this.idle.pop();
-        this.jobs.set(id, { src, key, c });
-        this.inflight.add(src.id + '|' + key);
-        w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1 });
-      }
-      if (!this.idle.length) break;
+    while (this.idle.length){
+      const src = this.nextSource();
+      if (!src) break;
+      const pick = this.pick(src);
+      if (!pick){ this.skip.add(src.id); continue; }
+      const [key, c] = pick;
+      src.dirty.delete(key);
+      const M = src.chunkM || CORE.CHUNK_M;
+      const box = [c[0] * M - 4, c[1] * M - 4, c[2] * M - 4,
+                   c[0] * M + M + 4, c[1] * M + M + 4, c[2] * M + M + 4];
+      const rows = CORE.serializeEdits(CORE.cullEdits(src.edits, box, 0));
+      const id = ++this.seq;
+      const w = this.idle.pop();
+      this.jobs.set(id, { src, key, c });
+      this.inflight.add(src.id + '|' + key);
+      w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1 });
     }
+    this.skip.clear();
+  },
+  skip: new Set(), rr: 0,
+  // Weighted round robin. Draining sources strictly in order starved the
+  // LOD forever: full-detail terrain ALWAYS has work, so the rings never
+  // got a worker and the horizon never appeared. Terrain keeps half the
+  // rotation (and its hot lane still preempts everything, so mining
+  // feedback stays instant), the rings split the other half.
+  nextSource(){
+    const S = this.sources;
+    if (!S.length) return null;
+    const t = S[0];
+    if (t && t.hot && t.hot.size && !this.skip.has(t.id)) return t;
+    let W = this._W;
+    if (!W || W.n !== S.length){
+      W = [];
+      for (let i = 1; i < S.length; i++) W.push(0, i);
+      if (!W.length) W.push(0);
+      W.n = S.length;
+      this._W = W;
+    }
+    for (let i = 0; i < W.length; i++){
+      const src = S[W[(this.rr + i) % W.length]];
+      if (!src || !src.dirty || !src.dirty.size || this.skip.has(src.id)) continue;
+      this.rr = (this.rr + i + 1) % W.length;
+      return src;
+    }
+    return null;
   },
   pick(src){
     const M = src.chunkM || CORE.CHUNK_M;
@@ -3285,21 +3311,62 @@ class Terrain {
     const floorY = this.gen.caveFloorY != null ? this.gen.caveFloorY : -1e9;
     const seaCy = this.gen.seaLevel != null ? Math.floor(this.gen.seaLevel / M) : null;
     for (const key of want){
-      if (!this.chunks.has(key)){
-        this.chunks.set(key, { mesh: null });
-        const [cx, cy, cz] = key.split(',').map(Number);
-        if (cy !== seaCy){   // sea-band chunks always process (water mesh)
-          const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
-          if (topY < floorY && topY < this.editMinY() - 1 &&
-              !(this.gen.caveInBox && this.gen.caveInBox(
-                [cx * M - 0.5, botY, cz * M - 0.5, cx * M + M + 0.5, topY, cz * M + M + 0.5]))) continue;
-          const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
-                                          cx * M + M + 0.5, cz * M + M + 0.5);
-          if (botY > hr[1] + 0.5 && botY > this.editMaxY() + 1) continue;
-        }
-        this.dirty.set(key, [cx, cy, cz]);
+      let ch = this.chunks.get(key);
+      const fresh = !ch;
+      if (fresh){ ch = { mesh: null }; this.chunks.set(key, ch); }
+      else if (!ch.banded) continue;       // already meshed, queued, or empty
+      const [cx, cy, cz] = key.split(',').map(Number);
+      if (fresh && cy !== seaCy){          // sea-band chunks always process (water mesh)
+        const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
+        if (topY < floorY && topY < this.editMinY() - 1 &&
+            !(this.gen.caveInBox && this.gen.caveInBox(
+              [cx * M - 0.5, botY, cz * M - 0.5, cx * M + M + 0.5, topY, cz * M + M + 0.5]))){ ch.empty = 1; continue; }
+        const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
+                                        cx * M + M + 0.5, cz * M + M + 0.5);
+        if (botY > hr[1] + 0.5 && botY > this.editMaxY() + 1){ ch.empty = 1; continue; }
       }
+      if (ch.empty) continue;
+      // the deep world you cannot see is not worth a worker: a surface
+      // player used to queue every cave chunk 200m below every column in
+      // render distance (37k chunks, hours of meshing). Full vertical
+      // within 64m; past that a column meshes only its surface band and
+      // whatever is BUILT there. Chunks deferred this way stay marked and
+      // queue the moment you come near.
+      if (cy !== seaCy && !this.inBand(cx, cy, cz)){ ch.banded = 1; continue; }
+      ch.banded = 0;
+      this.dirty.set(key, [cx, cy, cz]);
     }
+  }
+
+  inBand(cx, cy, cz){
+    const dx = cx - this.center[0], dy = cy - this.center[1], dz = cz - this.center[2];
+    const NEAR = 8;                                   // 64m sphere: everything
+    if (dx * dx + dy * dy + dz * dz <= NEAR * NEAR) return true;
+    const b = this.bandOf(cx, cz);
+    return cy >= b[0] && cy <= b[1];
+  }
+  // vertical chunk span a distant column can actually show: its surface,
+  // plus anything built on it (city towers, your base)
+  bandOf(cx, cz){
+    const k = cx + ',' + cz;
+    let b = (this._band = this._band || new Map()).get(k);
+    if (!b){
+      const M = CORE.CHUNK_M;
+      const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
+                                      cx * M + M + 0.5, cz * M + M + 0.5);
+      let lo = hr[0] - 10, hi = hr[1] + 2;
+      const EC = lodTerrain.editCols;
+      if (EC && EC.size)
+        for (let ez = Math.floor((cz * M - 2) / 32); ez <= Math.floor((cz * M + M + 2) / 32); ez++)
+          for (let ex = Math.floor((cx * M - 2) / 32); ex <= Math.floor((cx * M + M + 2) / 32); ex++){
+            const er = EC.get(ex + ',' + ez);
+            if (er){ if (er[0] - 2 < lo) lo = er[0] - 2; if (er[1] + 2 > hi) hi = er[1] + 2; }
+          }
+      b = [Math.floor(lo / M), Math.floor(hi / M)];
+      if (this._band.size > 30000) this._band.clear();
+      this._band.set(k, b);
+    }
+    return b;
   }
 
   // conservative vertical envelope of all edits (full size covers any
@@ -3323,6 +3390,7 @@ class Terrain {
   // mark chunks overlapping an edit AABB dirty
   invalidate(e){
     this._envN = -1;   // edit list changed or an edit moved: envelope stale
+    this._band = null; // a new build changes what a distant column shows
     if (lodTerrain.rings) lodTerrain.invalidate(e);
     const box = CORE.editAABB(e);
     const pad = CORE.VOX * 2;
@@ -5805,7 +5873,7 @@ const bulbSys = {
 // ---------- torches ----------
 // ---- rope anchors: placeable rope that drops to the floor; ladder rules
 const ropeSys = {
-  group: null, matA: null, matL: null,
+  group: null, matA: null, matL: null, R: 150,
   rebuild(){
     if (this.group) game.scene.remove(this.group);
     if (!this.matA){
@@ -5814,7 +5882,13 @@ const ropeSys = {
     }
     this.group = new THREE.Group();
     this.group.userData.noShadow = true;
+    // only what's near: a tower shaft's rope hanging in mid-air over a
+    // city that hasn't meshed yet reads as a bug, and every rope is two
+    // draw calls
+    const px = game.pos.x, pz = game.pos.z, R2 = this.R * this.R;
     for (const r of game.ropes || []){
+      const dx = r[0] - px, dz = r[2] - pz;
+      if (dx * dx + dz * dz > R2) continue;
       const g = this.model(r[3]);
       g.position.set(r[0], r[1], r[2]);
       this.group.add(g);
@@ -5827,9 +5901,14 @@ const ropeSys = {
       this.matL = new THREE.MeshLambertMaterial({ color: 0x9a7444 });
     }
     const g = new THREE.Group();
-    const anchor = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.22, 0.36), this.matA);
+    this.gA = this.gA || new THREE.BoxGeometry(0.36, 0.22, 0.36);
+    this.gL = this.gL || new Map();
+    const lk = Math.round(len * 4) / 4;
+    let gl = this.gL.get(lk);
+    if (!gl){ gl = new THREE.CylinderGeometry(0.055, 0.055, lk, 5); this.gL.set(lk, gl); }
+    const anchor = new THREE.Mesh(this.gA, this.matA);
     anchor.position.y = 0.05;
-    const line = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, len, 5), this.matL);
+    const line = new THREE.Mesh(gl, this.matL);
     line.position.y = -len / 2;
     g.add(anchor, line);
     return g;
@@ -6876,7 +6955,7 @@ const powerSys = {
 };
 
 const torchSys = {
-  group: null,
+  group: null, R: 150,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
   rebuild(){
     if (!this.group) return;
@@ -6884,7 +6963,11 @@ const torchSys = {
       const c = this.group.children.pop();
       this.group.remove(c);
     }
+    // near ones only — a city stamps its street lights from 1.4km away
+    const px = game.pos.x, pz = game.pos.z, R2 = this.R * this.R;
     for (const t of game.torches){
+      const dx = t[0] - px, dz = t[2] - pz;
+      if (dx * dx + dz * dz > R2) continue;
       const g = this.model();
       g.position.set(t[0], t[1], t[2]);
       this.group.add(g);
@@ -6895,9 +6978,11 @@ const torchSys = {
       this.mats = { bark: pixMat(PROP_TEX.bark, null, 1, 2), ember: pixMat(PROP_TEX.ember) };
     }
     const g = new THREE.Group();
-    const stick = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.42, 0.07), this.mats.bark);
+    this.gS = this.gS || new THREE.BoxGeometry(0.07, 0.42, 0.07);
+    this.gT = this.gT || new THREE.BoxGeometry(0.14, 0.15, 0.14);
+    const stick = new THREE.Mesh(this.gS, this.mats.bark);
     stick.position.y = 0.21;
-    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.15, 0.14), this.mats.ember);
+    const tip = new THREE.Mesh(this.gT, this.mats.ember);
     tip.position.y = 0.47;
     g.add(stick); g.add(tip);
     return g;
@@ -15722,8 +15807,9 @@ const farTerrain = {
 // 128m/256m supertiles so the whole horizon costs a few dozen draw calls.
 const lodTerrain = {
   R: [
-    { id: 'L0', sc: 4, far: 448 },
-    { id: 'L1', sc: 8, far: 1408 },
+    { id: 'L0', sc: 2, far: 176 },
+    { id: 'L1', sc: 4, far: 448 },
+    { id: 'L2', sc: 8, far: 1152 },
   ],
   rings: null, editCols: new Map(), lastKey: '', mat: null,
   init(scene){
@@ -15974,7 +16060,7 @@ const lodTerrain = {
       for (const [tk, t] of ring.tiles){
         if (!t.stale) continue;
         if (did && performance.now() - now > 3) return;  // ≥1 build even on a slow frame
-        if (t.builtAt && now - t.builtAt < 350) continue;
+        if (t.builtAt && now - t.builtAt < 150) continue;
         t.stale = false; t.builtAt = now; t.shed = false;
         this.buildTile(ring, t);
         did++;
@@ -16324,6 +16410,8 @@ function frame(now){
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
     treeSys.refresh();
     decorSys.refresh();
+    torchSys.rebuild();
+    ropeSys.rebuild();
   } else if (treeSys.pending || decorSys.pending){
     // trees/decor held back until their ground meshed — retry as chunks land
     game.treeRetryT = (game.treeRetryT || 0) + dt;
