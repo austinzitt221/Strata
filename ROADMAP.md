@@ -298,7 +298,7 @@ Quality of life the whole game leans on.
 - Inventory polish: search box, sort, and the vehicle sub-menu hook
   that Build 15 fills in.
 
-## Build 15 — STORED POWER (batteries, pads, and a grid that makes sense)
+## Build 15 — STORED POWER (batteries, pads, and a grid that makes sense) (DONE — rail battery boxes deferred)
 Charging a car by wiring it near a light bulb is nonsense. Power becomes
 portable.
 - **Batteries** — low / medium / high capacity, each a real item with

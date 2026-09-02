@@ -2,6 +2,81 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 15 — STORED POWER (2026-09-02)
+
+Charging a car by parking it near a lit bulb was nonsense. Power is now
+a thing you carry.
+
+- **Batteries.** Three cells — low 100, medium 300, high 1000 — as real
+  items (`{kind:'battery', tier, charge}`), crafted empty from iron/coal,
+  iron/ruby/coal, ruby/diamond/coal. Full cells are free in creative. The
+  HUD shows the charge; the de-crafter takes them back apart.
+- **The battery charger** (iron 10, ruby 4, planks 6). A wired bench;
+  right-click opens the usual container screen with battery slots that
+  fill at 12/s scaled by the circuit's supply ratio, 40W demand while
+  any cell wants more. Status line reads how full each slot is.
+- **The charging pad grows up.** It's a 2.6m plate now, big enough to
+  drive onto. A car parked within 1.9m of the centre charges at 6/s
+  (times ratio) and the pad draws demand for it; the jetpack keeps its
+  30/s. Wrench bounds updated so the bigger plate selects properly.
+  The old "any car within range of any surplus circuit charges" block is
+  gone — that was the lightbulb archaeology.
+- **Vehicle battery slot.** Open the inventory while driving and the
+  vehicle panel shows a battery slot plus a status line (tank %, cell
+  charge, "topping the tank"). A cell in the slot trickles 2.5/s into the
+  tank while you drive. The cursor lifts/puts it like any slot; the kit
+  carries it through deploy, wreck and pack-up; save rows keep it.
+- **Pour a battery into anything chargeable.** Holding a battery and
+  clicking a jetpack, drone, teleport drone or car kit pours charge in
+  (`chargeField` picks fuel vs charge); the part-used cell stays on the
+  cursor.
+- **Rails run on wire.** A rail line whose end post sits within 8m of a
+  circuit's terminals is that circuit's consumer (15W) and shows up in
+  `powerSys.railLive`. `railSys.powered` reads that set. A gen2 with
+  nothing but a rail line attached now ignites — no decoy bulb.
+- Not done: **rail battery boxes** (lines far from a grid). Rails still
+  want a wired circuit nearby; a box that eats a battery is a follow-up.
+
+Verified headlessly: recipe tiers/caps, charger fills a cell and caps at
+its tier, pad charges a parked car and pure surplus no longer does, the
+vehicle slot tops the tank (300 -> 290 cell, 40 -> 50 tank over 4s) and
+the panel/slot/cursor round-trip, pour into a drone, rails ignite a gen2
+with zero bulbs, car battery survives save/load. 297 CORE tests green.
+
+## Build 14.1 — hands (2026-09-01)
+
+Playtest: "you can't drop things or split stacks at all" — and 500
+accidental electric cars to prove it. The whole inventory interaction
+model changes.
+
+- **Click to hold.** Drag-while-holding is gone. Left click lifts a whole
+  stack onto the cursor, right click lifts half (a single thing lifts
+  whole). Holding, left click puts it all down, right click puts half and
+  keeps the rest, a tap of Shift puts exactly one — or, with an empty
+  cursor, lifts exactly one. Shift-click still quick-moves; shift-right-
+  click quick-moves half. The cursor icon follows the mouse with its
+  count. Closing a screen with something in hand puts it back in your pack
+  (or on the floor if the pack is full) — nothing is ever lost.
+- **Drop it.** Holding something and clicking outside every panel drops it
+  on the ground (left = all, right = half, Shift = one). Drops are a
+  spinning card of the item's own icon that falls to the ground, merges
+  with a like stack lying within 1.6m, gets picked up when you walk over
+  it, and fades after five minutes. They save with the world.
+- **The de-crafter.** A new bench (6 iron ingots + 8 planks, no power)
+  that runs every recipe backwards: a diamond drill back into its 24
+  diamonds, 20 rails into 2 recipes' worth of iron and sticks with 4 rails
+  left over. Anything no recipe made can't be taken apart. UNCRAFT 1 /
+  UNCRAFT ALL.
+- **Live refresh.** Crafting repainted the HUD hotbar but not the grids
+  on the crafting screen itself, so a new drill sat invisible until you
+  closed and reopened. Every inventory grid on screen repaints on every
+  change now.
+
+Verified: lift 500 -> half 250 -> put -> half 125 -> Shift 1 -> merge 374
+-> Shift-lift 1; quick-move whole and half; drop half then all merging to
+one 30-coal card, walked over and recovered, expiry; drill -> 24/24
+diamonds; crafted item painted on the open crafting screen.
+
 ## Build 14 — MENUS & MAKING THINGS (2026-09-01)
 
 - **One inventory for both modes.** The creative catalog is gone — panel,
