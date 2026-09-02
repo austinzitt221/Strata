@@ -2,6 +2,47 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 15 — STORED POWER (2026-09-02)
+
+Charging a car by parking it near a lit bulb was nonsense. Power is now
+a thing you carry.
+
+- **Batteries.** Three cells — low 100, medium 300, high 1000 — as real
+  items (`{kind:'battery', tier, charge}`), crafted empty from iron/coal,
+  iron/ruby/coal, ruby/diamond/coal. Full cells are free in creative. The
+  HUD shows the charge; the de-crafter takes them back apart.
+- **The battery charger** (iron 10, ruby 4, planks 6). A wired bench;
+  right-click opens the usual container screen with battery slots that
+  fill at 12/s scaled by the circuit's supply ratio, 40W demand while
+  any cell wants more. Status line reads how full each slot is.
+- **The charging pad grows up.** It's a 2.6m plate now, big enough to
+  drive onto. A car parked within 1.9m of the centre charges at 6/s
+  (times ratio) and the pad draws demand for it; the jetpack keeps its
+  30/s. Wrench bounds updated so the bigger plate selects properly.
+  The old "any car within range of any surplus circuit charges" block is
+  gone — that was the lightbulb archaeology.
+- **Vehicle battery slot.** Open the inventory while driving and the
+  vehicle panel shows a battery slot plus a status line (tank %, cell
+  charge, "topping the tank"). A cell in the slot trickles 2.5/s into the
+  tank while you drive. The cursor lifts/puts it like any slot; the kit
+  carries it through deploy, wreck and pack-up; save rows keep it.
+- **Pour a battery into anything chargeable.** Holding a battery and
+  clicking a jetpack, drone, teleport drone or car kit pours charge in
+  (`chargeField` picks fuel vs charge); the part-used cell stays on the
+  cursor.
+- **Rails run on wire.** A rail line whose end post sits within 8m of a
+  circuit's terminals is that circuit's consumer (15W) and shows up in
+  `powerSys.railLive`. `railSys.powered` reads that set. A gen2 with
+  nothing but a rail line attached now ignites — no decoy bulb.
+- Not done: **rail battery boxes** (lines far from a grid). Rails still
+  want a wired circuit nearby; a box that eats a battery is a follow-up.
+
+Verified headlessly: recipe tiers/caps, charger fills a cell and caps at
+its tier, pad charges a parked car and pure surplus no longer does, the
+vehicle slot tops the tank (300 -> 290 cell, 40 -> 50 tank over 4s) and
+the panel/slot/cursor round-trip, pour into a drone, rails ignite a gen2
+with zero bulbs, car battery survives save/load. 297 CORE tests green.
+
 ## Build 14.1 — hands (2026-09-01)
 
 Playtest: "you can't drop things or split stacks at all" — and 500
