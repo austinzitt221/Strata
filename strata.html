@@ -102,6 +102,15 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .craftrow .cname{flex:1;}
 .craftrow .ccost{font-size:12px; color:var(--ui-hi);}
 .craftrow .ccost.ok{color:#7dff9b;}
+.craftbar{display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;}
+.craftbar input[type=text]{flex:1; min-width:150px; background:var(--ui-bg2); border:2px solid var(--ui-border); color:#e8e4f0; padding:5px 8px; font:inherit; font-size:12px;}
+.amtbtns{display:flex; gap:4px;}
+.amtbtn{padding:4px 8px; font-size:11px; letter-spacing:1px; border:2px solid var(--ui-border); background:var(--ui-bg2); color:#cfe9ff; cursor:pointer; user-select:none;}
+.amtbtn:hover{border-color:#6fd3ff;}
+.amtbtn.on{border-color:#6fd3ff; background:rgba(50,90,120,0.35);}
+.amtcol{display:flex; flex-direction:column; align-items:center; gap:6px; width:66px;}
+.amtcol input[type=range]{writing-mode:vertical-lr; direction:rtl; height:250px; width:24px;}
+.amtcol input[type=number]{width:62px; background:var(--ui-bg2); border:2px solid var(--ui-border); color:#e8e4f0; padding:4px 2px; font:inherit; font-size:12px; text-align:center;}
 
 /* ---------- boss bar ---------- */
 #bossbar{position:fixed; top:52px; left:50%; transform:translateX(-50%); width:430px; z-index:6; text-align:center;}
@@ -136,10 +145,6 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- fatal ---------- */
 #fatal{z-index:100; background:#14060a;}
-#cataloggrid{display:grid; grid-template-columns:repeat(10, 52px); gap:6px;
-  max-height:420px; overflow-y:auto; padding-right:4px;}
-#cataloggrid .slot{cursor:pointer;}
-#cataloggrid .slot:hover{border-color:#6fd3ff;}
 .statfill.breath{background:#4aa3e8;}
 #uwater{position:fixed;inset:0;background:rgba(18,58,98,0.38);pointer-events:none;z-index:3;}
 #sleepfade{position:fixed;inset:0;background:#000;opacity:0.92;pointer-events:none;z-index:4;transition:opacity 0.8s;}
@@ -296,23 +301,21 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 <div id="invscreen" class="screen hidden dim">
   <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; justify-content:center; max-width:100vw; max-height:100vh; overflow:auto;">
-  <div class="panel hidden" id="catalogpanel">
-    <h2>CATALOG</h2>
-    <div class="sub" style="margin-bottom:8px;">creative — click anything to take it</div>
-    <div class="cattabs" id="catalogtabs"></div>
-    <div id="cataloggrid"></div>
-  </div>
   <div class="panel">
     <h2>INVENTORY</h2>
     <div class="invlabel">DISPENSER SLOT</div>
     <div class="invgrid" style="grid-template-columns:52px;" id="invdisp"></div>
     <div class="invlabel">ARMOR — helmet · chestplate · boots · back</div>
     <div class="invgrid" style="grid-template-columns:52px 52px 52px 52px;" id="invarmor"></div>
-    <div class="invlabel">STORAGE</div>
+    <div class="invlabel">STORAGE <button class="btn small" id="btnInvSort" style="margin-left:10px;" onmousedown="event.stopPropagation()">SORT</button></div>
     <div class="invgrid" id="invmain"></div>
     <div class="invlabel">HOTBAR</div>
     <div class="invgrid" id="invhot"></div>
     <div class="sub" style="margin-top:12px;">with a dispenser slotted, any material you hold becomes buildable &nbsp;·&nbsp; E to close</div>
+  </div>
+  <div class="panel hidden" id="vehiclepanel">
+    <h2>VEHICLE</h2>
+    <div class="sub">battery slot and cargo arrive with Stored Power (Build 15)</div>
   </div>
   <div class="panel" id="missionpanel">
     <h2>MISSIONS</h2>
@@ -335,6 +338,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="panel" style="min-width:560px;">
       <h2>AUTO-CRAFTER</h2>
       <div class="sub" id="crafterstatus">&nbsp;</div>
+      <div class="craftbar" id="crafteramts"></div>
       <div class="invlabel">BUFFER</div>
       <div class="invgrid" id="crafterbuf"></div>
       <div class="invlabel">RECIPE — click to select</div>
@@ -391,7 +395,17 @@ input[type=range]{width:180px; accent-color:var(--accent);}
       <h2>CRAFTING</h2>
       <div class="sub">mine ore veins underground · higher tiers dig bigger and faster</div>
       <div class="cattabs" id="crafttabs"></div>
-      <div id="craftlist" style="max-height:340px; overflow:auto;"></div>
+      <div class="craftbar">
+        <input type="text" id="craftsearch" placeholder="search every tab…" autocomplete="off" spellcheck="false">
+        <div class="amtbtns" id="craftamts"></div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:stretch;">
+        <div class="amtcol" title="how many to craft">
+          <input type="range" id="craftslider" min="1" max="100000" value="1">
+          <input type="number" id="craftnum" min="1" max="100000" value="1">
+        </div>
+        <div id="craftlist" style="flex:1; max-height:340px; overflow:auto;"></div>
+      </div>
       <button class="btn" id="btnCraftClose">CLOSE (Q)</button>
     </div>
     <div class="panel" style="min-width:560px;">
@@ -2516,6 +2530,26 @@ function payCosts(slots, r){
     else consumeMat(slots, c.mat, c.n);
   }
 }
+// how many times a recipe's MATERIALS allow (inventory room is discovered
+// by crafting until 'full'); a recipe with no costs is bounded by the UI cap
+function craftableCount(slots, r){
+  let n = Infinity;
+  for (const c of r.costs){
+    const have = c.item ? countItem(slots, c.item) : countMat(slots, c.mat);
+    n = Math.min(n, Math.floor(have / c.n));
+  }
+  return n === Infinity ? 100000 : n;
+}
+// craft up to n times, stopping at the first shortfall or full inventory
+function craftN(slots, r, n, free){
+  let made = 0, res = 'ok';
+  for (let i = 0; i < n; i++){
+    res = craft(slots, r, free);
+    if (res !== 'ok') break;
+    made++;
+  }
+  return { made, res: made ? 'ok' : res };
+}
 function craft(slots, r, free){
   if (!free && !canCraft(slots, r)) return 'poor';
   if (r.kind === 'matout'){
@@ -2661,7 +2695,7 @@ return {
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
   makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, CITY_CELL,
-  HARDNESS, mineDuration, placeDuration, volFactor,
+  HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN,
 };
 };
 const CORE = CORE_FACTORY();
@@ -3630,6 +3664,9 @@ const PLAYER = {
 };
 
 function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.height; }
+// how far a ghost — drill/dispenser shape, paste, blueprint — can be pushed
+// out. A copied build is easiest to line up from OUTSIDE it.
+const TOOL_REACH_MAX = 96;
 
 // edits near a point/segment, cheap cull for physics + ghost rays
 function nearEdits(box){
@@ -6909,11 +6946,13 @@ const powerSys = {
     if (!this.crafterWants(n)){ n.craftT = 0; return; }
     const ratio = this.crafterMap ? (this.crafterMap.get(n.id) || 0) : 0;
     if (ratio <= 0){ n.craftT = 0; return; }
+    if (n.limit != null && (n.made || 0) >= n.limit){ n.craftT = 0; return; }   // batch done
     n.craftT = (n.craftT || 0) + dt * ratio;
     if (n.craftT >= 4){
       n.craftT = 0;
       const res = CORE.craft(n.inv, CORE.RECIPES[n.recipe], false);
       if (res === 'ok'){
+        n.made = (n.made || 0) + 1;
         markSave();
         if (game.ui === 'crafter' && game.activeCrafter === n) refreshCrafterUI();
       }
@@ -11442,7 +11481,7 @@ function ghostPlacement(eff){
   const dir = new THREE.Vector3();
   game.camera.getWorldDirection(dir);
   const o = game.camera.position;
-  const reach = PLAYER.reach;
+  const reach = TOOL_REACH_MAX;
   const cb = game.camBack || 0;
   if (!game.snapOn){
     const tt = Math.min(reach, Math.max(1.0, game.tool.dist)) + cb;
@@ -12502,7 +12541,7 @@ const wrenchSys = {
     const dir = new THREE.Vector3();
     game.camera.getWorldDirection(dir);
     const o = game.camera.position;
-    const reach = PLAYER.reach;
+    const reach = TOOL_REACH_MAX;
     const segBox = [
       Math.min(o.x, o.x + dir.x * reach) - 1, Math.min(o.y, o.y + dir.y * reach) - 1, Math.min(o.z, o.z + dir.z * reach) - 1,
       Math.max(o.x, o.x + dir.x * reach) + 1, Math.max(o.y, o.y + dir.y * reach) + 1, Math.max(o.z, o.z + dir.z * reach) + 1,
@@ -13404,13 +13443,15 @@ function pickMaterial(){
 
 // V/B: pull the ghost closer / push it farther (free-place mode only)
 function updateGhostDist(dt){
-  if (game.ui !== 'none' || !isLocked() || game.snapOn) return;
+  if (game.ui !== 'none' || !isLocked()) return;
   const k = game.keys;
   let d = 0;
   if (k['KeyV']) d -= 1;
   if (k['KeyB']) d += 1;
   if (d){
-    game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist + d * 6 * dt));
+    // faster the farther out it is: 6 m/s in close, ~50 m/s at the limit
+    const spd = Math.max(6, game.tool.dist * 0.55);
+    game.tool.dist = Math.min(TOOL_REACH_MAX, Math.max(1.0, game.tool.dist + d * spd * dt));
     refreshToolHUD(); markSave();
   }
 }
@@ -14019,26 +14060,48 @@ function buildInvUI(){
   for (const k of ['ahead', 'achest', 'afeet', 'aback']) arm.appendChild(slotEl(k));
   for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
-  buildCatalogUI();
   buildMissionsUI();
+  $('btnInvSort').onclick = sortInventory;
+  $('vehiclepanel').classList.toggle('hidden', !game.driving);
   refreshInvUI();
+}
+// SORT: storage rows only (the hotbar is yours to arrange) — materials by
+// id, then stackables by kind, then the one-offs; like stacks merge
+function sortInventory(){
+  const rows = game.slots.slice(10, 40).filter(Boolean);
+  const mats = new Map(), stacks = new Map(), singles = [];
+  for (const it of rows){
+    if (it.kind === 'mat') mats.set(it.mat, (mats.get(it.mat) || 0) + it.count);
+    else if (CORE.STACKABLE_KINDS.includes(it.kind)) stacks.set(it.kind, (stacks.get(it.kind) || 0) + (it.count || 1));
+    else singles.push(it);
+  }
+  const out = [];
+  for (const m of [...mats.keys()].sort((a, b) => a - b)) out.push({ kind: 'mat', mat: m, count: mats.get(m) });
+  for (const k of [...stacks.keys()].sort()) out.push({ kind: k, count: stacks.get(k) });
+  singles.sort((a, b) => itemLabel(a).localeCompare(itemLabel(b)));
+  for (const it of singles) out.push(it);
+  for (let i = 10; i < 40; i++) game.slots[i] = out[i - 10] || null;
+  refreshInvUI(); refreshHotbar(); refreshToolHUD(); markSave();
+  AudioSys.sfx('click');
 }
 
 // ---------- item categories ----------
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'car'];
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone'];
+const CAT_VEHICLES = ['car', 'rail'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
 const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'rail', 'deed'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
   { id: 'weapon',   label: 'WEAPONS',     kinds: CAT_WEAPONS,   icon: () => CORE.makeGun() },
+  { id: 'vehicle',  label: 'VEHICLES',    kinds: CAT_VEHICLES,  icon: () => ({ kind: 'car', charge: 100 }) },
   // tiers are 0-based here: 4 is diamond
   { id: 'clothing', label: 'CLOTHING',    kinds: CAT_CLOTHING,  icon: () => ({ kind: 'helm', tier: 4, count: 1 }) },
   { id: 'power',    label: 'ELECTRICITY', kinds: CAT_POWER,     icon: () => ({ kind: 'lever', count: 1 }) },
@@ -14108,36 +14171,18 @@ function catalogEntries(){
   out.push({ kind: 'drone', charge: 100 });
   return out;
 }
-function buildCatalogUI(){
-  const panel = $('catalogpanel');
-  const grid = $('cataloggrid');
-  if (game.mode !== 'creative'){ panel.classList.add('hidden'); return; }
-  panel.classList.remove('hidden');
-  if (game.catTab == null) game.catTab = 0;
-  buildCatTabs($('catalogtabs'), game.catTab, i => { game.catTab = i; buildCatalogUI(); });
-  grid.innerHTML = '';
-  for (const entry of catalogEntries()){
-    if (itemCat(entry) !== game.catTab) continue;
-    const d = document.createElement('div');
-    d.className = 'slot';
-    d.title = itemLabel(entry);
-    const img = document.createElement('img');
-    img.alt = ''; img.src = itemIconURL(entry);
-    d.appendChild(img);
-    d.addEventListener('mousedown', ev => {
-      ev.stopPropagation();                 // never starts an inventory drag
-      const it = entry;
-      let ok2 = false;
-      if (it.kind === 'mat') ok2 = CORE.addMat(game.slots, it.mat, 500);
-      else if (CORE.STACKABLE_KINDS ? CORE.STACKABLE_KINDS.includes(it.kind) : it.count != null) ok2 = addStackItem(it.kind, 10);
-      else {
-        for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = Object.assign({}, it); ok2 = true; break; }
-      }
-      toast(ok2 ? '+' + itemLabel(it) : 'inventory full');
-      refreshInvUI(); refreshHotbar(); refreshToolHUD(); markSave();
-    });
-    grid.appendChild(d);
+// creative: hand over any item, free — the old catalog's "take", now a row
+// on the crafting screen so both modes share one screen
+function giveItem(it, n){
+  if (it.kind === 'mat') return CORE.addMat(game.slots, it.mat, n);
+  if (CORE.STACKABLE_KINDS.includes(it.kind)) return addStackItem(it.kind, n);
+  let ok = false;
+  for (let k = 0; k < n; k++){
+    let placed = false;
+    for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = Object.assign({}, it); placed = true; ok = true; break; }
+    if (!placed) break;
   }
+  return ok;
 }
 function refreshInvUI(){
   document.querySelectorAll('#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot').forEach(paintSlot);
@@ -14345,10 +14390,28 @@ function refreshCrafterUI(){
     list.appendChild(row);
   });
   const ratio = powerSys.crafterMap ? (powerSys.crafterMap.get(n.id) || 0) : 0;
+  const lim = n.limit == null ? '' : ' · ' + (n.made || 0) + ' of ' + n.limit + (n.made >= n.limit ? ' — done' : '');
   $('crafterstatus').textContent =
-    n.recipe == null ? 'pick a recipe — it crafts every 4s while powered and fed'
+    (n.recipe == null ? 'pick a recipe — it crafts every 4s while powered and fed'
     : ratio > 0 ? 'crafting at ' + Math.round(ratio * 100) + '% power — ' + Math.round((n.craftT || 0) / 4 * 100) + '% of this cycle'
-    : 'recipe set — no power: wire this machine into a live circuit';
+    : 'recipe set — no power: wire this machine into a live circuit') + lim;
+  // batch: how many to make before it rests (∞ = keep going)
+  const host = $('crafteramts');
+  host.innerHTML = '';
+  const lab = document.createElement('span'); lab.className = 'sub'; lab.textContent = 'batch'; host.appendChild(lab);
+  for (const [label, val] of [['∞', null], ['1000', 1000], ['100', 100], ['50', 50], ['5', 5], ['1', 1]]){
+    const b = document.createElement('div');
+    b.className = 'amtbtn' + ((n.limit == null ? null : n.limit) === val ? ' on' : '');
+    b.textContent = label;
+    b.addEventListener('mousedown', ev => { ev.stopPropagation(); n.limit = val; n.made = 0; markSave(); refreshCrafterUI(); AudioSys.sfx('click'); });
+    host.appendChild(b);
+  }
+  const num = document.createElement('input');
+  num.type = 'number'; num.min = 1; num.max = 100000; num.value = n.limit == null ? '' : n.limit; num.placeholder = 'any';
+  num.style.cssText = 'width:70px; background:var(--ui-bg2); border:2px solid var(--ui-border); color:#e8e4f0; padding:3px; font:inherit; font-size:12px;';
+  ['keydown', 'keyup', 'mousedown'].forEach(t => num.addEventListener(t, ev => ev.stopPropagation()));
+  num.addEventListener('change', () => { n.limit = num.value === '' ? null : Math.max(1, Math.min(100000, +num.value | 0)); n.made = 0; markSave(); refreshCrafterUI(); });
+  host.appendChild(num);
 }
 function openStove(st){
   game.activeStove = st;
@@ -14613,7 +14676,7 @@ function refreshToolHUD(){
     html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
     html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
     if (game.snapOn){
-      html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>';
+      html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span> · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     } else {
       html += '<div class="t2">snap: off · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     }
@@ -14751,7 +14814,8 @@ function refreshToolHUD(){
       const nPst = (wrenchSys.paste.clip.items || []).length + (wrenchSys.paste.clip.props || []).length;
       html += '<div class="t2 on">pasting ' + nPst + ' things — rotated ' + wrenchSys.paste.yaw * 90 + '°</div>';
       html += '<div class="t2">left click stamps · scroll rotates · right click cancels</div>';
-      html += '<div class="t2">F grid ' + (game.snapOn ? '<span class="on">on · ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span>' : 'off') + '</div>';
+      html += '<div class="t2">F grid ' + (game.snapOn ? '<span class="on">on · ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span>' : 'off') +
+              ' · dist ' + game.tool.dist.toFixed(1) + 'm (V/B, to ' + TOOL_REACH_MAX + 'm)</div>';
     } else if (game.tool.mode === 'paint'){
       html += '<div class="t2">left click paints <b>' + CORE.MAT_NAME[wrenchSys.palette[wrenchSys.palIdx]] + '</b> (scroll to change)</div>';
       html += '<div class="t2">R back to edit mode</div>';
@@ -14941,8 +15005,59 @@ function hide(id){ $(id).classList.add('hidden'); }
 function openInventory(){
   game.ui = 'inv'; buildInvUI(); show('invscreen'); document.exitPointerLock();
 }
+// the amount to craft: 'max' or a number; shared by the buttons, the
+// slider and the type-in box
+const CRAFT_AMTS = [['MAX', 'max'], ['1000', 1000], ['100', 100], ['50', 50], ['5', 5], ['1', 1]];
+function craftAmount(r, creative, slots){
+  const a = game.craftAmt == null ? 1 : game.craftAmt;
+  if (a !== 'max') return Math.max(1, Math.min(100000, a | 0));
+  if (!creative) return Math.max(0, CORE.craftableCount(slots, r));
+  return CORE.STACKABLE_KINDS.includes(r.kind) || r.kind === 'matout' ? 1000 : 40;
+}
+function wireCraftBar(){
+  if (game._craftBarWired) return;
+  game._craftBarWired = true;
+  const sl = $('craftslider'), num = $('craftnum'), q = $('craftsearch');
+  const stopKeys = el => {
+    el.addEventListener('keydown', ev => ev.stopPropagation());
+    el.addEventListener('keyup', ev => ev.stopPropagation());
+    el.addEventListener('mousedown', ev => ev.stopPropagation());
+  };
+  [sl, num, q].forEach(stopKeys);
+  const setAmt = (n, from) => {
+    n = Math.max(1, Math.min(100000, n | 0));
+    game.craftAmt = n;
+    if (from !== 'slider') sl.value = n;
+    if (from !== 'num') num.value = n;
+    paintAmtButtons();
+  };
+  sl.addEventListener('input', () => setAmt(+sl.value, 'slider'));
+  num.addEventListener('input', () => { if (num.value !== '') setAmt(+num.value, 'num'); });
+  num.addEventListener('change', () => setAmt(+num.value || 1, 'num'));
+  q.addEventListener('input', () => buildCraftUI());
+  const host = $('craftamts');
+  host.innerHTML = '';
+  for (const [label, val] of CRAFT_AMTS){
+    const b = document.createElement('div');
+    b.className = 'amtbtn'; b.textContent = label; b.dataset.val = String(val);
+    b.addEventListener('mousedown', ev => {
+      ev.stopPropagation();
+      game.craftAmt = val;
+      if (val !== 'max'){ sl.value = val; num.value = val; }
+      paintAmtButtons();
+      AudioSys.sfx('click');
+    });
+    host.appendChild(b);
+  }
+  paintAmtButtons();
+}
+function paintAmtButtons(){
+  const a = game.craftAmt == null ? 1 : game.craftAmt;
+  document.querySelectorAll('#craftamts .amtbtn').forEach(b =>
+    b.classList.toggle('on', b.dataset.val === String(a)));
+}
 function openCraft(){
-  game.ui = 'craft'; buildCraftUI();
+  game.ui = 'craft'; wireCraftBar(); buildCraftUI();
   const main = $('craftinvmain'), hot = $('craftinvhot');
   main.innerHTML = ''; hot.innerHTML = '';
   for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
@@ -14958,14 +15073,17 @@ function buildCraftUI(){
   buildCatTabs($('crafttabs'), game.craftTab, i => { game.craftTab = i; buildCraftUI(); });
   const head = document.createElement('div');
   head.className = 'sub';
-  head.textContent = creative ? 'creative — every recipe unlocked, no materials needed'
+  const q = ($('craftsearch') && $('craftsearch').value || '').trim().toLowerCase();
+  head.textContent = creative ? 'creative — everything in the game, free, any amount'
     : atTable ? 'crafting table in range — full catalog' : 'basic recipes — stand near a crafting table for tools';
   list.appendChild(head);
   let shown = 0;
+  const matches = (label) => !q || label.toLowerCase().includes(q);
+  const madeKinds = new Set(), madeMats = new Set();
   for (const r of CORE.RECIPES){
+    if (r.kind === 'matout') madeMats.add(r.matOut); else madeKinds.add(r.kind);
     if (r.station && !atTable) continue;
-    if (recipeCat(r) !== game.craftTab) continue;
-    shown++;
+    if (!q && recipeCat(r) !== game.craftTab) continue;
     const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
                : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
                : r.kind === 'gun' ? CORE.makeGun()
@@ -14974,6 +15092,8 @@ function buildCraftUI(){
                : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                  ? { kind: r.kind, tier: r.tier }
                : { kind: r.kind, count: r.yields };
+    if (!matches(itemLabel(item))) continue;
+    shown++;
     const row = document.createElement('div'); row.className = 'craftrow';
     const img = document.createElement('img'); img.src = itemIconURL(item); row.appendChild(img);
     const nm = document.createElement('div'); nm.className = 'cname';
@@ -14987,13 +15107,44 @@ function buildCraftUI(){
     row.appendChild(cost);
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
-      const res = CORE.craft(game.slots, r, creative);
-      if (res === 'ok'){ toast('crafted ' + itemLabel(item)); AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave(); }
+      const n = craftAmount(r, creative, game.slots);
+      if (n <= 0){ toast('missing materials'); AudioSys.sfx('deny'); return; }
+      const { made, res } = CORE.craftN(game.slots, r, n, creative);
+      if (res === 'ok'){
+        toast('crafted ' + (made > 1 ? made + ' × ' : '') + itemLabel(item) + (made < n ? ' (inventory full)' : ''));
+        AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave();
+      }
       else if (res === 'poor') toast('missing materials');
       else toast('inventory full');
     });
     row.appendChild(btn);
     list.appendChild(row);
+  }
+  // creative extras: everything the old catalog offered that no recipe
+  // makes (raw materials, ore, food, coin, the arsenal by class...)
+  if (creative){
+    for (const entry of catalogEntries()){
+      if (entry.kind === 'mat' ? madeMats.has(entry.mat) : madeKinds.has(entry.kind)) continue;
+      if (!q && itemCat(entry) !== game.craftTab) continue;
+      const label = itemLabel(entry);
+      if (!matches(label)) continue;
+      shown++;
+      const row = document.createElement('div'); row.className = 'craftrow';
+      const img = document.createElement('img'); img.src = itemIconURL(entry); row.appendChild(img);
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = label; row.appendChild(nm);
+      const cost = document.createElement('div'); cost.className = 'ccost ok'; cost.textContent = 'free'; row.appendChild(cost);
+      const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'TAKE';
+      btn.addEventListener('click', () => {
+        const a = game.craftAmt == null ? 1 : game.craftAmt;
+        const n = a === 'max' ? (entry.kind === 'mat' || CORE.STACKABLE_KINDS.includes(entry.kind) ? 1000 : 40) : Math.max(1, a | 0);
+        const ok = giveItem(entry, n);
+        toast(ok ? '+' + (n > 1 ? n + ' × ' : '') + label : 'inventory full');
+        AudioSys.sfx(ok ? 'craft' : 'deny');
+        buildCraftUI(); refreshHotbar(); refreshToolHUD(); markSave();
+      });
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
   }
   if (!shown){
     const none = document.createElement('div');
@@ -15431,7 +15582,7 @@ function startWorld(id){
   game.undoStack = [];
   game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
   game.tool.size = Math.min(CORE.SIZE_MAX, Math.max(CORE.SIZE_MIN, game.tool.size));
-  game.tool.dist = Math.min(PLAYER.reach, Math.max(1.0, game.tool.dist));
+  game.tool.dist = Math.min(TOOL_REACH_MAX, Math.max(1.0, game.tool.dist));
   game.hotSel = data.hotSel | 0;
   game.snapOn = !!data.snapOn;
   game.gridIdx = Math.min(9, Math.max(0, data.gridIdx | 0));
@@ -16805,7 +16956,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>

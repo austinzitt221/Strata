@@ -2,6 +2,66 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 14 — MENUS & MAKING THINGS (2026-09-01)
+
+- **One inventory for both modes.** The creative catalog is gone — panel,
+  grid, CSS, builder. Creative crafts everything free from the normal
+  crafting screen, and everything the catalog offered that no recipe
+  makes (raw materials, ore, ingots, food, coin, the arsenal by class)
+  appears there as a free TAKE row on its own tab. One screen, one
+  taxonomy, nothing to keep in sync — which is why the car was missing
+  from creative in the first place.
+- **Craft any amount.** Six buttons — MAX / 1000 / 100 / 50 / 5 / 1 — a
+  vertical slider from 1 to 100,000, and a type-in box, all bound to one
+  amount. MAX in survival is exactly what the materials allow
+  (`craftableCount`); in creative it's 1000 for stackables and a full
+  inventory for one-offs. `craftN` stops cleanly at the first shortfall
+  or full inventory and the toast says how many you actually got.
+  Verified: 10 iron ingots + MAX -> exactly 40 rails and 0 ingots left.
+  The auto-crafter gets a batch limit (∞/1000/100/50/5/1 or typed) and
+  rests when it's done — "12 of 50" in its status.
+- **VEHICLES tab.** Car and rails moved out of Gadgets/Special into a
+  category that boats, the motorcycle, the plane and the rocket will fill.
+- **Reach.** The drill/dispenser shape, paste ghosts and blueprint ghosts
+  push out to 96m and back on V/B — speed scales with distance (6 m/s in
+  close, ~50 m/s at the limit), works with the grid on, and the HUD reads
+  the distance in every mode. A copied build can finally be lined up from
+  outside it.
+- **Search + sort.** A search box on the crafting screen filters every tab
+  at once (typing in it never triggers hotkeys). SORT on the inventory
+  compacts storage — materials by id, then stackables by kind, then the
+  one-offs — merging like stacks; the hotbar is left as you arranged it.
+  A VEHICLE panel appears in the inventory while driving, ready for Build
+  15's battery slot.
+
+## Build 13.4 — the flash loop and the grid-line hitch (2026-09-01)
+
+- **The flash between "new LOD" and "old LOD".** Any chunk landing in a
+  supertile flips it stale: a frontier tile gaining members as you fly
+  toward it, or your own drill edit re-meshing a chunk. The coverage mask
+  required `!t.stale` to count a tile as covering, so for the rebuild
+  window the whole 64-256m tile's coverage dropped and the heightfield
+  skin — no caves, no edits — popped back over it, then vanished when the
+  build landed. Flying = a loop of it; drilling = the pre-cut mountain
+  flashing before the hole. The old mesh never left the scene during that
+  window, so a standing mesh now counts as coverage, stale or not.
+  Measured while gliding near a city: truthful coverage held near the
+  player rose from 3,957 to 5,889 columns per sample (+49%); the lighting
+  flash was the same swap (skin vs LOD shade differently).
+
+- **The hitch on every grid line.** Walk from one cut cube into the
+  adjoining one and you felt a bump. Between two adjoining cuts the CSG
+  field's nearest "surface" is the zero-thickness membrane where the shared
+  face used to be (field = +MINE_EPS on that plane). The foot sphere's
+  contact there is rightly rejected as phantom — but the `continue` after
+  the rejection also skipped resolving the REAL floor beneath the sphere.
+  You sank a hair, crossed the plane, the floor was nearest again and
+  pushed you back up. Fix: when a contact is rejected as phantom, resolve
+  the floor on its own straight down (a 7-step bisection, foot sphere
+  only), and the extra ground probe does the same so `grounded` never
+  flickers on the line. Measured walking two adjoining 3m grid cubes:
+  vertical jitter 8.96cm -> 0.05cm, grounded flickers 2 -> 0.
+
 ## Build 13.3 — the line is gone, and the treeline stops popping (2026-08-31)
 
 - **THE SEAM LINE.** The hairline of sky along the LOD/real boundary was a

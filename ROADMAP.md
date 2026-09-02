@@ -276,7 +276,7 @@ honest. Nothing else ships until this does.
   a live perf overlay (F3) showing chunk queue depth, worker use, and
   frame breakdown so future regressions are visible.
 
-## Build 14 — MENUS & MAKING THINGS
+## Build 14 — MENUS & MAKING THINGS (DONE)
 Quality of life the whole game leans on.
 - **One inventory for both modes.** The creative catalog is deleted —
   creative simply crafts everything for free from the normal crafting
