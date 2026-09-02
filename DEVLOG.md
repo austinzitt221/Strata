@@ -2,6 +2,38 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 14 — MENUS & MAKING THINGS (2026-09-01)
+
+- **One inventory for both modes.** The creative catalog is gone — panel,
+  grid, CSS, builder. Creative crafts everything free from the normal
+  crafting screen, and everything the catalog offered that no recipe
+  makes (raw materials, ore, ingots, food, coin, the arsenal by class)
+  appears there as a free TAKE row on its own tab. One screen, one
+  taxonomy, nothing to keep in sync — which is why the car was missing
+  from creative in the first place.
+- **Craft any amount.** Six buttons — MAX / 1000 / 100 / 50 / 5 / 1 — a
+  vertical slider from 1 to 100,000, and a type-in box, all bound to one
+  amount. MAX in survival is exactly what the materials allow
+  (`craftableCount`); in creative it's 1000 for stackables and a full
+  inventory for one-offs. `craftN` stops cleanly at the first shortfall
+  or full inventory and the toast says how many you actually got.
+  Verified: 10 iron ingots + MAX -> exactly 40 rails and 0 ingots left.
+  The auto-crafter gets a batch limit (∞/1000/100/50/5/1 or typed) and
+  rests when it's done — "12 of 50" in its status.
+- **VEHICLES tab.** Car and rails moved out of Gadgets/Special into a
+  category that boats, the motorcycle, the plane and the rocket will fill.
+- **Reach.** The drill/dispenser shape, paste ghosts and blueprint ghosts
+  push out to 96m and back on V/B — speed scales with distance (6 m/s in
+  close, ~50 m/s at the limit), works with the grid on, and the HUD reads
+  the distance in every mode. A copied build can finally be lined up from
+  outside it.
+- **Search + sort.** A search box on the crafting screen filters every tab
+  at once (typing in it never triggers hotkeys). SORT on the inventory
+  compacts storage — materials by id, then stackables by kind, then the
+  one-offs — merging like stacks; the hotbar is left as you arranged it.
+  A VEHICLE panel appears in the inventory while driving, ready for Build
+  15's battery slot.
+
 ## Build 13.4 — the flash loop and the grid-line hitch (2026-09-01)
 
 - **The flash between "new LOD" and "old LOD".** Any chunk landing in a
