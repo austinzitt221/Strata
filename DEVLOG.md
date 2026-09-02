@@ -2,6 +2,60 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 18 — WINGS (2026-09-02)
+
+Leaving the ground.
+
+- **Sky islands.** One candidate per 640 m cell, a third of cells carry
+  one: a flattened dome of rock with a ragged rim (16–34 m across) and a
+  cone of stone hanging under it, floating between 58 and 90 m up — above
+  every hill, under the world's ceiling at 104. Grass on top, rock inside,
+  and **aether ore** (material 18, a pale sky-stone shot with violet
+  crystal) veined through the core. Aether mines like any ore, smelts to
+  aether ingots, and is what the hoverbike and the cannon are made of —
+  you cannot get it below. Worldgen-wise it is a solid SDF unioned into
+  `sdfFromH` before the early-outs, `heightRange` reports each island's
+  top so the chunks under one are never culled as "all air" (the fully
+  solid interior chunk is still skipped as it should be), and it all
+  lives inside CORE so the mesh workers see exactly what the main thread
+  sees.
+- **The cargo plane** (iron 20, ruby 4, wire 10, planks 12). Fat
+  fuselage, high wing, twin tail, one big three-blade prop, fixed gear,
+  two seats. W/S throttle, A/D steer on the ground and bank in the air,
+  SPACE nose up, C nose down. Below 15 m/s the wings carry nothing and it
+  sinks; above it the nose sets the climb, and it wants to fly level when
+  you let go. Touchdown is judged: harder than 9 m/s down, nose below
+  -16 degrees, or faster than 100 km/h and it explodes — a crater, a
+  fireball, you thrown clear at 22+ damage, and a wrecked kit. Flying into
+  the ground at speed or ditching in water does the same. The cockpit
+  view rides the airframe: the camera composes the plane's pitch and bank
+  with your mouse look, and your yaw turns with the plane. A flight panel
+  shows altitude over the ground, speed, climb rate, STALL, and an
+  artificial horizon that rolls and pitches.
+- **The hoverbike** (iron 14, ruby 4, wire 8, aether 4). Two metres over
+  anything — rock, a road, a lake, the sea — found by marching the field
+  down and taking the higher of the ground and the water. Drinks 1.2%/s
+  moving and a quarter of that hovering; dead, it drops onto whatever is
+  under it. A wall ahead at cushion height stops it.
+- **The launch cannon** (iron 12, aether 2, planks 4). Stand at it, look
+  UP where you want to go, right click: you leave at 32 m/s along your
+  look, and the landing after a cannon shot hurts a third of what a fall
+  would. The barrel follows your aim while you stand near it.
+- **The airfield.** An **airstrip kit** lays an 80 m levelled basalt
+  runway ahead of you, squared to the compass, the air above it cleared,
+  a centre line painted, and a windsock at the near end. A **hangar kit**
+  raises a 14 x 7 x 16 stonebrick hangar with a door facing you and a
+  basalt apron. The **windsock** (sticks and wool) drifts on a wind of
+  its own.
+
+Verified headlessly: the nearest island meshes in the browser (meadow top
+and hanging underside, solid interior skipped), its meadow is grass and
+its core holds aether; a runway laid by the kit, the plane takes off past
+stall, climbs to 51 m, lands clean at full health, then nosed in from 30
+m at 34 m/s explodes into a wrecked kit; the hoverbike holds 2.2 m over
+land and 2.0 over water; the cannon launches at 32 m/s with the soft
+landing armed; the hangar stamps 4 edits; all six recipes exist.
+
 ## Build 17.1 — notes from the water (2026-09-02)
 
 - **Batteries x10.** Cells hold 1000 / 3000 / 10000 and the charger
