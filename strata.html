@@ -581,7 +581,7 @@ const ORE_TYPES = [
   { mat: MAT.COAL,       yMin: -60,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
 ];
 const VEIN_CELL = 4;
-const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic'];
+const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands'];
 const REGION = 260;            // macro-region cell edge (m) -- biomes change FAST
 const LM_CELL = 520;           // landmark set-piece grid (decoupled from biomes)
 const CAVE_CELL = 160;         // cave-network graph cell edge (m)
@@ -674,6 +674,7 @@ function makeGen(seed){
     { sw: 7,  rg: 2,  add: -0.8 },  // swamp
     { sw: 20, rg: 32, add: 8.0 },   // glacier
     { sw: 18, rg: 24, add: 1.6 },   // volcanic
+    { sw: 6,  rg: 3,  add: -7.5 },  // islands: a shallow sea, land only where the detail lifts it
   ];
   function coreH(a, x, z, F){
     const P = ARCHP[a];
@@ -684,6 +685,15 @@ function makeGen(seed){
           // universal ~90m rolling octave: even the flattest eroded plain
           // keeps undulating -- the reference look is never billiard-flat
           + (fbm2(sRl, x * 0.011, z * 0.011, 2) - 0.5) * 7.5 * (0.5 + F.relief);
+    if (a === 8){
+      // island chain: whatever the backbone says, this is a shallow shelf
+      // eight metres down, and sandy islands rise where a broad ridged
+      // field peaks — reefs on the shallows between them
+      const shelf = seaLevel - 8 + (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 3;
+      const m = fbm2(sR, x * 0.006, z * 0.006, 3);
+      const isl = sstep(0.50, 0.72, m);
+      h = Math.max(h, shelf + isl * 22);
+    }
     if (P.step && h > seaLevel + 1){
       // mesa: the WHOLE hill quantizes into plateaus with soft risers, so
       // backbone relief becomes stacked tables instead of a tilted plain
@@ -716,7 +726,7 @@ function makeGen(seed){
     // screenful of world holds many different biomes instead of one
     const heat = fbm2(sCl, sx * 0.0016, sz * 0.0016, 2);
     let pool;
-    if (Fc.c < 0.34)            pool = heat > 0.60 ? [4, 0, 5, 1, 3] : [5, 0, 1, 4, 2];
+    if (Fc.c < 0.34)            pool = heat > 0.60 ? [4, 0, 5, 1, 3, 8, 8] : [5, 0, 1, 4, 2, 8];
     else if (Fc.relief > 1.30)  pool = heat < 0.33 ? [6, 2, 1, 6, 0]
                                      : heat > 0.65 ? [7, 2, 3, 1, 4] : [2, 1, 0, 7, 3];
     else                        pool = heat > 0.60 ? [4, 3, 0, 1, 7, 5]
@@ -823,6 +833,8 @@ function makeGen(seed){
         const c = 1 - Math.abs(2 * fbm2(sR, x * 0.021, z * 0.021, 2) - 1);
         return (fbm2(sH, x * 0.01, z * 0.01, 3) - 0.5) * 12 - sstep(0.88, 0.97, c) * 9;
       }
+      case 8:   // island chain: the shelf and the islands are shaped in coreH
+        return (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 3;
       default:  // 7 volcanic: rough basalt fields
         return (fbm2(sH, x * 0.018, z * 0.018, 3) - 0.5) * 10;
     }
@@ -1249,6 +1261,7 @@ function makeGen(seed){
       }
       if (a === 6) return MAT.SNOW;              // glacier: ice to the water line
       if (a === 4) return MAT.SAND;              // dunes
+      if (a === 8) return h < seaLevel + 2.6 ? MAT.SAND : MAT.GRASS;   // islands: wide beaches
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
       if (a === 3) return h < 6 ? MAT.SAND : MAT.ROCK;  // badlands
       if (h >= 33) return MAT.SNOW;              // snow-capped peaks
@@ -1348,9 +1361,16 @@ function makeGen(seed){
     const x = cx * DECOR_CELL + 0.4 + (hashInt(h0 ^ 5) / 4294967296) * (DECOR_CELL - 0.8);
     const z = cz * DECOR_CELL + 0.4 + (hashInt(h0 ^ 9) / 4294967296) * (DECOR_CELL - 0.8);
     const h = height(x, z);
+    const arch = archAt(x, z);
+    if (arch === 8 && h < seaLevel - 1.2 && h > seaLevel - 14){
+      // the reef: coral heads and kelp on the island shelf
+      const r0 = hashInt(h0 ^ 13) / 4294967296;
+      if (r0 > 0.7) return null;
+      const type = r0 > 0.42 ? 'kelp' : 'coral';
+      return { x, z, y: h, type, s: 0.8 + (hashInt(h0 ^ 21) / 4294967296) * 0.6, vc: hashInt(h0 ^ 33) % 4, dry: false, key: cx + ',' + cz };
+    }
     if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
     if (inCity(x, z)) return null;                      // no tufts in the streets
-    const arch = archAt(x, z);
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
                   Math.abs(height(x, z + 1.2) - height(x, z - 1.2));
@@ -1375,7 +1395,7 @@ function makeGen(seed){
     const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
     const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
     const a = archAt(x, z);
-    if (a !== 0 && a !== 1 && a !== 5) return null;  // trees: plains, hills, swamp
+    if (a !== 0 && a !== 1 && a !== 5 && a !== 8) return null;  // trees: plains, hills, swamp, islands
     const h = height(x, z);
     if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
@@ -1409,6 +1429,18 @@ function makeGen(seed){
     if (mx - mn > 4.5) return null;
     return { x: vx, z: vz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- shipwrecks: one candidate per WRECK_CELL on deep open water ----
+  function wreckAt(cx, cz){
+    const h0 = hashInt(sX ^ 0x5ea5 ^ hashInt((cx * 743862113) ^ hashInt(cz * 318349891)));
+    if ((h0 & 1) === 0) return null;
+    const wx = cx * WRECK_CELL + 60 + (h0 % (WRECK_CELL - 120));
+    const wz = cz * WRECK_CELL + 60 + (hashInt(h0 ^ 11) % (WRECK_CELL - 120));
+    const hc = height(wx, wz);
+    if (hc > seaLevel - 7 || !wetAt(wx, wz, hc)) return null;
+    for (const [dx, dz] of [[-12, 0], [12, 0], [0, -12], [0, 12]])
+      if (height(wx + dx, wz + dz) > seaLevel - 4) return null;
+    return { x: wx, z: wz, y: hc, seed: h0, key: cx + ',' + cz };
+  }
   // ---- raid forts: one hostile candidate per FORT_CELL, dry open ground,
   // kept away from village candidates so the neighbors stay out of the war
   function fortAt(cx, cz){
@@ -1419,7 +1451,7 @@ function makeGen(seed){
     const hc = height(fx, fz);
     if (hc < seaLevel + 2.5) return null;
     const a = archAt(fx, fz);
-    if (a === 6 || a === 7) return null;             // no ice or lava forts
+    if (a === 6 || a === 7 || a === 8) return null;  // no ice, lava or island forts
     let mn = hc, mx = hc;
     for (const [dx, dz] of [[-20, 0], [20, 0], [0, -20], [0, 20], [15, 15], [-15, -15]]){
       const hh = height(fx + dx, fz + dz);
@@ -1481,11 +1513,12 @@ function makeGen(seed){
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, cityAt, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
+const WRECK_CELL = 360;
 const CITY_CELL = 1800;
 const DECOR_CELL = 3;
 const FLAT_GEN = {
@@ -2291,12 +2324,18 @@ const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'b
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
-  'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
+  'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
 const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
-const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat' };
+const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish' };
+// what bites where: the fish of each region
+const FISH_NAME = { perch: 'perch', trout: 'trout', catfish: 'catfish', carp: 'carp', snapper: 'snapper', eel: 'ember eel', cod: 'cod' };
+function fishFor(arch, deep){
+  if (deep) return 'cod';
+  return [ 'perch', 'perch', 'trout', 'carp', 'carp', 'catfish', 'trout', 'eel', 'snapper' ][arch] || 'perch';
+}
 const SMELT_T = 2.0;   // seconds per item
 function fuelOps(slot){
   if (!slot) return 0;
@@ -2308,6 +2347,7 @@ function fuelOps(slot){
 function stackableWith(A, B){
   if (!A || !B || A.kind !== B.kind) return false;
   if (A.kind === 'mat') return A.mat === B.mat;
+  if (A.kind === 'fish') return A.fish === B.fish;
   return STACKABLE_KINDS.includes(A.kind);
 }
 
@@ -2545,6 +2585,13 @@ const RECIPES = [];
   // the electric motorcycle: half the metal, twice the nerve
   RECIPES.push({ kind: 'bike', station: true,
     costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 2 }, { item: 'wire', n: 4 }] });
+  // the rod, the diving helmet
+  RECIPES.push({ kind: 'rod', costs: [{ item: 'stick', n: 3 }, { item: 'wire', n: 2 }] });
+  RECIPES.push({ kind: 'divehelm', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }, { item: 'wire', n: 2 }] });
+  // boats: the paddle boat is planks and honesty; the motorboat drinks a battery
+  RECIPES.push({ kind: 'boat', station: true, costs: [{ mat: MAT.PLANKS, n: 12 }, { item: 'stick', n: 4 }] });
+  RECIPES.push({ kind: 'motorboat', station: true,
+    costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'wire', n: 4 }, { mat: MAT.PLANKS, n: 8 }] });
   // the repair bench: wrecked kits go on it with iron and come off whole
   RECIPES.push({ kind: 'repair', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }] });
   // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
@@ -2574,7 +2621,7 @@ function batteryCap(it){ return BATTERY_CAP[it.tier | 0] || 100; }
 function chargeField(it){
   if (!it) return null;
   if (it.kind === 'jetpack') return 'fuel';
-  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car' || it.kind === 'sportscar' || it.kind === 'bike') return 'charge';
+  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car' || it.kind === 'sportscar' || it.kind === 'bike' || it.kind === 'motorboat') return 'charge';
   return null;
 }
 // add n of a stackable item kind to slots (merge first, then a free slot)
@@ -2658,13 +2705,17 @@ function craft(slots, r, free){
                   : r.kind === 'disp' ? makeDispenser(r.tier)
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
-                  : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: 0 }
-                  : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
-                  : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 0 }
-                  : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
+                  : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
+                  : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
+                  : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
+                  : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
-                  : r.kind === 'car' ? { kind: 'car', charge: 20 }
-                  : r.kind === 'bike' ? { kind: 'bike', charge: 20 }
+                  : r.kind === 'car' ? { kind: 'car', charge: 100 }
+                  : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
+                  : r.kind === 'boat' ? { kind: 'boat' }
+                  : r.kind === 'rod' ? { kind: 'rod' }
+                  : r.kind === 'divehelm' ? { kind: 'divehelm', tier: 0 }
+                  : r.kind === 'motorboat' ? { kind: 'motorboat', charge: 100 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -2779,7 +2830,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, CITY_CELL,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, CITY_CELL, FISH_NAME, fishFor,
   HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN, addItemN, uncraftRecipeFor, uncraft,
   BATTERY_CAP, BATTERY_NAME, batteryCap, chargeField,
 };
@@ -3604,6 +3655,7 @@ class Terrain {
     const seaCy = sea != null ? Math.floor(sea / M) : null;
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     if (!game.waterMat) return;
+    if (waterSys.cells.has(CK(cx, cy, cz))) return;        // disturbed water draws from its cells
     const x0 = cx * M, z0 = cz * M;
     const pos = [], uv = [], dep = [];
     const quad = (xa, za, xb, zb, wy, d) => {
@@ -3785,11 +3837,274 @@ function propSDF(x, y, z){
 // water occupies air below sea level over lake columns (ground below sea)
 function inWater(x, y, z){
   const g = game.gen;
+  // water that has been disturbed lives in cells: read those first
+  const gx = Math.floor(x), gy = Math.round(y), gz = Math.floor(z);
+  const wa = waterSys.cells.get(waterSys.keyOf(gx, gy, gz));
+  if (wa){
+    const v = wa[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
+    if (v === W_SOLID || v === 0) return false;
+    return y < gy - 0.5 + v / 8;
+  }
   if (g.floodedAt && g.floodedAt(x, y, z)) return true;   // flooded galleries
   const sea = g.seaLevel;
   if (sea == null || y >= sea) return false;
   return g.wetAt ? g.wetAt(x, z) : g.height(x, z) < sea;
 }
+// ---------- water that flows ----------
+// The sea, the lakes and the flooded galleries are what worldgen says they
+// are until something disturbs them. Then the chunk becomes a grid of
+// metre cells (x/z columns, y cells centred on integers so the sea's
+// surface at -1.5 is a cell boundary) and Minecraft's rules run on it:
+// a source (8) is infinite; water above a cell fills it (7); a supported
+// cell spreads sideways one level lower per metre; two sources beside a
+// supported cell make a third; unsupported flow drains away. Cells the
+// flow reaches in untouched chunks materialize on demand. 8 Hz.
+const W_SOLID = 255, W_SRC = 8;
+const waterSys = {
+  cells: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
+  accT: 0, maintT: 0, MAX_ACTIVE: 48,
+  idx(i, j, k){ return (j * 8 + k) * 8 + i; },
+  keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
+  reset(){ this.cells = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
+    for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
+    this.meshes = new Map(); },
+  // what an untouched cell holds: rock, still water, or air
+  staticLevel(gx, gy, gz){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (g.sdf(x, gy, z) < 0) return W_SOLID;
+    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
+    return 0;
+  },
+  // the same with every edit applied: carved rock is air (it fills), placed
+  // rock is rock, original water is a source
+  editedLevel(gx, gy, gz, le){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
+    if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
+    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
+    return 0;
+  },
+  statArr(key){
+    let a = this.stat.get(key);
+    if (a) return a;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    a = new Uint8Array(512);
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++)
+      a[this.idx(i, j, k)] = this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+    this.stat.set(key, a);
+    return a;
+  },
+  hasWater(key){
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const g = game.gen;
+    if (cy * 8 - 0.5 > (g.seaLevel != null ? g.seaLevel : -1e9) + 0.5 && cy * 8 > -6) return false;
+    const a = this.cells.get(key) || this.statArr(key);
+    for (let q = 0; q < 512; q++) if (a[q] >= 1 && a[q] <= 8) return true;
+    return false;
+  },
+  // a chunk the flow has reached: its cells, with the edits applied
+  materialize(key, keep){
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const le = nearEdits([cx * 8 - 1, cy * 8 - 1.5, cz * 8 - 1, cx * 8 + 9, cy * 8 + 8.5, cz * 8 + 9]);
+    const old = keep ? this.cells.get(key) : null;
+    const a = new Uint8Array(512);
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+      const q = this.idx(i, j, k);
+      const v = le.length ? this.editedLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k, le) : this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+      // an edit under running water: rock is rock, but water already there stays
+      a[q] = (old && v !== W_SOLID && old[q] !== W_SOLID && old[q] !== 0) ? old[q] : v;
+    }
+    this.cells.set(key, a);
+    this.active.add(key); this.dirtyMesh.add(key);
+    const ch = game.terrain.chunks.get(key);
+    if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
+    return a;
+  },
+  lv(gx, gy, gz){
+    const cx = Math.floor(gx / 8), cy = Math.floor(gy / 8), cz = Math.floor(gz / 8);
+    const key = CK(cx, cy, cz);
+    const a = this.cells.get(key) || this.statArr(key);
+    return a[this.idx(gx - cx * 8, gy - cy * 8, gz - cz * 8)];
+  },
+  isW(v){ return v >= 1 && v <= 8; },
+  // an edit landed: any chunk it touches that holds (or borders) water becomes cells
+  onEdit(e){
+    const g = game.gen;
+    if (!g || g.seaLevel == null || !game.running) return;
+    const B = CORE.editAABB(e);
+    if (B[1] > g.seaLevel + 1 && B[1] > -6) return;           // dry land, above every water table
+    const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
+    const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
+    const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
+    if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return;   // a city slab: not a water event
+    const keys = [];
+    let wet = false;
+    for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
+      const key = CK(cx, cy, cz);
+      keys.push(key);
+      if (this.cells.has(key) || this.hasWater(key)) wet = true;
+    }
+    if (!wet) return;
+    for (const key of keys) this.materialize(key, true);
+  },
+  tick(dt){
+    if (!game.running || !game.gen || game.gen.seaLevel == null) return;
+    this.accT += dt;
+    if (this.accT >= 0.12){
+      this.accT = 0;
+      if (this.active.size) this.step();
+    }
+    this.maintT += dt;
+    if (this.maintT > 0.4 || this.dirtyMesh.size){ this.maintT = 0; this.maintain(); }
+  },
+  step(){
+    const writes = [];
+    const next = new Set();
+    let count = 0;
+    for (const key of this.active){
+      if (count++ >= this.MAX_ACTIVE){ next.add(key); continue; }
+      const a = this.cells.get(key);
+      if (!a) continue;
+      const [cx, cy, cz] = key.split(',').map(Number);
+      for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+        const q = this.idx(i, j, k), v = a[q];
+        if (v === W_SOLID || v === W_SRC) continue;
+        const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
+        if (gy <= CORE.BEDROCK_Y + 1) continue;
+        const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
+        let nv = this.isW(above) ? 7 : 0, srcN = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+          const nn = this.lv(gx + dx, gy, gz + dz);
+          if (!this.isW(nn)) continue;
+          if (nn === W_SRC) srcN++;
+          // a neighbour spreads sideways when it is a source or stands on
+          // something (falling water only falls)
+          const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
+          if (nb === W_SOLID || nb === W_SRC) nv = Math.max(nv, nn - 1);
+        }
+        // sources are born three ways on a supported cell: Minecraft's two
+        // sources beside it; a full cell with water above it (a column fed
+        // from a lake is the lake); or a full cell beside a source (the
+        // lake's level creeps along every floor it can reach — it is infinite)
+        const supported = below === W_SOLID || below === W_SRC;
+        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (this.isW(above) || srcN >= 1)))) nv = W_SRC;
+        if (nv !== v) writes.push(key, q, nv, gx, gy, gz);
+      }
+    }
+    for (let w = 0; w < writes.length; w += 6){
+      const key = writes[w], q = writes[w + 1], nv = writes[w + 2];
+      this.cells.get(key)[q] = nv;
+      next.add(key); this.dirtyMesh.add(key);
+      // a change on a chunk face wakes the neighbour (and grows it cells if water is arriving)
+      const gx = writes[w + 3], gy = writes[w + 4], gz = writes[w + 5];
+      const i = gx & 7, j = gy & 7, k = gz & 7;
+      const nbs = [];
+      if (i === 0) nbs.push([gx - 1, gy, gz]); if (i === 7) nbs.push([gx + 1, gy, gz]);
+      if (k === 0) nbs.push([gx, gy, gz - 1]); if (k === 7) nbs.push([gx, gy, gz + 1]);
+      if (j === 0) nbs.push([gx, gy - 1, gz]); if (j === 7) nbs.push([gx, gy + 1, gz]);
+      // water always wakes the cell below and beside it, whatever chunk they're in
+      nbs.push([gx, gy - 1, gz]);
+      for (const [nx, ny, nz] of nbs){
+        const nk = this.keyOf(nx, ny, nz);
+        if (nk === key) continue;
+        if (!this.cells.has(nk)){ if (nv > 0 && this.lv(nx, ny, nz) !== W_SOLID) this.materialize(nk); else continue; }
+        next.add(nk);
+      }
+    }
+    this.active = next;
+  },
+  // meshes for the cells near the player; far ones are dropped (the cells stay)
+  maintain(){
+    if (!game.waterMat) return;
+    const R = ((game.opts.rd || 4) + 2) * 8;
+    for (const [key, m] of this.meshes){
+      const [cx, cy, cz] = key.split(',').map(Number);
+      if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R || !this.cells.has(key)){
+        game.scene.remove(m); m.geometry.dispose(); this.meshes.delete(key);
+      }
+    }
+    for (const key of this.cells.keys()){
+      const [cx, cy, cz] = key.split(',').map(Number);
+      if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R) continue;
+      if (!this.meshes.has(key) || this.dirtyMesh.has(key)) this.buildMesh(key);
+    }
+    this.dirtyMesh.clear();
+  },
+  buildMesh(key){
+    const old = this.meshes.get(key);
+    if (old){ game.scene.remove(old); old.geometry.dispose(); this.meshes.delete(key); }
+    const a = this.cells.get(key);
+    if (!a) return;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const pos = [], uv = [], dep = [];
+    const quadH = (xa, za, xb, zb, y, d) => {
+      pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
+      uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4, xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+      dep.push(d, d, d, d, d, d);
+    };
+    const quadV = (xa, za, xb, zb, y0, y1) => {
+      pos.push(xa, y0, za, xb, y0, zb, xb, y1, zb, xa, y0, za, xb, y1, zb, xa, y1, za);
+      uv.push(xa / 4, y0 / 4, xb / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y1 / 4);
+      dep.push(1, 1, 1, 1, 1, 1);
+    };
+    const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isW(v) ? gy - 0.5 + v / 8 : null; };
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+      const v = a[this.idx(i, j, k)];
+      if (!this.isW(v)) continue;
+      const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
+      const bottom = gy - 0.5, top = bottom + v / 8;
+      if (!this.isW(this.lv(gx, gy + 1, gz))){
+        let d = 0.5;
+        for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
+        quadH(gx, gz, gx + 1, gz + 1, top, d);
+      }
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        const nn = this.lv(gx + dx, gy, gz + dz);
+        if (nn === W_SOLID) continue;
+        const nt = this.isW(nn) ? gy - 0.5 + nn / 8 : bottom;
+        if (nt >= top - 0.01) continue;
+        const xa = dx === 1 ? gx + 1 : gx, xb = dx === -1 ? gx : dx === 1 ? gx + 1 : gx + 1;
+        const za = dz === 1 ? gz + 1 : gz, zb = dz === -1 ? gz : dz === 1 ? gz + 1 : gz + 1;
+        if (dx !== 0) quadV(xa, gz, xa, gz + 1, nt, top);
+        else quadV(gx, za, gx + 1, za, nt, top);
+      }
+      if (this.lv(gx, gy - 1, gz) === 0) quadH(gx, gz, gx + 1, gz + 1, bottom, 0.5);
+    }
+    if (!pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('aDep', new THREE.Float32BufferAttribute(dep, 1));
+    const m = new THREE.Mesh(geo, game.waterMat);
+    m.renderOrder = 3; m.userData.noShadow = true; m.frustumCulled = false;
+    game.scene.add(m);
+    this.meshes.set(key, m);
+  },
+  // save: run-length pairs per chunk
+  serialize(){
+    const out = [];
+    for (const [key, a] of this.cells){
+      const r = [];
+      let v = a[0], c = 0;
+      for (let q = 0; q < 512; q++){ if (a[q] === v) c++; else { r.push(v, c); v = a[q]; c = 1; } }
+      r.push(v, c);
+      out.push([key, r]);
+    }
+    return out;
+  },
+  load(rows){
+    this.reset();
+    for (const [key, r] of rows || []){
+      const a = new Uint8Array(512);
+      let q = 0;
+      for (let t = 0; t + 1 < r.length; t += 2){ for (let c = 0; c < r[t + 1] && q < 512; c++) a[q++] = r[t]; }
+      this.cells.set(key, a);
+      this.active.add(key); this.dirtyMesh.add(key);
+    }
+  },
+};
 function sdfWorld(x, y, z, edits){
   let d = CORE.evalSDF(x, y, z, edits, game.gen);
   if (game.solidProps.length) d = Math.min(d, propSDF(x, y, z));
@@ -4323,6 +4638,16 @@ const playerBody = {
         this.upper.add(noz); this.armorMeshes.push(noz);
       }
     }
+    if (A.head && A.head.kind === 'divehelm'){
+      // the diving helmet: a glass globe with a brass collar
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.37, 12, 10),
+        new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.45 }));
+      dome.position.y = 0.22;
+      const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.1, 12),
+        new THREE.MeshBasicMaterial({ color: 0xd9b25a }));
+      collar.position.y = -0.1;
+      this.head.add(dome, collar); this.armorMeshes.push(dome, collar);
+    }
   },
   update(dt){
     if (!this.root) return;
@@ -4330,7 +4655,7 @@ const playerBody = {
     this.root.visible = show;
     if (!show) return;
     const A = game.armor || {};
-    const sig = (A.head ? A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
+    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
     if (game.driving){
       const e2 = game.driving;
@@ -5057,7 +5382,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7396,6 +7721,9 @@ const decorSys = {
     { id: 'flower2', w: 0.5,  h: 0.7 },
     { id: 'flower3', w: 0.5,  h: 0.7 },
     { id: 'shrub',   w: 1.5,  h: 1.15 },
+    { id: 'coral0',  w: 1.0,  h: 0.9 },
+    { id: 'coral1',  w: 1.0,  h: 0.9 },
+    { id: 'kelp',    w: 0.7,  h: 2.8 },
   ],
   texFor(id){
     return PixTex.make('decor_' + id, (c, w, h, rng) => {
@@ -7409,6 +7737,24 @@ const decorSys = {
       };
       if (id === 'tuft') blades('#3f8c2f', '#57a63f');
       else if (id === 'tuftdry') blades('#a89552', '#c2ad66');
+      else if (id === 'kelp'){
+        // ribbons of kelp reaching up
+        for (let i = 0; i < 3; i++){
+          const x = 3 + i * 4 + ((rng() * 2) | 0);
+          c.fillStyle = ['#2f7a4d', '#3f9a5d', '#25603d'][i];
+          for (let y = 16; y > 1; y--) c.fillRect(x + (((y >> 2) + i) & 1), y, 2, 1);
+        }
+      } else if (id.startsWith('coral')){
+        // a coral head: branching arms in pink or orange
+        const cols = id === 'coral0' ? ['#e07aa0', '#f09ab8', '#b8507a'] : ['#f09040', '#f8b060', '#c06a20'];
+        c.fillStyle = cols[2]; c.fillRect(6, 11, 4, 5);
+        for (let i = 0; i < 6; i++){
+          const x = 2 + ((rng() * 12) | 0), top = 3 + ((rng() * 6) | 0);
+          c.fillStyle = cols[i & 1];
+          for (let y = 11; y > top; y--) c.fillRect(x + ((y & 2) ? 1 : 0), y, 2, 1);
+          c.fillRect(x - 1, top, 4, 2);
+        }
+      }
       else if (id.startsWith('flower')){
         blades('#3f8c2f', '#57a63f');
         const petals = ['#e04848', '#f0d040', '#b060e0', '#f0f0f0'][+id.slice(6)];
@@ -7465,11 +7811,13 @@ const decorSys = {
   variantOf(d){
     if (d.type === 'flower') return 'flower' + (d.vc & 3);
     if (d.type === 'shrub') return 'shrub';
+    if (d.type === 'coral') return 'coral' + (d.vc & 1);
+    if (d.type === 'kelp') return 'kelp';
     return d.dry ? 'tuftdry' : 'tuft';
   },
   // one plain (non-instanced) plant, for the placement preview
   model(type){
-    const id = type === 'flower' ? 'flower0' : type === 'shrub' ? 'shrub' : 'tuft';
+    const id = type === 'flower' ? 'flower0' : type === 'shrub' ? 'shrub' : type === 'coral' ? 'coral0' : type === 'kelp' ? 'kelp' : 'tuft';
     const v = this.VARIANTS.find(v => v.id === id);
     const m = new THREE.Mesh(this.crossGeo(v.w, v.h),
       new THREE.MeshBasicMaterial({ map: this.texFor(v.id), alphaTest: 0.5, side: THREE.DoubleSide }));
@@ -8153,7 +8501,34 @@ const VEH = {
                seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
   bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.5, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
                seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
+  // water: floats on the surface (draft below), crawls when beached
+  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22,
+               seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
+  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.9, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
+               seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
 };
+// the water surface over (x,z) near height y — cells first, then the world's still water
+function waterTopAt(x, z, y){
+  const gx = Math.floor(x), gz = Math.floor(z), g = game.gen;
+  const gy0 = Math.round(y);
+  for (let gy = gy0 + 2; gy >= gy0 - 6; gy--){
+    const key = waterSys.keyOf(gx, gy, gz);
+    const a = waterSys.cells.get(key);
+    if (!a){
+      // untouched water: the sea and the lakes sit at seaLevel
+      if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
+      if (g.floodedAt && g.floodedAt(x, gy, z)){ let t = gy; while (g.floodedAt(x, t + 1, z)) t++; return t + 0.5; }
+      continue;
+    }
+    const v = a[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
+    if (!waterSys.isW(v)) continue;
+    let t = gy;
+    while (waterSys.isW(waterSys.lv(gx, t + 1, gz))) t++;
+    const tv = waterSys.lv(gx, t, gz);
+    return t - 0.5 + tv / 8;
+  }
+  return null;
+}
 function isVehicle(e){ return !!(e && VEH[e.type]); }
 // ---------- entities ----------
 const ENT_DEF = {
@@ -8165,12 +8540,15 @@ const ENT_DEF = {
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
+  boat:     { hp: 120, speed: 0, r: 1.0, h: 1.0, cap: 0 },
+  motorboat:{ hp: 180, speed: 0, r: 1.1, h: 1.2, cap: 0 },
   drop:     { hp: 1e9, speed: 0, r: 0.01, h: 0.01, cap: 0 },   // a thing on the ground; untargetable
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
   tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
   architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
+  leviathan: { hp: 700, speed: 9.5, r: 2.0, h: 3.0, cap: 0, boss: 'THE LEVIATHAN' },
 };
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
@@ -8286,15 +8664,17 @@ function entMesh(type, ent){
     g.add(torso, core, hips, legL, legR, head, eye, hornL, hornR, armL, armR, fistL, fistR);
     return g;
   }
-  if (type === 'burrower'){
+  if (type === 'burrower' || type === 'leviathan'){
     // a chitin worm: armored head with a glowing maw, body segments trail
-    // behind along its real path (positioned each frame from ent.trail)
-    const chitin = new THREE.MeshBasicMaterial({ color: 0x4a4058 });
-    const chitin2 = new THREE.MeshBasicMaterial({ color: 0x635875 });
+    // behind along its real path (positioned each frame from ent.trail).
+    // The leviathan is the same beast in deep-sea blues, longer, pale-fanged
+    const lev = type === 'leviathan';
+    const chitin = new THREE.MeshBasicMaterial({ color: lev ? 0x1f5f7a : 0x4a4058 });
+    const chitin2 = new THREE.MeshBasicMaterial({ color: lev ? 0x2f8aa8 : 0x635875 });
     const head = new THREE.Group();
     const skull = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 2.2), chitin);
     const maw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 0.5),
-      new THREE.MeshBasicMaterial({ color: 0xff7a30 }));
+      new THREE.MeshBasicMaterial({ color: lev ? 0xdff6ff : 0xff7a30 }));
     maw.position.z = -1.05;
     const jawT = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
     jawT.position.set(0, 0.85, -0.9);
@@ -8304,8 +8684,8 @@ function entMesh(type, ent){
     g.add(head);
     g.userData.head = head;
     g.userData.segs = [];
-    for (let i = 0; i < 7; i++){
-      const sc = 1.5 - i * 0.14;
+    for (let i = 0; i < (lev ? 10 : 7); i++){
+      const sc = (lev ? 1.7 : 1.5) - i * (lev ? 0.11 : 0.14);
       const seg = new THREE.Mesh(new THREE.BoxGeometry(sc, sc, 1.4), i % 2 ? chitin : chitin2);
       g.add(seg);
       g.userData.segs.push(seg);
@@ -8513,6 +8893,63 @@ function entMesh(type, ent){
     gauges.rotation.x = -0.5;
     g.add(gauges);
     g.userData.gauge = { cv: gcv, tex: gtex };
+    return g;
+  }
+  if (type === 'boat' || type === 'motorboat'){
+    const motor = type === 'motorboat';
+    const hullT = PixTex.make(motor ? 'hullwhite' : 'hullwood', (c, w, h, rng) => {
+      if (motor){ pxSpeckle(c, rng, '#eef1f4', '#dfe4ea', '#ffffff', 16); c.fillStyle = '#2f6fb8'; c.fillRect(0, 9, w, 2); }
+      else { pxSpeckle(c, rng, '#a8783f', '#8a6237', '#c0904f', 18); c.fillStyle = '#6e4d2a'; c.fillRect(0, 4, w, 1); c.fillRect(0, 11, w, 1); }
+    });
+    const hull = new THREE.MeshBasicMaterial({ map: hullT });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const L = motor ? 4.2 : 3.2, Wd = motor ? 1.8 : 1.4, H = motor ? 0.62 : 0.5;
+    const bottom = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.3, 0.14, L - 0.6), hull);
+    bottom.position.y = 0.08;
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.14, H, L - 0.4), hull);
+    sideL.position.set(-Wd / 2 + 0.07, H / 2 + 0.05, 0);
+    const sideR = sideL.clone(); sideR.position.x = Wd / 2 - 0.07;
+    const stern = new THREE.Mesh(new THREE.BoxGeometry(Wd, H, 0.14), hull);
+    stern.position.set(0, H / 2 + 0.05, L / 2 - 0.07);
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(Wd * 0.55, H, 0.7), hull);
+    bow.position.set(0, H / 2 + 0.05, -L / 2 - 0.1);
+    bow.rotation.y = 0;
+    const bowL = new THREE.Mesh(new THREE.BoxGeometry(0.14, H, 0.9), hull);
+    bowL.position.set(-Wd / 2 + 0.25, H / 2 + 0.05, -L / 2 + 0.05); bowL.rotation.y = 0.55;
+    const bowR = bowL.clone(); bowR.position.x = Wd / 2 - 0.25; bowR.rotation.y = -0.55;
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.4, 0.1, 0.5), dark);
+    seat.position.set(0, 0.42, 0.3);
+    g.add(bottom, sideL, sideR, stern, bow, bowL, bowR, seat);
+    if (motor){
+      const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.5, 0.4, 0.05), glass);
+      screen.position.set(0, H + 0.3, -0.5); screen.rotation.x = -0.35;
+      const eng = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.4), dark);
+      eng.position.set(0, H + 0.2, L / 2 + 0.2);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.16), dark);
+      leg.position.set(0, -0.15, L / 2 + 0.25);
+      const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+      const gtex = new THREE.CanvasTexture(gcv);
+      gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+      const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: gtex }));
+      gauges.position.set(-0.35, H + 0.28, -0.42); gauges.rotation.x = -0.4;
+      g.add(screen, eng, leg, gauges);
+      g.userData.gauge = { cv: gcv, tex: gtex };
+    } else {
+      // two paddles that swing with your stroke
+      const pads = [];
+      for (const sx2 of [-1, 1]){
+        const pv = new THREE.Group();
+        pv.position.set(sx2 * (Wd / 2 + 0.05), H + 0.12, 0.1);
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.7), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+        shaft.rotation.z = sx2 * 0.5; shaft.position.set(sx2 * 0.35, -0.2, 0);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.45), dark);
+        blade.position.set(sx2 * 0.75, -0.55, -0.6);
+        pv.add(shaft, blade);
+        g.add(pv); pads.push(pv);
+      }
+      g.userData.paddles = pads;
+    }
     return g;
   }
   if (type === 'cab'){
@@ -8727,6 +9164,18 @@ function killEntity(e, byPlayer){
       } else {
         addStackItem('coin', 120); addStackItem('diamond', 3);
         toast('THE WARDEN crumbles — +1 vault key · +120 coins · +3 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'leviathan'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.leviathan){
+        game.bossKills.leviathan = true;
+        giveItem({ kind: 'lscale' }, 1); addStackItem('coin', 160);
+        toast('THE LEVIATHAN sinks — a LEVIATHAN SCALE is yours (+160 coins)');
+      } else {
+        addStackItem('coin', 160); addStackItem('diamond', 4);
+        toast('THE LEVIATHAN sinks — +160 coins · +4 diamond');
       }
       markSave();
     }
@@ -9438,7 +9887,9 @@ const tradeSys = {
       { buy: { k: 'rail', n: 16 }, price: 30, rep: 0 },
       { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
     ];
-    if (role === 'food') return [   // grocer: the city eats
+    if (role === 'food') return [   // grocer: the city eats — and its fish market pays for the catch
+      { sell: { k: 'fish', n: 1 }, price: 7, rep: 0 },
+      { sell: { k: 'cookedfish', n: 2 }, price: 20, rep: 0 },
       { buy: { k: 'cookedmeat', n: 4 }, price: 10, rep: 0 },
       { buy: { k: 'meat', n: 6 }, price: 8, rep: 0 },
       { sell: { k: 'meat', n: 4 }, price: 6, rep: 0 },
@@ -9708,6 +10159,19 @@ const bossSys = {
       AudioSys.sfx('boom');
       return;
     }
+    // THE LEVIATHAN: deep water, and you on it or in it
+    {
+      const wt = waterTopAt(game.pos.x, game.pos.z, game.pos.y);
+      const onWater = game.swim || (game.driving && VEH[game.driving.type] && VEH[game.driving.type].water);
+      if (wt != null && onWater && wt - game.gen.height(game.pos.x, game.pos.z) > 14 && Math.random() < 0.07){
+        const a = Math.random() * Math.PI * 2;
+        const e = this.spawn('leviathan', game.pos.x + Math.cos(a) * 30, wt - 10, game.pos.z + Math.sin(a) * 30);
+        e.state = 'stalk';
+        toast('the water beneath you goes dark…');
+        AudioSys.sfx('boom');
+        return;
+      }
+    }
     // THE MAGMA TYRANT: every caldera has a keeper. Climb into a volcano's
     // crater and it hauls itself out of the melt (once per crater per session)
     const L = game.gen.lmAt(game.pos.x, game.pos.z);
@@ -9735,6 +10199,7 @@ const bossSys = {
   },
   updateBoss(e, dt, now){
     if (e.bossType === 'burrower') this.burrower(e, dt);
+    else if (e.bossType === 'leviathan') this.leviathan(e, dt);
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
     else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
     else if (e.bossType === 'architect'){ this.architect(e, dt); return; }
@@ -9756,6 +10221,47 @@ const bossSys = {
           Math.atan2(dy, Math.hypot(dx, dz)), Math.atan2(-dx, -dz), 0);
       }
     }
+  },
+  // THE LEVIATHAN: circles under you, then comes up through the hull.
+  // Stalk (deep, closing), breach (straight up under you: the boat is
+  // thrown and you with it), dive (wide and deep before the next pass).
+  leviathan(e, dt){
+    this.rumble(e, dt);
+    const def = ENT_DEF.leviathan;
+    e.stateT = (e.stateT || 0) + dt;
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const wt = waterTopAt(e.x, e.z, e.y);
+    const surf = wt != null ? wt : (game.gen.seaLevel != null ? game.gen.seaLevel : py);
+    const floor = game.gen.height(e.x, e.z) + 1.5;
+    const d3 = Math.hypot(e.x - px, e.y - py, e.z - pz);
+    let tx, ty, tz, sp = def.speed;
+    if (e.state === 'stalk'){
+      // circle in, ten metres down
+      e.circA = (e.circA || 0) + dt * 0.9;
+      tx = px + Math.cos(e.circA) * 9; tz = pz + Math.sin(e.circA) * 9; ty = surf - 10;
+      if (e.stateT > 3.5 && Math.hypot(e.x - px, e.z - pz) < 12){ e.state = 'breach'; e.stateT = 0; }
+    } else if (e.state === 'breach'){
+      tx = px; tz = pz; ty = surf + 1.5; sp = def.speed * 1.8;
+      if (d3 < def.r + 1.8){
+        // through the hull
+        const v = game.driving;
+        if (v && VEH[v.type] && VEH[v.type].water){ v.speed = 0; hurtEntity(v, 45, 0, 0); v.y += 1.2; }
+        damagePlayer(18, (px - e.x) * 3, (pz - e.z) * 3);
+        Particles.burst(e.x, surf, e.z, 2.5, [0xdfeeff, 0xffffff, 0x9fd4e8], 40, 4);
+        AudioSys.sfx('boom');
+        e.state = 'dive'; e.stateT = 0; e.diveA = Math.random() * Math.PI * 2;
+      } else if (e.stateT > 2.6){ e.state = 'dive'; e.stateT = 0; e.diveA = Math.random() * Math.PI * 2; }
+    } else {
+      tx = px + Math.cos(e.diveA || 0) * 26; tz = pz + Math.sin(e.diveA || 0) * 26; ty = surf - 16;
+      if (e.stateT > 3) { e.state = 'stalk'; e.stateT = 0; }
+    }
+    const dx = tx - e.x, dy = ty - e.y, dz = tz - e.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    e.x += (dx / L) * sp * dt; e.y += (dy / L) * sp * dt; e.z += (dz / L) * sp * dt;
+    // it lives in the water: never above the surface (bar the breach), never in the seabed
+    e.y = Math.max(Math.max(floor, CORE.BEDROCK_Y + 3), Math.min(e.y, e.state === 'breach' ? surf + 1.5 : surf - 1.5));
+    if (e.state === 'breach' && e.y > surf - 1 && Math.random() < dt * 20)
+      Particles.burst(e.x, surf, e.z, 1.2, [0xdfeeff, 0xffffff], 4, 2.5);
   },
   // THE BURROWER: swims through solid rock, carving a REAL tunnel behind it.
   // It dives under you, lunges up through the floor, sails, and dives again.
@@ -10375,7 +10881,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 6.5;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -10414,27 +10920,13 @@ const roadSys = {
     const ex = b.x - ux * edgeB, ez = b.z - uz * edgeB;
     const len = Math.hypot(ex - sx, ez - sz);
     const segs = Math.max(1, Math.round(len / ROAD_SEG));
-    // elevation profile: terrain at every node, wide-smoothed, slope ≤ 0.22
-    const raw = [];
-    for (let i = 0; i <= segs; i++){
-      const t = i / segs;
-      raw.push(game.gen.height(sx + (ex - sx) * t, sz + (ez - sz) * t));
-    }
-    // water is crossed on a causeway: the road never dips below the surface
-    const sea = (game.gen.seaLevel || 0) + 1.2;
-    const prof = raw.map((h, i) => {
-      let sum = 0, cnt = 0;
-      for (let k = -3; k <= 3; k++){ const j = i + k; if (j >= 0 && j < raw.length){ sum += Math.max(sea, raw[j]); cnt++; } }
-      return sum / cnt;
-    });
-    // pin the ends to the city slabs so the road meets the avenue level
-    prof[0] = Math.max(prof[0], citySys.slabLevel(a));
-    prof[segs] = Math.max(prof[segs], citySys.slabLevel(b));
-    const step = (len / segs) * 0.22;
-    for (let i = 1; i <= segs; i++) prof[i] = Math.min(prof[i], prof[i - 1] + step);
-    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.min(prof[i], prof[i + 1] + step);
-    for (let i = 1; i <= segs; i++) prof[i] = Math.max(prof[i], prof[i - 1] - step);
-    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.max(prof[i], prof[i + 1] - step);
+    // one straight grade from slab level to slab level: the road holds the
+    // cities' level the whole way — over dips on an embankment, through
+    // rises in a tunnel — so every segment lies in the same plane and
+    // nothing pokes up through the tarmac
+    const la = citySys.slabLevel(a), lb = citySys.slabLevel(b);
+    const prof = [];
+    for (let i = 0; i <= segs; i++) prof.push(+(la + (lb - la) * i / segs).toFixed(3));
     L = { key, a, b, sx, sz, ex, ez, ux, uz, len, segs, prof, yaw: Math.atan2(-ux, uz) };   // local +z -> (ux, uz)
     this.cache.set(key, L);
     return L;
@@ -10447,8 +10939,8 @@ const roadSys = {
     const y0 = L.prof[i], y1 = L.prof[i + 1];
     const top = (y0 + y1) / 2 + 0.25;
     const segLen = L.len / L.segs + 0.6;             // a hair of overlap: no cracks between slabs
-    const hr = game.gen.heightRange(mx - 8, mz - 8, mx + 8, mz + 8);
-    const bottom = Math.max(top - 30, Math.min(hr[0], top) - 2.5);
+    const hr = game.gen.heightRange(mx - 9, mz - 9, mx + 9, mz + 9);
+    const bottom = Math.max(top - 90, Math.min(hr[0], top) - 2.5);
     const EB = (op, y, sy, sx, sz, mat) => {
       const e = CORE.makeEdit(op, 1, +mx.toFixed(1), +y.toFixed(2), +mz.toFixed(1), sx, mat || 0, L.yaw);
       e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
@@ -10457,8 +10949,13 @@ const roadSys = {
       if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
       applyEdit(e);
     };
+    // the corridor comes out FIRST: a box 12m wide and 6.5m tall whose floor
+    // sits a metre under the tarmac. Through a mountain that is a tunnel with
+    // a roof; through a hill an open trench; on flat ground it just clears
+    // the shoulders. The slab then refills its own lane, so the road stands
+    // a metre proud of whatever it cut — the ground never rises into it.
+    if (hr[1] > top - ROAD_SHOULDER) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_W + 4, segLen, 0);
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT);
-    if (hr[1] > top + 0.2) EB(0, top + 3.6, 7.0, ROAD_W + 4, segLen, 0);   // the cut
     // no trees on the tarmac: fell every tree whose trunk lands on the segment
     if (game.gen.treeAt){
       const TC = CORE.TREE_CELL, half = ROAD_W / 2 + 1.2, along = segLen / 2 + 1;
@@ -10483,7 +10980,7 @@ const roadSys = {
       const rest = toB ? L.len * (1 - t0) : L.len * t1;
       const rx = L.uz, rz = -L.ux;                  // right of travel toward b
       const side = toB ? 1 : -1;
-      const px = mx + rx * side * (ROAD_W / 2 + 1.6), pz = mz + rz * side * (ROAD_W / 2 + 1.6);
+      const px = mx + rx * side * (ROAD_W / 2 - 0.35), pz = mz + rz * side * (ROAD_W / 2 - 0.35);
       pnodeSys.add('sign', px, top, pz, Math.atan2(L.ux, L.uz) + (toB ? 0 : Math.PI), {
         text: citySys.nameFor(dest.seed).slice(0, 16) + '\n' + (rest / 1000).toFixed(1) + ' km' });
     }
@@ -10530,6 +11027,71 @@ const roadSys = {
       if (Math.abs(y - ry) < 3) return true;
     }
     return false;
+  },
+};
+
+// ---------- shipwrecks: hulls on the seabed, holding what went down with them ----------
+const wreckSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.wreckAt) return [];
+    const C = CORE.WRECK_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const w = game.gen.wreckAt(cx, cz);
+        if (w && Math.hypot(w.x - x, w.z - z) < r) out.push(w);
+      }
+    return out;
+  },
+  stamp(w, rec){
+    const MAT = CORE.MAT;
+    const yaw = ((w.seed >>> 3) % 628) / 100;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, yaw);
+      e.sy = sy; e.sz = sz;
+      applyEdit(e);
+    };
+    const g = +w.y.toFixed(1);
+    rec.gy = g;
+    // the hull, listing on the seabed: planks outside, a hollow hold, the bow
+    // stove in, a stub of mast
+    EB(1, w.x, g + 1.6, w.z, 5.6, 3.4, 15, MAT.PLANKS);
+    EB(0, w.x, g + 1.9, w.z, 4.4, 2.6, 13.4, 0);
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    EB(0, w.x + fx * 6.5, g + 2.2, w.z + fz * 6.5, 3.0, 2.4, 3.2, 0);            // the hole in the bow
+    EB(0, w.x - fz * 2.9, g + 2.0, w.z + fx * 2.9, 1.2, 1.6, 2.4, 0);            // a breach in the side
+    EB(1, w.x, g + 3.4 + 3.5, w.z - 0.5, 0.5, 7, 0.5, MAT.PLANKS);               // the mast stump
+    // the strongbox in the hold, and what the crew left
+    const ch = pnodeSys.add('chest', w.x - fx * 3.5, g + 0.75, w.z - fz * 3.5, yaw, { sc: 0.8 });
+    ch.inv = new Array(chestSlots(0.8)).fill(null);
+    const rng = CORE.mulberry32(w.seed);
+    ch.inv[0] = { kind: 'coin', count: 40 + ((rng() * 60) | 0) };
+    ch.inv[1] = { kind: 'rubyingot', count: 3 + ((rng() * 4) | 0) };
+    ch.inv[2] = { kind: 'ironingot', count: 6 + ((rng() * 6) | 0) };
+    ch.inv[3] = { kind: 'rounds', count: 40 };
+    ch.inv[4] = { kind: 'battery', tier: 1, charge: 300 };
+    if ((w.seed % 3) === 0) ch.inv[5] = { kind: 'divehelm', tier: 0 };
+    else ch.inv[5] = { kind: 'diamond', count: 1 + ((rng() * 2) | 0) };
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const w of this.candidatesNear(game.pos.x, game.pos.z, 160)){
+      const key = 'w' + w.key;
+      let rec = (game.wrecks = game.wrecks || {})[key];
+      if (!rec){ rec = { key, x: w.x, z: w.z, seed: w.seed, stamped: false }; game.wrecks[key] = rec; }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(w, rec);
+        toast('a SHIPWRECK lies on the seabed nearby — ' + Math.round(game.gen.seaLevel - w.y) + 'm down');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 2) return;
+    this.accT = 0;
+    this.ensure();
   },
 };
 
@@ -10978,6 +11540,10 @@ function updateEntities(dt, now){
     } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
       if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
+      if (VEH[e.type].water){
+        const wt1 = waterTopAt(e.x, e.z, e.y);
+        if (wt1 != null){ e.y += (wt1 - VEH[e.type].draft - e.y) * Math.min(1, 4 * dt); e.vy = 0; if (e.mesh) e.mesh.position.y = e.y; }
+      }
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -11539,7 +12105,7 @@ function bindInput(){
         return;
       }
       const selIt = selectedItem();
-      if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' ||
+      if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' || selIt.kind === 'fish' || selIt.kind === 'cookedfish' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
         tryEat();
         return;
@@ -11879,9 +12445,12 @@ function enterCar(e){
   game.driving = e;
   game.vel.set(0, 0, 0);
   e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
-  toast((VEH[e.type] && VEH[e.type].air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
-                                         : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
-        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a charging pad' : ''));
+  const V0 = VEH[e.type] || VEH.car;
+  toast((V0.air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
+         : V0.paddle ? 'rowing — W/S stroke · A/D steer'
+         : V0.water ? 'at the helm — W/S throttle · A/D steer'
+         : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
+        (!V0.paddle && (e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a charging pad' : ''));
   AudioSys.sfx('toggle');
   refreshToolHUD();
 }
@@ -11918,12 +12487,16 @@ function driveCar(dt){
   e.heading = e.heading || 0;
   e.speed = e.speed || 0;
   e.air = e.air || 0;
-  const dead = (e.charge || 0) <= 0;
+  const dead = V.paddle ? false : (e.charge || 0) <= 0;
   const airborne = V.air && e.air > 0.12;
+  // boats: afloat on the water's surface, or beached and crawling
+  const wtop = V.water ? waterTopAt(e.x, e.z, e.y) : null;
+  const afloat = V.water && wtop != null;
   // the highway pays: tarmac under the wheels lifts the top speed
   e.onRoad = roadSys.onRoad(e.x, e.y, e.z);
   const cruise = e.onRoad ? 1.35 : 1;
-  const top = dead ? 0 : V.top * cruise, rev = dead ? 0 : V.rev;
+  const beached = V.water && !afloat ? 0.2 : 1;
+  const top = dead ? 0 : V.top * cruise * beached, rev = dead ? 0 : V.rev * beached;
   const target = thr > 0 ? top : thr < 0 ? -rev : 0;
   const accel = airborne ? 0 : (thr !== 0 ? V.accel : V.brake);
   e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
@@ -11939,7 +12512,12 @@ function driveCar(dt){
   // roll forward under gravity; a sphere-vs-SDF pass keeps it on the ground
   const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
   const vyBefore = e.vy || 0;
-  e.vy = (e.vy || 0) - 22 * dt;
+  if (afloat){
+    // the hull rides the surface, draft below it; a little bob at speed
+    const target = wtop - V.draft + Math.sin(performance.now() * 0.004) * 0.03 * Math.min(1, Math.abs(e.speed) / 4);
+    e.y += (target - e.y) * Math.min(1, 6 * dt);
+    e.vy = 0;
+  } else e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
   e.y += e.vy * dt;
@@ -11959,7 +12537,13 @@ function driveCar(dt){
     }
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; grounded = true; }
-  if (inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  if (!V.water && inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  if (afloat && Math.abs(e.speed) > 1.5 && Math.random() < dt * 14)
+    Particles.burst(e.x - fx * 1.6, e.y + 0.1, e.z - fz * 1.6, 0.4, [0xdfeeff, 0xffffff], 2, 0.8);   // the wake
+  if (V.paddle && e.mesh && e.mesh.userData.paddles){
+    e.padPh = (e.padPh || 0) + dt * Math.abs(e.speed) * 1.6;
+    for (const pv of e.mesh.userData.paddles) pv.rotation.x = Math.sin(e.padPh) * 0.55;
+  }
   if (V.air){
     // ---- the motorcycle leaves the ground ----
     if (grounded){
@@ -12053,6 +12637,28 @@ function driveCar(dt){
   if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
   game.carHud2T = (game.carHud2T || 0) + dt;
   if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
+}
+// ---------- fishing ----------
+function endFishing(){
+  const F = game.fishing;
+  if (F && F.mesh) game.scene.remove(F.mesh);
+  game.fishing = null;
+}
+function fishingTick(dt){
+  const F = game.fishing;
+  if (!F) return;
+  const tl = activeTool();
+  if (!tl || tl.kind !== 'rod' || Math.hypot(game.pos.x - F.px, game.pos.z - F.pz) > 3 || game.driving){ endFishing(); return; }
+  F.t += dt;
+  if (!F.bit && F.t > F.bite){
+    F.bit = true; F.bitT = 0;
+    toast('BITE! — click!'); AudioSys.sfx('hit');
+  }
+  if (F.bit){
+    F.bitT += dt;
+    if (F.bitT > 1.6){ F.bit = false; F.t = 0; F.bite = 3 + Math.random() * 7; toast('it got away…'); refreshToolHUD(); }
+  }
+  if (F.mesh) F.mesh.position.y = F.y + (F.bit ? -0.22 + Math.sin(F.bitT * 30) * 0.05 : Math.sin(F.t * 2.5) * 0.04);
 }
 function trickName(flips, spins, whips){
   const parts = [];
@@ -12287,8 +12893,9 @@ function activeTool(){
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
   if (it.kind === 'bulb') return { kind: 'bulb', tier: 0, item: it };
-  if (it.kind === 'tuft' || it.kind === 'flower' || it.kind === 'shrub')
+  if (it.kind === 'tuft' || it.kind === 'flower' || it.kind === 'shrub' || it.kind === 'coral' || it.kind === 'kelp')
     return { kind: 'decor', decorType: it.kind, tier: 0, item: it };
+  if (it.kind === 'rod') return { kind: 'rod', tier: 0, item: it };
   if (it.kind === 'wrench') return { kind: 'wrench', tier: 0 };
   if (it.kind === 'grapple') return { kind: 'grapple', tier: 0, item: it };
   if (it.kind === 'mat' && game.dispSlot)
@@ -12439,6 +13046,7 @@ function updateGhost(){
 function applyEdit(e){
   game.edits.push(e);
   game.terrain.invalidate(e);
+  waterSys.onEdit(e);
   markSave();
 }
 
@@ -13801,6 +14409,47 @@ function tryAction(dt, now){
     }
     return;
   }
+  if (tool.kind === 'rod'){
+    AudioSys.setHum(false, 0, 0);
+    if (!edge) return;
+    const F = game.fishing;
+    if (!F){
+      // cast: where the view ray meets water within 14m
+      const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+      const o = game.camera.position;
+      let hit = null;
+      for (let t = 1.5; t < 14; t += 0.4){
+        const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+        if (inWater(x, y, z)){ const wt = waterTopAt(x, z, y); hit = [x, wt != null ? wt : y, z]; break; }
+        if (sdfWorld(x, y, z, nearEdits([x - 1, y - 1, z - 1, x + 1, y + 1, z + 1])) < 0) break;
+      }
+      if (!hit){ toast('cast it onto water'); return; }
+      const bob = new THREE.Group();
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color: 0xe04848 }));
+      const bot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color: 0xf7f2e8 }));
+      top.position.y = 0.05; bot.position.y = -0.06;
+      bob.add(top, bot);
+      bob.position.set(hit[0], hit[1], hit[2]);
+      game.scene.add(bob);
+      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: 3 + Math.random() * 7, bit: false, bitT: 0, mesh: bob,
+                       px: game.pos.x, pz: game.pos.z };
+      toast('cast — watch the bobber, click when it bites');
+      AudioSys.sfx('toggle');
+    } else if (F.bit){
+      const deep = game.gen.seaLevel != null && game.gen.height(F.x, F.z) < game.gen.seaLevel - 9;
+      const kind = CORE.fishFor(game.gen.archAt ? game.gen.archAt(F.x, F.z) : 0, deep);
+      giveItem({ kind: 'fish', fish: kind, count: 1 }, 1);
+      toast('caught a ' + (CORE.FISH_NAME[kind] || 'fish') + '!');
+      AudioSys.sfx('craft');
+      Particles.burst(F.x, F.y + 0.2, F.z, 0.4, [0xdfeeff, 0xffffff], 8, 1.2);
+      endFishing();
+      refreshHotbar(); refreshToolHUD();
+    } else {
+      endFishing();
+      toast('reeled in');
+    }
+    return;
+  }
   if (tool.kind === 'decor'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
@@ -13963,13 +14612,14 @@ function tryAction(dt, now){
       if (tool.item.wrecked){ toast('it\'s wrecked — put the kit on a repair bench with iron'); return; }
       const px = game.pos.x - Math.sin(game.yaw) * 4.2;
       const pz = game.pos.z - Math.cos(game.yaw) * 4.2;
-      const e = spawnEntity(tool.item.kind, px, game.pos.y + 0.6, pz);
+      const wt0 = VEH[tool.item.kind].water ? waterTopAt(px, pz, game.pos.y) : null;
+      const e = spawnEntity(tool.item.kind, px, wt0 != null ? wt0 - VEH[tool.item.kind].draft : game.pos.y + 0.6, pz);
       e.charge = tool.item.charge || 0;
       e.bat = tool.item.bat || null;
       e.heading = game.yaw;
       game.slots[game.hotSel] = null;
       refreshHotbar(); refreshToolHUD();
-      toast(VEH[e.type].name + ' deployed — right click to ride · crouch + right click to pack it up');
+      toast(VEH[e.type].name + ' deployed — right click to ' + (VEH[e.type].water ? 'board' : 'ride') + ' · crouch + right click to pack it up');
       AudioSys.sfx('craft');
     }
     return;
@@ -14304,7 +14954,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'].includes(it.kind) ? it.kind : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -14406,6 +15056,43 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
+    const FC = { perch: ['#8ab060', '#5d7f3c'], trout: ['#b08aa0', '#7a5a70'], catfish: ['#6a6a5a', '#44443a'], carp: ['#d8a040', '#a87020'],
+                 snapper: ['#e06050', '#a83a30'], eel: ['#f07030', '#b04010'], cod: ['#8aa0b8', '#5a7088'] };
+    const cc = it.kind === 'cookedfish' ? ['#c89a5a', '#8a6237'] : (FC[it.fish] || FC.perch);
+    c.fillStyle = cc[0]; c.fillRect(3, 6, 8, 4); c.fillRect(2, 7, 1, 2);
+    c.fillStyle = cc[1]; c.fillRect(11, 5, 3, 2); c.fillRect(11, 9, 3, 2); c.fillRect(12, 7, 2, 2); c.fillRect(6, 5, 3, 1);
+    c.fillStyle = '#101216'; c.fillRect(4, 7, 1, 1);
+  } else if (it.kind === 'rod'){
+    c.fillStyle = '#8a6237'; for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
+    c.fillStyle = '#d9d9e0'; c.fillRect(13, 2, 1, 8);
+    c.fillStyle = '#e04848'; c.fillRect(12, 10, 3, 2); c.fillStyle = '#f7f2e8'; c.fillRect(12, 9, 3, 1);
+  } else if (it.kind === 'divehelm'){
+    c.fillStyle = '#9fd4e8'; c.fillRect(4, 2, 8, 9); c.fillRect(3, 3, 10, 7);
+    c.fillStyle = '#d9b25a'; c.fillRect(2, 11, 12, 3); c.fillRect(6, 1, 4, 1);
+    c.fillStyle = '#e8f6ff'; c.fillRect(5, 4, 2, 2);
+  } else if (it.kind === 'coral'){
+    c.fillStyle = '#b8507a'; c.fillRect(6, 11, 4, 4);
+    c.fillStyle = '#e07aa0'; c.fillRect(3, 4, 2, 8); c.fillRect(7, 2, 2, 10); c.fillRect(11, 5, 2, 7);
+    c.fillStyle = '#f09ab8'; c.fillRect(2, 3, 4, 2); c.fillRect(6, 1, 4, 2); c.fillRect(10, 4, 4, 2);
+  } else if (it.kind === 'kelp'){
+    c.fillStyle = '#2f7a4d'; c.fillRect(4, 1, 2, 14); c.fillRect(9, 3, 2, 12);
+    c.fillStyle = '#3f9a5d'; c.fillRect(6, 4, 2, 3); c.fillRect(2, 7, 2, 3); c.fillRect(11, 6, 2, 3); c.fillRect(7, 10, 2, 3);
+  } else if (it.kind === 'lscale'){
+    c.fillStyle = '#1f5f7a'; c.fillRect(4, 2, 8, 12); c.fillRect(3, 4, 10, 8);
+    c.fillStyle = '#2f8aa8'; c.fillRect(5, 3, 6, 9);
+    c.fillStyle = '#9fe8ff'; c.fillRect(6, 4, 2, 3);
+  } else if (it.kind === 'boat'){
+    c.fillStyle = '#a8783f'; c.fillRect(2, 9, 12, 3); c.fillRect(4, 8, 8, 1);
+    c.fillStyle = '#6e4d2a'; c.fillRect(2, 11, 12, 1);
+    c.fillStyle = '#8a6237'; c.fillRect(7, 3, 1, 6); c.fillRect(3, 5, 1, 4);
+    c.fillStyle = '#2f6fb8'; c.fillRect(1, 12, 14, 2);
+  } else if (it.kind === 'motorboat'){
+    c.fillStyle = '#eef1f4'; c.fillRect(2, 8, 12, 4); c.fillRect(4, 7, 9, 1);
+    c.fillStyle = '#2f6fb8'; c.fillRect(2, 10, 12, 1);
+    c.fillStyle = '#9fd4e8'; c.fillRect(8, 5, 3, 3);
+    c.fillStyle = '#23232a'; c.fillRect(13, 6, 2, 5);
+    c.fillStyle = '#2f6fb8'; c.fillRect(1, 12, 14, 2);
   } else if (it.kind === 'repair'){
     c.fillStyle = '#8a6237'; c.fillRect(2, 8, 12, 6);
     c.fillStyle = '#a37c47'; c.fillRect(2, 8, 12, 2);
@@ -14786,6 +15473,15 @@ function itemLabel(it){
   if (it.kind === 'car') return (it.wrecked ? 'wrecked ' : '') + 'electric car';
   if (it.kind === 'sportscar') return (it.wrecked ? 'wrecked ' : '') + 'sports car';
   if (it.kind === 'bike') return (it.wrecked ? 'wrecked ' : '') + 'electric motorcycle';
+  if (it.kind === 'boat') return (it.wrecked ? 'wrecked ' : '') + 'paddle boat';
+  if (it.kind === 'fish') return CORE.FISH_NAME[it.fish] || 'fish';
+  if (it.kind === 'cookedfish') return 'cooked fish';
+  if (it.kind === 'rod') return 'fishing rod';
+  if (it.kind === 'divehelm') return 'diving helmet';
+  if (it.kind === 'coral') return 'coral';
+  if (it.kind === 'kelp') return 'kelp';
+  if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
+  if (it.kind === 'motorboat') return (it.wrecked ? 'wrecked ' : '') + 'motorboat';
   if (it.kind === 'repair') return 'repair bench';
   if (it.kind === 'rail') return 'rails';
   if (it.kind === 'tdrone') return 'teleport drone';
@@ -14964,7 +15660,7 @@ function buildInvUI(){
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildMissionsUI();
   $('btnInvSort').onclick = sortInventory;
-  $('vehiclepanel').classList.toggle('hidden', !game.driving);
+  $('vehiclepanel').classList.toggle('hidden', !game.driving || !!(VEH[game.driving.type] && VEH[game.driving.type].paddle));
   const vh = $('invveh'); vh.innerHTML = '';
   if (game.driving) vh.appendChild(slotEl('vbat'));
   refreshInvUI();
@@ -14993,10 +15689,10 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'rail', 'repair'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'rod'];
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'rail', 'repair'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
@@ -15075,12 +15771,25 @@ function catalogEntries(){
   out.push({ kind: 'drone', charge: 100 });
   for (let t = 0; t < 3; t++) out.push({ kind: 'battery', tier: t, charge: CORE.BATTERY_CAP[t] });
   out.push({ kind: 'sportscar', charge: 100 });
+  out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
+  out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
+  for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod']) out.push({ kind: 'fish', fish: f, count: 8 });
+  out.push({ kind: 'coral', count: 16 }); out.push({ kind: 'kelp', count: 16 });
   return out;
 }
 // creative: hand over any item, free — the old catalog's "take", now a row
 // on the crafting screen so both modes share one screen
 function giveItem(it, n){
   if (it.kind === 'mat') return CORE.addMat(game.slots, it.mat, n);
+  if (it.kind === 'fish'){
+    // fish stack by species
+    const have = game.slots.find(sl => sl && sl.kind === 'fish' && sl.fish === it.fish);
+    if (have){ have.count += n; return true; }
+    const i = game.slots.findIndex(sl => !sl);
+    if (i < 0) return false;
+    game.slots[i] = { kind: 'fish', fish: it.fish, count: n };
+    return true;
+  }
   if (CORE.STACKABLE_KINDS.includes(it.kind)) return addStackItem(it.kind, n);
   let ok = false;
   for (let k = 0; k < n; k++){
@@ -15478,7 +16187,7 @@ function uiMove(from, to){
   if (to === 'sin' && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
   if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
-  if (to === 'ahead' && A.kind !== 'helm'){ toast('that slot wants a helmet'); return 'none'; }
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm'){ toast('that slot wants a helmet'); return 'none'; }
   if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
   if (to === 'aback' && A.kind !== 'jetpack'){ toast('that slot wants a jetpack'); return 'none'; }
@@ -15642,7 +16351,7 @@ function slotRefuses(to, A){
   if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
   if (to === 'sfuel' && !CORE.fuelOps(A)) return 'fuel is coal or wood';
   if (to === 'gfuel' && A.kind !== 'coal') return 'generators burn coal';
-  if (to === 'ahead' && A.kind !== 'helm') return 'that slot wants a helmet';
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm') return 'that slot wants a helmet';
   if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
   if (to === 'aback' && A.kind !== 'jetpack') return 'that slot wants a jetpack';
@@ -15814,7 +16523,8 @@ function refreshToolHUD(){
     const e = game.driving;
     const V = VEH[e.type] || VEH.car;
     el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
-      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
       (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
       '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
                                    : 'W/S throttle · A/D steer') + '</div>' +
@@ -15860,10 +16570,23 @@ function refreshToolHUD(){
   } else if (it.kind === 'deed'){
     html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
   } else if (VEH[it.kind]){
-    html = '<div class="t1">' + itemLabel(it) + ' · ' + Math.round(it.charge || 0) + '% charge</div><div class="t2">' +
+    html = '<div class="t1">' + itemLabel(it) + (VEH[it.kind].paddle ? '' : ' · ' + Math.round(it.charge || 0) + '% charge') + '</div><div class="t2">' +
       (it.wrecked ? 'wrecked — slot it into a REPAIR BENCH with ' + VEH[it.kind].repair + ' iron ingots'
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
+       : VEH[it.kind].paddle ? 'left click to deploy on the water · right click to row · no battery, just you'
+       : VEH[it.kind].water ? 'left click to deploy on the water · right click to take the helm · slot a battery for the long crossings'
        : 'left click to deploy · right click to drive · charge it on a charging pad') + '</div>';
+  } else if (it.kind === 'rod'){
+    const F = game.fishing;
+    html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
+      (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
+         : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
+    html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
+  } else if (it.kind === 'divehelm'){
+    html = '<div class="t1">diving helmet</div><div class="t2">wear it in the helmet slot (E, shift-click) — ninety seconds of air under water</div>';
+  } else if (it.kind === 'lscale'){
+    html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
   } else if (it.kind === 'repair'){
     html = '<div class="t1">repair bench</div><div class="t2">right click to open · a wrecked vehicle kit plus iron ingots comes off whole</div>';
   } else if (it.kind === 'sigil'){
@@ -16126,7 +16849,8 @@ function updateSurvival(dt){
   const eyeUnder = !game.fly &&
                    inWater(game.pos.x, game.pos.y + playerHeight() - PLAYER.eyeGap, game.pos.z);
   if (game.breath == null) game.breath = 100;
-  if (eyeUnder) game.breath = Math.max(0, game.breath - dt * 8);
+  const dive = game.armor && game.armor.head && game.armor.head.kind === 'divehelm';
+  if (eyeUnder) game.breath = Math.max(0, game.breath - dt * (dive ? 1.1 : 8));   // 90s in the helmet
   else game.breath = Math.min(100, game.breath + dt * 30);
   if (eyeUnder && game.breath <= 0) damagePlayer(dt * 6, 0, 0);
   const bb = $('breathbar');
@@ -16152,8 +16876,8 @@ function tryEat(){
   // banking more than you can use would just throw the meal away
   const roomLeft = () => Math.max(0, 100 - game.hp - game.heal);
   if (roomLeft() < 1){ toast(game.heal > 0 ? 'already mending' : 'already at full health'); return; }
-  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat')){
-    const gain = it.kind === 'meat' ? HEAL_RAW : HEAL_COOKED;
+  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat' || it.kind === 'fish' || it.kind === 'cookedfish')){
+    const gain = it.kind === 'meat' ? HEAL_RAW : it.kind === 'fish' ? 15 : it.kind === 'cookedfish' ? 45 : HEAL_COOKED;
     it.count -= 1;
     if (it.count === 0) game.slots[game.hotSel] = null;
     game.heal = Math.min(game.heal + gain, 100 - game.hp);
@@ -16653,6 +17377,7 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    wrecks: game.wrecks || {},
     cities: game.cities || {},
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
@@ -16668,6 +17393,7 @@ function saveNow(){
     ropes: game.ropes || [],
     rails: game.rails || [],
     roads: game.roads || {},
+    water: waterSys.serialize(),
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -16705,9 +17431,12 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.wrecks = data.wrecks || {};
+  endFishing();
   game.cities = data.cities || {};
   game.rails = data.rails || [];
   game.roads = data.roads || {};
+  waterSys.load(data.water || []);
   roadSys.near = []; roadSys.scanT = 99; roadSys.cache = new Map();
   game.railDraft = null;
   game.riding = null;
@@ -17918,6 +18647,9 @@ function frame(now){
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
+  waterSys.tick(dt);
+  fishingTick(dt);
+  wreckSys.tick(dt);
   lodTerrain.update(game.pos.x, game.pos.y, game.pos.z);
   lodTerrain.frame();
   if (!meshPool.ok) lodTerrain.processSync(2);
@@ -18131,12 +18863,12 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
-  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
+  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, waterSys, inWater, waterTopAt, wreckSys, bossSys, fishingTick, endFishing, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>

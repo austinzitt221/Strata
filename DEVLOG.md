@@ -2,6 +2,142 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 17 — BLUE WATER (2026-09-02)
+
+### A. Water that flows
+Playtest: "if you cut around it or below it, the water doesn't flow. I
+should be able to cut below a pool, have it flow down a hole, then cut
+out from that to make another flat pool underground. Same rules as
+Minecraft."
+
+- **Cells.** The sea, the lakes and the flooded galleries stay what
+  worldgen says they are until an edit disturbs them. Then every chunk
+  the edit touches (and holds or borders water) becomes a grid of 512
+  metre cells — x/z columns, y cells centred on integers so the sea's
+  surface at -1.5 is a cell boundary — filled from the world with the
+  edits applied: rock is 255, original water is a source (8), carved
+  rock is air (0) and fills from its neighbours. Untouched chunks the
+  flow reaches materialize on demand; edits on dry land above every
+  water table never touch it; a city slab (400+ chunks) is not a water
+  event.
+- **The rules, at 8 Hz.** A source is infinite. Water above a cell makes
+  it 7. A cell spreads sideways one level lower per metre when it is a
+  source or stands on rock or a source (falling water only falls).
+  Unsupported flow drains. Sources are born three ways on a supported
+  cell: Minecraft's two sources beside it; a full cell with water above
+  it (a column fed from a lake IS the lake); or a full cell beside a
+  source — the lake's level creeps along every floor it can reach,
+  because the lake is infinite. That last rule is the one Minecraft
+  lacks and the one that makes "flow down a hole, then a flat pool"
+  actually happen: a 15 m tunnel from a lake-fed shaft floods to its
+  ceiling and the chamber at its end fills as a flat sheet of sources.
+- **Reading it.** `inWater` reads cells first (a fractional level is a
+  fractional surface), then the old still-water rules; so swimming,
+  breath, the underwater tint, wheels and cars all follow the flow. A
+  fresh hole under a lake is dry until the water arrives — the old
+  "swim effect with no water" is gone.
+- **Drawing it.** A chunk with cells draws its water from them (top face
+  at level/8, sides where a neighbour is lower, a bottom under a falling
+  column) with the existing water shader; the static sea sheet yields in
+  those chunks. Meshes are dropped past render distance and rebuilt on
+  return; the cells persist. Saved as run-length pairs per chunk (16
+  chunks, 1.9 KB).
+- Cost: 0.8 ms per step for the test's 16 chunks; at most 48 chunks step
+  per tick, the rest wait a tick.
+
+### B. Boats
+- **Paddle boat** (planks 12, sticks 4): 5.5 m/s, no battery — the
+  paddles swing with your stroke. **Motorboat** (iron 10, ruby 2, wire
+  4, planks 8): 17 m/s, drinks 0.9%/s, outboard, windscreen, a gauge, a
+  battery slot like the cars.
+- `VEH.water`: the hull rides `waterTopAt` (cells first, then the sea)
+  minus its draft, bobbing a little at speed, with a spray wake. Off the
+  water it crawls at a fifth of its speed and the HUD says BEACHED.
+  Parked boats float too. A kit deployed over water lands on the
+  surface. Cars still hate water; boats don't.
+
+Verified: a 3x3 shaft dug up into a lakebed is dry, then fills (7s,
+then sources); a 15 m tunnel + 7 m chamber fills flat (49/49 floor
+cells sources) and is swimmable; a hole in a hilltop stays dry; cells
+survive a save byte-for-byte; the paddle boat floats at -0.22 and rows
+at 5.5 m/s, the motorboat hits 17, drains, and crawls at 3.4 beached.
+
+### C. The ocean
+- **Island chains** — region archetype 8, rolled into the low-continent
+  pools. Whatever the backbone says, the region is a shelf eight metres
+  down; sandy islands rise up to 14 m where a broad ridged field peaks.
+  Wide beaches, palms (the usual trees), no forts or villages.
+- **The reef.** On the shelf between islands, decor goes under water:
+  coral heads in two colours and ribbons of kelp nearly three metres
+  tall, instanced like the meadow tufts, pickable and placeable.
+- **Shipwrecks.** One candidate per 360 m cell on water at least 7 m
+  deep, stamped on approach (160 m) like forts: a planked hull listing
+  on the seabed, hollow hold, the bow stove in, a breach in the side, a
+  mast stump, and a strongbox in the hold — coins, ruby and iron ingots,
+  rounds, a medium battery, and a diamond or (one wreck in three) a
+  diving helmet. The hull edits wake the water, so the hold is flooded
+  the way a wreck should be.
+- **The diving helmet** (iron 6, ruby 1, wire 2). Wears in the helmet
+  slot; breath drains at 1.1/s instead of 8 — ninety seconds down. A
+  glass globe with a brass collar on the body model.
+
+### D. Fishing and the thing under the boat
+- **The rod** (sticks 3, wire 2). Aim at water within 14 m and click to
+  cast: a red-and-white bobber sits on the surface. Three to ten seconds
+  later it dips — BITE! — and you have 1.6 s to click and reel. The
+  catch is the region's fish: perch on the plains and hills, trout in
+  the ranges and on the ice, carp on the mesa and dunes, catfish in the
+  swamp, ember eel off the volcanoes, snapper on the reef, and cod
+  anywhere the water is deeper than nine metres. Fish stack by species,
+  eat for 15, cook to cooked fish for 45, and the grocer's fish market
+  pays 7 a fish, 20 for two cooked. Walk more than 3 m from the cast or
+  switch tools and the line comes in.
+- **THE LEVIATHAN.** Deep water (14 m+) and you on it — swimming, or in
+  a boat — and one check in fourteen every two seconds it comes: a
+  ten-segment serpent in deep-sea blues. It circles ten metres down,
+  then breaches straight up under you: the boat takes 45, you take 18
+  and are thrown, and it dives wide before the next pass. 700 hp; it
+  never leaves the water. First kill: the LEVIATHAN SCALE and 160
+  coins; after that coins and diamonds.
+
+Verified: an island region 300 m from spawn (17 land cells, 378 shelf,
+93 coral + 59 kelp candidates, all sand/grass); a wreck stamps with 5
+edits, 1 chest (87 coins), waking 18 water chunks; the helmet cuts
+breath loss 17x; a cast, a bite and a snapper in the pack, 2 market
+rows, 15 hp of mending; the Leviathan runs stalk > breach > dive, hits
+the boat (180 > 45) and the rider (100 > 49), shows its bar, and drops
+the scale.
+
+## Build 16.1 — roads that hold their level (2026-09-02)
+
+Playtest: "the roads are very glitchy — sections phase with the ground
+and the car gets stuck where the ground comes out of the road."
+
+- **One grade, slab to slab.** The terrain-following profile is gone. A
+  link is now a single straight grade from one city's slab level to the
+  other's, so every segment lies in the same plane and the road holds the
+  cities' level the whole way — over a dip on an embankment (the slab
+  reaches down to 2.5 m under the lowest ground, up to 90 m), through a
+  rise in a tunnel.
+- **The corridor comes out first.** Before the slab, every segment cuts a
+  12 m-wide, 6.5 m-tall box whose floor sits a metre under the tarmac.
+  Through a mountain that leaves a roof — it reads as a tunnel, not as a
+  mountain with a slot missing. Through a hill it's an open trench. On
+  flat ground it just clears the shoulders. Then the slab refills its own
+  lane, so the road stands a metre proud of whatever was cut: the ground
+  never rises into it, inside a tunnel or out.
+- Signs moved up onto the tarmac's edge (the old shoulder spot is now the
+  gutter).
+- **Crafted full.** Drones, teleport drones, jetpacks, cars, bikes and
+  batteries all come off the bench at 100% (a battery at its capacity).
+  Use it the moment you make it; charge it later.
+
+Verified on the link with the most relief (81 m between road and
+terrain): 693 probes along 2 km — tarmac air above and solid below at
+every one, the 5 m shoulder cut at every one, a roof over the road at all
+11 probes where the mountain stands 8 m or more above it — and a sports
+car drove the full length without dropping below 27 m/s.
+
 ## Build 16 — THE GARAGE (2026-09-02)
 
 Roads, and the things that speed on them.
