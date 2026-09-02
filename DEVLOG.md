@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 13.4 — the flash loop and the grid-line hitch (2026-09-01)
+
+- **The flash between "new LOD" and "old LOD".** Any chunk landing in a
+  supertile flips it stale: a frontier tile gaining members as you fly
+  toward it, or your own drill edit re-meshing a chunk. The coverage mask
+  required `!t.stale` to count a tile as covering, so for the rebuild
+  window the whole 64-256m tile's coverage dropped and the heightfield
+  skin — no caves, no edits — popped back over it, then vanished when the
+  build landed. Flying = a loop of it; drilling = the pre-cut mountain
+  flashing before the hole. The old mesh never left the scene during that
+  window, so a standing mesh now counts as coverage, stale or not.
+  Measured while gliding near a city: truthful coverage held near the
+  player rose from 3,957 to 5,889 columns per sample (+49%); the lighting
+  flash was the same swap (skin vs LOD shade differently).
+
+- **The hitch on every grid line.** Walk from one cut cube into the
+  adjoining one and you felt a bump. Between two adjoining cuts the CSG
+  field's nearest "surface" is the zero-thickness membrane where the shared
+  face used to be (field = +MINE_EPS on that plane). The foot sphere's
+  contact there is rightly rejected as phantom — but the `continue` after
+  the rejection also skipped resolving the REAL floor beneath the sphere.
+  You sank a hair, crossed the plane, the floor was nearest again and
+  pushed you back up. Fix: when a contact is rejected as phantom, resolve
+  the floor on its own straight down (a 7-step bisection, foot sphere
+  only), and the extra ground probe does the same so `grounded` never
+  flickers on the line. Measured walking two adjoining 3m grid cubes:
+  vertical jitter 8.96cm -> 0.05cm, grounded flickers 2 -> 0.
+
 ## Build 13.3 — the line is gone, and the treeline stops popping (2026-08-31)
 
 - **THE SEAM LINE.** The hairline of sky along the LOD/real boundary was a
