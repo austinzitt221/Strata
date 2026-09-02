@@ -2,6 +2,26 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 18.1 — flight notes (2026-09-02)
+
+- **The rider banks with the plane.** The body model's driving branch
+  only knew heading; in a turn the pilot stuck straight out of the
+  banked airframe. The plane (and the hoverbike) now seat the body in
+  the vehicle's own frame — pitch, heading, roll — with the seat offset
+  rotated through it, the same trick the motorcycle uses for flips.
+- **The cockpit eye.** The first-person seat sat inside the fuselage
+  box, so you looked at its inner walls and past the dash. The eye now
+  sits up in the glass, ahead of the wing, over a proper dash with a
+  gauge cluster nearly twice the size, and the cabin behind it is roofed.
+- **Ceiling 150.** The plane could not clear the ranges at 100 m. It
+  climbs to 150 now, half again higher than every mountain.
+- **Roads through mountains** — see below.
+- **Roadmap.** Build 19 grows teeth: three night enemies for Earth
+  (stalker, husk, wisp), the Sky Spire on floating islands with winged
+  angels that never leave their island and THE ARCHANGEL at the top,
+  and the Ziggurat, a unique trapped pyramid on the ground. Weather,
+  seasons and collapse stay in the same build after them.
+
 ## Build 18 — WINGS (2026-09-02)
 
 Leaving the ground.
