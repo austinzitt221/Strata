@@ -2658,13 +2658,13 @@ function craft(slots, r, free){
                   : r.kind === 'disp' ? makeDispenser(r.tier)
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
-                  : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: 0 }
-                  : r.kind === 'drone' ? { kind: 'drone', charge: 0 }
-                  : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 0 }
-                  : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
+                  : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
+                  : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
+                  : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
+                  : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
-                  : r.kind === 'car' ? { kind: 'car', charge: 20 }
-                  : r.kind === 'bike' ? { kind: 'bike', charge: 20 }
+                  : r.kind === 'car' ? { kind: 'car', charge: 100 }
+                  : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -10375,7 +10375,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 6.5;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -10414,27 +10414,13 @@ const roadSys = {
     const ex = b.x - ux * edgeB, ez = b.z - uz * edgeB;
     const len = Math.hypot(ex - sx, ez - sz);
     const segs = Math.max(1, Math.round(len / ROAD_SEG));
-    // elevation profile: terrain at every node, wide-smoothed, slope ≤ 0.22
-    const raw = [];
-    for (let i = 0; i <= segs; i++){
-      const t = i / segs;
-      raw.push(game.gen.height(sx + (ex - sx) * t, sz + (ez - sz) * t));
-    }
-    // water is crossed on a causeway: the road never dips below the surface
-    const sea = (game.gen.seaLevel || 0) + 1.2;
-    const prof = raw.map((h, i) => {
-      let sum = 0, cnt = 0;
-      for (let k = -3; k <= 3; k++){ const j = i + k; if (j >= 0 && j < raw.length){ sum += Math.max(sea, raw[j]); cnt++; } }
-      return sum / cnt;
-    });
-    // pin the ends to the city slabs so the road meets the avenue level
-    prof[0] = Math.max(prof[0], citySys.slabLevel(a));
-    prof[segs] = Math.max(prof[segs], citySys.slabLevel(b));
-    const step = (len / segs) * 0.22;
-    for (let i = 1; i <= segs; i++) prof[i] = Math.min(prof[i], prof[i - 1] + step);
-    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.min(prof[i], prof[i + 1] + step);
-    for (let i = 1; i <= segs; i++) prof[i] = Math.max(prof[i], prof[i - 1] - step);
-    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.max(prof[i], prof[i + 1] - step);
+    // one straight grade from slab level to slab level: the road holds the
+    // cities' level the whole way — over dips on an embankment, through
+    // rises in a tunnel — so every segment lies in the same plane and
+    // nothing pokes up through the tarmac
+    const la = citySys.slabLevel(a), lb = citySys.slabLevel(b);
+    const prof = [];
+    for (let i = 0; i <= segs; i++) prof.push(+(la + (lb - la) * i / segs).toFixed(3));
     L = { key, a, b, sx, sz, ex, ez, ux, uz, len, segs, prof, yaw: Math.atan2(-ux, uz) };   // local +z -> (ux, uz)
     this.cache.set(key, L);
     return L;
@@ -10447,8 +10433,8 @@ const roadSys = {
     const y0 = L.prof[i], y1 = L.prof[i + 1];
     const top = (y0 + y1) / 2 + 0.25;
     const segLen = L.len / L.segs + 0.6;             // a hair of overlap: no cracks between slabs
-    const hr = game.gen.heightRange(mx - 8, mz - 8, mx + 8, mz + 8);
-    const bottom = Math.max(top - 30, Math.min(hr[0], top) - 2.5);
+    const hr = game.gen.heightRange(mx - 9, mz - 9, mx + 9, mz + 9);
+    const bottom = Math.max(top - 90, Math.min(hr[0], top) - 2.5);
     const EB = (op, y, sy, sx, sz, mat) => {
       const e = CORE.makeEdit(op, 1, +mx.toFixed(1), +y.toFixed(2), +mz.toFixed(1), sx, mat || 0, L.yaw);
       e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
@@ -10457,8 +10443,13 @@ const roadSys = {
       if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
       applyEdit(e);
     };
+    // the corridor comes out FIRST: a box 12m wide and 6.5m tall whose floor
+    // sits a metre under the tarmac. Through a mountain that is a tunnel with
+    // a roof; through a hill an open trench; on flat ground it just clears
+    // the shoulders. The slab then refills its own lane, so the road stands
+    // a metre proud of whatever it cut — the ground never rises into it.
+    if (hr[1] > top - ROAD_SHOULDER) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_W + 4, segLen, 0);
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT);
-    if (hr[1] > top + 0.2) EB(0, top + 3.6, 7.0, ROAD_W + 4, segLen, 0);   // the cut
     // no trees on the tarmac: fell every tree whose trunk lands on the segment
     if (game.gen.treeAt){
       const TC = CORE.TREE_CELL, half = ROAD_W / 2 + 1.2, along = segLen / 2 + 1;
@@ -10483,7 +10474,7 @@ const roadSys = {
       const rest = toB ? L.len * (1 - t0) : L.len * t1;
       const rx = L.uz, rz = -L.ux;                  // right of travel toward b
       const side = toB ? 1 : -1;
-      const px = mx + rx * side * (ROAD_W / 2 + 1.6), pz = mz + rz * side * (ROAD_W / 2 + 1.6);
+      const px = mx + rx * side * (ROAD_W / 2 - 0.35), pz = mz + rz * side * (ROAD_W / 2 - 0.35);
       pnodeSys.add('sign', px, top, pz, Math.atan2(L.ux, L.uz) + (toB ? 0 : Math.PI), {
         text: citySys.nameFor(dest.seed).slice(0, 16) + '\n' + (rest / 1000).toFixed(1) + ' km' });
     }
@@ -18131,7 +18122,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
-  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, capsuleFree, surfaceHit, placePreview,
+  treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,

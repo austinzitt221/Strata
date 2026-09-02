@@ -2,6 +2,36 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 16.1 — roads that hold their level (2026-09-02)
+
+Playtest: "the roads are very glitchy — sections phase with the ground
+and the car gets stuck where the ground comes out of the road."
+
+- **One grade, slab to slab.** The terrain-following profile is gone. A
+  link is now a single straight grade from one city's slab level to the
+  other's, so every segment lies in the same plane and the road holds the
+  cities' level the whole way — over a dip on an embankment (the slab
+  reaches down to 2.5 m under the lowest ground, up to 90 m), through a
+  rise in a tunnel.
+- **The corridor comes out first.** Before the slab, every segment cuts a
+  12 m-wide, 6.5 m-tall box whose floor sits a metre under the tarmac.
+  Through a mountain that leaves a roof — it reads as a tunnel, not as a
+  mountain with a slot missing. Through a hill it's an open trench. On
+  flat ground it just clears the shoulders. Then the slab refills its own
+  lane, so the road stands a metre proud of whatever was cut: the ground
+  never rises into it, inside a tunnel or out.
+- Signs moved up onto the tarmac's edge (the old shoulder spot is now the
+  gutter).
+- **Crafted full.** Drones, teleport drones, jetpacks, cars, bikes and
+  batteries all come off the bench at 100% (a battery at its capacity).
+  Use it the moment you make it; charge it later.
+
+Verified on the link with the most relief (81 m between road and
+terrain): 693 probes along 2 km — tarmac air above and solid below at
+every one, the 5 m shoulder cut at every one, a roof over the road at all
+11 probes where the mountain stands 8 m or more above it — and a sports
+car drove the full length without dropping below 27 m/s.
+
 ## Build 16 — THE GARAGE (2026-09-02)
 
 Roads, and the things that speed on them.

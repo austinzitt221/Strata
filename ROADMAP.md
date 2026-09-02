@@ -330,6 +330,8 @@ portable.
 - **Highways** — generated roads linking neighbouring cities, road signs,
   and a cruise-control speed bonus for staying on the tarmac. Suddenly
   the cities are a network, and vehicles have somewhere to go.
+  *(16.1: one grade slab to slab, tunnels through rises, road raised a
+  metre above its cut shoulders.)
 - Garages/driveways on owned property; a repair bench for wrecked
   vehicles.
 
