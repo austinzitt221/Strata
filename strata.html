@@ -389,6 +389,25 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="decraftscreen" class="screen hidden dim">
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2>DE-CRAFTER</h2>
+      <div class="invlabel">TAKE APART</div>
+      <div class="invgrid" style="grid-template-columns:52px; align-items:center;" id="decraftrow"></div>
+      <div class="sub" id="decraftstatus" style="margin:6px 0 8px;">put in anything a recipe made — get the recipe back</div>
+      <div><button class="btn small" id="btnUncraft1">UNCRAFT 1</button> <button class="btn small" id="btnUncraftAll">UNCRAFT ALL</button></div>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="decraftmain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="decrafthot"></div>
+      <div class="sub" style="margin-top:8px;">click to pick up · click to put down · shift-click moves &nbsp;·&nbsp; E to close</div>
+    </div>
+  </div>
+</div>
+
 <div id="craftscreen" class="screen hidden dim">
   <div class="mstack">
     <div class="panel" style="min-width:720px;">
@@ -2266,7 +2285,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -2468,6 +2487,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'elev', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { mat: MAT.PLANKS, n: 6 }] });
   RECIPES.push({ kind: 'acrank', yields: 1, station: true, costs: [{ item: 'ironingot', n: 4 }, { mat: MAT.PLANKS, n: 6 }, { item: 'stick', n: 2 }] });
   RECIPES.push({ kind: 'crafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 8 }, { item: 'rubyingot', n: 2 }] });
+  // the de-crafter: no power, runs every recipe backwards
+  RECIPES.push({ kind: 'decrafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { mat: MAT.PLANKS, n: 8 }] });
   RECIPES.push({ kind: 'gen2', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 8 }, { item: 'ironingot', n: 8 }] });
   RECIPES.push({ kind: 'tesla', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 4 }, { mat: MAT.CRYSTAL, n: 6 }, { item: 'ironingot', n: 4 }] });
   RECIPES.push({ kind: 'bulb', yields: 2, costs: [{ mat: MAT.GLOWSHROOM, n: 4 }, { item: 'ironingot', n: 1 }] });
@@ -2529,6 +2550,42 @@ function payCosts(slots, r){
     if (c.item) consumeItem(slots, c.item, c.n);
     else consumeMat(slots, c.mat, c.n);
   }
+}
+// add n of a stackable item kind to slots (merge first, then a free slot)
+function addItemN(slots, kind, n){
+  for (const sl of slots) if (sl && sl.kind === kind && sl.count != null){ sl.count += n; return true; }
+  for (let i = 0; i < slots.length; i++) if (!slots[i]){ slots[i] = { kind, count: n }; return true; }
+  return false;
+}
+// the recipe that MADE this item (kind + tier), if any — what uncrafting returns
+function uncraftRecipeFor(it){
+  if (!it || it.kind === 'mat' || it.kind === 'matout') return null;
+  for (const r of RECIPES){
+    if (r.kind !== it.kind || r.kind === 'matout' || !r.costs.length) continue;
+    if (r.tier != null && it.tier != null && r.tier !== it.tier) continue;
+    return r;
+  }
+  return null;
+}
+// run a recipe backwards up to n times on `it`, paying its costs back into
+// slots. Stackables give back one recipe per `yields` units. Returns the
+// number of recipes reversed; `it` is mutated (count) or emptied (null via
+// the caller when done===true).
+function uncraft(slots, it, n){
+  const r = uncraftRecipeFor(it);
+  if (!r) return { made: 0, done: false };
+  const per = r.yields || 1;
+  let made = 0;
+  for (let k = 0; k < n; k++){
+    if (it.count != null && it.count < per) break;
+    for (const c of r.costs){
+      if (c.item) addItemN(slots, c.item, c.n); else addMat(slots, c.mat, c.n);
+    }
+    made++;
+    if (it.count != null) it.count -= per; else break;   // a single tool is one recipe
+  }
+  const done = it.count == null ? made > 0 : it.count <= 0;
+  return { made, done };
 }
 // how many times a recipe's MATERIALS allow (inventory room is discovered
 // by crafting until 'full'); a recipe with no costs is bounded by the UI cap
@@ -2695,7 +2752,7 @@ return {
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
   makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, CITY_CELL,
-  HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN,
+  HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN, addItemN, uncraftRecipeFor, uncraft,
 };
 };
 const CORE = CORE_FACTORY();
@@ -6208,6 +6265,18 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, orb, face);
       g.userData.orb = orb;
+    } else if (t === 'decrafter'){
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.95, 1.05), M.wood);
+      body.position.y = 0.48;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 1.1), M.steel);
+      top.position.y = 1.0;
+      const gear = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3),
+        new THREE.MeshBasicMaterial({ color: 0xf0a040 }));
+      gear.position.y = 1.2; gear.rotation.y = Math.PI / 4; gear.rotation.x = Math.PI / 4;
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.06), M.dark);
+      face.position.set(0, 0.55, -0.54);
+      g.add(body, top, gear, face);
+      g.userData.orb = gear;
     } else if (t === 'board'){
       for (const s of [-0.9, 0.9]){
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.0, 0.14), M.bark);
@@ -7661,7 +7730,7 @@ function itemModel(it){
   else if (K === 'rope') g.add(ropeSys.model(0.8));
   else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
   else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
-            'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable'].includes(K)){
+            'gen2', 'crafter', 'decrafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable'].includes(K)){
     g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
   } else if (K === 'helm'){
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
@@ -7933,6 +8002,7 @@ const ENT_DEF = {
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
+  drop:     { hp: 1e9, speed: 0, r: 0.01, h: 0.01, cap: 0 },   // a thing on the ground; untargetable
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
@@ -7948,9 +8018,26 @@ const VROLE = {
   mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
 };
+const dropTexCache = new Map();
 function entMesh(type, ent){
   const g = new THREE.Group();
   const legs = [];
+  if (type === 'drop'){
+    // a card of the item's icon, both sides, turning on the spot
+    const url = itemIconURL(ent.item) || '';
+    let tex = dropTexCache.get(url);
+    if (!tex){
+      tex = new THREE.TextureLoader().load(url);
+      tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      dropTexCache.set(url, tex);
+    }
+    const card = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.62),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.4, side: THREE.DoubleSide }));
+    card.userData.noShadow = true;
+    g.add(card);
+    g.userData.noShadow = true;
+    return g;
+  }
   if (type === 'warden'){
     // a vault golem assembled from the ground itself: stonebrick torso,
     // rock limbs, an obsidian head. The boulders bolted to it are the
@@ -8283,6 +8370,29 @@ function entMesh(type, ent){
 function reviveEntity(type, x, y, z, hp){
   return { type, x, y, z, vx: 0, vy: 0, vz: 0, hp,
            tt: 0, tx: x, tz: z, flash: 0, atkT: 0, fleeT: 0, mesh: null };
+}
+// something on the ground: a spinning card of its icon. Same stacks merge,
+// you pick it up by walking over it, and it fades after five minutes.
+const DROP_TTL = 300;
+function dropItem(it, at){
+  if (!it) return null;
+  const dir = new THREE.Vector3();
+  if (game.camera) game.camera.getWorldDirection(dir);
+  const x = at ? at.x : game.pos.x + dir.x * 0.9, z = at ? at.z : game.pos.z + dir.z * 0.9;
+  const y = at ? at.y : game.pos.y + 1.2;
+  // merge into a like stack lying nearby
+  for (const e of game.entities){
+    if (e.type !== 'drop' || !e.item) continue;
+    if (Math.hypot(e.x - x, e.z - z) < 1.6 && Math.abs(e.y - y) < 2.5 && it.count != null && CORE.stackableWith(it, e.item)){
+      e.item.count += it.count; e.ttl = DROP_TTL; e.noGrab = 0.6;
+      if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+      return e;
+    }
+  }
+  const e = spawnEntity('drop', x, y, z);
+  e.item = it; e.ttl = DROP_TTL; e.noGrab = 0.9;       // a beat before it can be re-taken
+  e.vx = dir.x * 2.2; e.vz = dir.z * 2.2; e.vy = 1.6;
+  return e;
 }
 function spawnEntity(type, x, y, z){
   const e = reviveEntity(type, x, y, z, ENT_DEF[type].hp);
@@ -10222,6 +10332,40 @@ function updateEntities(dt, now){
       if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
       continue;
     }
+    if (e.type === 'drop'){
+      e.ttl = (e.ttl == null ? DROP_TTL : e.ttl) - dt;
+      if (e.ttl <= 0 || !e.item){ if (e.mesh) game.scene.remove(e.mesh); game.entities.splice(i, 1); continue; }
+      // fall until the ground, then rest and slide to a stop
+      e.vy -= 24 * dt;
+      let nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
+      const ed = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
+      if (sdfWorld(nx, ny + 0.15, nz, ed) < 0.15){
+        ny = e.y; e.vy = 0; e.vx *= 0.7; e.vz *= 0.7;
+        if (sdfWorld(nx, ny + 0.15, nz, ed) < 0.15){ nx = e.x; nz = e.z; }
+        if (sdfWorld(e.x, e.y + 0.15, e.z, ed) < 0.1) ny = e.y + 0.05;     // buried: ease up
+      }
+      e.x = nx; e.y = ny; e.z = nz;
+      if (!e.mesh){ e.mesh = entMesh('drop', e); game.scene.add(e.mesh); }
+      e.spin = (e.spin || 0) + dt * 2.2;
+      e.mesh.position.set(e.x, e.y + 0.35 + Math.sin(e.spin * 1.4) * 0.05, e.z);
+      e.mesh.rotation.y = e.spin;
+      e.noGrab = Math.max(0, (e.noGrab || 0) - dt);
+      // walk over it and it's yours
+      if (!e.noGrab && game.running && !game.photo &&
+          Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 1.35 && e.y > game.pos.y - 1.2 && e.y < game.pos.y + 2.2){
+        const it = e.item;
+        const ok = it.kind === 'mat' ? CORE.addMat(game.slots, it.mat, it.count)
+          : it.count != null && CORE.STACKABLE_KINDS.includes(it.kind) ? CORE.addItemN(game.slots, it.kind, it.count)
+          : giveItem(it, 1);
+        if (ok){
+          toast('+' + (it.count > 1 ? it.count + ' × ' : '') + itemLabel(it));
+          AudioSys.sfx('toggle');
+          game.scene.remove(e.mesh); game.entities.splice(i, 1);
+          refreshHotbar(); refreshToolHUD(); if (INV_UIS.includes(game.ui)) refreshAllUI(); markSave();
+        } else e.noGrab = 1.5;                            // pack full: try again later
+      }
+      continue;
+    }
     const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
     if (e.bossType){
       // bosses run their own physics and never despawn by distance
@@ -10730,6 +10874,7 @@ function bindInput(){
           return;
         }
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'decrafter'){ openDecrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'chest' && pn.locked){
           if (CORE.countItem(game.slots, 'vkey') >= 1){
@@ -10937,8 +11082,9 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab'){
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab')) closeOverlay();
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft'){
+      if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft')) closeOverlay();
       else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -11455,7 +11601,7 @@ function activeTool(){
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -11650,7 +11796,7 @@ const wrenchProps = {
       const D = { staple: [0.05, 0.22, 0.12, 0.22], lever: [0.2, 0.32, 0.3, 0.28], crank: [0.5, 0.34, 0.55, 0.34],
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
-                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56],
+                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 0.52, 0.15, 0.52], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -13467,7 +13613,7 @@ function itemIconURL(it){
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
+       'crafter', 'decrafter', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
        'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone'].includes(it.kind) ? it.kind : it.kind + it.tier;
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
@@ -13691,6 +13837,13 @@ function itemIconURL(it){
     c.fillStyle = '#3c3a44'; c.fillRect(4, 7, 8, 5);
     c.fillStyle = '#59c8d8'; c.fillRect(5, 8, 2, 2); c.fillRect(8, 9, 3, 2);
     c.fillStyle = '#ffd76a'; c.fillRect(11, 5, 2, 1);
+  } else if (it.kind === 'decrafter'){
+    // the auto-crafter's mirror: same bench, amber gear, a split-arrow face
+    c.fillStyle = '#8a6237'; c.fillRect(2, 4, 12, 10);
+    c.fillStyle = '#a37c47'; c.fillRect(2, 4, 12, 2);
+    c.fillStyle = '#3c3a44'; c.fillRect(4, 7, 8, 5);
+    c.fillStyle = '#f0a040'; c.fillRect(5, 8, 2, 3); c.fillRect(9, 8, 2, 3); c.fillRect(7, 9, 2, 1);
+    c.fillStyle = '#ffd76a'; c.fillRect(3, 5, 2, 1);
   } else if (it.kind === 'wire'){
     // copper coil with two loose ends
     c.fillStyle = '#b5793a';
@@ -13928,6 +14081,7 @@ function itemLabel(it){
   if (it.kind === 'tesla') return 'tesla coil';
   if (it.kind === 'gen2') return 'generator mk2';
   if (it.kind === 'crafter') return 'auto-crafter';
+  if (it.kind === 'decrafter') return 'de-crafter';
   if (it.kind === 'chest') return 'chest';
   if (it.kind === 'helm') return CORE.TIER_NAME[it.tier] + ' helmet';
   if (it.kind === 'plate') return CORE.TIER_NAME[it.tier] + ' chestplate';
@@ -13987,12 +14141,13 @@ function slotItem(key){
   if (key === 'achest') return game.armor.chest;
   if (key === 'afeet') return game.armor.feet;
   if (key === 'gfuel') return game.activeCont && game.activeCont.fuel;
+  if (key === 'dcin') return game.activeDecraft && game.activeDecraft.inv && game.activeDecraft.inv[0];
   if (typeof key === 'string' && /^c\d+$/.test(key))
     return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
   return game.slots[+key];
 }
 function isPseudoKey(k){
-  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k);
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k);
 }
 function slotKeyOf(el){
   const k = el.dataset.slot;
@@ -14095,7 +14250,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blas
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad'];
-const CAT_SPECIAL  = ['door', 'table', 'stove', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -14164,7 +14319,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'chest', 'astand', 'pad', 'ped', 'sign',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'chest', 'astand', 'pad', 'ped', 'sign',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -14413,6 +14568,41 @@ function refreshCrafterUI(){
   num.addEventListener('change', () => { n.limit = num.value === '' ? null : Math.max(1, Math.min(100000, +num.value | 0)); n.made = 0; markSave(); refreshCrafterUI(); });
   host.appendChild(num);
 }
+function openDecrafter(pn){
+  game.activeDecraft = pn;
+  if (!pn.inv) pn.inv = [null];
+  game.ui = 'decraft';
+  const row = $('decraftrow'), main = $('decraftmain'), hot = $('decrafthot');
+  row.innerHTML = ''; main.innerHTML = ''; hot.innerHTML = '';
+  row.appendChild(slotEl('dcin'));
+  for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+  for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+  $('btnUncraft1').onclick = () => doUncraft(1);
+  $('btnUncraftAll').onclick = () => doUncraft(100000);
+  refreshDecraftUI();
+  show('decraftscreen'); document.exitPointerLock();
+}
+function refreshDecraftUI(){
+  const pn = game.activeDecraft;
+  if (!pn || game.ui !== 'decraft') return;
+  document.querySelectorAll('#decraftscreen .slot').forEach(paintSlot);
+  const it = pn.inv[0];
+  const r = it ? CORE.uncraftRecipeFor(it) : null;
+  $('decraftstatus').textContent = !it ? 'put in anything a recipe made — get the recipe back'
+    : !r ? itemLabel(it) + ' was never crafted — nothing to take apart'
+    : 'each ' + (r.yields > 1 ? r.yields + ' ' : '') + itemLabel(it) + ' gives back ' +
+      r.costs.map(c => c.n + ' ' + (c.item ? c.item : CORE.MAT_NAME[c.mat])).join(' + ');
+}
+function doUncraft(n){
+  const pn = game.activeDecraft;
+  const it = pn && pn.inv[0];
+  if (!it){ toast('nothing in the de-crafter'); return; }
+  const { made, done } = CORE.uncraft(game.slots, it, n);
+  if (!made){ toast(CORE.uncraftRecipeFor(it) ? 'not enough to take apart' : 'that was never crafted'); AudioSys.sfx('deny'); return; }
+  if (done) pn.inv[0] = null;
+  toast('took apart ' + (made > 1 ? made + ' × ' : '') + itemLabel(it));
+  AudioSys.sfx('craft'); markSave(); refreshAllUI();
+}
 function openStove(st){
   game.activeStove = st;
   game.ui = 'stove'; buildStoveUI(); show('stovescreen'); document.exitPointerLock();
@@ -14457,6 +14647,7 @@ function uiMove(from, to){
     : k === 'achest' ? game.armor.chest
     : k === 'afeet' ? game.armor.feet
     : k === 'gfuel' ? (pc && pc.fuel)
+    : k === 'dcin' ? (game.activeDecraft && game.activeDecraft.inv[0])
     : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
     : game.slots[k];
   const set = (k, v) => {
@@ -14469,6 +14660,7 @@ function uiMove(from, to){
     else if (k === 'achest') game.armor.chest = v;
     else if (k === 'afeet') game.armor.feet = v;
     else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
+    else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
     else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
     else game.slots[k] = v;
   };
@@ -14493,9 +14685,22 @@ function uiMove(from, to){
   return 'swapped';
 }
 // shift-click: send a stack where it obviously wants to go
-function quickMove(key){
-  const it = slotItem(key);
-  if (!it) return;
+function quickMove(key, n){
+  const whole = slotItem(key);
+  if (!whole) return;
+  // a partial quick-move splits the stack first and puts the remainder
+  // back whether or not the move lands
+  if (n && whole.count != null && n < whole.count){
+    whole.count -= n;
+    slotSet(key, Object.assign({}, whole, { count: n }));
+    const moved = quickMove(key);
+    const left = slotItem(key);
+    if (left){ whole.count += left.count; }              // it didn't go anywhere
+    slotSet(key, whole);
+    if (moved) refreshAllUI();
+    return moved;
+  }
+  const it = whole;
   const isNum = typeof key === 'number';
   const mergeInto = arr => {
     if (it.count != null)
@@ -14527,8 +14732,14 @@ function quickMove(key){
       else if (key === 'sfuel') game.activeStove.fuel = null;
       else if (key === 'sout') game.activeStove.out = null;
       else if (key === 'disp') game.dispSlot = null;
+      else if (key === 'dcin') game.activeDecraft.inv[0] = null;
       done = true;
     }
+  } else if (game.ui === 'decraft' && game.activeDecraft){
+    const pn = game.activeDecraft;
+    if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
+    else if (CORE.stackableWith(it, pn.inv[0])){ pn.inv[0].count += it.count; game.slots[key] = null; done = true; }
+    else toast('the de-crafter holds one thing at a time');
   } else if (game.ui === 'stove' && game.activeStove){
     const st = game.activeStove;
     if (CORE.SMELTS[it.kind] && (!st.in || CORE.stackableWith(it, st.in))){
@@ -14569,60 +14780,178 @@ function quickMove(key){
   if (done){
     AudioSys.sfx('toggle');
     markSave();
+    if (game.ui === 'inv') refreshInvUI();
     refreshAllUI();
   }
+  return done;
 }
 function refreshAllUI(){
   refreshHotbar(); refreshToolHUD();
   if (game.ui === 'stove') refreshStoveUI(true);
+  else if (game.ui === 'decraft') refreshDecraftUI();
   else if (game.ui === 'cont') refreshContUI();
   else if (game.ui === 'crafter') refreshCrafterUI();
   else if (game.ui === 'trade') tradeSys.refresh();
   else document.querySelectorAll(
     '#invmain .slot, #invhot .slot, #invdisp .slot, #invarmor .slot, ' +
     '#craftinvmain .slot, #craftinvhot .slot').forEach(paintSlot);
+  invCursor.paint();
 }
 
-// drag & drop
-const drag = { active: false, from: -1 };
+// ---------- the cursor: click to pick up, click to put down ----------
+// Left click lifts a whole stack, right click lifts half; holding, left
+// click puts it all down, right click puts half, a tap of Shift puts one
+// (or lifts one, if the cursor is empty). Shift-click still quick-moves
+// (shift-right-click quick-moves half). Click outside every panel while
+// holding and it drops on the ground.
+const INV_UIS = ['inv', 'stove', 'cont', 'crafter', 'craft', 'trade', 'decraft'];
+function slotSet(k, v){
+  const st = game.activeStove, pc = game.activeCont;
+  if (k === 'disp') game.dispSlot = v;
+  else if (k === 'sin'){ if (st) st.in = v; }
+  else if (k === 'sfuel'){ if (st) st.fuel = v; }
+  else if (k === 'sout'){ if (st) st.out = v; }
+  else if (k === 'aback') game.armor.back = v;
+  else if (k === 'ahead') game.armor.head = v;
+  else if (k === 'achest') game.armor.chest = v;
+  else if (k === 'afeet') game.armor.feet = v;
+  else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
+  else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
+  else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
+  else game.slots[k] = v;
+}
+// why an item may not go into a slot (null = fine)
+function slotRefuses(to, A){
+  if (to === 'disp' && A.kind !== 'disp') return 'only a dispenser fits in the dispenser slot';
+  if (to === 'sout') return 'the output slot only gives';
+  if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
+  if (to === 'sfuel' && !CORE.fuelOps(A)) return 'fuel is coal or wood';
+  if (to === 'gfuel' && A.kind !== 'coal') return 'generators burn coal';
+  if (to === 'ahead' && A.kind !== 'helm') return 'that slot wants a helmet';
+  if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
+  if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
+  if (to === 'aback' && A.kind !== 'jetpack') return 'that slot wants a jetpack';
+  if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
+      !['helm', 'plate', 'boots'].includes(A.kind)) return 'the stand holds armor';
+  return null;
+}
+const invCursor = {
+  it: null, el: null, img: null, cnt: null, mx: 0, my: 0,
+  init(){
+    this.el = $('draggy');
+    this.el.innerHTML = '<img alt=""><span class="cnt"></span>';
+    this.img = this.el.querySelector('img'); this.cnt = this.el.querySelector('.cnt');
+    this.el.style.pointerEvents = 'none';
+  },
+  paint(){
+    if (!this.it){ this.el.style.display = 'none'; return; }
+    this.img.src = itemIconURL(this.it);
+    this.cnt.textContent = this.it.count != null ? fmtCount(this.it.count) : '';
+    this.el.style.display = 'block';
+    this.el.style.left = (this.mx - 26) + 'px'; this.el.style.top = (this.my - 26) + 'px';
+  },
+  // split n off an item (n >= count, or a one-off tool: the whole thing)
+  take(it, n){
+    if (it.count == null || n >= it.count) return { part: it, rest: null };
+    it.count -= n;
+    return { part: Object.assign({}, it, { count: n }), rest: it };
+  },
+  lift(key, n){
+    const it = slotItem(key);
+    if (!it) return;
+    const { part, rest } = this.take(it, n);
+    slotSet(key, rest);
+    this.it = part;
+    AudioSys.sfx('toggle');
+    this.after();
+  },
+  put(key, n){
+    const A = this.it;
+    if (!A) return;
+    const why = slotRefuses(key, A);
+    if (why){ toast(why); AudioSys.sfx('deny'); return; }
+    const B = slotItem(key);
+    const { part, rest } = this.take(A, n);
+    if (!B){ slotSet(key, part); this.it = rest; }
+    else if (CORE.stackableWith(part, B)){ B.count += part.count; this.it = rest; }
+    else if (rest || isPseudoKey(key) && key !== 'disp' && !/^c\d+$/.test(String(key))){
+      // a partial put or a one-item machine slot can't swap
+      if (rest){ rest.count += part.count; }
+      toast('that slot is taken'); AudioSys.sfx('deny'); return;
+    } else { slotSet(key, part); this.it = B; }          // swap
+    AudioSys.sfx('toggle');
+    this.after();
+  },
+  // a tap of Shift over a slot: one in, or one out
+  shiftTap(){
+    const el = document.elementFromPoint(this.mx, this.my);
+    const slot = el && el.closest && el.closest('.slot');
+    if (slot && slot.parentElement.id !== 'hotbar'){
+      const key = slotKeyOf(slot);
+      if (this.it) this.put(key, 1); else if (slotItem(key)) this.lift(key, 1);
+      return;
+    }
+    if (this.it && !(el && el.closest && el.closest('.panel'))) this.dropHeld(1);
+  },
+  dropHeld(n){
+    if (!this.it) return;
+    const { part, rest } = this.take(this.it, n);
+    dropItem(part);
+    this.it = rest;
+    this.after();
+  },
+  // closing a screen with something in hand: back to the pack, or the floor
+  putBack(){
+    if (!this.it) return;
+    const it = this.it; this.it = null;
+    const ok = it.kind === 'mat' ? CORE.addMat(game.slots, it.mat, it.count)
+      : it.count != null && CORE.STACKABLE_KINDS.includes(it.kind) ? CORE.addItemN(game.slots, it.kind, it.count)
+      : giveItem(it, 1);
+    if (!ok) dropItem(it);
+    this.paint();
+  },
+  after(){
+    this.paint();
+    if (game.ui === 'inv') refreshInvUI();
+    refreshAllUI(); markSave();
+  },
+};
 function bindInvDnD(){
-  const dgy = $('draggy'), dgi = dgy.querySelector('img');
+  invCursor.init();
+  document.addEventListener('mousemove', e => {
+    invCursor.mx = e.clientX; invCursor.my = e.clientY;
+    if (invCursor.it) invCursor.paint();
+    if (!INV_UIS.includes(game.ui)) return;
+    document.querySelectorAll('.drop-ok').forEach(x => x.classList.remove('drop-ok'));
+    const el = e.target.closest && e.target.closest('.slot');
+    if (el && el.parentElement.id !== 'hotbar' && invCursor.it) el.classList.add('drop-ok');
+  });
+  document.addEventListener('contextmenu', e => { if (INV_UIS.includes(game.ui)) e.preventDefault(); });
   document.addEventListener('mousedown', e => {
-    if (!['inv', 'stove', 'cont', 'crafter', 'craft', 'trade'].includes(game.ui)) return;
-    const el = e.target.closest('.slot');
-    if (!el || el.parentElement.id === 'hotbar') return;
-    const key = slotKeyOf(el);
-    if (!slotItem(key)) return;
-    if (e.shiftKey){
-      quickMove(key);
+    if (!INV_UIS.includes(game.ui)) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    if (e.target.closest && (e.target.closest('button') || e.target.closest('input') || e.target.closest('.cattab') || e.target.closest('.amtbtn'))) return;
+    const right = e.button === 2;
+    const half = x => Math.max(1, Math.ceil((x.count || 1) / 2));
+    const el = e.target.closest && e.target.closest('.slot');
+    if (el && el.parentElement.id !== 'hotbar'){
+      const key = slotKeyOf(el);
+      const it = slotItem(key);
+      if (!invCursor.it){
+        if (!it) return;
+        if (e.shiftKey) quickMove(key, right && it.count != null ? half(it) : 0);
+        else invCursor.lift(key, right ? half(it) : (it.count || 1));
+      } else {
+        invCursor.put(key, right && invCursor.it.count != null ? half(invCursor.it) : (invCursor.it.count || 1));
+      }
       e.preventDefault();
       return;
     }
-    drag.active = true; drag.from = key;
-    dgi.src = itemIconURL(slotItem(key));
-    dgy.style.display = 'block';
-    dgy.style.left = (e.clientX - 26) + 'px'; dgy.style.top = (e.clientY - 26) + 'px';
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
-    if (!drag.active) return;
-    dgy.style.left = (e.clientX - 26) + 'px'; dgy.style.top = (e.clientY - 26) + 'px';
-    document.querySelectorAll('.drop-ok').forEach(x => x.classList.remove('drop-ok'));
-    const el = e.target.closest && e.target.closest('.slot');
-    if (el && el.parentElement.id !== 'hotbar') el.classList.add('drop-ok');
-  });
-  document.addEventListener('mouseup', e => {
-    if (!drag.active) return;
-    drag.active = false; dgy.style.display = 'none';
-    document.querySelectorAll('.drop-ok').forEach(x => x.classList.remove('drop-ok'));
-    const el = e.target.closest && e.target.closest('.slot');
-    if (el && el.parentElement.id !== 'hotbar'){
-      uiMove(drag.from, slotKeyOf(el));
-      if (game.ui === 'inv') refreshInvUI();
-      refreshAllUI();
-      markSave();
+    // holding something and clicked outside every panel: onto the ground
+    if (invCursor.it && !(e.target.closest && e.target.closest('.panel'))){
+      invCursor.dropHeld(right && invCursor.it.count != null ? half(invCursor.it) : (invCursor.it.count || 1));
+      e.preventDefault();
     }
-    drag.from = -1;
   });
 }
 
@@ -14745,6 +15074,7 @@ function refreshToolHUD(){
                   tesla: 'wireless power in 8m · zaps anyone within arm\'s reach',
                   gen2: '~100W · right click to open, coal burns long and hot',
                   crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
+                  decrafter: 'no power needed · right click to take things apart into what made them',
                   chest: 'storage — right click to open · tubes can pipe into it',
                   pad: 'wire it up, stand on it wearing a jetpack — it refuels · 20W' }[it.kind];
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">left click to place · ' + tip + '</div>';
@@ -15112,7 +15442,7 @@ function buildCraftUI(){
       const { made, res } = CORE.craftN(game.slots, r, n, creative);
       if (res === 'ok'){
         toast('crafted ' + (made > 1 ? made + ' × ' : '') + itemLabel(item) + (made < n ? ' (inventory full)' : ''));
-        AudioSys.sfx('craft'); buildCraftUI(); refreshHotbar(); markSave();
+        AudioSys.sfx('craft'); buildCraftUI(); refreshAllUI(); markSave();
       }
       else if (res === 'poor') toast('missing materials');
       else toast('inventory full');
@@ -15140,7 +15470,7 @@ function buildCraftUI(){
         const ok = giveItem(entry, n);
         toast(ok ? '+' + (n > 1 ? n + ' × ' : '') + label : 'inventory full');
         AudioSys.sfx(ok ? 'craft' : 'deny');
-        buildCraftUI(); refreshHotbar(); refreshToolHUD(); markSave();
+        buildCraftUI(); refreshAllUI(); markSave();
       });
       row.appendChild(btn);
       list.appendChild(row);
@@ -15233,7 +15563,9 @@ function openMap(){
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
 }
 function closeOverlay(){
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen');
+  invCursor.putBack();                        // never lose what your cursor held
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen');
+  game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
   game.activeBoard = null;
@@ -15498,7 +15830,9 @@ function saveNow(){
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
     entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag)
-      .map(e => [e.type, e.x, e.y, e.z, e.hp,
+      .map(e => e.type === 'drop'
+        ? ['drop', +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), 1, 0, 0, e.item, Math.round(e.ttl || 0)]
+        : [e.type, e.x, e.y, e.z, e.hp,
                  e.charge != null ? +(+e.charge).toFixed(1) : 0,
                  e.heading != null ? +(+e.heading).toFixed(2) : 0]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
@@ -15575,8 +15909,9 @@ function startWorld(id){
     const e = reviveEntity(r[0], r[1], r[2], r[3], r[4]);
     if (r[5]) e.charge = r[5];
     if (r[6]) e.heading = r[6];
+    if (r[0] === 'drop'){ e.item = r[7] || null; e.ttl = r[8] || 1; }
     return e;
-  });
+  }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
@@ -16956,7 +17291,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>

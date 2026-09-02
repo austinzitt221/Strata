@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 14.1 — hands (2026-09-01)
+
+Playtest: "you can't drop things or split stacks at all" — and 500
+accidental electric cars to prove it. The whole inventory interaction
+model changes.
+
+- **Click to hold.** Drag-while-holding is gone. Left click lifts a whole
+  stack onto the cursor, right click lifts half (a single thing lifts
+  whole). Holding, left click puts it all down, right click puts half and
+  keeps the rest, a tap of Shift puts exactly one — or, with an empty
+  cursor, lifts exactly one. Shift-click still quick-moves; shift-right-
+  click quick-moves half. The cursor icon follows the mouse with its
+  count. Closing a screen with something in hand puts it back in your pack
+  (or on the floor if the pack is full) — nothing is ever lost.
+- **Drop it.** Holding something and clicking outside every panel drops it
+  on the ground (left = all, right = half, Shift = one). Drops are a
+  spinning card of the item's own icon that falls to the ground, merges
+  with a like stack lying within 1.6m, gets picked up when you walk over
+  it, and fades after five minutes. They save with the world.
+- **The de-crafter.** A new bench (6 iron ingots + 8 planks, no power)
+  that runs every recipe backwards: a diamond drill back into its 24
+  diamonds, 20 rails into 2 recipes' worth of iron and sticks with 4 rails
+  left over. Anything no recipe made can't be taken apart. UNCRAFT 1 /
+  UNCRAFT ALL.
+- **Live refresh.** Crafting repainted the HUD hotbar but not the grids
+  on the crafting screen itself, so a new drill sat invisible until you
+  closed and reopened. Every inventory grid on screen repaints on every
+  change now.
+
+Verified: lift 500 -> half 250 -> put -> half 125 -> Shift 1 -> merge 374
+-> Shift-lift 1; quick-move whole and half; drop half then all merging to
+one 30-coal card, walked over and recovered, expiry; drill -> 24/24
+diamonds; crafted item painted on the open crafting screen.
+
 ## Build 14 — MENUS & MAKING THINGS (2026-09-01)
 
 - **One inventory for both modes.** The creative catalog is gone — panel,
