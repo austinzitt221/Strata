@@ -347,7 +347,7 @@ portable.
   The one fight where the arena is water and the floor is a long way
   down.
 
-## Build 18 — WINGS (leaving the ground)
+## Build 18 — WINGS (leaving the ground) (DONE)
 - **The cargo plane** — a two-seat prop plane. Not fast, but it crosses
   the map. Real takeoff and landing: come in too steep or too hot and
   it explodes. You will carve runways, and that's the point.
