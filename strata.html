@@ -11161,7 +11161,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 3;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 4;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -11235,11 +11235,18 @@ const roadSys = {
       const hj = game.gen.heightRange(jx - 15, jz - 15, jx + 15, jz + 15);
       if (hj[1] > (L.prof[j] + L.prof[j + 1]) / 2 + 0.25 - ROAD_SHOULDER) riseNear = true;
     }
-    const EB = (op, y, sy, sx, sz, mat) => {
-      const e = CORE.makeEdit(op, 1, +mx.toFixed(1), +y.toFixed(2), +mz.toFixed(1), sx, mat || 0, L.yaw);
+    const grade = Math.atan2(y1 - y0, L.len / L.segs);
+    // A box tilts about its own centre, so a face far from the centre slides
+    // along the road: a 48 m embankment slab's TOP moves ~0.4 m one way while
+    // the corridor cut's FLOOR (3.5 m above the road) moves the other, and
+    // the two no longer meet at the segment boundary — a metre-deep,
+    // half-metre trench across every graded road ("the mountain is still
+    // there"). Each box is shifted so its working face lands where the
+    // untilted face would have: faceY is that face's height off the centre.
+    const EB = (op, y, sy, sx, sz, mat, faceY) => {
+      const shift = (faceY || 0) * Math.sin(grade);
+      const e = CORE.makeEdit(op, 1, +(mx + L.ux * shift).toFixed(2), +y.toFixed(2), +(mz + L.uz * shift).toFixed(2), sx, mat || 0, L.yaw);
       e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
-      // tilt with the grade so the surface stays one plane
-      const grade = Math.atan2(y1 - y0, L.len / L.segs);
       if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
       applyEdit(e);
     };
@@ -11248,8 +11255,8 @@ const roadSys = {
     // a roof; through a hill an open trench; on flat ground it just clears
     // the shoulders. The slab then refills its own lane, so the road stands
     // a metre proud of whatever it cut — the ground never rises into it.
-    if (riseNear) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0);   // exactly the slab's length: the next slab refills what this cut takes
-    EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT);
+    if (riseNear) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0, -ROAD_TUNNEL_H / 2);   // its floor is the working face
+    EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT, (top - bottom) / 2);                              // its top is
     // at either end: a painted strip along the slab's edge from where the
     // road arrives to the nearest avenue, so the highway joins the grid
     if (i === 0 || i === L.segs - 1) this.connect(L, i === 0 ? L.a : L.b, i === 0 ? [L.ux, L.uz] : [-L.ux, -L.uz]);
