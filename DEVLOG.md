@@ -2,6 +2,44 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 15.1 — rail meters and battery bars (2026-09-02)
+
+Playtest on 15: "remove the post thing at the end and just have it end in
+rail" — and make rails a thing you wire, not a thing you park a grid near.
+
+- **Rail meters.** The brass posts are gone. Each end of a line carries a
+  small meter on a stem: a screen reading the watts the line is getting
+  and, under it, how fast the cart will go. The meter is the line's wire
+  terminal (`r<lineId>e<0|1>`), so it wires like any machine: wire tool
+  from a generator to either meter, or both. Tesla coils reach it
+  wirelessly like anything else. It comes with the rails — no item.
+- **Watts buy speed.** A wired line draws 15W to exist, then takes
+  whatever its circuit has left after every other load is fed (bulbs and
+  machines still get theirs first). Both meters' watts add up. Speed is
+  4 + 0.22 m/s per watt, capped at 60 m/s: one gen2 alone reads 100W and
+  26 m/s, two of them 200W and 48 m/s. A line that goes dead mid-ride
+  dumps you at the cart.
+- **Extending a line.** Plant a spike on an existing rail meter and you
+  grab that end; the next spikes push it out (either end — the front end
+  grows backwards). Finishing an extension where the meter moved cuts the
+  wire that fed it and hands the wire back: rewire the meter where it is
+  now. The line never leaves `game.rails` while it's being extended, so a
+  save mid-extension keeps it.
+- **Battery bars.** Every powered item — jetpack, drone, teleport drone,
+  car kit and the batteries themselves — shows a bar under its icon in
+  every slot and on the cursor: green above half, amber, red below a
+  fifth. It reads like a pickaxe's durability in Minecraft, but it is the
+  remaining charge; nothing here wears out.
+- Lines get ids (old saves are minted them on load). `powerSys.railWatts`
+  replaces `railLive`; `railSys.speedFor` / `wattsFor` are the readouts.
+
+Verified headlessly: a gen2 wired to a meter reads 100W / 26 m/s and the
+screen lights; both meters 200W, a bulb on the circuit takes its 5W first
+(195); grabbing the far meter with the rail tool extends the line, drops
+that meter's wire (refunded) and keeps the other; ride distance matches
+speed x time and a dead line dismounts; bars at 50/25/100/10% and none on
+a rail stack; ids and meter wires survive the save.
+
 ## Build 15 — STORED POWER (2026-09-02)
 
 Charging a car by parking it near a lit bulb was nonsense. Power is now

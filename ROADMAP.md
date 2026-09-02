@@ -315,6 +315,8 @@ portable.
 - **Rails run on wire.** Powered rail segments join the normal wiring
   rules; no more accidental-lightbulb archaeology. Rail battery boxes
   for lines far from your grid.
+  *(15.1: each end of a line is a rail meter — the wire terminal — that
+  reads its watts and cart speed; more watts, faster cart.)
 - Every existing chargeable (jetpack, drone, teleport drone) accepts
   batteries too.
 
