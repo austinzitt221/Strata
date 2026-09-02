@@ -335,7 +335,7 @@ portable.
 - Garages/driveways on owned property; a repair bench for wrecked
   vehicles.
 
-## Build 17 — BLUE WATER (the ocean update)
+## Build 17 — BLUE WATER (the ocean update) (DONE — plus flowing water)
 - **The paddle boat** — no power, you row it. Cheap, early, honest.
 - **The motorboat** — electric, fast, battery-driven, planes across open
   water.

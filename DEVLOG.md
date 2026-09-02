@@ -2,7 +2,7 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
-## Build 17 — BLUE WATER (2026-09-02) — in progress
+## Build 17 — BLUE WATER (2026-09-02)
 
 ### A. Water that flows
 Playtest: "if you cut around it or below it, the water doesn't flow. I
@@ -61,6 +61,52 @@ then sources); a 15 m tunnel + 7 m chamber fills flat (49/49 floor
 cells sources) and is swimmable; a hole in a hilltop stays dry; cells
 survive a save byte-for-byte; the paddle boat floats at -0.22 and rows
 at 5.5 m/s, the motorboat hits 17, drains, and crawls at 3.4 beached.
+
+### C. The ocean
+- **Island chains** — region archetype 8, rolled into the low-continent
+  pools. Whatever the backbone says, the region is a shelf eight metres
+  down; sandy islands rise up to 14 m where a broad ridged field peaks.
+  Wide beaches, palms (the usual trees), no forts or villages.
+- **The reef.** On the shelf between islands, decor goes under water:
+  coral heads in two colours and ribbons of kelp nearly three metres
+  tall, instanced like the meadow tufts, pickable and placeable.
+- **Shipwrecks.** One candidate per 360 m cell on water at least 7 m
+  deep, stamped on approach (160 m) like forts: a planked hull listing
+  on the seabed, hollow hold, the bow stove in, a breach in the side, a
+  mast stump, and a strongbox in the hold — coins, ruby and iron ingots,
+  rounds, a medium battery, and a diamond or (one wreck in three) a
+  diving helmet. The hull edits wake the water, so the hold is flooded
+  the way a wreck should be.
+- **The diving helmet** (iron 6, ruby 1, wire 2). Wears in the helmet
+  slot; breath drains at 1.1/s instead of 8 — ninety seconds down. A
+  glass globe with a brass collar on the body model.
+
+### D. Fishing and the thing under the boat
+- **The rod** (sticks 3, wire 2). Aim at water within 14 m and click to
+  cast: a red-and-white bobber sits on the surface. Three to ten seconds
+  later it dips — BITE! — and you have 1.6 s to click and reel. The
+  catch is the region's fish: perch on the plains and hills, trout in
+  the ranges and on the ice, carp on the mesa and dunes, catfish in the
+  swamp, ember eel off the volcanoes, snapper on the reef, and cod
+  anywhere the water is deeper than nine metres. Fish stack by species,
+  eat for 15, cook to cooked fish for 45, and the grocer's fish market
+  pays 7 a fish, 20 for two cooked. Walk more than 3 m from the cast or
+  switch tools and the line comes in.
+- **THE LEVIATHAN.** Deep water (14 m+) and you on it — swimming, or in
+  a boat — and one check in fourteen every two seconds it comes: a
+  ten-segment serpent in deep-sea blues. It circles ten metres down,
+  then breaches straight up under you: the boat takes 45, you take 18
+  and are thrown, and it dives wide before the next pass. 700 hp; it
+  never leaves the water. First kill: the LEVIATHAN SCALE and 160
+  coins; after that coins and diamonds.
+
+Verified: an island region 300 m from spawn (17 land cells, 378 shelf,
+93 coral + 59 kelp candidates, all sand/grass); a wreck stamps with 5
+edits, 1 chest (87 coins), waking 18 water chunks; the helmet cuts
+breath loss 17x; a cast, a bite and a snapper in the pack, 2 market
+rows, 15 hp of mending; the Leviathan runs stalk > breach > dive, hits
+the boat (180 > 45) and the rider (100 > 49), shows its bar, and drops
+the scale.
 
 ## Build 16.1 — roads that hold their level (2026-09-02)
 
