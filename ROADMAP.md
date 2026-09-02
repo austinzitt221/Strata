@@ -320,7 +320,7 @@ portable.
 - Every existing chargeable (jetpack, drone, teleport drone) accepts
   batteries too.
 
-## Build 16 — THE GARAGE (roads and the things that speed on them)
+## Build 16 — THE GARAGE (roads and the things that speed on them) (DONE)
 - **The sports car** — coin only, sold in city dealerships. Fast, twitchy,
   a pure money sink and a status object.
 - **The electric motorcycle** — crafted; quick, nimble, and dangerous:

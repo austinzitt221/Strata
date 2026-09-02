@@ -2,6 +2,70 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 16 — THE GARAGE (2026-09-02)
+
+Roads, and the things that speed on them.
+
+- **One drive loop, three personalities.** `VEH` holds each vehicle's
+  numbers (top/reverse speed, accel, brake, steer rate, drain, ground
+  sphere, seat camera, gauge scale, repair cost) and `driveCar` reads
+  them. Every `e.type === 'car'` check became `VEH[e.type]`: pad charging,
+  the pack-up crouch-grab, the kit tool, save rows, HUD, the vehicle
+  panel. The gauge's full scale follows the vehicle (50 / 120 / 90 km/h).
+- **The sports car.** Coin only — 2400 from the electrician's dealership
+  row (rep 15), and a free TAKE row in creative. 27 m/s, sharp steering,
+  drinks 1.3%/s. Low red wedge, spoiler, fat wheels, the same live gauge
+  cluster.
+- **The electric motorcycle.** Crafted (iron 8, ruby 2, wire 4). 21 m/s,
+  the nimblest thing on wheels, and it leaves the ground: a crest launches
+  you with the slope's upward velocity, SPACE hops. Airborne, W/S flips,
+  A/D spins, and both together whip; the bike model rotates as a whole
+  (YXZ) and leans into corners on the ground. Landing reads the residual
+  angles: under 0.75 rad on every axis and you STUCK it (toast with the
+  trick name and air time, +2 m/s); more than that, or a drop harder than
+  24 m/s, and you CRASH — thrown off, 8 + 12/rad + impact damage, the bike
+  loses 25 hp. A wall at over 9 m/s throws you too. Keys already held at
+  takeoff are throttle and steering, not tricks: let go and press again in
+  the air. Without that rule a plain hop with W held flipped you (the
+  first test found it).
+- **Wrecks and the repair bench.** A vehicle at 0 hp folds into a WRECKED
+  kit (half charge, battery kept; dropped on the ground if the pack is
+  full) with a slashed, dimmed icon. It won't deploy. The repair bench
+  (iron 8, planks 6; Vehicles tab) takes the kit on the left and iron on
+  the right — 6 for the car, 10 for the sports car, 4 for the bike — and
+  eight seconds later the kit is whole. Unpowered; the vise nods while it
+  works.
+- **Highways.** Each city links to the cities in the cell east, south and
+  both diagonals ahead (pairs drawn once, up to 3.4 km apart). A link runs
+  straight from slab edge to slab edge in 24 m segments; the elevation
+  profile is the terrain wide-smoothed, clamped above sea level (a
+  causeway over water) and slope-limited to 0.22 both ways, pinned to
+  each city's slab level. Each segment is one basalt slab edit (tilted
+  with the grade via `rx`, embankment down to 2.5 m under the lowest
+  ground or 30 m) plus a 7 m-tall cut where the ground rises above it —
+  never `noLod`, so the LOD rings carry the roads. Segments stamp within
+  700 m as you approach, tracked in `game.roads` (saved). Signs at both
+  ends and every 480 m read the destination and the distance. Any
+  vehicle on the tarmac gets a 1.35x cruise on its top speed and the HUD
+  says HIGHWAY. Trees whose trunks land on a segment are felled when it
+  stamps (the first screenshot had an oak growing out of the road).
+  Lesson from the first run: the edit frame maps local +z to
+  (-sin yaw, cos yaw) and +rx tilts +z downward — with the yaw sign wrong
+  the slab crossed the road diagonally and the car spent the drive
+  climbing curbs at 3 m/s.
+- **The garage.** Claiming a tower with a deed now also cuts a 3.4 x 3.5 m
+  vehicle door in its east wall, paints a basalt driveway out to the
+  avenue, and drops a charging pad, a battery charger and a repair bench
+  inside. Wire them to your own power.
+
+Verified headlessly: dealership row and kit; sports car hits 27 m/s and
+brakes to a stop; bike hop with throttle held does not crash, a full flip
+sticks ("STUCK FLIP"), a half flip crashes and hurts; a wreck is a wrecked
+kit that refuses to deploy and the bench repairs it for 4 iron; a 2.28 km
+link stamps 59 of 95 segments from its midpoint with 3 signs, onRoad
+true on the tarmac and false 30 m off it, the car cruises at 18.2 m/s
+(13.5 x 1.35); the deed adds the garage props and 2 edits; roads save.
+
 ## Build 15.1 — rail meters and battery bars (2026-09-02)
 
 Playtest on 15: "remove the post thing at the end and just have it end in
