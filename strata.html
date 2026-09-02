@@ -2545,6 +2545,10 @@ const RECIPES = [];
   // the electric motorcycle: half the metal, twice the nerve
   RECIPES.push({ kind: 'bike', station: true,
     costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 2 }, { item: 'wire', n: 4 }] });
+  // boats: the paddle boat is planks and honesty; the motorboat drinks a battery
+  RECIPES.push({ kind: 'boat', station: true, costs: [{ mat: MAT.PLANKS, n: 12 }, { item: 'stick', n: 4 }] });
+  RECIPES.push({ kind: 'motorboat', station: true,
+    costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'wire', n: 4 }, { mat: MAT.PLANKS, n: 8 }] });
   // the repair bench: wrecked kits go on it with iron and come off whole
   RECIPES.push({ kind: 'repair', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }] });
   // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
@@ -2574,7 +2578,7 @@ function batteryCap(it){ return BATTERY_CAP[it.tier | 0] || 100; }
 function chargeField(it){
   if (!it) return null;
   if (it.kind === 'jetpack') return 'fuel';
-  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car' || it.kind === 'sportscar' || it.kind === 'bike') return 'charge';
+  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car' || it.kind === 'sportscar' || it.kind === 'bike' || it.kind === 'motorboat') return 'charge';
   return null;
 }
 // add n of a stackable item kind to slots (merge first, then a free slot)
@@ -2665,6 +2669,8 @@ function craft(slots, r, free){
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
                   : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
+                  : r.kind === 'boat' ? { kind: 'boat' }
+                  : r.kind === 'motorboat' ? { kind: 'motorboat', charge: 100 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -3604,6 +3610,7 @@ class Terrain {
     const seaCy = sea != null ? Math.floor(sea / M) : null;
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     if (!game.waterMat) return;
+    if (waterSys.cells.has(CK(cx, cy, cz))) return;        // disturbed water draws from its cells
     const x0 = cx * M, z0 = cz * M;
     const pos = [], uv = [], dep = [];
     const quad = (xa, za, xb, zb, wy, d) => {
@@ -3785,11 +3792,274 @@ function propSDF(x, y, z){
 // water occupies air below sea level over lake columns (ground below sea)
 function inWater(x, y, z){
   const g = game.gen;
+  // water that has been disturbed lives in cells: read those first
+  const gx = Math.floor(x), gy = Math.round(y), gz = Math.floor(z);
+  const wa = waterSys.cells.get(waterSys.keyOf(gx, gy, gz));
+  if (wa){
+    const v = wa[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
+    if (v === W_SOLID || v === 0) return false;
+    return y < gy - 0.5 + v / 8;
+  }
   if (g.floodedAt && g.floodedAt(x, y, z)) return true;   // flooded galleries
   const sea = g.seaLevel;
   if (sea == null || y >= sea) return false;
   return g.wetAt ? g.wetAt(x, z) : g.height(x, z) < sea;
 }
+// ---------- water that flows ----------
+// The sea, the lakes and the flooded galleries are what worldgen says they
+// are until something disturbs them. Then the chunk becomes a grid of
+// metre cells (x/z columns, y cells centred on integers so the sea's
+// surface at -1.5 is a cell boundary) and Minecraft's rules run on it:
+// a source (8) is infinite; water above a cell fills it (7); a supported
+// cell spreads sideways one level lower per metre; two sources beside a
+// supported cell make a third; unsupported flow drains away. Cells the
+// flow reaches in untouched chunks materialize on demand. 8 Hz.
+const W_SOLID = 255, W_SRC = 8;
+const waterSys = {
+  cells: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
+  accT: 0, maintT: 0, MAX_ACTIVE: 48,
+  idx(i, j, k){ return (j * 8 + k) * 8 + i; },
+  keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
+  reset(){ this.cells = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
+    for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
+    this.meshes = new Map(); },
+  // what an untouched cell holds: rock, still water, or air
+  staticLevel(gx, gy, gz){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (g.sdf(x, gy, z) < 0) return W_SOLID;
+    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
+    return 0;
+  },
+  // the same with every edit applied: carved rock is air (it fills), placed
+  // rock is rock, original water is a source
+  editedLevel(gx, gy, gz, le){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
+    if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
+    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
+    return 0;
+  },
+  statArr(key){
+    let a = this.stat.get(key);
+    if (a) return a;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    a = new Uint8Array(512);
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++)
+      a[this.idx(i, j, k)] = this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+    this.stat.set(key, a);
+    return a;
+  },
+  hasWater(key){
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const g = game.gen;
+    if (cy * 8 - 0.5 > (g.seaLevel != null ? g.seaLevel : -1e9) + 0.5 && cy * 8 > -6) return false;
+    const a = this.cells.get(key) || this.statArr(key);
+    for (let q = 0; q < 512; q++) if (a[q] >= 1 && a[q] <= 8) return true;
+    return false;
+  },
+  // a chunk the flow has reached: its cells, with the edits applied
+  materialize(key, keep){
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const le = nearEdits([cx * 8 - 1, cy * 8 - 1.5, cz * 8 - 1, cx * 8 + 9, cy * 8 + 8.5, cz * 8 + 9]);
+    const old = keep ? this.cells.get(key) : null;
+    const a = new Uint8Array(512);
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+      const q = this.idx(i, j, k);
+      const v = le.length ? this.editedLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k, le) : this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+      // an edit under running water: rock is rock, but water already there stays
+      a[q] = (old && v !== W_SOLID && old[q] !== W_SOLID && old[q] !== 0) ? old[q] : v;
+    }
+    this.cells.set(key, a);
+    this.active.add(key); this.dirtyMesh.add(key);
+    const ch = game.terrain.chunks.get(key);
+    if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
+    return a;
+  },
+  lv(gx, gy, gz){
+    const cx = Math.floor(gx / 8), cy = Math.floor(gy / 8), cz = Math.floor(gz / 8);
+    const key = CK(cx, cy, cz);
+    const a = this.cells.get(key) || this.statArr(key);
+    return a[this.idx(gx - cx * 8, gy - cy * 8, gz - cz * 8)];
+  },
+  isW(v){ return v >= 1 && v <= 8; },
+  // an edit landed: any chunk it touches that holds (or borders) water becomes cells
+  onEdit(e){
+    const g = game.gen;
+    if (!g || g.seaLevel == null || !game.running) return;
+    const B = CORE.editAABB(e);
+    if (B[1] > g.seaLevel + 1 && B[1] > -6) return;           // dry land, above every water table
+    const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
+    const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
+    const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
+    if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return;   // a city slab: not a water event
+    const keys = [];
+    let wet = false;
+    for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
+      const key = CK(cx, cy, cz);
+      keys.push(key);
+      if (this.cells.has(key) || this.hasWater(key)) wet = true;
+    }
+    if (!wet) return;
+    for (const key of keys) this.materialize(key, true);
+  },
+  tick(dt){
+    if (!game.running || !game.gen || game.gen.seaLevel == null) return;
+    this.accT += dt;
+    if (this.accT >= 0.12){
+      this.accT = 0;
+      if (this.active.size) this.step();
+    }
+    this.maintT += dt;
+    if (this.maintT > 0.4 || this.dirtyMesh.size){ this.maintT = 0; this.maintain(); }
+  },
+  step(){
+    const writes = [];
+    const next = new Set();
+    let count = 0;
+    for (const key of this.active){
+      if (count++ >= this.MAX_ACTIVE){ next.add(key); continue; }
+      const a = this.cells.get(key);
+      if (!a) continue;
+      const [cx, cy, cz] = key.split(',').map(Number);
+      for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+        const q = this.idx(i, j, k), v = a[q];
+        if (v === W_SOLID || v === W_SRC) continue;
+        const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
+        if (gy <= CORE.BEDROCK_Y + 1) continue;
+        const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
+        let nv = this.isW(above) ? 7 : 0, srcN = 0;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+          const nn = this.lv(gx + dx, gy, gz + dz);
+          if (!this.isW(nn)) continue;
+          if (nn === W_SRC) srcN++;
+          // a neighbour spreads sideways when it is a source or stands on
+          // something (falling water only falls)
+          const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
+          if (nb === W_SOLID || nb === W_SRC) nv = Math.max(nv, nn - 1);
+        }
+        // sources are born three ways on a supported cell: Minecraft's two
+        // sources beside it; a full cell with water above it (a column fed
+        // from a lake is the lake); or a full cell beside a source (the
+        // lake's level creeps along every floor it can reach — it is infinite)
+        const supported = below === W_SOLID || below === W_SRC;
+        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (this.isW(above) || srcN >= 1)))) nv = W_SRC;
+        if (nv !== v) writes.push(key, q, nv, gx, gy, gz);
+      }
+    }
+    for (let w = 0; w < writes.length; w += 6){
+      const key = writes[w], q = writes[w + 1], nv = writes[w + 2];
+      this.cells.get(key)[q] = nv;
+      next.add(key); this.dirtyMesh.add(key);
+      // a change on a chunk face wakes the neighbour (and grows it cells if water is arriving)
+      const gx = writes[w + 3], gy = writes[w + 4], gz = writes[w + 5];
+      const i = gx & 7, j = gy & 7, k = gz & 7;
+      const nbs = [];
+      if (i === 0) nbs.push([gx - 1, gy, gz]); if (i === 7) nbs.push([gx + 1, gy, gz]);
+      if (k === 0) nbs.push([gx, gy, gz - 1]); if (k === 7) nbs.push([gx, gy, gz + 1]);
+      if (j === 0) nbs.push([gx, gy - 1, gz]); if (j === 7) nbs.push([gx, gy + 1, gz]);
+      // water always wakes the cell below and beside it, whatever chunk they're in
+      nbs.push([gx, gy - 1, gz]);
+      for (const [nx, ny, nz] of nbs){
+        const nk = this.keyOf(nx, ny, nz);
+        if (nk === key) continue;
+        if (!this.cells.has(nk)){ if (nv > 0 && this.lv(nx, ny, nz) !== W_SOLID) this.materialize(nk); else continue; }
+        next.add(nk);
+      }
+    }
+    this.active = next;
+  },
+  // meshes for the cells near the player; far ones are dropped (the cells stay)
+  maintain(){
+    if (!game.waterMat) return;
+    const R = ((game.opts.rd || 4) + 2) * 8;
+    for (const [key, m] of this.meshes){
+      const [cx, cy, cz] = key.split(',').map(Number);
+      if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R || !this.cells.has(key)){
+        game.scene.remove(m); m.geometry.dispose(); this.meshes.delete(key);
+      }
+    }
+    for (const key of this.cells.keys()){
+      const [cx, cy, cz] = key.split(',').map(Number);
+      if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R) continue;
+      if (!this.meshes.has(key) || this.dirtyMesh.has(key)) this.buildMesh(key);
+    }
+    this.dirtyMesh.clear();
+  },
+  buildMesh(key){
+    const old = this.meshes.get(key);
+    if (old){ game.scene.remove(old); old.geometry.dispose(); this.meshes.delete(key); }
+    const a = this.cells.get(key);
+    if (!a) return;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const pos = [], uv = [], dep = [];
+    const quadH = (xa, za, xb, zb, y, d) => {
+      pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
+      uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4, xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+      dep.push(d, d, d, d, d, d);
+    };
+    const quadV = (xa, za, xb, zb, y0, y1) => {
+      pos.push(xa, y0, za, xb, y0, zb, xb, y1, zb, xa, y0, za, xb, y1, zb, xa, y1, za);
+      uv.push(xa / 4, y0 / 4, xb / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y1 / 4);
+      dep.push(1, 1, 1, 1, 1, 1);
+    };
+    const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isW(v) ? gy - 0.5 + v / 8 : null; };
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
+      const v = a[this.idx(i, j, k)];
+      if (!this.isW(v)) continue;
+      const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
+      const bottom = gy - 0.5, top = bottom + v / 8;
+      if (!this.isW(this.lv(gx, gy + 1, gz))){
+        let d = 0.5;
+        for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
+        quadH(gx, gz, gx + 1, gz + 1, top, d);
+      }
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        const nn = this.lv(gx + dx, gy, gz + dz);
+        if (nn === W_SOLID) continue;
+        const nt = this.isW(nn) ? gy - 0.5 + nn / 8 : bottom;
+        if (nt >= top - 0.01) continue;
+        const xa = dx === 1 ? gx + 1 : gx, xb = dx === -1 ? gx : dx === 1 ? gx + 1 : gx + 1;
+        const za = dz === 1 ? gz + 1 : gz, zb = dz === -1 ? gz : dz === 1 ? gz + 1 : gz + 1;
+        if (dx !== 0) quadV(xa, gz, xa, gz + 1, nt, top);
+        else quadV(gx, za, gx + 1, za, nt, top);
+      }
+      if (this.lv(gx, gy - 1, gz) === 0) quadH(gx, gz, gx + 1, gz + 1, bottom, 0.5);
+    }
+    if (!pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    geo.setAttribute('aDep', new THREE.Float32BufferAttribute(dep, 1));
+    const m = new THREE.Mesh(geo, game.waterMat);
+    m.renderOrder = 3; m.userData.noShadow = true; m.frustumCulled = false;
+    game.scene.add(m);
+    this.meshes.set(key, m);
+  },
+  // save: run-length pairs per chunk
+  serialize(){
+    const out = [];
+    for (const [key, a] of this.cells){
+      const r = [];
+      let v = a[0], c = 0;
+      for (let q = 0; q < 512; q++){ if (a[q] === v) c++; else { r.push(v, c); v = a[q]; c = 1; } }
+      r.push(v, c);
+      out.push([key, r]);
+    }
+    return out;
+  },
+  load(rows){
+    this.reset();
+    for (const [key, r] of rows || []){
+      const a = new Uint8Array(512);
+      let q = 0;
+      for (let t = 0; t + 1 < r.length; t += 2){ for (let c = 0; c < r[t + 1] && q < 512; c++) a[q++] = r[t]; }
+      this.cells.set(key, a);
+      this.active.add(key); this.dirtyMesh.add(key);
+    }
+  },
+};
 function sdfWorld(x, y, z, edits){
   let d = CORE.evalSDF(x, y, z, edits, game.gen);
   if (game.solidProps.length) d = Math.min(d, propSDF(x, y, z));
@@ -5057,7 +5327,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8153,7 +8423,34 @@ const VEH = {
                seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
   bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.5, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
                seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
+  // water: floats on the surface (draft below), crawls when beached
+  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22,
+               seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
+  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.9, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
+               seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
 };
+// the water surface over (x,z) near height y — cells first, then the world's still water
+function waterTopAt(x, z, y){
+  const gx = Math.floor(x), gz = Math.floor(z), g = game.gen;
+  const gy0 = Math.round(y);
+  for (let gy = gy0 + 2; gy >= gy0 - 6; gy--){
+    const key = waterSys.keyOf(gx, gy, gz);
+    const a = waterSys.cells.get(key);
+    if (!a){
+      // untouched water: the sea and the lakes sit at seaLevel
+      if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
+      if (g.floodedAt && g.floodedAt(x, gy, z)){ let t = gy; while (g.floodedAt(x, t + 1, z)) t++; return t + 0.5; }
+      continue;
+    }
+    const v = a[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
+    if (!waterSys.isW(v)) continue;
+    let t = gy;
+    while (waterSys.isW(waterSys.lv(gx, t + 1, gz))) t++;
+    const tv = waterSys.lv(gx, t, gz);
+    return t - 0.5 + tv / 8;
+  }
+  return null;
+}
 function isVehicle(e){ return !!(e && VEH[e.type]); }
 // ---------- entities ----------
 const ENT_DEF = {
@@ -8165,6 +8462,8 @@ const ENT_DEF = {
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
+  boat:     { hp: 120, speed: 0, r: 1.0, h: 1.0, cap: 0 },
+  motorboat:{ hp: 180, speed: 0, r: 1.1, h: 1.2, cap: 0 },
   drop:     { hp: 1e9, speed: 0, r: 0.01, h: 0.01, cap: 0 },   // a thing on the ground; untargetable
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
@@ -8513,6 +8812,63 @@ function entMesh(type, ent){
     gauges.rotation.x = -0.5;
     g.add(gauges);
     g.userData.gauge = { cv: gcv, tex: gtex };
+    return g;
+  }
+  if (type === 'boat' || type === 'motorboat'){
+    const motor = type === 'motorboat';
+    const hullT = PixTex.make(motor ? 'hullwhite' : 'hullwood', (c, w, h, rng) => {
+      if (motor){ pxSpeckle(c, rng, '#eef1f4', '#dfe4ea', '#ffffff', 16); c.fillStyle = '#2f6fb8'; c.fillRect(0, 9, w, 2); }
+      else { pxSpeckle(c, rng, '#a8783f', '#8a6237', '#c0904f', 18); c.fillStyle = '#6e4d2a'; c.fillRect(0, 4, w, 1); c.fillRect(0, 11, w, 1); }
+    });
+    const hull = new THREE.MeshBasicMaterial({ map: hullT });
+    const dark = new THREE.MeshBasicMaterial({ color: 0x23232a });
+    const L = motor ? 4.2 : 3.2, Wd = motor ? 1.8 : 1.4, H = motor ? 0.62 : 0.5;
+    const bottom = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.3, 0.14, L - 0.6), hull);
+    bottom.position.y = 0.08;
+    const sideL = new THREE.Mesh(new THREE.BoxGeometry(0.14, H, L - 0.4), hull);
+    sideL.position.set(-Wd / 2 + 0.07, H / 2 + 0.05, 0);
+    const sideR = sideL.clone(); sideR.position.x = Wd / 2 - 0.07;
+    const stern = new THREE.Mesh(new THREE.BoxGeometry(Wd, H, 0.14), hull);
+    stern.position.set(0, H / 2 + 0.05, L / 2 - 0.07);
+    const bow = new THREE.Mesh(new THREE.BoxGeometry(Wd * 0.55, H, 0.7), hull);
+    bow.position.set(0, H / 2 + 0.05, -L / 2 - 0.1);
+    bow.rotation.y = 0;
+    const bowL = new THREE.Mesh(new THREE.BoxGeometry(0.14, H, 0.9), hull);
+    bowL.position.set(-Wd / 2 + 0.25, H / 2 + 0.05, -L / 2 + 0.05); bowL.rotation.y = 0.55;
+    const bowR = bowL.clone(); bowR.position.x = Wd / 2 - 0.25; bowR.rotation.y = -0.55;
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.4, 0.1, 0.5), dark);
+    seat.position.set(0, 0.42, 0.3);
+    g.add(bottom, sideL, sideR, stern, bow, bowL, bowR, seat);
+    if (motor){
+      const glass = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(Wd - 0.5, 0.4, 0.05), glass);
+      screen.position.set(0, H + 0.3, -0.5); screen.rotation.x = -0.35;
+      const eng = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.4), dark);
+      eng.position.set(0, H + 0.2, L / 2 + 0.2);
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.16), dark);
+      leg.position.set(0, -0.15, L / 2 + 0.25);
+      const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+      const gtex = new THREE.CanvasTexture(gcv);
+      gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+      const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.2), new THREE.MeshBasicMaterial({ map: gtex }));
+      gauges.position.set(-0.35, H + 0.28, -0.42); gauges.rotation.x = -0.4;
+      g.add(screen, eng, leg, gauges);
+      g.userData.gauge = { cv: gcv, tex: gtex };
+    } else {
+      // two paddles that swing with your stroke
+      const pads = [];
+      for (const sx2 of [-1, 1]){
+        const pv = new THREE.Group();
+        pv.position.set(sx2 * (Wd / 2 + 0.05), H + 0.12, 0.1);
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.7), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+        shaft.rotation.z = sx2 * 0.5; shaft.position.set(sx2 * 0.35, -0.2, 0);
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.45), dark);
+        blade.position.set(sx2 * 0.75, -0.55, -0.6);
+        pv.add(shaft, blade);
+        g.add(pv); pads.push(pv);
+      }
+      g.userData.paddles = pads;
+    }
     return g;
   }
   if (type === 'cab'){
@@ -10969,6 +11325,10 @@ function updateEntities(dt, now){
     } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
       if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
+      if (VEH[e.type].water){
+        const wt1 = waterTopAt(e.x, e.z, e.y);
+        if (wt1 != null){ e.y += (wt1 - VEH[e.type].draft - e.y) * Math.min(1, 4 * dt); e.vy = 0; if (e.mesh) e.mesh.position.y = e.y; }
+      }
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -11870,9 +12230,12 @@ function enterCar(e){
   game.driving = e;
   game.vel.set(0, 0, 0);
   e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
-  toast((VEH[e.type] && VEH[e.type].air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
-                                         : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
-        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a charging pad' : ''));
+  const V0 = VEH[e.type] || VEH.car;
+  toast((V0.air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
+         : V0.paddle ? 'rowing — W/S stroke · A/D steer'
+         : V0.water ? 'at the helm — W/S throttle · A/D steer'
+         : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
+        (!V0.paddle && (e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a charging pad' : ''));
   AudioSys.sfx('toggle');
   refreshToolHUD();
 }
@@ -11909,12 +12272,16 @@ function driveCar(dt){
   e.heading = e.heading || 0;
   e.speed = e.speed || 0;
   e.air = e.air || 0;
-  const dead = (e.charge || 0) <= 0;
+  const dead = V.paddle ? false : (e.charge || 0) <= 0;
   const airborne = V.air && e.air > 0.12;
+  // boats: afloat on the water's surface, or beached and crawling
+  const wtop = V.water ? waterTopAt(e.x, e.z, e.y) : null;
+  const afloat = V.water && wtop != null;
   // the highway pays: tarmac under the wheels lifts the top speed
   e.onRoad = roadSys.onRoad(e.x, e.y, e.z);
   const cruise = e.onRoad ? 1.35 : 1;
-  const top = dead ? 0 : V.top * cruise, rev = dead ? 0 : V.rev;
+  const beached = V.water && !afloat ? 0.2 : 1;
+  const top = dead ? 0 : V.top * cruise * beached, rev = dead ? 0 : V.rev * beached;
   const target = thr > 0 ? top : thr < 0 ? -rev : 0;
   const accel = airborne ? 0 : (thr !== 0 ? V.accel : V.brake);
   e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
@@ -11930,7 +12297,12 @@ function driveCar(dt){
   // roll forward under gravity; a sphere-vs-SDF pass keeps it on the ground
   const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
   const vyBefore = e.vy || 0;
-  e.vy = (e.vy || 0) - 22 * dt;
+  if (afloat){
+    // the hull rides the surface, draft below it; a little bob at speed
+    const target = wtop - V.draft + Math.sin(performance.now() * 0.004) * 0.03 * Math.min(1, Math.abs(e.speed) / 4);
+    e.y += (target - e.y) * Math.min(1, 6 * dt);
+    e.vy = 0;
+  } else e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
   e.y += e.vy * dt;
@@ -11950,7 +12322,13 @@ function driveCar(dt){
     }
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; grounded = true; }
-  if (inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  if (!V.water && inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  if (afloat && Math.abs(e.speed) > 1.5 && Math.random() < dt * 14)
+    Particles.burst(e.x - fx * 1.6, e.y + 0.1, e.z - fz * 1.6, 0.4, [0xdfeeff, 0xffffff], 2, 0.8);   // the wake
+  if (V.paddle && e.mesh && e.mesh.userData.paddles){
+    e.padPh = (e.padPh || 0) + dt * Math.abs(e.speed) * 1.6;
+    for (const pv of e.mesh.userData.paddles) pv.rotation.x = Math.sin(e.padPh) * 0.55;
+  }
   if (V.air){
     // ---- the motorcycle leaves the ground ----
     if (grounded){
@@ -12430,6 +12808,7 @@ function updateGhost(){
 function applyEdit(e){
   game.edits.push(e);
   game.terrain.invalidate(e);
+  waterSys.onEdit(e);
   markSave();
 }
 
@@ -13954,13 +14333,14 @@ function tryAction(dt, now){
       if (tool.item.wrecked){ toast('it\'s wrecked — put the kit on a repair bench with iron'); return; }
       const px = game.pos.x - Math.sin(game.yaw) * 4.2;
       const pz = game.pos.z - Math.cos(game.yaw) * 4.2;
-      const e = spawnEntity(tool.item.kind, px, game.pos.y + 0.6, pz);
+      const wt0 = VEH[tool.item.kind].water ? waterTopAt(px, pz, game.pos.y) : null;
+      const e = spawnEntity(tool.item.kind, px, wt0 != null ? wt0 - VEH[tool.item.kind].draft : game.pos.y + 0.6, pz);
       e.charge = tool.item.charge || 0;
       e.bat = tool.item.bat || null;
       e.heading = game.yaw;
       game.slots[game.hotSel] = null;
       refreshHotbar(); refreshToolHUD();
-      toast(VEH[e.type].name + ' deployed — right click to ride · crouch + right click to pack it up');
+      toast(VEH[e.type].name + ' deployed — right click to ' + (VEH[e.type].water ? 'board' : 'ride') + ' · crouch + right click to pack it up');
       AudioSys.sfx('craft');
     }
     return;
@@ -14295,7 +14675,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'].includes(it.kind) ? it.kind : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat'].includes(it.kind) ? it.kind : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -14397,6 +14777,17 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'boat'){
+    c.fillStyle = '#a8783f'; c.fillRect(2, 9, 12, 3); c.fillRect(4, 8, 8, 1);
+    c.fillStyle = '#6e4d2a'; c.fillRect(2, 11, 12, 1);
+    c.fillStyle = '#8a6237'; c.fillRect(7, 3, 1, 6); c.fillRect(3, 5, 1, 4);
+    c.fillStyle = '#2f6fb8'; c.fillRect(1, 12, 14, 2);
+  } else if (it.kind === 'motorboat'){
+    c.fillStyle = '#eef1f4'; c.fillRect(2, 8, 12, 4); c.fillRect(4, 7, 9, 1);
+    c.fillStyle = '#2f6fb8'; c.fillRect(2, 10, 12, 1);
+    c.fillStyle = '#9fd4e8'; c.fillRect(8, 5, 3, 3);
+    c.fillStyle = '#23232a'; c.fillRect(13, 6, 2, 5);
+    c.fillStyle = '#2f6fb8'; c.fillRect(1, 12, 14, 2);
   } else if (it.kind === 'repair'){
     c.fillStyle = '#8a6237'; c.fillRect(2, 8, 12, 6);
     c.fillStyle = '#a37c47'; c.fillRect(2, 8, 12, 2);
@@ -14777,6 +15168,8 @@ function itemLabel(it){
   if (it.kind === 'car') return (it.wrecked ? 'wrecked ' : '') + 'electric car';
   if (it.kind === 'sportscar') return (it.wrecked ? 'wrecked ' : '') + 'sports car';
   if (it.kind === 'bike') return (it.wrecked ? 'wrecked ' : '') + 'electric motorcycle';
+  if (it.kind === 'boat') return (it.wrecked ? 'wrecked ' : '') + 'paddle boat';
+  if (it.kind === 'motorboat') return (it.wrecked ? 'wrecked ' : '') + 'motorboat';
   if (it.kind === 'repair') return 'repair bench';
   if (it.kind === 'rail') return 'rails';
   if (it.kind === 'tdrone') return 'teleport drone';
@@ -14955,7 +15348,7 @@ function buildInvUI(){
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildMissionsUI();
   $('btnInvSort').onclick = sortInventory;
-  $('vehiclepanel').classList.toggle('hidden', !game.driving);
+  $('vehiclepanel').classList.toggle('hidden', !game.driving || !!(VEH[game.driving.type] && VEH[game.driving.type].paddle));
   const vh = $('invveh'); vh.innerHTML = '';
   if (game.driving) vh.appendChild(slotEl('vbat'));
   refreshInvUI();
@@ -14985,7 +15378,7 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'rail', 'repair'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'rail', 'repair'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -15066,6 +15459,7 @@ function catalogEntries(){
   out.push({ kind: 'drone', charge: 100 });
   for (let t = 0; t < 3; t++) out.push({ kind: 'battery', tier: t, charge: CORE.BATTERY_CAP[t] });
   out.push({ kind: 'sportscar', charge: 100 });
+  out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   return out;
 }
 // creative: hand over any item, free — the old catalog's "take", now a row
@@ -15805,7 +16199,8 @@ function refreshToolHUD(){
     const e = game.driving;
     const V = VEH[e.type] || VEH.car;
     el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
-      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
       (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
       '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
                                    : 'W/S throttle · A/D steer') + '</div>' +
@@ -15851,9 +16246,11 @@ function refreshToolHUD(){
   } else if (it.kind === 'deed'){
     html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
   } else if (VEH[it.kind]){
-    html = '<div class="t1">' + itemLabel(it) + ' · ' + Math.round(it.charge || 0) + '% charge</div><div class="t2">' +
+    html = '<div class="t1">' + itemLabel(it) + (VEH[it.kind].paddle ? '' : ' · ' + Math.round(it.charge || 0) + '% charge') + '</div><div class="t2">' +
       (it.wrecked ? 'wrecked — slot it into a REPAIR BENCH with ' + VEH[it.kind].repair + ' iron ingots'
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
+       : VEH[it.kind].paddle ? 'left click to deploy on the water · right click to row · no battery, just you'
+       : VEH[it.kind].water ? 'left click to deploy on the water · right click to take the helm · slot a battery for the long crossings'
        : 'left click to deploy · right click to drive · charge it on a charging pad') + '</div>';
   } else if (it.kind === 'repair'){
     html = '<div class="t1">repair bench</div><div class="t2">right click to open · a wrecked vehicle kit plus iron ingots comes off whole</div>';
@@ -16659,6 +17056,7 @@ function saveNow(){
     ropes: game.ropes || [],
     rails: game.rails || [],
     roads: game.roads || {},
+    water: waterSys.serialize(),
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -16699,6 +17097,7 @@ function startWorld(id){
   game.cities = data.cities || {};
   game.rails = data.rails || [];
   game.roads = data.roads || {};
+  waterSys.load(data.water || []);
   roadSys.near = []; roadSys.scanT = 99; roadSys.cache = new Map();
   game.railDraft = null;
   game.riding = null;
@@ -17909,6 +18308,7 @@ function frame(now){
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
+  waterSys.tick(dt);
   lodTerrain.update(game.pos.x, game.pos.y, game.pos.z);
   lodTerrain.frame();
   if (!meshPool.ok) lodTerrain.processSync(2);
@@ -18127,7 +18527,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, waterSys, inWater, waterTopAt, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>

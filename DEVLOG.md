@@ -2,6 +2,66 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 17 — BLUE WATER (2026-09-02) — in progress
+
+### A. Water that flows
+Playtest: "if you cut around it or below it, the water doesn't flow. I
+should be able to cut below a pool, have it flow down a hole, then cut
+out from that to make another flat pool underground. Same rules as
+Minecraft."
+
+- **Cells.** The sea, the lakes and the flooded galleries stay what
+  worldgen says they are until an edit disturbs them. Then every chunk
+  the edit touches (and holds or borders water) becomes a grid of 512
+  metre cells — x/z columns, y cells centred on integers so the sea's
+  surface at -1.5 is a cell boundary — filled from the world with the
+  edits applied: rock is 255, original water is a source (8), carved
+  rock is air (0) and fills from its neighbours. Untouched chunks the
+  flow reaches materialize on demand; edits on dry land above every
+  water table never touch it; a city slab (400+ chunks) is not a water
+  event.
+- **The rules, at 8 Hz.** A source is infinite. Water above a cell makes
+  it 7. A cell spreads sideways one level lower per metre when it is a
+  source or stands on rock or a source (falling water only falls).
+  Unsupported flow drains. Sources are born three ways on a supported
+  cell: Minecraft's two sources beside it; a full cell with water above
+  it (a column fed from a lake IS the lake); or a full cell beside a
+  source — the lake's level creeps along every floor it can reach,
+  because the lake is infinite. That last rule is the one Minecraft
+  lacks and the one that makes "flow down a hole, then a flat pool"
+  actually happen: a 15 m tunnel from a lake-fed shaft floods to its
+  ceiling and the chamber at its end fills as a flat sheet of sources.
+- **Reading it.** `inWater` reads cells first (a fractional level is a
+  fractional surface), then the old still-water rules; so swimming,
+  breath, the underwater tint, wheels and cars all follow the flow. A
+  fresh hole under a lake is dry until the water arrives — the old
+  "swim effect with no water" is gone.
+- **Drawing it.** A chunk with cells draws its water from them (top face
+  at level/8, sides where a neighbour is lower, a bottom under a falling
+  column) with the existing water shader; the static sea sheet yields in
+  those chunks. Meshes are dropped past render distance and rebuilt on
+  return; the cells persist. Saved as run-length pairs per chunk (16
+  chunks, 1.9 KB).
+- Cost: 0.8 ms per step for the test's 16 chunks; at most 48 chunks step
+  per tick, the rest wait a tick.
+
+### B. Boats
+- **Paddle boat** (planks 12, sticks 4): 5.5 m/s, no battery — the
+  paddles swing with your stroke. **Motorboat** (iron 10, ruby 2, wire
+  4, planks 8): 17 m/s, drinks 0.9%/s, outboard, windscreen, a gauge, a
+  battery slot like the cars.
+- `VEH.water`: the hull rides `waterTopAt` (cells first, then the sea)
+  minus its draft, bobbing a little at speed, with a spray wake. Off the
+  water it crawls at a fifth of its speed and the HUD says BEACHED.
+  Parked boats float too. A kit deployed over water lands on the
+  surface. Cars still hate water; boats don't.
+
+Verified: a 3x3 shaft dug up into a lakebed is dry, then fills (7s,
+then sources); a 15 m tunnel + 7 m chamber fills flat (49/49 floor
+cells sources) and is swimmable; a hole in a hilltop stays dry; cells
+survive a save byte-for-byte; the paddle boat floats at -0.22 and rows
+at 5.5 m/s, the motorboat hits 17, drains, and crawls at 3.4 beached.
+
 ## Build 16.1 — roads that hold their level (2026-09-02)
 
 Playtest: "the roads are very glitchy — sections phase with the ground
