@@ -3285,6 +3285,8 @@ class Terrain {
   update(px, py, pz){
     const [ccx, ccz] = this.chunkOfWorld(px, pz);
     this.center = [ccx, Math.floor(py / CORE.CHUNK_M), ccz];
+    // are we out in the open? (underground, the deep IS the view)
+    this.surfaceEye = py > this.gen.height(px, pz) - 3;
     const want = new Set();
     const R = this.radius;
     for (let dz = -R; dz <= R; dz++)
@@ -3340,10 +3342,18 @@ class Terrain {
 
   inBand(cx, cy, cz){
     const dx = cx - this.center[0], dy = cy - this.center[1], dz = cz - this.center[2];
-    const NEAR = 8;                                   // 64m sphere: everything
+    const NEAR = 6;                                   // 48m sphere: everything
     if (dx * dx + dy * dy + dz * dz <= NEAR * NEAR) return true;
     const b = this.bandOf(cx, cz);
-    return cy >= b[0] && cy <= b[1];
+    if (cy < b[0] || cy > b[1]) return false;
+    // standing on the surface you cannot see into the deep, however far the
+    // render distance reaches. Underground only meshes out to a short radius
+    // (it still follows you the moment you go down a shaft or into a cave).
+    if (this.surfaceEye && cy < b[1] - 1){
+      const DEEP = 12;                                // 96m
+      if (dx * dx + dz * dz > DEEP * DEEP) return false;
+    }
+    return true;
   }
   // vertical chunk span a distant column can actually show: its surface,
   // plus anything built on it (city towers, your base)
@@ -3892,6 +3902,7 @@ function buildScene(){
   godRays.init();
   wrenchSys.init(scene);
   treeSys.init(scene);
+  farTreeSys.init(scene);
   decorSys.init(scene);
   doorSys.init(scene);
   tableSys.init(scene);
@@ -5426,6 +5437,18 @@ function updateDayNight(dt){
   const sunH = Math.sin(phase);
   const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
   game.dayF = dayF;
+  // unlit vegetation (decor + trees are MeshBasic) tracks the sky, or it
+  // glows through the night
+  {
+    const L = 0.20 + 0.80 * dayF;
+    if (decorSys.meshes)
+      for (const k in decorSys.meshes) decorSys.meshes[k].material.color.setScalar(L);
+    if (treeSys.mats){
+      treeSys.mats.bark.color.setScalar(L);
+      treeSys.mats.leaf.color.setScalar(L);
+      treeSys.mats.leaf2.color.setScalar(L);
+    }
+  }
   const u = game.terrainMat.uniforms;
   u.uSunDir.value.set(Math.cos(phase) * 0.5, Math.max(sunH, 0.12), 0.35).normalize();
   u.uSunCol.value.copy(SUN_BASE).multiplyScalar(dayF);
@@ -7037,6 +7060,75 @@ const torchSys = {
 // Instanced cross-quad billboards, one InstancedMesh per look. Placement is
 // deterministic (gen.decorAt per 3m cell); picked-up cells go in a removed
 // set, hand-placed decor in a placed list — both saved with the world.
+// ---------- far trees: the treeline stops popping in ----------
+// treeAt() is a pure function of the cell, so distant trees need no chunk
+// data — they stand on gen.height like the real ones. Anything the near
+// system is already drawing is skipped, so there is exactly one tree per
+// cell on screen.
+const farTreeSys = {
+  group: null, trunks: null, canopy: null, lastCell: null, CAP: 9000, R: 460,
+  init(scene){
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;      // distant: not worth the shadow pass
+    scene.add(this.group);
+    this.lastCell = null;
+    const M = treeSys.ensureMats();
+    this.trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.26, 0.42, 5.4, 5), M.bark, this.CAP);
+    this.canopy = new THREE.InstancedMesh(new THREE.SphereGeometry(2.25, 7, 5), M.leaf, this.CAP);
+    for (const m of [this.trunks, this.canopy]){
+      m.count = 0;
+      m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      m.frustumCulled = false;                // instance bounds != geometry bounds
+      m.userData.noShadow = true;
+      this.group.add(m);
+    }
+  },
+  teardown(){
+    if (!this.group) return;
+    for (const m of [this.trunks, this.canopy]) if (m) m.geometry.dispose();
+    this.group = null; this.trunks = null; this.canopy = null; this.lastCell = null;
+  },
+  refresh(){
+    if (!this.group || !game.gen || !game.gen.treeAt) return;
+    const TC = CORE.TREE_CELL;
+    const cc = [Math.floor(game.pos.x / TC), Math.floor(game.pos.z / TC)];
+    const key = cc[0] + ',' + cc[1];
+    if (key === this.lastCell) return;
+    this.lastCell = key;
+    const R = Math.ceil(this.R / TC);
+    const R2 = this.R * this.R;
+    const px = game.pos.x, pz = game.pos.z;
+    const mt = this._m || (this._m = new THREE.Matrix4());
+    const q = this._q || (this._q = new THREE.Quaternion());
+    const sc = this._s || (this._s = new THREE.Vector3());
+    const po = this._p || (this._p = new THREE.Vector3());
+    let n = 0;
+    for (let dz = -R; dz <= R && n < this.CAP; dz++)
+      for (let dx = -R; dx <= R && n < this.CAP; dx++){
+        const cx = cc[0] + dx, cz = cc[1] + dz;
+        const k = cx + ',' + cz;
+        if (treeSys.visible.has(k)) continue;      // the real one is up close
+        if (game.removedTreeSet.has(k)) continue;
+        const t = game.gen.treeAt(cx, cz);
+        if (!t) continue;
+        const ddx = t.x - px, ddz = t.z - pz;
+        if (ddx * ddx + ddz * ddz > R2) continue;
+        const s2 = t.s || 1;
+        po.set(t.x, t.y + 2.4 * s2, t.z);
+        sc.set(s2, s2, s2);
+        mt.compose(po, q, sc);
+        this.trunks.setMatrixAt(n, mt);
+        po.set(t.x, t.y + 5.9 * s2, t.z);
+        mt.compose(po, q, sc);
+        this.canopy.setMatrixAt(n, mt);
+        n++;
+      }
+    this.trunks.count = n; this.canopy.count = n;
+    this.trunks.instanceMatrix.needsUpdate = true;
+    this.canopy.instanceMatrix.needsUpdate = true;
+  },
+};
+
 const decorSys = {
   group: null, meshes: null, lastCell: null, pending: false, dirty: false,
   CAP: 3200,
@@ -15375,6 +15467,7 @@ function startWorld(id){
   doorSys.rebuild();
   tableSys.rebuild();
   treeSys.refresh();
+  farTreeSys.refresh();
   decorSys.lastCell = null;
   decorSys.refresh();
   game.cacheMarker = null;
@@ -15399,6 +15492,7 @@ function quitToTitle(){
   hide('pausemenu'); hide('hud');
   if (game.terrain) game.terrain.disposeAll();
   lodTerrain.teardown();
+  farTreeSys.teardown();
   if (game.scene){
     game.scene.clear();
   }
@@ -15651,6 +15745,30 @@ const farTerrain = {
         }
       }
     }
+    // erode the real-coverage region by one column: a covered column that
+    // touches an uncovered one is a SEAM column (200), and the LOD keeps
+    // drawing under it so the join is backed instead of showing sky
+    {
+      const src = this._maskCopy && this._maskCopy.length === data.length
+        ? this._maskCopy : (this._maskCopy = new Uint8Array(data.length));
+      src.set(data);
+      const R2 = T.radius + 2;
+      const pcx2 = pcx - ox, pcz2 = pcz - oz;
+      for (let dz = -R2; dz <= R2; dz++){
+        const iz = pcz2 + dz;
+        if (iz < 1 || iz >= n - 1) continue;
+        for (let dx = -R2; dx <= R2; dx++){
+          const ix = pcx2 + dx;
+          if (ix < 1 || ix >= n - 1) continue;
+          if (src[iz * n + ix] !== 255) continue;
+          let edge = false;
+          for (let b = -2; b <= 2 && !edge; b++)
+            for (let a = -2; a <= 2; a++)
+              if (src[(iz + b) * n + ix + a] !== 255){ edge = true; break; }
+          if (edge) data[iz * n + ix] = 200;
+        }
+      }
+    }
     // truthful-LOD coverage: columns whose coarse chunks are all meshed
     // and merged mark 128 — the skin yields there, the water skin stays
     if (lodTerrain.rings){
@@ -15862,12 +15980,18 @@ const lodTerrain = {
         'void main(){\n' +
         '  vec2 mi2 = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
         '  if (mi2.x > 0.0 && mi2.x < 1.0 && mi2.y > 0.0 && mi2.y < 1.0 &&\n' +
-        '      texture2D(uMask, mi2).r > 0.72) discard;\n');
+        '      texture2D(uMask, mi2).r > 0.9) discard;\n');
+    const lodVert = TERRAIN_VERT
+      .replace('uniform mat4 uShadowMatrix;', 'uniform mat4 uShadowMatrix;\nuniform float uSink;')
+      .replace('gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+               'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.x, position.y - uSink, position.z, 1.0);');
     this.rings.forEach((ring, ri) => {
+      const ru = Object.assign({}, u);
+      ru.uSink = { value: CORE.VOX * ring.sc * 0.18 };
       ring.mat = new THREE.ShaderMaterial({
-        vertexShader: TERRAIN_VERT,
+        vertexShader: lodVert,
         fragmentShader: lodFrag,
-        uniforms: u,
+        uniforms: ru,
         side: THREE.DoubleSide,
         polygonOffset: true,
         polygonOffsetFactor: 1 + ri,
@@ -16439,6 +16563,8 @@ function frame(now){
     game.terrain.update(game.pos.x, game.pos.y, game.pos.z);
     farTerrain.maskFrame = 99;     // crossed a chunk: re-cut the mask NOW
     treeSys.refresh();
+    farTreeSys.lastCell = null;    // the near set just changed; re-cut the far one
+    farTreeSys.refresh();
     decorSys.refresh();
     torchSys.rebuild();
     ropeSys.rebuild();
@@ -16447,7 +16573,7 @@ function frame(now){
     game.treeRetryT = (game.treeRetryT || 0) + dt;
     if (game.treeRetryT > 0.3){
       game.treeRetryT = 0;
-      if (treeSys.pending) treeSys.refresh();
+      if (treeSys.pending){ treeSys.refresh(); farTreeSys.lastCell = null; farTreeSys.refresh(); }
       if (decorSys.pending){ decorSys.lastCell = null; decorSys.refresh(); }
     }
   }
@@ -16679,7 +16805,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
