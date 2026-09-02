@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 17.1 — notes from the water (2026-09-02)
+
+- **Batteries x10.** Cells hold 1000 / 3000 / 10000 and the charger
+  fills at 120/s, so a full charge takes the same time it did. The
+  tanks in cars, the sports car, the bike and the motorboat drain at a
+  tenth of the rate (a car now goes ~25 minutes flat out), and the
+  jetpack sips 0.9/s. Pad charging is unchanged, so charging takes the
+  same time as before. Wreck strongboxes carry a full 3000 cell.
+- **Creative is hostile too.** The Leviathan, the Burrower, night
+  lurkers and raids all come in creative now — you can't be hurt there,
+  but you can find them. The sigil still only answers in survival.
+- **Roads, three fixes.** (1) A diagonal highway used to start inside
+  the city and take the ground floors of towers with it: the distance to
+  a square slab's edge is half-span *divided* by the larger direction
+  component, not multiplied. Roads now begin 3 m outside the slab.
+  (2) Each end paints a basalt strip along the slab edge to the nearest
+  avenue, so the highway joins the city grid instead of dead-ending at
+  the margin. (3) The corridor is 14 m wide and 7 m tall. Every link
+  carries a version now; a link laid by an older builder is laid again on
+  top — the new corridor clears whatever the old slabs left and the new
+  slab refills its lane. That is the fix for "the mountain is still
+  there": worlds saved before 16.1 kept their old terrain-following
+  slabs and their ledges, and nothing re-laid them.
+- **The rod is a rod.** A tapered three-piece cane with a reel and a
+  grip, held low in first person like the other tools; it lifts while
+  the line is out and bends to a bite. A line runs from its tip (or the
+  hand, in third person) to the bobber, sagging a little.
+- **Oars.** They pivot at the oarlocks now, reaching out and down over
+  the gunwale, and sweep fore-and-aft with a dip on the return.
+
+Verified: a crafted high cell holds 10000 and a low cell fills in 10 s;
+the Leviathan spawns for a creative boat; a diagonal link starts outside
+both slabs with connector paint at its ends and an old-version record is
+laid again; the cast line runs from 0.5 m of the player to the bobber;
+the oars sweep 0.19 rad and dip 0.2 at speed.
+
 ## Build 17 — BLUE WATER (2026-09-02)
 
 ### A. Water that flows

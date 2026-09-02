@@ -2614,7 +2614,7 @@ function payCosts(slots, r){
 }
 // batteries: capacity by tier, in the same units a car tank / jetpack /
 // drone holds (100 = one full tank)
-const BATTERY_CAP = [100, 300, 1000];
+const BATTERY_CAP = [1000, 3000, 10000];
 const BATTERY_NAME = ['low', 'medium', 'high'];
 function batteryCap(it){ return BATTERY_CAP[it.tier | 0] || 100; }
 // what a battery can pour into: the field that holds its charge, or null
@@ -5332,6 +5332,38 @@ function buildViewmodel(cam){
     stapler.rotation.y = -0.5;
     wireRig.add(stapler);
   }
+  // FISHING ROD: a long tapered cane held low, a reel, and `tip` — the
+  // empty the line leaves from
+  const rod = held(() => {
+    const t = new THREE.Group();
+    const cane = new THREE.MeshBasicMaterial({ color: 0x8a6237 });
+    const cane2 = new THREE.MeshBasicMaterial({ color: 0xa8783f });
+    const segs = [[0.032, 0.026, 0.42, 0], [0.026, 0.018, 0.42, 1], [0.018, 0.01, 0.42, 2]];
+    for (const [r0, r1, len, k] of segs){
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 7), k % 2 ? cane2 : cane);
+      m.rotation.x = -Math.PI / 2 + 0.28;                         // forward and a little up
+      const d = k * len + len / 2;
+      m.position.set(0, 0.06 + Math.sin(0.28) * d, -Math.cos(0.28) * d);
+      t.add(m);
+    }
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.22, 8), gripM);
+    grip.rotation.x = -Math.PI / 2 + 0.28;
+    grip.position.set(0, 0.03, 0.1);
+    const reel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.05, 10), steelM);
+    reel.rotation.z = Math.PI / 2;
+    reel.position.set(0, -0.02, -0.1);
+    const spool = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.06, 10), ropeM);
+    spool.rotation.z = Math.PI / 2;
+    spool.position.set(0, -0.02, -0.1);
+    t.add(grip, reel, spool);
+    const tip = new THREE.Object3D();
+    const dT = 3 * 0.42;
+    tip.position.set(0, 0.06 + Math.sin(0.28) * dT, -Math.cos(0.28) * dT);
+    t.add(tip);
+    t.userData = { tip };
+    return t;
+  });
+  vm.add(rod);
   vm.add(wireRig);
   vm.add(grapple);
   vm.add(fists);
@@ -5342,7 +5374,7 @@ function buildViewmodel(cam){
   vm.position.set(VM_POS.x, VM_POS.y, VM_POS.z);
   cam.add(vm);
   game.vm = { root: vm, drill, disp, gun, torch, sword, stick, door, table, beacon, bed, wool, wrench, generic, matCube, fists, fws,
-              wireRig, grapple, bob: 0, emberT: 0 };
+              wireRig, grapple, rod, bob: 0, emberT: 0 };
 }
 function updateViewmodel(dt){
   const v = game.vm; if (!v) return;
@@ -5376,13 +5408,20 @@ function updateViewmodel(dt){
   v.wrench.visible = kind === 'wrench';
   v.wireRig.visible = kind === 'wire';
   v.grapple.visible = kind === 'grapple';
+  v.rod.visible = kind === 'rod';
+  if (v.rod.visible){
+    // the rod bends to the bite, and lifts a touch while the line is out
+    const F = game.fishing;
+    const want = F ? (F.bit ? 0.42 : 0.12) : 0;
+    v.rod.userData.item.rotation.x += (want - v.rod.userData.item.rotation.x) * Math.min(1, 10 * dt);
+  }
   // anything here shows the item's own icon in the fist; coin and drone used
   // to match no branch at all, so selecting them raised no hand whatsoever
   const genericKinds = ['meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7401,7 +7440,7 @@ const powerSys = {
       if (!b || b.kind !== 'battery') continue;
       const cap = CORE.batteryCap(b);
       if ((b.charge || 0) >= cap) continue;
-      b.charge = Math.min(cap, (b.charge || 0) + 12 * ratio * dt);
+      b.charge = Math.min(cap, (b.charge || 0) + 120 * ratio * dt);
       touched = true;
     }
     if (touched && game.ui === 'cont' && game.activeCont === n){
@@ -8495,16 +8534,16 @@ function addTorchesToInv(n){ return addStackItem('torch', n); }
 // sphere, seat = camera offsets, kmh = the gauge's full scale.
 // air: it leaves the ground on purpose (tricks, crashes)
 const VEH = {
-  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.65, r: 0.85, ride: 0.4, kmh: 50, repair: 6,
+  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.065, r: 0.85, ride: 0.4, kmh: 50, repair: 6,
                seat: { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 } },
-  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 1.3, r: 0.75, ride: 0.3, kmh: 120, repair: 10,
+  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 0.13, r: 0.75, ride: 0.3, kmh: 120, repair: 10,
                seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
-  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.5, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
+  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.05, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
                seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
   // water: floats on the surface (draft below), crawls when beached
   boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22,
                seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
-  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.9, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
+  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
                seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
 };
 // the water surface over (x,z) near height y — cells first, then the world's still water
@@ -8936,16 +8975,19 @@ function entMesh(type, ent){
       g.add(screen, eng, leg, gauges);
       g.userData.gauge = { cv: gcv, tex: gtex };
     } else {
-      // two paddles that swing with your stroke
+      // two oars pivoting at the oarlocks: they reach out and down over the
+      // gunwale and sweep fore-and-aft with your stroke
       const pads = [];
       for (const sx2 of [-1, 1]){
         const pv = new THREE.Group();
-        pv.position.set(sx2 * (Wd / 2 + 0.05), H + 0.12, 0.1);
-        const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 1.7), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
-        shaft.rotation.z = sx2 * 0.5; shaft.position.set(sx2 * 0.35, -0.2, 0);
-        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.45), dark);
-        blade.position.set(sx2 * 0.75, -0.55, -0.6);
-        pv.add(shaft, blade);
+        pv.position.set(sx2 * (Wd / 2 + 0.02), H + 0.1, 0.1);
+        const lock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.1), new THREE.MeshBasicMaterial({ color: 0x9aa0ab }));
+        const shaft = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.055, 0.055), new THREE.MeshBasicMaterial({ color: 0x8a6237 }));
+        shaft.position.set(sx2 * 0.78, -0.28, 0); shaft.rotation.z = -sx2 * 0.36;
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.04, 0.2), dark);
+        blade.position.set(sx2 * 1.68, -0.62, 0); blade.rotation.z = -sx2 * 0.36;
+        pv.add(lock, shaft, blade);
+        pv.userData.side = sx2;
         g.add(pv); pads.push(pv);
       }
       g.userData.paddles = pads;
@@ -10100,7 +10142,6 @@ const raidSys = {
     return w;
   },
   tick(dt){
-    if (game.mode !== 'survival'){ this.pending = 0; return; }
     if (game.dayF > 0.5){ this.nightDone = false; return; }   // noon resets
     if (this.nightDone || game.dayF > 0.22) return;           // deep night only
     const W = this.wattsNear(game.pos.x, game.pos.z, 140);
@@ -10144,7 +10185,7 @@ const bossSys = {
   anyBoss(){ return game.entities.find(e => e.bossType); },
   // ---- encounter triggers ----
   tick(dt){
-    if (game.mode !== 'survival' || !game.running) return;
+    if (!game.running) return;                 // bosses come in creative too (you just can't be hurt)
     this.accT += dt;
     if (this.accT < 2) return;
     this.accT = 0;
@@ -10881,7 +10922,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 6.5;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 2;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -10913,9 +10954,12 @@ const roadSys = {
     const spanA = citySys.plan(a).n * 36 + 8, spanB = citySys.plan(b).n * 36 + 8;
     const d = Math.hypot(b.x - a.x, b.z - a.z);
     const ux = (b.x - a.x) / d, uz = (b.z - a.z) / d;
-    // start/end just past each city's slab edge (its road margin)
-    const edgeA = spanA / 2 * Math.max(Math.abs(ux), Math.abs(uz)) + 3;
-    const edgeB = spanB / 2 * Math.max(Math.abs(ux), Math.abs(uz)) + 3;
+    // start/end just past each city's slab edge (its road margin) — the
+    // distance along the ray to a square's edge is half-span OVER the
+    // larger direction component (a diagonal road used to start inside
+    // the city and take the ground floors of its towers with it)
+    const edgeA = spanA / 2 / Math.max(Math.abs(ux), Math.abs(uz)) + 3;
+    const edgeB = spanB / 2 / Math.max(Math.abs(ux), Math.abs(uz)) + 3;
     const sx = a.x + ux * edgeA, sz = a.z + uz * edgeA;
     const ex = b.x - ux * edgeB, ez = b.z - uz * edgeB;
     const len = Math.hypot(ex - sx, ez - sz);
@@ -10954,8 +10998,11 @@ const roadSys = {
     // a roof; through a hill an open trench; on flat ground it just clears
     // the shoulders. The slab then refills its own lane, so the road stands
     // a metre proud of whatever it cut — the ground never rises into it.
-    if (hr[1] > top - ROAD_SHOULDER) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_W + 4, segLen, 0);
+    if (hr[1] > top - ROAD_SHOULDER) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0);
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT);
+    // at either end: a painted strip along the slab's edge from where the
+    // road arrives to the nearest avenue, so the highway joins the grid
+    if (i === 0 || i === L.segs - 1) this.connect(L, i === 0 ? L.a : L.b, i === 0 ? [L.ux, L.uz] : [-L.ux, -L.uz]);
     // no trees on the tarmac: fell every tree whose trunk lands on the segment
     if (game.gen.treeAt){
       const TC = CORE.TREE_CELL, half = ROAD_W / 2 + 1.2, along = segLen / 2 + 1;
@@ -10985,12 +11032,42 @@ const roadSys = {
         text: citySys.nameFor(dest.seed).slice(0, 16) + '\n' + (rest / 1000).toFixed(1) + ' km' });
     }
   },
+  // the strip that joins a road end to the city's avenue grid (paint only)
+  connect(L, c, dir){
+    const MAT = CORE.MAT;
+    const nn = citySys.plan(c).n, span = nn * 36 + 8, half = (nn - 1) / 2;
+    const offs = [];
+    for (let m = -half; m < half; m++) offs.push((m + 0.5) * 36);
+    const mx = Math.max(Math.abs(dir[0]), Math.abs(dir[1]));
+    const P = [c.x + dir[0] * (span / 2) / mx, c.z + dir[1] * (span / 2) / mx];   // where the road meets the slab edge
+    const g = citySys.slabLevel(c);
+    const paint = (x, z, sx, sz) => {
+      const e = CORE.makeEdit(2, 1, +x.toFixed(1), +(g - 0.4).toFixed(1), +z.toFixed(1), sx, MAT.BASALT, 0);
+      e.sy = 1.6; e.sz = sz;
+      applyEdit(e);
+    };
+    if (Math.abs(dir[0]) >= Math.abs(dir[1])){
+      // an east/west edge: the avenues running along x end here at z = c.z + lane
+      let lane = offs[0];
+      for (const o of offs) if (Math.abs(c.z + o - P[1]) < Math.abs(c.z + lane - P[1])) lane = o;
+      const ex = c.x + Math.sign(dir[0]) * (span / 2 - 3.5), zB = c.z + lane;
+      paint(ex, (P[1] + zB) / 2, 7, Math.abs(P[1] - zB) + 8);
+    } else {
+      let lane = offs[0];
+      for (const o of offs) if (Math.abs(c.x + o - P[0]) < Math.abs(c.x + lane - P[0])) lane = o;
+      const ez = c.z + Math.sign(dir[1]) * (span / 2 - 3.5), xB = c.x + lane;
+      paint((P[0] + xB) / 2, ez, Math.abs(P[0] - xB) + 8, 7);
+    }
+  },
   ensure(){
     if (!game.running || !game.gen) return;
     game.roads = game.roads || {};
     for (const L of this.linksNear(game.pos.x, game.pos.z, 700)){
       let rec = game.roads[L.key];
-      if (!rec){ rec = { done: [] }; game.roads[L.key] = rec; }
+      if (!rec){ rec = { done: [], ver: ROAD_VER }; game.roads[L.key] = rec; }
+      // a link laid by an older road builder is laid again on top: the new
+      // corridor clears whatever the old slabs left, the new slab refills
+      if (rec.ver !== ROAD_VER){ rec.done = []; rec.ver = ROAD_VER; }
       const done = new Set(rec.done);
       let any = false;
       for (let i = 0; i < L.segs; i++){
@@ -11069,7 +11146,7 @@ const wreckSys = {
     ch.inv[1] = { kind: 'rubyingot', count: 3 + ((rng() * 4) | 0) };
     ch.inv[2] = { kind: 'ironingot', count: 6 + ((rng() * 6) | 0) };
     ch.inv[3] = { kind: 'rounds', count: 40 };
-    ch.inv[4] = { kind: 'battery', tier: 1, charge: 300 };
+    ch.inv[4] = { kind: 'battery', tier: 1, charge: CORE.BATTERY_CAP[1] };
     if ((w.seed % 3) === 0) ch.inv[5] = { kind: 'divehelm', tier: 0 };
     else ch.inv[5] = { kind: 'diamond', count: 1 + ((rng() * 2) | 0) };
   },
@@ -11415,7 +11492,7 @@ function trySpawnEntities(){
   const night = game.dayF < 0.25;
   // lurkers spawn in the dark (survival only): night surface, or an
   // underground air pocket
-  if (survival && counts.lurker < ENT_DEF.lurker.cap){
+  if (counts.lurker < ENT_DEF.lurker.cap){
     if (night && nearestTorchDist(x, h, z) > 12){
       spawnEntity('lurker', x, h + 0.5, z); return;
     }
@@ -12542,7 +12619,10 @@ function driveCar(dt){
     Particles.burst(e.x - fx * 1.6, e.y + 0.1, e.z - fz * 1.6, 0.4, [0xdfeeff, 0xffffff], 2, 0.8);   // the wake
   if (V.paddle && e.mesh && e.mesh.userData.paddles){
     e.padPh = (e.padPh || 0) + dt * Math.abs(e.speed) * 1.6;
-    for (const pv of e.mesh.userData.paddles) pv.rotation.x = Math.sin(e.padPh) * 0.55;
+    for (const pv of e.mesh.userData.paddles){
+      pv.rotation.y = Math.sin(e.padPh) * 0.6 * pv.userData.side;           // the sweep
+      pv.rotation.z = pv.userData.side * (Math.cos(e.padPh) * 0.16 - 0.05);  // the dip
+    }
   }
   if (V.air){
     // ---- the motorcycle leaves the ground ----
@@ -12642,7 +12722,24 @@ function driveCar(dt){
 function endFishing(){
   const F = game.fishing;
   if (F && F.mesh) game.scene.remove(F.mesh);
+  if (F && F.line){ game.scene.remove(F.line); F.line.geometry.dispose(); }
   game.fishing = null;
+}
+// where the line leaves: the rod's tip in first person, the hand otherwise
+const _rodTip = new THREE.Vector3();
+function rodTipWorld(){
+  const v = game.vm;
+  if (v && v.rod && v.root.visible && v.rod.visible){
+    const tip = v.rod.userData.item.userData.tip;
+    tip.updateWorldMatrix(true, false);
+    return _rodTip.setFromMatrixPosition(tip.matrixWorld);
+  }
+  if (playerBody.root && playerBody.root.visible && playerBody.handItem){
+    playerBody.handItem.updateWorldMatrix(true, false);
+    return _rodTip.setFromMatrixPosition(playerBody.handItem.matrixWorld);
+  }
+  const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+  return _rodTip.set(game.pos.x + dir.x * 0.8, game.pos.y + playerHeight() * 0.75, game.pos.z + dir.z * 0.8);
 }
 function fishingTick(dt){
   const F = game.fishing;
@@ -12659,6 +12756,21 @@ function fishingTick(dt){
     if (F.bitT > 1.6){ F.bit = false; F.t = 0; F.bite = 3 + Math.random() * 7; toast('it got away…'); refreshToolHUD(); }
   }
   if (F.mesh) F.mesh.position.y = F.y + (F.bit ? -0.22 + Math.sin(F.bitT * 30) * 0.05 : Math.sin(F.t * 2.5) * 0.04);
+  // the line: rod tip to bobber, with a little sag
+  if (!F.line){
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9 * 3), 3));
+    F.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xf4f7fb, transparent: true, opacity: 0.85 }));
+    F.line.frustumCulled = false; F.line.renderOrder = 4;
+    game.scene.add(F.line);
+  }
+  const a = rodTipWorld(), by = F.mesh ? F.mesh.position.y : F.y;
+  const pos = F.line.geometry.attributes.position;
+  for (let k = 0; k < 9; k++){
+    const t = k / 8;
+    pos.setXYZ(k, a.x + (F.x - a.x) * t, a.y + (by - a.y) * t - Math.sin(t * Math.PI) * 0.35, a.z + (F.z - a.z) * t);
+  }
+  pos.needsUpdate = true;
 }
 function trickName(flips, spins, whips){
   const parts = [];
@@ -12728,7 +12840,7 @@ function updatePlayer(dt){
     const jp = game.armor && game.armor.back;
     if (jp && jp.kind === 'jetpack' && canMove && k['Space'] && !game.grounded && (jp.fuel || 0) > 0){
       game.vel.y = Math.min(6.5, game.vel.y + 60 * dt);
-      jp.fuel = Math.max(0, jp.fuel - 9 * dt);
+      jp.fuel = Math.max(0, jp.fuel - 0.9 * dt);
       game.jetOn = true;
       if (Math.random() < 0.5)
         Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.15, [0xffb347, 0xff8830], 1, 1.2);
