@@ -86,6 +86,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 .slot img{width:100%; height:100%; image-rendering:pixelated; display:block;}
 .slot .cnt{position:absolute; right:2px; bottom:1px; font-size:11px; color:#fff; text-shadow:1px 1px 0 #000; pointer-events:none;}
 .slot .key{position:absolute; left:3px; top:1px; font-size:10px; color:var(--ui-hi); pointer-events:none;}
+.slot .bar{position:absolute; left:5px; right:5px; bottom:4px; height:5px; background:#15131c; border:1px solid #000; pointer-events:none;}
+.slot .bar i{display:block; height:100%; background:#4fe07a;}
 .slot.sel{border-color:#fff; box-shadow:0 0 0 2px var(--accent);}
 
 /* ---------- inventory ---------- */
@@ -2287,7 +2289,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'ped', 'sign',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -2540,6 +2542,11 @@ const RECIPES = [];
   // the electric car ships as a kit: place it, drive it, charge it
   RECIPES.push({ kind: 'car', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }] });
+  // the electric motorcycle: half the metal, twice the nerve
+  RECIPES.push({ kind: 'bike', station: true,
+    costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 2 }, { item: 'wire', n: 4 }] });
+  // the repair bench: wrecked kits go on it with iron and come off whole
+  RECIPES.push({ kind: 'repair', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }] });
   // the endgame summons: carve deep, smelt hard, then draw THE ARCHITECT out
   RECIPES.push({ kind: 'sigil', yields: 1, station: true,
     costs: [{ item: 'diamond', n: 4 }, { mat: MAT.OBSIDIAN, n: 12 }, { mat: MAT.CRYSTAL, n: 6 }] });
@@ -2567,7 +2574,7 @@ function batteryCap(it){ return BATTERY_CAP[it.tier | 0] || 100; }
 function chargeField(it){
   if (!it) return null;
   if (it.kind === 'jetpack') return 'fuel';
-  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car') return 'charge';
+  if (it.kind === 'drone' || it.kind === 'tdrone' || it.kind === 'car' || it.kind === 'sportscar' || it.kind === 'bike') return 'charge';
   return null;
 }
 // add n of a stackable item kind to slots (merge first, then a free slot)
@@ -2657,6 +2664,7 @@ function craft(slots, r, free){
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 0 }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'car' ? { kind: 'car', charge: 20 }
+                  : r.kind === 'bike' ? { kind: 'bike', charge: 20 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -4325,14 +4333,29 @@ const playerBody = {
     const sig = (A.head ? A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
     if (game.driving){
-      // seated at the wheel: butt in the left seat, knees forward
       const e2 = game.driving;
+      const V2 = VEH[e2.type] || VEH.car;
+      if (V2.air){
+        // astride the bike: the rider turns with it through every flip and whip
+        this.root.rotation.order = 'YXZ';
+        this.root.rotation.set(e2.tPitch || 0, (e2.heading || 0) + (e2.tYaw || 0), (e2.tRoll || 0) + (e2.lean || 0));
+        const off = new THREE.Vector3(0, 0.5, 0.3).applyEuler(this.root.rotation);
+        this.root.position.set(e2.x + off.x, e2.y + off.y, e2.z + off.z);
+        this.upper.position.y = -0.3;
+        this.legL.rotation.x = 1.0; this.legR.rotation.x = 1.0;
+        this.armL.rotation.x = 1.15; this.armR.rotation.x = 1.15;
+        this.head.rotation.x = 0.15;
+        return;
+      }
+      this.root.rotation.order = 'XYZ';
+      this.root.rotation.set(0, 0, 0);
+      // seated at the wheel: butt in the left seat, knees forward
       const fdx = -Math.sin(e2.heading || 0), fdz = -Math.cos(e2.heading || 0);
       const rdx = -fdz, rdz = fdx;
       this.root.position.set(
-        e2.x + rdx * -0.45 - fdx * 0.55,
+        e2.x + rdx * V2.seat.seatX - fdx * 0.55,
         e2.y + 0.06,
-        e2.z + rdz * -0.45 - fdz * 0.55);
+        e2.z + rdz * V2.seat.seatX - fdz * 0.55);
       this.root.rotation.y = e2.heading || 0;
       this.upper.position.y = -0.42;
       this.legL.rotation.x = 1.45; this.legR.rotation.x = 1.45;
@@ -4341,6 +4364,7 @@ const playerBody = {
       return;
     }
     this.root.position.set(game.pos.x, game.pos.y, game.pos.z);
+    if (this.root.rotation.order !== 'XYZ'){ this.root.rotation.order = 'XYZ'; this.root.rotation.set(0, 0, 0); }
     this.root.rotation.y = game.yaw;
     const speed = Math.hypot(game.vel.x, game.vel.z);
     this.phase += dt * Math.min(10, Math.max(speed, 0.001)) * 2.0;
@@ -5033,7 +5057,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -6298,6 +6322,25 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, gear, face);
       g.userData.orb = gear;
+    } else if (t === 'repair'){
+      // a planks workbench with a steel vise and a red wrench on the top
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.12, 0.8), M.wood);
+      top.position.y = 0.9;
+      g.add(top);
+      for (const [lx, lz] of [[-0.7, -0.3], [0.7, -0.3], [-0.7, 0.3], [0.7, 0.3]]){
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), M.bark);
+        leg.position.set(lx, 0.42, lz);
+        g.add(leg);
+      }
+      const vise = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.26, 0.3), M.steel);
+      vise.position.set(-0.45, 1.09, 0);
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.34), M.dark);
+      jaw.position.set(-0.45, 1.24, 0);
+      const wrench = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.12), new THREE.MeshBasicMaterial({ color: 0xd8302c }));
+      wrench.position.set(0.35, 0.99, 0.1);
+      wrench.rotation.y = 0.5;
+      g.add(vise, jaw, wrench);
+      g.userData.vise = jaw;
     } else if (t === 'charger'){
       const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.9, 0.7), M.steel);
       body.position.y = 0.45;
@@ -6515,12 +6558,20 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
                    elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
+    }
+    if (k === 'r'){
+      // a rail meter: r<lineId>e<0|1>
+      const m = /^r(\d+)e([01])$/.exec(id);
+      const L = m && railSys.byId(+m[1]);
+      if (!L || !L.pts || L.pts.length < 2) return null;
+      const p = m[2] === '0' ? L.pts[0] : L.pts[L.pts.length - 1];
+      return [p[0], p[1] + 1.0, p[2]];
     }
     if (k === 'b'){
       const b = (game.bulbs || []).find(b => b[6] === num);
@@ -6550,6 +6601,13 @@ const pnodeSys = {
       if (st.id == null) continue;
       const p = this.terminal('s' + st.id);
       if (p) out.push({ id: 's' + st.id, p });
+    }
+    for (const L of game.rails || []){
+      if (L.id == null || !L.pts || L.pts.length < 2) continue;
+      for (const end of [0, 1]){
+        const id = 'r' + L.id + 'e' + end, p = this.terminal(id);
+        if (p) out.push({ id, p });
+      }
     }
     return out;
   },
@@ -6596,7 +6654,12 @@ const pnodeSys = {
       }
       if (n.t === 'ped' && ud.pedItem)
         ud.pedItem.rotation.y += dt * 0.7;
+      if (n.t === 'repair'){
+        repairTick(n, dt);
+        if (ud.vise) ud.vise.position.y = 1.24 + ((n.prog || 0) > 0 ? Math.sin(performance.now() * 0.02) * 0.04 : 0);
+      }
     }
+    if (powerSys.meterDirty) railSys.refreshMeters();
     powerSys.meterDirty = false;
   },
 };
@@ -6858,6 +6921,11 @@ const powerSys = {
         } else if (id[0] === 's'){
           const st = (game.stoves || []).find(s => 's' + s.id === id);
           if (st && st.in && CORE.SMELTS[st.in.kind] && st.burn > 0){ c.d += 30; c.stoves.push(id); }
+        } else if (id[0] === 'r'){
+          // a rail meter on the circuit: the line draws 15W to exist, and
+          // takes whatever the circuit has left once everything else is fed
+          const L = railSys.byId(+id.slice(1).split('e')[0]);
+          if (L && L.pts && L.pts.length >= 2){ c.d += 15; (c.railEnds = c.railEnds || []).push(L.id); }
         }
       }
     };
@@ -6896,29 +6964,17 @@ const powerSys = {
     this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
     this.gridSites = [];
     this.chargerMap = this.chargerMap || new Map(); this.chargerMap.clear();
-    this.railLive = new Set();
-    // rails are CONSUMERS: a line whose end post stands within 8m of a
-    // circuit's terminal draws 15W from that circuit — so a generator
-    // ignites for the rail itself, and no bulb has to be sacrificed
-    const railKey = L => L.pts[0][0] + ',' + L.pts[0][1] + ',' + L.pts[0][2];
-    const claimed = new Set();
-    for (const c of comps.values()){
-      if (!c.terms.length) continue;
-      for (const L of game.rails || []){
-        const k = railKey(L);
-        if (claimed.has(k) || !L.pts || L.pts.length < 2) continue;
-        let near = false;
-        for (const p of [L.pts[0], L.pts[L.pts.length - 1]]){
-          for (const t of c.terms) if (Math.hypot(t[0] - p[0], t[2] - p[2]) < 8){ near = true; break; }
-          if (near) break;
-        }
-        if (near){ claimed.add(k); c.d += 15; (c.rails = c.rails || []).push(k); }
-      }
-    }
+    this.railWatts = new Map();
     for (const c of comps.values()){
       const ratio = c.d > 0 ? Math.min(1, c.w / c.d) : (c.w > 0 ? 1 : 0);
       if (c.chargers) for (const n of c.chargers) this.chargerMap.set(n.id, c.w > 0 ? ratio : 0);
-      if (c.rails && c.w > 0 && ratio > 0) for (const k of c.rails) this.railLive.add(k);
+      if (c.railEnds && c.w > 0){
+        // rails are greedy: after every other load on the circuit is fed,
+        // the rest goes down the line (never less than the 15W share)
+        const other = c.d - 15 * c.railEnds.length;
+        const share = Math.max(15 * ratio, Math.max(0, c.w - other) / c.railEnds.length);
+        for (const id of c.railEnds) this.railWatts.set(id, (this.railWatts.get(id) || 0) + share);
+      }
       for (const b of c.bulbs) this.bulbMap.set(b, ratio);
       for (const s of c.stoves) this.stoveMap.set(s, ratio);
       for (const n of c.elevs) this.elevMap.set(n.id, c.w > 0 ? ratio : 0);
@@ -6988,7 +7044,7 @@ const powerSys = {
   padCars(n){
     const out = [];
     for (const e of game.entities)
-      if (e.type === 'car' && (e.charge || 0) < 100 &&
+      if (VEH[e.type] && (e.charge || 0) < 100 &&
           Math.abs(e.x - n.x) < 1.9 && Math.abs(e.z - n.z) < 1.9 && Math.abs(e.y - n.y) < 2.5) out.push(e);
     return out;
   },
@@ -7822,7 +7878,7 @@ function itemModel(it){
   else if (K === 'rope') g.add(ropeSys.model(0.8));
   else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
   else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
-            'gen2', 'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable'].includes(K)){
+            'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable'].includes(K)){
     g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
   } else if (K === 'helm'){
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
@@ -8086,6 +8142,19 @@ function addStackItem(kind, n){
 }
 function addTorchesToInv(n){ return addStackItem('torch', n); }
 
+// ---------- vehicles: one drive loop, three personalities ----------
+// top/rev m/s, accel/brake m/s², steer rad/s, drain %/s, r = the ground
+// sphere, seat = camera offsets, kmh = the gauge's full scale.
+// air: it leaves the ground on purpose (tricks, crashes)
+const VEH = {
+  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.65, r: 0.85, ride: 0.4, kmh: 50, repair: 6,
+               seat: { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 } },
+  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 1.3, r: 0.75, ride: 0.3, kmh: 120, repair: 10,
+               seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
+  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.5, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
+               seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
+};
+function isVehicle(e){ return !!(e && VEH[e.type]); }
 // ---------- entities ----------
 const ENT_DEF = {
   grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
@@ -8094,6 +8163,8 @@ const ENT_DEF = {
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
+  sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
+  bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
   drop:     { hp: 1e9, speed: 0, r: 0.01, h: 0.01, cap: 0 },   // a thing on the ground; untargetable
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
@@ -8320,6 +8391,130 @@ function entMesh(type, ent){
     }
     return g;
   }
+  if (type === 'sportscar'){
+    // low, wide, red: a wedge on four fat wheels with a spoiler, and the
+    // same live gauge cluster as the car
+    const paintT = PixTex.make('sportpaint', (c, w, h, rng) => {
+      pxSpeckle(c, rng, '#d8302c', '#b8231f', '#ef4a44', 20);
+      c.fillStyle = '#f7f2e8'; c.fillRect(0, 6, w, 2);
+    });
+    const paint = new THREE.MeshBasicMaterial({ map: paintT });
+    const darkT = PixTex.make('cardark', (c, w, h, rng) => pxSpeckle(c, rng, '#23232a', '#191920', '#31313a', 14));
+    const dark = new THREE.MeshBasicMaterial({ map: darkT });
+    const glass = new THREE.MeshBasicMaterial({ color: 0x8fc8e0, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.36, 4.0), paint);
+    body.position.y = 0.5;
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.22, 0.9), paint);
+    nose.position.set(0, 0.4, -2.35);
+    const hood = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 1.3), paint);
+    hood.position.set(0, 0.74, -1.2);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.5, 1.7), glass);
+    canopy.position.set(0, 0.98, 0.15);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(1.54, 0.07, 1.2), paint);
+    roof.position.set(0, 1.25, 0.25);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.3, 0.9), paint);
+    tail.position.set(0, 0.7, 1.6);
+    g.add(body, nose, hood, canopy, roof, tail);
+    // the spoiler
+    for (const sxx of [-0.7, 0.7]){
+      const strut = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.34, 0.1), dark);
+      strut.position.set(sxx, 1.0, 1.85);
+      g.add(strut);
+    }
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.06, 0.4), paint);
+    wing.position.set(0, 1.18, 1.85);
+    g.add(wing);
+    const hlM = new THREE.MeshBasicMaterial({ color: 0xfff4c9 });
+    const tlM = new THREE.MeshBasicMaterial({ color: 0xff3b3b });
+    for (const sxx of [-0.62, 0.62]){
+      const hl = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.06), hlM);
+      hl.position.set(sxx, 0.44, -2.81);
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.06), tlM);
+      tl.position.set(sxx, 0.74, 2.06);
+      g.add(hl, tl);
+    }
+    const seatM = new THREE.MeshBasicMaterial({ color: 0x1c1c22 });
+    for (const sxx of [-0.42, 0.42]){
+      const sb = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.6), seatM);
+      sb.position.set(sxx, 0.72, 0.45);
+      const sk = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.12), seatM);
+      sk.position.set(sxx, 0.98, 0.78);
+      g.add(sb, sk);
+    }
+    const dash = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 0.3), dark);
+    dash.position.set(0, 0.84, -0.55);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 12), dark);
+    wheel.rotation.x = Math.PI / 2 - 0.6;
+    wheel.position.set(-0.42, 0.9, -0.4);
+    g.add(dash, wheel);
+    const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+    const gtex = new THREE.CanvasTexture(gcv);
+    gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+    const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.25), new THREE.MeshBasicMaterial({ map: gtex }));
+    gauges.position.set(-0.42, 1.04, -0.46);
+    gauges.rotation.x = -0.35;
+    g.add(gauges);
+    g.userData.gauge = { cv: gcv, tex: gtex };
+    for (const [wx2, wz2] of [[-0.92, -1.4], [0.92, -1.4], [-0.92, 1.35], [0.92, 1.35]]){
+      const wh = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.6, 0.6), dark);
+      wh.position.set(wx2, 0.3, wz2);
+      const hubc = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.22), new THREE.MeshBasicMaterial({ color: 0xd9d9e0 }));
+      hubc.position.set(wx2, 0.3, wz2);
+      g.add(wh, hubc);
+    }
+    return g;
+  }
+  if (type === 'bike'){
+    // the electric motorcycle: two fat wheels, a frame, a tank, bars and
+    // a tiny gauge. Rotates as a whole for tricks (order YXZ: yaw, then
+    // flip, then whip)
+    g.rotation.order = 'YXZ';
+    const darkT = PixTex.make('cardark', (c, w, h, rng) => pxSpeckle(c, rng, '#23232a', '#191920', '#31313a', 14));
+    const dark = new THREE.MeshBasicMaterial({ map: darkT });
+    const tankT = PixTex.make('bikepaint', (c, w, h, rng) => {
+      pxSpeckle(c, rng, '#2f9de0', '#2277b8', '#4ab5f0', 18);
+      c.fillStyle = '#f4f7fb'; c.fillRect(0, 7, w, 1);
+    });
+    const tankM = new THREE.MeshBasicMaterial({ map: tankT });
+    const steel = new THREE.MeshBasicMaterial({ color: 0x9aa0ab });
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 1.3), dark);
+    frame.position.set(0, 0.62, 0.05);
+    const tank = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.3, 0.6), tankM);
+    tank.position.set(0, 0.86, -0.15);
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.62), new THREE.MeshBasicMaterial({ color: 0x1c1c22 }));
+    seat.position.set(0, 0.88, 0.42);
+    const tailB = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.14, 0.34), tankM);
+    tailB.position.set(0, 0.8, 0.82);
+    const motor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.34, 0.5), steel);
+    motor.position.set(0, 0.42, 0.05);
+    g.add(frame, tank, seat, tailB, motor);
+    for (const wz2 of [-0.78, 0.78]){
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.16, 10), dark);
+      wh.rotation.z = Math.PI / 2;
+      wh.position.set(0, 0.36, wz2);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.18, 8), steel);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.set(0, 0.36, wz2);
+      g.add(wh, hub);
+    }
+    const fork = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.08), steel);
+    fork.position.set(0, 0.72, -0.72);
+    fork.rotation.x = 0.4;
+    const bars = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.06, 0.06), steel);
+    bars.position.set(0, 1.06, -0.52);
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.08), new THREE.MeshBasicMaterial({ color: 0xfff4c9 }));
+    lamp.position.set(0, 0.96, -0.66);
+    g.add(fork, bars, lamp);
+    const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+    const gtex = new THREE.CanvasTexture(gcv);
+    gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+    const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.15), new THREE.MeshBasicMaterial({ map: gtex }));
+    gauges.position.set(0, 1.12, -0.44);
+    gauges.rotation.x = -0.5;
+    g.add(gauges);
+    g.userData.gauge = { cv: gcv, tex: gtex };
+    return g;
+  }
   if (type === 'cab'){
     // a boxy electric cab: painted pixel shell, taxi stripe, roof sign,
     // and a visible driver at the wheel
@@ -8501,14 +8696,15 @@ function killEntity(e, byPlayer){
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
     [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
-  if (e.type === 'car'){
-    if (game.driving === e) game.driving = null;
+  if (VEH[e.type]){
+    if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
+    const kit = { kind: e.type, charge: Math.round((e.charge || 0) / 2), bat: e.bat || null, wrecked: 1 };
     const i2 = game.slots.findIndex(sl => !sl);
     if (i2 >= 0){
-      game.slots[i2] = { kind: 'car', charge: Math.round((e.charge || 0) / 2), bat: e.bat || null };
-      toast('the wreck folds back into a kit (half the charge lost)');
+      game.slots[i2] = kit;
+      toast('the wreck folds into a kit — a REPAIR BENCH puts it back together');
       refreshHotbar();
-    } else toast('the car is wrecked — no pack space to recover the kit');
+    } else { dropItem(kit, { x: e.x, y: e.y + 1, z: e.z }); toast('the ' + VEH[e.type].name + ' is wrecked — the kit is on the ground'); }
     markSave();
     return;
   }
@@ -9265,6 +9461,7 @@ const tradeSys = {
       { buy: { k: 'tesla', n: 1 }, price: 220, rep: 25 },
       { buy: { make: 'jetpack' }, price: 420, rep: 25 },
       { buy: { make: 'car' }, price: 650, rep: 10 },
+      { buy: { make: 'sportscar' }, price: 2400, rep: 15 },
       { buy: { make: 'tdrone' }, price: 950, rep: 25 },
       { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
     ];
@@ -9280,6 +9477,7 @@ const tradeSys = {
     if (s.make === 'grapple') return { kind: 'grapple' };
     if (s.make === 'jetpack') return { kind: 'jetpack', fuel: 0 };
     if (s.make === 'car') return { kind: 'car', charge: 100 };
+    if (s.make === 'sportscar') return { kind: 'sportscar', charge: 100 };
     if (s.make === 'tdrone') return { kind: 'tdrone', charge: 100 };
     if (s.make === 'deed') return { kind: 'deed', count: 1 };
     if (s.make === 'tmap') return { kind: 'tmap' };
@@ -9965,11 +10163,12 @@ const railSys = {
     if (this.group) game.scene.remove(this.group);
     this.group = new THREE.Group();
     this.group.userData.noShadow = true;
+    this.meters = [];
     const railM = new THREE.MeshBasicMaterial({ color: 0x8a8f9a });
     const tieM = new THREE.MeshBasicMaterial({ color: 0x6b5233 });
-    const postM = new THREE.MeshBasicMaterial({ color: 0xd9b25a });
     const lines = (game.rails || []).slice();
-    if (game.railDraft && game.railDraft.pts.length) lines.push(game.railDraft);
+    // a line being extended is still in game.rails — don't draw it twice
+    if (game.railDraft && game.railDraft.pts.length && !lines.includes(game.railDraft)) lines.push(game.railDraft);
     for (const L of lines){
       const pts = L.pts;
       for (let i = 0; i + 1 < pts.length; i++){
@@ -9990,20 +10189,101 @@ const railSys = {
         }
         this.group.add(seg);
       }
-      for (const end of [pts[0], pts[pts.length - 1]]){
-        const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.6, 0.3), postM);
-        post.position.set(end[0], end[1] + 0.8, end[2]);
-        this.group.add(post);
+      // each end carries its RAIL METER: the wire terminal for the line, and
+      // a screen reading the watts it gets and how fast the cart will go
+      if (pts.length >= 2) for (const end of [0, 1]){
+        const p = end === 0 ? pts[0] : pts[pts.length - 1];
+        const q = end === 0 ? pts[1] : pts[pts.length - 2];
+        const m = this.meterModel();
+        m.position.set(p[0], p[1], p[2]);
+        m.rotation.y = Math.atan2(q[0] - p[0], q[2] - p[2]);   // screen faces away from the line
+        this.group.add(m);
+        const rec = { L, end, cv: m.userData.cv, tex: m.userData.tex };
+        this.meters.push(rec);
+        this.drawRailMeter(rec);
       }
     }
     game.scene.add(this.group);
   },
+  meterModel(){
+    const g = new THREE.Group();
+    const M = this.mats || (this.mats = {
+      steel: new THREE.MeshBasicMaterial({ color: 0x9aa0ab }),
+      dark: new THREE.MeshBasicMaterial({ color: 0x1c1f26 }),
+      brass: new THREE.MeshBasicMaterial({ color: 0xd9b25a }) });
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), M.brass);
+    foot.position.y = 0.06;
+    const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), M.steel);
+    pole.position.y = 0.5;
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.44, 0.1), M.dark);
+    panel.position.y = 1.0;
+    const cv = document.createElement('canvas');
+    cv.width = 64; cv.height = 32;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.56, 0.36),
+      new THREE.MeshBasicMaterial({ map: tex }));
+    screen.position.set(0, 1.0, -0.055);
+    screen.rotation.y = Math.PI;
+    g.add(foot, pole, panel, screen);
+    g.userData.cv = cv; g.userData.tex = tex;
+    return g;
+  },
+  drawRailMeter(m){
+    const w = m.L.id != null ? this.wattsFor(m.L) : 0;
+    const c = m.cv.getContext('2d');
+    c.fillStyle = w > 0 ? '#0d1a12' : '#1a0d0d'; c.fillRect(0, 0, 64, 32);
+    c.fillStyle = w > 0 ? '#57e88a' : '#e85757'; c.font = 'bold 14px monospace'; c.textAlign = 'center';
+    c.fillText(w > 0 ? Math.round(w) + 'W' : (m.L.id == null ? '--' : 'DEAD'), 32, 14);
+    c.fillStyle = w > 0 ? '#2f7a4d' : '#7a2f2f'; c.font = '9px monospace';
+    c.fillText(w > 0 ? this.speedFor(m.L).toFixed(0) + ' m/s' : 'no power', 32, 27);
+    m.tex.needsUpdate = true;
+  },
+  refreshMeters(){
+    for (const m of this.meters || []) this.drawRailMeter(m);
+  },
+  byId(id){
+    for (const L of game.rails || []) if (L.id === id) return L;
+    return null;
+  },
+  // watts arriving at the line (both meters combined) and the cart speed they buy
+  wattsFor(L){
+    return (L && L.id != null && powerSys.railWatts) ? (powerSys.railWatts.get(L.id) || 0) : 0;
+  },
+  speedFor(L){
+    const w = this.wattsFor(L);
+    return w > 0 ? Math.min(60, 4 + 0.22 * w) : 0;
+  },
+  // cut every wire on a terminal and hand the wire back
+  dropWires(id){
+    let k = 0;
+    game.wires = (game.wires || []).filter(w => {
+      if (w.a === id || w.b === id){ k++; return false; }
+      return true;
+    });
+    if (k) addStackItem('wire', k);
+    return k;
+  },
   finish(){
     const L = game.railDraft;
     game.railDraft = null;
-    if (L && L.pts.length >= 2){
+    if (L && L.orig){
+      // an extension: the line never left game.rails. If a meter moved, the
+      // wire that fed it comes loose — you rewire the meter where it is now
+      const orig = L.orig;
+      delete L.orig; delete L.ext;
+      let cut = 0;
+      for (const end of [0, 1]){
+        const p = end === 0 ? L.pts[0] : L.pts[L.pts.length - 1], o = orig[end];
+        if (o[0] !== p[0] || o[1] !== p[1] || o[2] !== p[2]) cut += this.dropWires('r' + L.id + 'e' + end);
+      }
+      toast(cut ? 'line extended — the rail meter moved, ' + cut + ' wire' + (cut > 1 ? 's' : '') + ' came loose: rewire it'
+                : 'line unchanged');
+      if (cut) wireSys.rebuild();
+    } else if (L && L.pts.length >= 2){
+      if (L.id == null) L.id = game.pSeq++;
       (game.rails = game.rails || []).push(L);
-      toast('rail line laid — power either end, then right-click an end post to ride');
+      toast('rail line laid — wire a power source to a rail meter, then right-click the meter to ride');
     } else if (L) toast('rail line discarded — a line needs at least two spikes');
     this.rebuild(); markSave();
   },
@@ -10018,10 +10298,8 @@ const railSys = {
     return null;
   },
   powered(L){
-    // a line is live when its circuit is: it draws 15W like any machine
-    if (!L || !L.pts || !L.pts.length) return false;
-    const k = L.pts[0][0] + ',' + L.pts[0][1] + ',' + L.pts[0][2];
-    return !!(powerSys.railLive && powerSys.railLive.has(k));
+    // a line is live when a wire feeds either of its meters
+    return this.wattsFor(L) > 0;
   },
   board(L, end){
     const cart = new THREE.Group();
@@ -10057,7 +10335,10 @@ const railSys = {
           pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]));
       R.d = R.dir > 0 ? 0 : R.cum[R.cum.length - 1];
     }
-    R.d += R.dir * 16 * dt;
+    // the more watts the meters read, the faster the cart rolls
+    const spd = this.speedFor(R.L);
+    if (spd <= 0){ this.dismount('the line went dead'); return; }
+    R.d += R.dir * spd * dt;
     const total = R.cum[R.cum.length - 1];
     if (R.d <= 0 || R.d >= total){
       const p = R.d <= 0 ? pts[0] : pts[pts.length - 1];
@@ -10083,6 +10364,172 @@ const railSys = {
     const hdg = Math.atan2(-(b[0] - a[0]) * R.dir, -(b[2] - a[2]) * R.dir);
     vehicleCamera(x, y + 0.5, z, hdg, dt, { seatX: 0, seatY: 1.55, seatZ: 0, back: 6.5, up: 2.6, look: 1.2 });
     if ((game.keys || {})['Space']) this.dismount('bailed out');
+  },
+};
+
+// ---------- highways: the cities become a network ----------
+// Every city links to the cities in the next cell east, south and both
+// diagonals ahead (so each pair is drawn once). A link is a straight line
+// from one city's edge to the other's, cut into 24m segments; each segment
+// is a basalt slab whose top follows a smoothed, slope-limited profile of
+// the terrain (embankments over dips, a cut through rises). Segments stamp
+// as you come within reach, like the cities themselves, and the record of
+// what's stamped lives in game.roads. Signs at both ends and every 480m.
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400;
+const roadSys = {
+  accT: 0, scanT: 99, near: [],
+  linksNear(x, z, r){
+    if (!game.gen || !game.gen.cityAt) return [];
+    const cands = citySys.candidatesNear(x, z, r + ROAD_LINK_MAX);
+    const byKey = new Map(cands.map(c => [c.key, c]));
+    const out = [];
+    for (const a of cands){
+      const [cx, cz] = a.key.split(',').map(Number);
+      for (const [dx, dz] of [[1, 0], [0, 1], [1, 1], [1, -1]]){
+        const b = byKey.get((cx + dx) + ',' + (cz + dz));
+        if (!b) continue;
+        const d = Math.hypot(b.x - a.x, b.z - a.z);
+        if (d > ROAD_LINK_MAX) continue;
+        // keep links whose nearest point to (x,z) is within r
+        const t = Math.max(0, Math.min(1, ((x - a.x) * (b.x - a.x) + (z - a.z) * (b.z - a.z)) / (d * d)));
+        if (Math.hypot(a.x + (b.x - a.x) * t - x, a.z + (b.z - a.z) * t - z) > r) continue;
+        out.push(this.link(a, b));
+      }
+    }
+    return out;
+  },
+  // the geometry of one link, built once and cached by key
+  link(a, b){
+    const key = 'h' + a.key + '|' + b.key;
+    this.cache = this.cache || new Map();
+    let L = this.cache.get(key);
+    if (L) return L;
+    const spanA = citySys.plan(a).n * 36 + 8, spanB = citySys.plan(b).n * 36 + 8;
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    const ux = (b.x - a.x) / d, uz = (b.z - a.z) / d;
+    // start/end just past each city's slab edge (its road margin)
+    const edgeA = spanA / 2 * Math.max(Math.abs(ux), Math.abs(uz)) + 3;
+    const edgeB = spanB / 2 * Math.max(Math.abs(ux), Math.abs(uz)) + 3;
+    const sx = a.x + ux * edgeA, sz = a.z + uz * edgeA;
+    const ex = b.x - ux * edgeB, ez = b.z - uz * edgeB;
+    const len = Math.hypot(ex - sx, ez - sz);
+    const segs = Math.max(1, Math.round(len / ROAD_SEG));
+    // elevation profile: terrain at every node, wide-smoothed, slope ≤ 0.22
+    const raw = [];
+    for (let i = 0; i <= segs; i++){
+      const t = i / segs;
+      raw.push(game.gen.height(sx + (ex - sx) * t, sz + (ez - sz) * t));
+    }
+    // water is crossed on a causeway: the road never dips below the surface
+    const sea = (game.gen.seaLevel || 0) + 1.2;
+    const prof = raw.map((h, i) => {
+      let sum = 0, cnt = 0;
+      for (let k = -3; k <= 3; k++){ const j = i + k; if (j >= 0 && j < raw.length){ sum += Math.max(sea, raw[j]); cnt++; } }
+      return sum / cnt;
+    });
+    // pin the ends to the city slabs so the road meets the avenue level
+    prof[0] = Math.max(prof[0], citySys.slabLevel(a));
+    prof[segs] = Math.max(prof[segs], citySys.slabLevel(b));
+    const step = (len / segs) * 0.22;
+    for (let i = 1; i <= segs; i++) prof[i] = Math.min(prof[i], prof[i - 1] + step);
+    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.min(prof[i], prof[i + 1] + step);
+    for (let i = 1; i <= segs; i++) prof[i] = Math.max(prof[i], prof[i - 1] - step);
+    for (let i = segs - 1; i >= 0; i--) prof[i] = Math.max(prof[i], prof[i + 1] - step);
+    L = { key, a, b, sx, sz, ex, ez, ux, uz, len, segs, prof, yaw: Math.atan2(-ux, uz) };   // local +z -> (ux, uz)
+    this.cache.set(key, L);
+    return L;
+  },
+  // stamp one segment: the slab, a cut above it where the ground rises, signs
+  stampSeg(L, i){
+    const MAT = CORE.MAT;
+    const t0 = i / L.segs, t1 = (i + 1) / L.segs;
+    const mx = L.sx + (L.ex - L.sx) * (t0 + t1) / 2, mz = L.sz + (L.ez - L.sz) * (t0 + t1) / 2;
+    const y0 = L.prof[i], y1 = L.prof[i + 1];
+    const top = (y0 + y1) / 2 + 0.25;
+    const segLen = L.len / L.segs + 0.6;             // a hair of overlap: no cracks between slabs
+    const hr = game.gen.heightRange(mx - 8, mz - 8, mx + 8, mz + 8);
+    const bottom = Math.max(top - 30, Math.min(hr[0], top) - 2.5);
+    const EB = (op, y, sy, sx, sz, mat) => {
+      const e = CORE.makeEdit(op, 1, +mx.toFixed(1), +y.toFixed(2), +mz.toFixed(1), sx, mat || 0, L.yaw);
+      e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
+      // tilt with the grade so the surface stays one plane
+      const grade = Math.atan2(y1 - y0, L.len / L.segs);
+      if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
+      applyEdit(e);
+    };
+    EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT);
+    if (hr[1] > top + 0.2) EB(0, top + 3.6, 7.0, ROAD_W + 4, segLen, 0);   // the cut
+    // no trees on the tarmac: fell every tree whose trunk lands on the segment
+    if (game.gen.treeAt){
+      const TC = CORE.TREE_CELL, half = ROAD_W / 2 + 1.2, along = segLen / 2 + 1;
+      const reach = Math.ceil((along + 2) / TC);
+      const ccx = Math.floor(mx / TC), ccz = Math.floor(mz / TC);
+      let felled = 0;
+      for (let dz = -reach; dz <= reach; dz++) for (let dx = -reach; dx <= reach; dx++){
+        const k = (ccx + dx) + ',' + (ccz + dz);
+        if (game.removedTreeSet.has(k)) continue;
+        const t = game.gen.treeAt(ccx + dx, ccz + dz);
+        if (!t) continue;
+        const rx = t.x - mx, rz = t.z - mz;
+        const a = rx * L.ux + rz * L.uz, c = rx * L.uz - rz * L.ux;
+        if (Math.abs(a) <= along && Math.abs(c) <= half){ game.removedTreeSet.add(k); felled++; }
+      }
+      if (felled){ treeSys.lastCell = null; if (typeof farTreeSys !== 'undefined') farTreeSys.lastCell = null; }
+    }
+    // signs: at both ends and every 20 segments, on the right shoulder
+    if (i === 0 || i === L.segs - 1 || i % 20 === 10){
+      const toB = i !== L.segs - 1;
+      const dest = toB ? L.b : L.a;
+      const rest = toB ? L.len * (1 - t0) : L.len * t1;
+      const rx = L.uz, rz = -L.ux;                  // right of travel toward b
+      const side = toB ? 1 : -1;
+      const px = mx + rx * side * (ROAD_W / 2 + 1.6), pz = mz + rz * side * (ROAD_W / 2 + 1.6);
+      pnodeSys.add('sign', px, top, pz, Math.atan2(L.ux, L.uz) + (toB ? 0 : Math.PI), {
+        text: citySys.nameFor(dest.seed).slice(0, 16) + '\n' + (rest / 1000).toFixed(1) + ' km' });
+    }
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    game.roads = game.roads || {};
+    for (const L of this.linksNear(game.pos.x, game.pos.z, 700)){
+      let rec = game.roads[L.key];
+      if (!rec){ rec = { done: [] }; game.roads[L.key] = rec; }
+      const done = new Set(rec.done);
+      let any = false;
+      for (let i = 0; i < L.segs; i++){
+        if (done.has(i)) continue;
+        const t = (i + 0.5) / L.segs;
+        const mx = L.sx + (L.ex - L.sx) * t, mz = L.sz + (L.ez - L.sz) * t;
+        if (Math.hypot(mx - game.pos.x, mz - game.pos.z) > 700) continue;
+        this.stampSeg(L, i);
+        rec.done.push(i); any = true;
+      }
+      if (any) markSave();
+    }
+  },
+  tick(dt){
+    this.accT += dt; this.scanT += dt;
+    if (this.scanT > 6){ this.scanT = 0; this.near = game.gen ? this.linksNear(game.pos.x, game.pos.z, 900) : []; }
+    if (this.accT < 1.5) return;
+    this.accT = 0;
+    this.ensure();
+  },
+  // is (x,y,z) on a highway's tarmac? (the cruise bonus)
+  onRoad(x, y, z){
+    game.roads = game.roads || {};
+    for (const L of this.near){
+      const rec = game.roads[L.key];
+      if (!rec || !rec.done.length) continue;
+      const t = ((x - L.sx) * (L.ex - L.sx) + (z - L.sz) * (L.ez - L.sz)) / (L.len * L.len);
+      if (t < 0 || t > 1) continue;
+      const px = L.sx + (L.ex - L.sx) * t, pz = L.sz + (L.ez - L.sz) * t;
+      if (Math.hypot(px - x, pz - z) > ROAD_W / 2 + 0.6) continue;
+      const i = Math.min(L.segs - 1, Math.floor(t * L.segs));
+      if (!rec.done.includes(i)) continue;
+      const ry = L.prof[i] + (L.prof[i + 1] - L.prof[i]) * (t * L.segs - i) + 0.25;
+      if (Math.abs(y - ry) < 3) return true;
+    }
+    return false;
   },
 };
 
@@ -10112,6 +10559,36 @@ const citySys = {
         if (c && Math.hypot(c.x - x, c.z - z) < r) out.push(c);
       }
     return out;
+  },
+  // the level the foundation slab irons the site to (what stamp() computes)
+  slabLevel(c){
+    const n = this.plan(c).n, span = n * 36 + 8, rim = span / 2 - 6;
+    let g = game.gen.height(c.x, c.z);
+    for (const [dx, dz] of [[-rim, -rim], [rim, -rim], [-rim, rim], [rim, rim], [0, -rim], [0, rim], [-rim, 0], [rim, 0], [0, 0]])
+      g = Math.max(g, game.gen.height(c.x + dx, c.z + dz));
+    return +(g + 0.3).toFixed(1);
+  },
+  // your tower's ground floor becomes THE GARAGE: a vehicle door cut in the
+  // east wall, a basalt driveway out to the avenue, a charging pad, a
+  // battery charger and a repair bench inside. Wire it and you're in business.
+  garage(rec, t2, tx, tz, gy){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz;
+      if (nl) e.noLod = 1;
+      applyEdit(e);
+    };
+    const hw = t2.w / 2;
+    EB(0, tx + hw, gy + 1.75, tz, 3.4, 3.5, 4.6, 0, 1);                        // the vehicle door
+    const dx0 = tx + hw + 1.2, dx1 = tx + 14.5;                                  // out to the avenue
+    EB(2, (dx0 + dx1) / 2, gy - 0.4, tz, dx1 - dx0, 1.6, 4.4, MAT.BASALT);      // the driveway
+    const pad = pnodeSys.add('pad', tx + hw - 3.0, gy, tz, 0, {});
+    const ch = pnodeSys.add('charger', tx + hw - 3.0, gy, tz - 3.4, 0, {});
+    ch.inv = new Array(4).fill(null);
+    const rb = pnodeSys.add('repair', tx + hw - 3.0, gy, tz + 3.4, 0, {});
+    rb.inv = new Array(2).fill(null);
+    rec.garage = { x: +(tx + hw - 3.0).toFixed(1), z: +tz.toFixed(1), pad: pad.id, charger: ch.id, repair: rb.id };
   },
   // deterministic block plan: the city rolls its SIZE first (leaning hard
   // toward the very large), then every block rolls what it is — most are
@@ -10473,7 +10950,7 @@ function updateEntities(dt, now){
     if (e === game.driving) continue;            // driveCar owns it this frame
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (e.type !== 'car' && pd > (e.ckey ? 180 : 70)){
+    if (!VEH[e.type] && pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -10498,9 +10975,9 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
-    } else if (e.type === 'car'){
+    } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
-      if (e.mesh) e.mesh.rotation.y = e.heading || 0;
+      if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -10983,7 +11460,7 @@ function bindInput(){
           }
           return;
         }
-        if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger'){
+        if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger' || pn.t === 'repair'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
         }
@@ -11031,16 +11508,16 @@ function bindInput(){
         return;
       }
       if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
-      if (vent && vent.type === 'car'){
+      if (vent && VEH[vent.type]){
         if (game.keys['KeyC']){
           // crouch-grab folds it back into a kit, charge intact
           const i2 = game.slots.findIndex(sl => !sl);
-          if (i2 < 0){ toast('no pack space for the car kit'); return; }
-          game.slots[i2] = { kind: 'car', charge: Math.round(vent.charge || 0), bat: vent.bat || null };
+          if (i2 < 0){ toast('no pack space for the kit'); return; }
+          game.slots[i2] = { kind: vent.type, charge: Math.round(vent.charge || 0), bat: vent.bat || null };
           if (vent.mesh) game.scene.remove(vent.mesh);
           game.entities.splice(game.entities.indexOf(vent), 1);
           refreshHotbar(); markSave();
-          toast('car packed up (' + Math.round(vent.charge || 0) + '% charge)');
+          toast(VEH[vent.type].name + ' packed up (' + Math.round(vent.charge || 0) + '% charge)');
           return;
         }
         enterCar(vent);
@@ -11050,7 +11527,7 @@ function bindInput(){
         const tl3 = activeTool();
         const rle = railSys.endpointNear(game.pos.x, game.pos.y, game.pos.z, 3.5);
         if (rle && !(tl3 && tl3.kind === 'rail')){
-          if (!railSys.powered(rle.line)) toast('dead line — build a live grid within 8m of an end post');
+          if (!railSys.powered(rle.line)) toast('dead line — wire a power source to the rail meter');
           else railSys.board(rle.line, rle.end);
           return;
         }
@@ -11354,6 +11831,7 @@ function drawCarGauge(e){
   const G = e.mesh && e.mesh.userData.gauge;
   if (!G) return;
   const c = G.cv.getContext('2d');
+  const KM = (VEH[e.type] || VEH.car).kmh;
   c.fillStyle = '#101216'; c.fillRect(0, 0, 128, 64);
   const cx = 34, cy = 36, R = 26;
   c.strokeStyle = '#3a3f4a'; c.lineWidth = 3;
@@ -11367,10 +11845,10 @@ function drawCarGauge(e){
     c.lineTo(cx + Math.cos(a) * (R - 5), cy + Math.sin(a) * (R - 5));
     c.stroke();
     c.fillStyle = '#cfd6e2'; c.font = '7px monospace';
-    c.fillText(String(k * 10), cx + Math.cos(a) * (R - 10), cy + Math.sin(a) * (R - 10) + 2);
+    c.fillText(String(k * KM / 5), cx + Math.cos(a) * (R - 10), cy + Math.sin(a) * (R - 10) + 2);
   }
-  const kmh = Math.min(50, Math.abs(e.speed || 0) * 3.6);
-  const na = Math.PI * 0.75 + (kmh / 50) * Math.PI * 1.5;
+  const kmh = Math.min(KM, Math.abs(e.speed || 0) * 3.6);
+  const na = Math.PI * 0.75 + (kmh / KM) * Math.PI * 1.5;
   c.strokeStyle = '#ff5a4e'; c.lineWidth = 2;
   c.beginPath(); c.moveTo(cx, cy); c.lineTo(cx + Math.cos(na) * (R - 7), cy + Math.sin(na) * (R - 7)); c.stroke();
   c.fillStyle = '#ff5a4e'; c.beginPath(); c.arc(cx, cy, 3, 0, 7); c.fill();
@@ -11400,8 +11878,10 @@ function enterCar(e){
   if (game.driving) return;
   game.driving = e;
   game.vel.set(0, 0, 0);
-  toast('driving — W/S throttle · A/D steer · right click to step out' +
-        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a powered grid' : ''));
+  e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
+  toast((VEH[e.type] && VEH[e.type].air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
+                                         : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
+        ((e.charge || 0) <= 0 ? ' · BATTERY DEAD: park it on a charging pad' : ''));
   AudioSys.sfx('toggle');
   refreshToolHUD();
 }
@@ -11414,7 +11894,9 @@ function exitCar(){
     // step out on the driver's side
     game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
     e.speed = 0;
-    toast('parked' + ((e.charge || 0) < 25 ? ' — charge it near a powered grid (' + Math.round(e.charge || 0) + '%)' : ''));
+    if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
+    e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.air = 0;
+    toast('parked' + ((e.charge || 0) < 25 ? ' — charge it on a charging pad (' + Math.round(e.charge || 0) + '%)' : ''));
   }
   game.vel.set(0, 0, 0);
   markSave();
@@ -11423,6 +11905,7 @@ function exitCar(){
 function driveCar(dt){
   const e = game.driving;
   if (!e || e.hp <= 0 || game.entities.indexOf(e) < 0){ game.driving = null; return; }
+  const V = VEH[e.type] || VEH.car;
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
   let thr = 0, steer = 0;
@@ -11434,14 +11917,19 @@ function driveCar(dt){
   }
   e.heading = e.heading || 0;
   e.speed = e.speed || 0;
+  e.air = e.air || 0;
   const dead = (e.charge || 0) <= 0;
-  const top = dead ? 0 : 13.5, rev = dead ? 0 : 5;
+  const airborne = V.air && e.air > 0.12;
+  // the highway pays: tarmac under the wheels lifts the top speed
+  e.onRoad = roadSys.onRoad(e.x, e.y, e.z);
+  const cruise = e.onRoad ? 1.35 : 1;
+  const top = dead ? 0 : V.top * cruise, rev = dead ? 0 : V.rev;
   const target = thr > 0 ? top : thr < 0 ? -rev : 0;
-  const accel = thr !== 0 ? 9 : 7;
+  const accel = airborne ? 0 : (thr !== 0 ? V.accel : V.brake);
   e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
-  if (Math.abs(e.speed) > 0.3)
-    e.heading -= steer * dt * 1.7 * Math.sign(e.speed) * Math.min(1, 0.35 + Math.abs(e.speed) / 6);
-  if (thr !== 0 && !dead) e.charge = Math.max(0, (e.charge || 0) - dt * 0.65);
+  if (!airborne && Math.abs(e.speed) > 0.3)
+    e.heading -= steer * dt * V.steer * Math.sign(e.speed) * Math.min(1, 0.35 + Math.abs(e.speed) / 6);
+  if (thr !== 0 && !dead && !airborne) e.charge = Math.max(0, (e.charge || 0) - dt * V.drain);
   // a battery in the slot keeps the tank topped up — this is how you cross
   // a continent
   if (e.bat && e.bat.kind === 'battery' && (e.charge || 0) < 100 && (e.bat.charge || 0) > 0){
@@ -11450,39 +11938,128 @@ function driveCar(dt){
   }
   // roll forward under gravity; a sphere-vs-SDF pass keeps it on the ground
   const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
+  const vyBefore = e.vy || 0;
   e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
   e.y += e.vy * dt;
+  const R = V.r;
   const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
   const le = nearEdits(box);
+  let grounded = false, wall = false, gn = null;
   for (let it = 0; it < 3; it++){
-    const cy = e.y + 0.85;
+    const cy = e.y + R;
     const dd = sdfWorld(e.x, cy, e.z, le);
-    if (dd < 0.85){
+    if (dd < R){
       const g2 = gradWorld(e.x, cy, e.z, le);
-      const push = 0.85 - dd / g2[3];
+      const push = R - dd / g2[3];
       e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
-      if (g2[1] > 0.5) e.vy = Math.max(e.vy, 0);
-      else e.speed *= 0.55;                        // clipped a wall
+      if (g2[1] > 0.5){ grounded = true; gn = g2; e.vy = Math.max(e.vy, 0); }
+      else { wall = true; e.speed *= 0.55; }      // clipped a wall
     }
   }
-  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; }
+  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; grounded = true; }
   if (inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
+  if (V.air){
+    // ---- the motorcycle leaves the ground ----
+    if (grounded){
+      // a crest launches you: keep the slope's upward velocity as you leave it
+      if (gn && Math.abs(e.speed) > 3){
+        const up = -(fx * gn[0] + fz * gn[2]) * e.speed / Math.max(0.5, gn[1]);
+        if (up > 0) e.vy = Math.max(e.vy, up);
+      }
+      if (canMove && k['Space'] && Math.abs(e.speed) > 1 && !e.hopHeld){ e.vy = 6.5; e.hopHeld = true; }
+      if (!k['Space']) e.hopHeld = false;
+      // landing: read the trick, stick it or eat it
+      if (e.air > 0.25){
+        const wrap = a => { a = a % (Math.PI * 2); if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return Math.abs(a); };
+        const rp = wrap(e.tPitch || 0), ry = wrap(e.tYaw || 0), rr = wrap(e.tRoll || 0);
+        const flips = Math.round(Math.abs(e.tPitch || 0) / (Math.PI * 2));
+        const spins = Math.round(Math.abs(e.tYaw || 0) / (Math.PI * 2));
+        const whips = Math.round(Math.abs(e.tRoll || 0) / (Math.PI * 2));
+        const impact = -vyBefore;
+        const off = Math.max(rp, ry, rr);
+        if (off > 0.75 || impact > 24){
+          const dmg = Math.round(8 + off * 12 + Math.max(0, impact - 12) * 1.2 + Math.abs(e.speed) * 0.4);
+          e.hp = Math.max(1, (e.hp || 1) - 25);
+          e.speed = 0;
+          e.trickMsg = '';
+          exitCar();
+          game.vel.set(fx * 4, 3, fz * 4);
+          damagePlayer(dmg, 0, 0);
+          toast('CRASHED' + (flips || spins || whips ? ' — ' + trickName(flips, spins, whips) + ' not landed' : impact > 24 ? ' — too much drop' : ''));
+          AudioSys.sfx('boom');
+          return;
+        }
+        if (flips || spins || whips){
+          e.trickMsg = 'STUCK ' + trickName(flips, spins, whips);
+          e.trickT = 3;
+          toast('STUCK IT — ' + trickName(flips, spins, whips) + ' · ' + e.air.toFixed(1) + 's air');
+          AudioSys.sfx('craft');
+          e.speed += 2;                            // a clean landing keeps your pace
+        }
+      }
+      e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0;
+      // lean into corners on the ground
+      e.lean = ((e.lean || 0) + (-steer * 0.4 * Math.min(1, Math.abs(e.speed) / 8) - (e.lean || 0)) * Math.min(1, 8 * dt));
+    } else {
+      if (e.air === 0){
+        // takeoff: keys already down are throttle and steering, not tricks —
+        // let go and press again in the air to spin
+        e.tkLock = { KeyW: !!k['KeyW'], KeyS: !!k['KeyS'], KeyA: !!k['KeyA'], KeyD: !!k['KeyD'] };
+      }
+      e.air += dt;
+      for (const kk in e.tkLock) if (!k[kk]) e.tkLock[kk] = false;
+      const tk = kk => canMove && k[kk] && !e.tkLock[kk];
+      if (e.air > 0.12 && canMove){
+        // WASD in the air: W/S flip, A/D spin, both together whip the bike over
+        const flip = (tk('KeyW') ? 1 : 0) - (tk('KeyS') ? 1 : 0);
+        const spin = (tk('KeyD') ? 1 : 0) - (tk('KeyA') ? 1 : 0);
+        if (flip && spin){ e.tRoll = (e.tRoll || 0) + flip * spin * 5.5 * dt; }
+        else {
+          e.tPitch = (e.tPitch || 0) - flip * 5.5 * dt;
+          e.tYaw = (e.tYaw || 0) - spin * 6.0 * dt;
+        }
+      }
+      e.lean = 0;
+    }
+    if (wall && Math.abs(e.speed) > 9 && !airborne){
+      // a wall at speed throws you off
+      const dmg = Math.round(6 + Math.abs(e.speed) * 0.9);
+      e.hp = Math.max(1, (e.hp || 1) - 20);
+      e.speed = 0;
+      exitCar();
+      damagePlayer(dmg, 0, 0);
+      toast('CRASHED into the wall');
+      AudioSys.sfx('boom');
+      return;
+    }
+    if (e.trickT > 0){ e.trickT -= dt; if (e.trickT <= 0) e.trickMsg = ''; }
+  }
   // the motor hums with speed
-  AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / 13.5));
+  AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / V.top));
   // the driver rides along
-  game.pos.set(e.x, e.y + 0.4, e.z);
+  game.pos.set(e.x, e.y + V.ride, e.z);
   game.vel.set(0, 0, 0);
   game.grounded = true;
-  if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = e.heading; }
-  // the camera is IN the car: driver's seat, or a chase cam on F5
-  vehicleCamera(e.x, e.y, e.z, e.heading, dt,
-    { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 });
+  if (e.mesh){
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (V.air) e.mesh.rotation.set(e.tPitch || 0, e.heading + (e.tYaw || 0), (e.tRoll || 0) + (e.lean || 0));
+    else e.mesh.rotation.y = e.heading;
+  }
+  // the camera is IN the vehicle: the seat, or a chase cam on F5
+  vehicleCamera(e.x, e.y, e.z, e.heading, dt, V.seat);
   game.carHudT = (game.carHudT || 0) + dt;
   if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
   game.carHud2T = (game.carHud2T || 0) + dt;
   if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
+}
+function trickName(flips, spins, whips){
+  const parts = [];
+  if (flips) parts.push(flips > 1 ? flips + 'x FLIP' : 'FLIP');
+  if (spins) parts.push(spins > 1 ? spins * 360 : '360');
+  if (whips) parts.push(whips > 1 ? whips + 'x WHIP' : 'WHIP');
+  return parts.join(' + ');
 }
 function updatePlayer(dt){
   if (game.riding){ railSys.ride(dt); return; }
@@ -11694,13 +12271,13 @@ function activeTool(){
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
   if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
   if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
-  if (it.kind === 'car') return { kind: 'carkit', tier: 0, item: it };
+  if (VEH[it.kind]) return { kind: 'carkit', tier: 0, item: it };
   if (it.kind === 'rail') return { kind: 'rail', tier: 0, item: it };
   if (it.kind === 'deed') return { kind: 'deedtool', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -11895,7 +12472,7 @@ const wrenchProps = {
       const D = { staple: [0.05, 0.22, 0.12, 0.22], lever: [0.2, 0.32, 0.3, 0.28], crank: [0.5, 0.34, 0.55, 0.34],
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
-                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6],
+                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -13312,18 +13889,29 @@ function tryAction(dt, now){
       const p = [+hit[0].toFixed(1), +(hit[1] + 0.12).toFixed(1), +hit[2].toFixed(1)];
       const D = game.railDraft;
       if (!D){
-        tool.item.count--;
-        game.railDraft = { pts: [p] };
-        toast('rail started — left click extends spike by spike · right click finishes the line');
+        // a spike planted on an existing rail meter grabs that end: the line
+        // extends from there (its meter walks with the end)
+        const grab = railSys.endpointNear(p[0], p[1], p[2], 2.5);
+        if (grab && grab.line.id != null){
+          const L = grab.line;
+          L.ext = grab.end;
+          L.orig = [L.pts[0].slice(), L.pts[L.pts.length - 1].slice()];
+          game.railDraft = L;
+          toast('extending the line — left click plants the next spike · right click finishes (a moved meter drops its wire)');
+        } else {
+          tool.item.count--;
+          game.railDraft = { pts: [p] };
+          toast('rail started — left click extends spike by spike · right click finishes the line');
+        }
       } else {
-        const last = D.pts[D.pts.length - 1];
+        const last = D.ext === 0 ? D.pts[0] : D.pts[D.pts.length - 1];
         const d = Math.hypot(p[0] - last[0], p[1] - last[1], p[2] - last[2]);
         if (d < 2){ toast('too close to the last spike'); return; }
         if (d > 60){ toast('too far — plant the next spike within 60m'); return; }
         const cost = Math.max(1, Math.ceil(d / 4));
         if (tool.item.count < cost){ toast('that span needs ' + cost + ' rails — you have ' + tool.item.count); return; }
         tool.item.count -= cost;
-        D.pts.push(p);
+        if (D.ext === 0) D.pts.unshift(p); else D.pts.push(p);
         AudioSys.sfx('craft');
       }
       if (tool.item.count <= 0){
@@ -13360,10 +13948,11 @@ function tryAction(dt, now){
       game.torches.push([tx, gy + 0.4, tz - t2.w / 2 + 1.4]);
       torchSys.rebuild();
       rec.owned = bi;
+      citySys.garage(rec, t2, tx, tz, gy);
       tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       refreshHotbar(); refreshToolHUD(); markSave();
-      toast('the deed is yours — a ' + (rec.name || 'city') + ' tower, furnished: strongbox, bed, light');
+      toast('the deed is yours — a ' + (rec.name || 'city') + ' tower: strongbox, bed, light, and a GARAGE with a pad, charger and repair bench (wire them)');
       AudioSys.sfx('craft');
     }
     return;
@@ -13371,15 +13960,16 @@ function tryAction(dt, now){
   if (tool.kind === 'carkit'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
+      if (tool.item.wrecked){ toast('it\'s wrecked — put the kit on a repair bench with iron'); return; }
       const px = game.pos.x - Math.sin(game.yaw) * 4.2;
       const pz = game.pos.z - Math.cos(game.yaw) * 4.2;
-      const e = spawnEntity('car', px, game.pos.y + 0.6, pz);
+      const e = spawnEntity(tool.item.kind, px, game.pos.y + 0.6, pz);
       e.charge = tool.item.charge || 0;
       e.bat = tool.item.bat || null;
       e.heading = game.yaw;
       game.slots[game.hotSel] = null;
       refreshHotbar(); refreshToolHUD();
-      toast('car deployed — right click to drive · crouch + right click to pack it up');
+      toast(VEH[e.type].name + ' deployed — right click to ride · crouch + right click to pack it up');
       AudioSys.sfx('craft');
     }
     return;
@@ -13707,17 +14297,18 @@ const TIER_COL = ['#8a8a92', '#c9c7d1', '#d84a63', '#5d4a86', '#6fe3ef'];
 const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
-  const key = it.kind === 'mat' ? 'm' + it.mat
+  const key = (it.kind === 'mat' ? 'm' + it.mat
     : it.kind === 'fw' ? 'fw' + it.g
     : ['gun', 'torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'meat', 'cookedmeat',
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone'].includes(it.kind) ? it.kind : it.kind + it.tier;
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair'].includes(it.kind) ? it.kind : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
+  if (it.wrecked) cv.__wrecked = true;
   const c = cv.getContext('2d');
   if (it.kind === 'mat'){
     c.drawImage(tileCanvas(it.mat, game.seed || 1), 0, 0);
@@ -13806,6 +14397,20 @@ function itemIconURL(it){
     c.fillStyle = '#9fd4e8'; c.fillRect(5, 6, 6, 2);
     c.fillStyle = '#35d1c0'; c.fillRect(2, 10, 12, 1);
     c.fillStyle = '#23232a'; c.fillRect(3, 11, 2, 2); c.fillRect(11, 11, 2, 2);
+  } else if (it.kind === 'sportscar'){
+    c.fillStyle = '#d8302c'; c.fillRect(1, 9, 14, 3); c.fillRect(4, 7, 8, 2);
+    c.fillStyle = '#8fc8e0'; c.fillRect(6, 7, 4, 1);
+    c.fillStyle = '#23232a'; c.fillRect(2, 12, 3, 2); c.fillRect(11, 12, 3, 2); c.fillRect(12, 6, 3, 1);
+  } else if (it.kind === 'bike'){
+    c.fillStyle = '#23232a'; c.fillRect(1, 9, 4, 4); c.fillRect(11, 9, 4, 4);
+    c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
+    c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
+    c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'repair'){
+    c.fillStyle = '#8a6237'; c.fillRect(2, 8, 12, 6);
+    c.fillStyle = '#a37c47'; c.fillRect(2, 8, 12, 2);
+    c.fillStyle = '#9aa0ab'; c.fillRect(4, 3, 2, 6); c.fillRect(3, 2, 4, 2);
+    c.fillStyle = '#d8302c'; c.fillRect(9, 4, 4, 3);
   } else if (it.kind === 'sigil'){
     c.fillStyle = '#2a2333'; c.fillRect(3, 3, 10, 10);
     c.fillStyle = '#7f6fd6'; c.fillRect(7, 4, 2, 8); c.fillRect(4, 7, 8, 2);
@@ -14152,6 +14757,11 @@ function itemIconURL(it){
       c.fillStyle = col; c.fillRect(11, 7, 1, 1);
     }
   }
+  if (it.wrecked){
+    c.fillStyle = 'rgba(20,16,20,0.55)'; c.fillRect(0, 0, 16, 16);
+    c.fillStyle = '#e04a3a';
+    for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
+  }
   const url = cv.toDataURL();
   iconCache.set(key, url);
   return url;
@@ -14173,7 +14783,10 @@ function itemLabel(it){
   if (it.kind === 'mheart') return 'magma heart';
   if (it.kind === 'sigil') return 'architect sigil';
   if (it.kind === 'aseal') return "architect's seal";
-  if (it.kind === 'car') return 'electric car';
+  if (it.kind === 'car') return (it.wrecked ? 'wrecked ' : '') + 'electric car';
+  if (it.kind === 'sportscar') return (it.wrecked ? 'wrecked ' : '') + 'sports car';
+  if (it.kind === 'bike') return (it.wrecked ? 'wrecked ' : '') + 'electric motorcycle';
+  if (it.kind === 'repair') return 'repair bench';
   if (it.kind === 'rail') return 'rails';
   if (it.kind === 'tdrone') return 'teleport drone';
   if (it.kind === 'deed') return 'property deed';
@@ -14268,6 +14881,24 @@ function slotKeyOf(el){
   const k = el.dataset.slot;
   return /^\d+$/.test(k) ? +k : k;
 }
+// remaining battery of a powered item, 0..1 — null for anything unpowered.
+// (No durability around here: the bar under a jetpack is its fuel.)
+function itemChargeFrac(it){
+  if (!it) return null;
+  if (it.kind === 'battery') return Math.max(0, Math.min(1, (it.charge || 0) / CORE.batteryCap(it)));
+  const f = CORE.chargeField(it);
+  if (!f) return null;
+  return Math.max(0, Math.min(1, (it[f] || 0) / 100));
+}
+function paintChargeBar(el, it){
+  const frac = itemChargeFrac(it);
+  let bar = el.querySelector('.bar');
+  if (frac == null){ if (bar) bar.style.display = 'none'; return; }
+  if (!bar){ bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>'; el.appendChild(bar); }
+  bar.style.display = 'block';
+  bar.firstChild.style.width = Math.round(frac * 100) + '%';
+  bar.firstChild.style.background = frac > 0.5 ? '#4fe07a' : frac > 0.2 ? '#e8c84f' : '#e85a4f';
+}
 function paintSlot(el){
   const key = el.dataset.slot;
   const it = slotItem(key);
@@ -14277,6 +14908,7 @@ function paintSlot(el){
   const url = itemIconURL(it);
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
   cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
+  paintChargeBar(el, it);
   el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
@@ -14362,7 +14994,7 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone'];
-const CAT_VEHICLES = ['car', 'rail'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'rail', 'repair'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -14436,12 +15068,13 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'ped', 'sign',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
   out.push({ kind: 'drone', charge: 100 });
   for (let t = 0; t < 3; t++) out.push({ kind: 'battery', tier: t, charge: CORE.BATTERY_CAP[t] });
+  out.push({ kind: 'sportscar', charge: 100 });
   return out;
 }
 // creative: hand over any item, free — the old catalog's "take", now a row
@@ -14588,8 +15221,8 @@ function closeSign(){
 }
 function openMachine(pn){
   game.activeCont = pn;
-  if ((pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger') && !pn.inv)
-    pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : pn.t === 'astand' ? 3 : pn.t === 'ped' ? 1 : pn.t === 'charger' ? 4 : 24).fill(null);
+  if ((pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger' || pn.t === 'repair') && !pn.inv)
+    pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : pn.t === 'astand' ? 3 : pn.t === 'ped' ? 1 : pn.t === 'charger' ? 4 : pn.t === 'repair' ? 2 : 24).fill(null);
   game.ui = 'cont';
   buildContUI();
   show('contscreen');
@@ -14621,6 +15254,43 @@ function chargerStatus(pn){
   const parts = cells.map(b => Math.round(b.charge || 0) + '/' + CORE.batteryCap(b));
   return (ratio > 0 ? '⚡ charging at ' + Math.round(ratio * 100) + '% — ' : powerSys.chargerWants(pn) ? 'no power — wire it to a live circuit — ' : 'full — ') + parts.join(' · ');
 }
+// the repair bench: a wrecked kit in the left slot, iron in the right, and
+// eight seconds later the kit is whole again (charge as it was)
+const REPAIR_T = 8;
+function repairWants(pn){
+  const kit = pn.inv && pn.inv[0], iron = pn.inv && pn.inv[1];
+  if (!kit || !VEH[kit.kind] || !kit.wrecked) return 0;
+  const need = VEH[kit.kind].repair;
+  return iron && iron.kind === 'ironingot' && iron.count >= need ? need : -need;
+}
+function repairTick(pn, dt){
+  const need = repairWants(pn);
+  if (need <= 0){ pn.prog = 0; return; }
+  pn.prog = (pn.prog || 0) + dt;
+  if (game.ui === 'cont' && game.activeCont === pn){
+    pn._rT = (pn._rT || 0) + dt;
+    if (pn._rT > 0.5){ pn._rT = 0; refreshContUI(); }
+  }
+  if (pn.prog >= REPAIR_T){
+    pn.prog = 0;
+    const kit = pn.inv[0];
+    pn.inv[1].count -= need;
+    if (pn.inv[1].count <= 0) pn.inv[1] = null;
+    delete kit.wrecked;
+    markSave();
+    if (game.ui === 'cont' && game.activeCont === pn){ refreshContUI(); AudioSys.sfx('craft'); }
+    toast(VEH[kit.kind].name + ' repaired');
+  }
+}
+function repairStatus(pn){
+  const kit = pn.inv && pn.inv[0];
+  if (!kit) return 'slot a WRECKED vehicle kit on the left, iron ingots on the right';
+  if (!VEH[kit.kind]) return 'that is not a vehicle kit';
+  if (!kit.wrecked) return VEH[kit.kind].name + ' — not wrecked, nothing to do';
+  const need = VEH[kit.kind].repair, w = repairWants(pn);
+  if (w < 0) return 'wrecked ' + VEH[kit.kind].name + ' — needs ' + need + ' iron ingots' + (pn.inv[1] && pn.inv[1].kind === 'ironingot' ? ' (' + pn.inv[1].count + ' here)' : '');
+  return 'repairing — ' + Math.round(Math.max(0, REPAIR_T - (pn.prog || 0))) + 's · uses ' + need + ' iron';
+}
 function refreshContUI(){
   const pn = game.activeCont;
   if (!pn || game.ui !== 'cont') return;
@@ -14635,6 +15305,7 @@ function refreshContUI(){
       : pn.t === 'astand' ? 'dress the stand — helmet, chestplate, boots'
       : pn.t === 'ped' ? 'display one thing proudly'
       : pn.t === 'charger' ? chargerStatus(pn)
+      : pn.t === 'repair' ? repairStatus(pn)
       : 'storage — tubes can pipe in';
     if (pn.t === 'astand' || pn.t === 'ped') pnodeSys.rebuild();
   }
@@ -14978,6 +15649,8 @@ function slotRefuses(to, A){
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)) return 'the stand holds armor';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'charger' && A.kind !== 'battery') return 'the charger holds batteries';
+  if (to === 'c0' && game.activeCont && game.activeCont.t === 'repair' && !VEH[A.kind]) return 'the left slot takes a vehicle kit';
+  if (to === 'c1' && game.activeCont && game.activeCont.t === 'repair' && A.kind !== 'ironingot') return 'the right slot takes iron ingots';
   if (to === 'vbat' && A.kind !== 'battery') return 'that slot wants a battery';
   return null;
 }
@@ -14993,6 +15666,7 @@ const invCursor = {
     if (!this.it){ this.el.style.display = 'none'; return; }
     this.img.src = itemIconURL(this.it);
     this.cnt.textContent = this.it.count != null ? fmtCount(this.it.count) : '';
+    paintChargeBar(this.el, this.it);
     this.el.style.display = 'block';
     this.el.style.left = (this.mx - 26) + 'px'; this.el.style.top = (this.my - 26) + 'px';
   },
@@ -15138,9 +15812,13 @@ function refreshToolHUD(){
   let html = '';
   if (game.driving){
     const e = game.driving;
-    el.innerHTML = '<div class="t1">electric car</div>' +
-      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s</div>' +
-      '<div class="t2">W/S throttle · A/D steer · right click to step out</div>';
+    const V = VEH[e.type] || VEH.car;
+    el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
+      '<div class="t2">charge ' + Math.round(e.charge || 0) + '% · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
+      '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
+                                   : 'W/S throttle · A/D steer') + '</div>' +
+      '<div class="t2">right click to step out</div>';
     return;
   }
   if (!it){
@@ -15178,11 +15856,16 @@ function refreshToolHUD(){
   } else if (it.kind === 'tdrone'){
     html = '<div class="t1">teleport drone · ' + Math.round(it.charge || 0) + '%</div><div class="t2">right click to fly it (90m tether) — land it and you BLINK to where it was. Charges near a powered grid.</div>';
   } else if (it.kind === 'rail'){
-    html = '<div class="t1">rails ×' + it.count + '</div><div class="t2">left click plants spikes into a line (1 rail per 4m) · right click finishes it · power an end post and right-click it to ride</div>';
+    html = '<div class="t1">rails ×' + it.count + '</div><div class="t2">left click plants spikes into a line (1 rail per 4m) · right click finishes it · wire power to a rail meter and right-click it to ride — more watts, faster cart · plant a spike on a meter to extend that line</div>';
   } else if (it.kind === 'deed'){
     html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
-  } else if (it.kind === 'car'){
-    html = '<div class="t1">electric car ·' + Math.round(it.charge || 0) + '% charge</div><div class="t2">left click to deploy · right click the car to drive · it recharges parked on a powered grid</div>';
+  } else if (VEH[it.kind]){
+    html = '<div class="t1">' + itemLabel(it) + ' · ' + Math.round(it.charge || 0) + '% charge</div><div class="t2">' +
+      (it.wrecked ? 'wrecked — slot it into a REPAIR BENCH with ' + VEH[it.kind].repair + ' iron ingots'
+       : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
+       : 'left click to deploy · right click to drive · charge it on a charging pad') + '</div>';
+  } else if (it.kind === 'repair'){
+    html = '<div class="t1">repair bench</div><div class="t2">right click to open · a wrecked vehicle kit plus iron ingots comes off whole</div>';
   } else if (it.kind === 'sigil'){
     html = '<div class="t1">architect sigil</div><div class="t2">left click to summon THE ARCHITECT — the endgame. Craft it when you are ready.</div>';
   } else if (it.kind === 'aseal'){
@@ -15984,6 +16667,7 @@ function saveNow(){
     tables: game.tables,
     ropes: game.ropes || [],
     rails: game.rails || [],
+    roads: game.roads || {},
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -15998,7 +16682,7 @@ function saveNow(){
         : [e.type, e.x, e.y, e.z, e.hp,
                  e.charge != null ? +(+e.charge).toFixed(1) : 0,
                  e.heading != null ? +(+e.heading).toFixed(2) : 0,
-                 e.type === 'car' && e.bat ? e.bat : 0]),
+                 VEH[e.type] && e.bat ? e.bat : 0]),
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -16023,6 +16707,8 @@ function startWorld(id){
   game.forts = data.forts || {};
   game.cities = data.cities || {};
   game.rails = data.rails || [];
+  game.roads = data.roads || {};
+  roadSys.near = []; roadSys.scanT = 99; roadSys.cache = new Map();
   game.railDraft = null;
   game.riding = null;
   game.bossKills = data.bossKills || {};
@@ -16055,6 +16741,7 @@ function startWorld(id){
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
   game.pSeq = data.pSeq || 1;
+  for (const L of game.rails || []){ if (L.id == null) L.id = game.pSeq++; delete L.orig; delete L.ext; }
   game.pnodes = (data.pnodes || []).map(n => ({ ...n }));
   game.wires = (data.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb }));
   game.tubes = (data.tubes || []).map(t => ({ a: t.a, b: t.b }));
@@ -16074,7 +16761,7 @@ function startWorld(id){
     if (r[5]) e.charge = r[5];
     if (r[6]) e.heading = r[6];
     if (r[0] === 'drop'){ e.item = r[7] || null; e.ttl = r[8] || 1; }
-    if (r[0] === 'car' && r[7]) e.bat = r[7];
+    if (VEH[r[0]] && r[7]) e.bat = r[7];
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
@@ -17249,6 +17936,7 @@ function frame(now){
   raidSys.update(dt);
   raidBaseSys.tick(dt);
   citySys.tick(dt);
+  roadSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
@@ -17448,7 +18136,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>
