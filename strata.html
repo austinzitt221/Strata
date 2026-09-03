@@ -4248,6 +4248,36 @@ function contactReal(x, y, z, dTrue, g, edits){
   return sdfWorld(x - g[0] * t, y - g[1] * t, z - g[2] * t, edits) < 0.015 ||
          sdfWorld(x - g[0] * t1, y - g[1] * t1, z - g[2] * t1, edits) < -0.005;
 }
+// sphere-vs-world contact for vehicles: null when clear, else the unit
+// normal and how far to push. Only REAL contact counts — the CSG field is
+// a lower bound, not a distance: two subtracts that overlap (the corridor
+// cuts of neighbouring road segments) both claim "solid this close" at
+// their own end faces, a cave carve flattens the field near its mouth, and
+// a car that trusts the raw number stops dead on open tarmac. (Playtest:
+// "invisible walls on mountain roads, and where a cave comes close".)
+function sphereContact(x, y, z, R, edits){
+  const dd = sdfWorld(x, y, z, edits);
+  if (dd >= R) return null;
+  const g = gradWorld(x, y, z, edits);
+  const dTrue = dd / g[3];
+  if (dTrue >= R) return null;
+  if (!contactReal(x, y, z, dTrue, g, edits)) return null;
+  return { g, push: R - dTrue };
+}
+// a wheel climbs a kerb: when a real wall stops a grounded vehicle, take the
+// lowest lift (up to maxStep) that puts the sphere in clear air both here
+// and a little way ahead. The mesh and camera ease up over a few frames
+// (e.stepVis) so it reads as a bump, not a teleport.
+function vehicleStepUp(e, R, fx, fz, edits, maxStep){
+  for (let s = 0.1; s <= maxStep + 1e-6; s += 0.1){
+    const y = e.y + s + R;
+    if (sphereContact(e.x, y, e.z, R * 0.98, edits)) continue;
+    if (sphereContact(e.x + fx * 0.7, y, e.z + fz * 0.7, R * 0.98, edits)) continue;
+    e.y += s; e.stepVis = (e.stepVis || 0) + s;
+    return true;
+  }
+  return false;
+}
 function capsuleFree(x, y, z, edits){
   const r = PLAYER.radius, h = playerHeight();
   for (const c of [r + 0.02, h * 0.5, h - r - 0.02]){
@@ -8691,16 +8721,17 @@ function addTorchesToInv(n){ return addStackItem('torch', n); }
 // sphere, seat = camera offsets, kmh = the gauge's full scale.
 // air: it leaves the ground on purpose (tricks, crashes)
 const VEH = {
-  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.065, r: 0.85, ride: 0.4, kmh: 50, repair: 6,
+  // step: the kerb a wheel climbs without slowing (m)
+  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.065, r: 0.85, ride: 0.4, kmh: 50, repair: 6, step: 0.9,
                seat: { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 } },
-  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 0.13, r: 0.75, ride: 0.3, kmh: 120, repair: 10,
+  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 0.13, r: 0.75, ride: 0.3, kmh: 120, repair: 10, step: 0.7,
                seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
-  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.05, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
+  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.05, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true, step: 0.8,
                seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
   // water: floats on the surface (draft below), crawls when beached
-  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22,
+  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22, step: 0.4,
                seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
-  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
+  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3, step: 0.4,
                seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
@@ -11161,7 +11192,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 4;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 5;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -11243,8 +11274,11 @@ const roadSys = {
     // half-metre trench across every graded road ("the mountain is still
     // there"). Each box is shifted so its working face lands where the
     // untilted face would have: faceY is that face's height off the centre.
-    const EB = (op, y, sy, sx, sz, mat, faceY) => {
-      const shift = (faceY || 0) * Math.sin(grade);
+    const EB = (op, y, sy, sx, sz, mat, faceY, along) => {
+      // along: the box centre's offset from the segment midpoint down the
+      // road (its y follows the grade)
+      const shift = (faceY || 0) * Math.sin(grade) + (along || 0);
+      if (along) y += along * (y1 - y0) / (L.len / L.segs);
       const e = CORE.makeEdit(op, 1, +(mx + L.ux * shift).toFixed(2), +y.toFixed(2), +(mz + L.uz * shift).toFixed(2), sx, mat || 0, L.yaw);
       e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
       if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
@@ -11255,7 +11289,22 @@ const roadSys = {
     // a roof; through a hill an open trench; on flat ground it just clears
     // the shoulders. The slab then refills its own lane, so the road stands
     // a metre proud of whatever it cut — the ground never rises into it.
-    if (riseNear) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0, -ROAD_TUNNEL_H / 2);   // its floor is the working face
+    if (riseNear){
+      EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0, -ROAD_TUNNEL_H / 2);   // its floor is the working face
+      // A chain of subtracts is a lower bound on distance, not a distance:
+      // where two neighbouring cuts overlap, each says "solid at my end
+      // face" and the air over the tarmac reads as a wall 0.3 m thick at
+      // every boundary — the invisible wall that stopped cars in tunnels.
+      // So a second cut, THREE segments long with its floor flush on the
+      // tarmac (MINE_EPS above it, so it shaves nothing off the neighbours'
+      // slabs), owns the air the vehicles drive in: its end faces are a
+      // whole segment away from anything on this segment, so the field
+      // here is the true distance to the corridor's roof and walls.
+      const seg0 = L.len / L.segs;
+      const a0 = Math.max(0, i - 1) * seg0, a1 = Math.min(L.segs, i + 2) * seg0;
+      const airH = ROAD_TUNNEL_H - ROAD_SHOULDER;
+      EB(0, top + CORE.MINE_EPS + airH / 2, airH, ROAD_CUT_W, a1 - a0, 0, -airH / 2, (a0 + a1) / 2 - (i + 0.5) * seg0);
+    }
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT, (top - bottom) / 2);                              // its top is
     // at either end: a painted strip along the slab's edge from where the
     // road arrives to the nearest avenue, so the highway joins the grid
@@ -12895,19 +12944,39 @@ function driveCar(dt){
   const R = V.r;
   const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
   const le = nearEdits(box);
-  let grounded = false, wall = false, gn = null;
+  let grounded = false, wall = false, gn = null, hitSpd = 0;
+  const maxStep = V.step != null ? V.step : 0.6;
   for (let it = 0; it < 3; it++){
     const cy = e.y + R;
-    const dd = sdfWorld(e.x, cy, e.z, le);
-    if (dd < R){
-      const g2 = gradWorld(e.x, cy, e.z, le);
-      const push = R - dd / g2[3];
+    const c = sphereContact(e.x, cy, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    if (g2[1] > 0.5){
       e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
-      if (g2[1] > 0.5){ grounded = true; gn = g2; e.vy = Math.max(e.vy, 0); }
-      else { wall = true; e.speed *= Math.max(0.35, 1 - push * 2.5); }      // clipped a wall: a graze barely slows you
+      grounded = true; gn = g2; e.vy = Math.max(e.vy, 0);
+      continue;
     }
+    // a wall: with wheels on (or just off) the ground, try to climb it —
+    // a kerb, a slab lip, a low rock — before it counts as a hit. The one
+    // sphere sees only the nearest surface, so beside a wall it sinks a
+    // little into the ground it stands on: stand it back up first so the
+    // climb is measured from the road, not from the hole it dug.
+    if ((e.groundT || 0) < 0.3 && Math.abs(e.speed) > 0.5){
+      const bc = sphereContact(e.x, e.y + 0.05, e.z, 0.05, le);
+      if (bc && bc.g[1] > 0.5){ e.y += bc.push / bc.g[1]; grounded = true; e.vy = Math.max(e.vy, 0); }
+      if (vehicleStepUp(e, R, fx * Math.sign(e.speed), fz * Math.sign(e.speed), le, maxStep)){
+        grounded = true; e.vy = Math.max(e.vy, 0);
+        continue;
+      }
+    }
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    wall = true;
+    if (push > 0.15) hitSpd = Math.max(hitSpd, Math.abs(e.speed));   // a real hit, judged at the speed you arrived
+    e.speed *= Math.max(0.35, 1 - push * 2.5);      // clipped a wall: a graze barely slows you
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; grounded = true; }
+  e.groundT = grounded ? 0 : (e.groundT || 0) + dt;
+  if (e.stepVis) e.stepVis = e.stepVis > 0.01 ? e.stepVis * Math.exp(-14 * dt) : 0;
   if (!V.water && inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
   if (afloat && Math.abs(e.speed) > 1.5 && Math.random() < dt * 14)
     Particles.burst(e.x - fx * 1.6, e.y + 0.1, e.z - fz * 1.6, 0.4, [0xdfeeff, 0xffffff], 2, 0.8);   // the wake
@@ -12981,9 +13050,9 @@ function driveCar(dt){
       }
       e.lean = 0;
     }
-    if (wall && Math.abs(e.speed) > 9 && !airborne){
+    if (wall && hitSpd > 9 && !airborne){
       // a wall at speed throws you off
-      const dmg = Math.round(6 + Math.abs(e.speed) * 0.9);
+      const dmg = Math.round(6 + hitSpd * 0.9);
       e.hp = Math.max(1, (e.hp || 1) - 20);
       e.speed = 0;
       exitCar();
@@ -12996,17 +13065,18 @@ function driveCar(dt){
   }
   // the motor hums with speed
   AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / V.top));
-  // the driver rides along
-  game.pos.set(e.x, e.y + V.ride, e.z);
+  // the driver rides along (a kerb climb eases up over a few frames)
+  const vy = e.y - (e.stepVis || 0);
+  game.pos.set(e.x, vy + V.ride, e.z);
   game.vel.set(0, 0, 0);
   game.grounded = true;
   if (e.mesh){
-    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.position.set(e.x, vy, e.z);
     if (V.air) e.mesh.rotation.set(e.tPitch || 0, e.heading + (e.tYaw || 0), (e.tRoll || 0) + (e.lean || 0));
     else e.mesh.rotation.y = e.heading;
   }
   // the camera is IN the vehicle: the seat, or a chase cam on F5
-  vehicleCamera(e.x, e.y, e.z, e.heading, dt, V.seat);
+  vehicleCamera(e.x, vy, e.z, e.heading, dt, V.seat);
   game.carHudT = (game.carHudT || 0) + dt;
   if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
   game.carHud2T = (game.carHud2T || 0) + dt;
@@ -13118,14 +13188,12 @@ function drivePlane(e, V, dt){
   let grounded = false, wall = false;
   for (let it = 0; it < 3; it++){
     const cy = e.y + R;
-    const dd = sdfWorld(e.x, cy, e.z, le);
-    if (dd < R){
-      const g2 = gradWorld(e.x, cy, e.z, le);
-      const push = R - dd / g2[3];
-      e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
-      if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
-      else wall = true;
-    }
+    const c = sphereContact(e.x, cy, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
+    else wall = true;
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; grounded = true; }
   const wt = waterTopAt(e.x, e.z, e.y);
@@ -13196,9 +13264,8 @@ function driveHover(e, V, dt){
   }
   const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
   const le = nearEdits([e.x - 3, e.y - 10, e.z - 3, e.x + 3, e.y + 4, e.z + 3]);
-  // a wall ahead at cushion height stops it
-  const ahead = sdfWorld(e.x + fx * 1.3, e.y + 0.7, e.z + fz * 1.3, le);
-  if (ahead < 0.5) e.speed *= Math.pow(0.02, dt);
+  // a (real) wall ahead at cushion height stops it
+  if (sphereContact(e.x + fx * 1.3, e.y + 0.7, e.z + fz * 1.3, 0.5, le)) e.speed *= Math.pow(0.02, dt);
   e.x += fx * e.speed * dt; e.z += fz * e.speed * dt;
   // the cushion: find the ground under it (march down), and the water
   let gy = null;

@@ -2,6 +2,45 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 18.2 — the wall that wasn't there (2026-09-03)
+
+- **Invisible walls on mountain roads, the real cause.** A chain of
+  CSG subtracts is a lower bound on distance, not a distance. Two
+  neighbouring corridor cuts overlap by 0.6 m at every segment boundary,
+  and in that band each one says "solid at my end face": the air over
+  the tarmac reads as a wall 0.3 m thick, a metre or two before every
+  boundary, all the way up to the roof. The car collider took the raw
+  number as truth, met the phantom, and was shoved back down the road
+  (13 of the first 13 links driven headlessly stalled or grazed at a
+  boundary). The player collider has always marched to the claimed
+  surface to check it is real (`contactReal`, from the removed-cube bug
+  of Build 5.3); the car, bike, boat, plane and hoverbike never did.
+  Fixed in two places: (1) every vehicle contact now goes through
+  `sphereContact`, which rejects a claimed hit unless marching to it
+  finds solid, so cave carves and overlapping cuts anywhere in the
+  world stop pretending to be walls; (2) corridor roads get a second
+  cut, three segments long with its floor flush on the tarmac (MINE_EPS
+  above it, so it shaves nothing off the neighbours' slabs), that owns
+  the air vehicles drive in — its end faces are a whole segment from
+  anything on the segment, so the field there is the true distance to
+  the corridor's roof and walls. Roads restamp (version 5). Thirteen
+  links in two seeds now drive end to end with zero grazes.
+- **Kerb climb.** When a real wall stops a grounded vehicle, it looks
+  for the lowest lift (up to `VEH.step`: car 0.9 m, sports car 0.7,
+  bike 0.8, boats 0.4) that puts its sphere in clear air here and a
+  little way ahead, and takes it; the mesh and camera ease up over a
+  few frames so it reads as a bump. The one sphere sees only the
+  nearest surface, so beside a wall it used to sink a little into the
+  ground it stood on; it is stood back up first so the climb is measured
+  from the road, not from the hole it dug. Verified on a test pad: the
+  car takes 0.5 and 0.85 m kerbs at full speed and stops at 1.3; the
+  sports car 0.6 yes, 0.9 no; the bike 0.7 yes and is thrown off a 1.2 m
+  wall at speed. A bike's wall crash is judged at the speed it arrived,
+  before the graze slowdown, which had been quietly eating every crash
+  since 18.1.
+- **Known.** The single-sphere vehicle collider still dips a few
+  centimetres when pressed against a wall taller than its step.
+
 ## Build 18.1 — flight notes (2026-09-02)
 
 - **The rider banks with the plane.** The body model's driving branch
