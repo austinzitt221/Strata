@@ -2407,13 +2407,13 @@ const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'b
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
 const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
-const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot' };
+const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat' };
 // what bites where: the fish of each region
 const FISH_NAME = { perch: 'perch', trout: 'trout', catfish: 'catfish', carp: 'carp', snapper: 'snapper', eel: 'ember eel', cod: 'cod' };
 function fishFor(arch, deep){
@@ -2655,6 +2655,12 @@ const RECIPES = [];
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'wtable', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }, { item: 'coin', n: 40 }] });
   RECIPES.push({ kind: 'rounds', yields: 24, costs: [{ item: 'ironingot', n: 1 }, { item: 'coal', n: 1 }] });
+// the night shift pays in reagents: stalker fangs make hard rounds, a wisp's
+// core is a charge that already wants to go off
+RECIPES.push({ kind: 'rounds',  yields: 32, costs: [{ item: 'fang', n: 3 }, { item: 'coal', n: 1 }] });
+RECIPES.push({ kind: 'tnt',     yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { mat: MAT.SAND, n: 2 }] });
+RECIPES.push({ kind: 'rockets', yields: 4, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
+RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'cells', yields: 16, costs: [{ item: 'rubyingot', n: 1 }, { item: 'coal', n: 1 }] });
   RECIPES.push({ kind: 'rockets', yields: 2, station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'tnt', yields: 2, station: true, costs: [{ item: 'coal', n: 6 }, { item: 'ironingot', n: 1 }, { mat: MAT.SAND, n: 4 }] });
@@ -5568,7 +5574,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8766,6 +8772,10 @@ function isVehicle(e){ return !!(e && VEH[e.type]); }
 const ENT_DEF = {
   grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
+  // the night shift (Build 19): each with a habit
+  stalker: { hp: 22, speed: 5.4, r: 0.36, h: 0.8, cap: 4 },     // fast, low, hunts in pairs, hates torchlight
+  husk:    { hp: 95, speed: 1.45, r: 0.48, h: 2.0, cap: 3 },    // slow, tanky, walks straight at you, hits hard, burns at dawn
+  wisp:    { hp: 12, speed: 2.4, r: 0.3, h: 0.5, cap: 3, fly: true },   // a floating light with a grudge: drifts at you and detonates
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
@@ -9372,6 +9382,67 @@ function entMesh(type, ent){
       const leg = box(0.14, 0.4, 0.14, 0x9a8c76, sx, 0.2, sz);
       legs.push(leg);
     }
+  } else if (type === 'stalker'){
+    // low and long: a grey-blue hound with pale eyes and a whip tail
+    box(0.34, 0.3, 0.9, 0x2c3444, 0, 0.5, 0.05);             // body
+    box(0.3, 0.1, 0.5, 0x1e2431, 0, 0.68, 0.05);             // spine ridge
+    const head = box(0.28, 0.24, 0.34, 0x343d50, 0, 0.58, -0.55);
+    box(0.16, 0.1, 0.14, 0x1e2431, 0, -0.06, -0.22, head);   // muzzle
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xd8ffe8 });
+    for (const sx of [-0.08, 0.08]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), eyeM);
+      eye.position.set(sx, 0.04, -0.17); head.add(eye);
+    }
+    for (const tx of [-0.05, 0.05]) box(0.025, 0.05, 0.03, 0xe8e2d0, tx, -0.12, -0.28, head);   // fangs
+    box(0.06, 0.06, 0.5, 0x1e2431, 0, 0.55, 0.7);             // tail
+    for (const [sx, sz] of [[-0.14,-0.3],[0.14,-0.3],[-0.14,0.32],[0.14,0.32]]){
+      const leg = box(0.1, 0.4, 0.1, 0x1e2431, sx, 0.2, sz);
+      legs.push(leg);
+    }
+  } else if (type === 'husk'){
+    // a dried giant: cracked hide, hollow amber eyes, arms like beams
+    box(0.72, 0.95, 0.5, 0x6a5040, 0, 1.15, 0);              // torso
+    box(0.9, 0.2, 0.56, 0x4e3a2e, 0, 1.68, 0);               // shoulders
+    box(0.6, 0.35, 0.42, 0x5a4436, 0, 0.55, 0);              // hips
+    for (const [cx, cy] of [[-0.2, 1.3],[0.15, 0.95],[0.28, 1.45]]) box(0.06, 0.28, 0.52, 0x3a2a20, cx, cy, 0);   // cracks
+    const head = box(0.42, 0.44, 0.4, 0x5e4838, 0, 1.98, -0.04);
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xffb040 });
+    for (const sx of [-0.1, 0.1]){
+      box(0.12, 0.1, 0.05, 0x1a120c, sx, 0.04, -0.2, head);  // sockets
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.04), eyeM);
+      eye.position.set(sx, 0.04, -0.21); head.add(eye);
+    }
+    box(0.2, 0.05, 0.04, 0x1a120c, 0, -0.12, -0.2, head);    // a mouth sewn shut
+    for (const sx of [-0.5, 0.5]){
+      const arm = box(0.2, 1.0, 0.22, 0x5a4436, sx, 1.1, 0);
+      box(0.24, 0.16, 0.26, 0x3a2a20, 0, -0.55, 0, arm);     // fist
+      legs.push(arm);
+    }
+    for (const sx of [-0.18, 0.18]){
+      const leg = box(0.22, 0.75, 0.24, 0x4e3a2e, sx, 0.37, 0);
+      legs.push(leg);
+    }
+  } else if (type === 'wisp'){
+    // a caged light: a bright core, two flecks that orbit it, a soft halo
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), new THREE.MeshBasicMaterial({ color: 0xd8f6ff }));
+    g.add(core);
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    core.add(inner);
+    const flecks = [];
+    for (let i = 0; i < 2; i++){
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshBasicMaterial({ color: 0x9fe8ff }));
+      g.add(f); flecks.push(f);
+    }
+    const hc = document.createElement('canvas'); hc.width = hc.height = 32;
+    const hx = hc.getContext('2d');
+    const grd = hx.createRadialGradient(16, 16, 2, 16, 16, 16);
+    grd.addColorStop(0, 'rgba(200,245,255,0.9)'); grd.addColorStop(0.5, 'rgba(120,200,255,0.35)'); grd.addColorStop(1, 'rgba(80,160,255,0)');
+    hx.fillStyle = grd; hx.fillRect(0, 0, 32, 32);
+    const ht = new THREE.CanvasTexture(hc);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: ht, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.set(1.6, 1.6, 1);
+    g.add(halo);
+    g.userData.core = core; g.userData.flecks = flecks; g.userData.halo = halo; g.userData.noShadow = true;
   } else {
     box(0.5, 0.7, 0.42, 0x1c1626, 0, 0.85, 0);               // hunched torso
     box(0.62, 0.16, 0.5, 0x120e1c, 0, 1.24, -0.02);          // shoulder ridge
@@ -9443,7 +9514,7 @@ function killEntity(e, byPlayer){
   if (i >= 0) game.entities.splice(i, 1);
   if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
-    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
+    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
   if (VEH[e.type]){
     if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
@@ -9459,6 +9530,19 @@ function killEntity(e, byPlayer){
   }
   if (byPlayer){
     if (e.type === 'grazer'){ addStackItem('meat', 2); toast('+2 meat'); }
+    else if (e.type === 'stalker'){
+      const n = 1 + ((Math.random() * 2) | 0);
+      addStackItem('fang', n); addStackItem('coin', 2);
+      toast('+' + n + ' stalker fang  ·  +2 coins');
+    }
+    else if (e.type === 'husk'){
+      addStackItem('huskmeat', 2); addStackItem('ironore', 3); addStackItem('coin', 6);
+      toast('+2 husk meat  ·  +3 iron ore  ·  +6 coins');
+    }
+    else if (e.type === 'wisp'){
+      addStackItem('wispcore', 1); addStackItem('coin', 3);
+      toast('+1 wisp core  ·  +3 coins');
+    }
     else if (e.type === 'sheep'){
       const n = 2 + ((Math.random() * 2) | 0);
       addStackItem('wool', n); addStackItem('meat', 1);
@@ -9566,6 +9650,22 @@ function hurtEntity(e, dmg, kx, kz){
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
   if (e.hp <= 0) killEntity(e, true);
+}
+// how far the nearest LIGHT is — torches, beacons (which count for
+// farther: a beacon reads as a torch 0.6x as far away) and powered bulbs.
+// The night shift spawns on this: a lit base stays a base.
+function nearestLightDist(x, y, z){
+  let best = nearestTorchDist(x, y, z);
+  for (const b of game.beacons){
+    const d = Math.hypot(b[0]-x, b[1]-y, b[2]-z) * 0.6;
+    if (d < best) best = d;
+  }
+  for (const b of game.bulbs){
+    if (powerSys.bulbLight(b[6]) <= 0.02) continue;
+    const d = Math.hypot(b[0]-x, b[1]-y, b[2]-z) * 0.7;
+    if (d < best) best = d;
+  }
+  return best;
 }
 function nearestTorchDist(x, y, z){
   let best = 1e9;
@@ -11788,7 +11888,7 @@ const citySys = {
 
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
-  const counts = { grazer: 0, lurker: 0, sheep: 0 };
+  const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
   for (const e of game.entities) counts[e.type]++;
   const a = Math.random() * Math.PI * 2;
   const d = 22 + Math.random() * 20;
@@ -11796,6 +11896,25 @@ function trySpawnEntities(){
   const h = game.gen.height(x, z);
   if (game.gen.wetAt && game.gen.wetAt(x, z, h)) return;   // nothing spawns in the sea
   const night = game.dayF < 0.25;
+  // the night shift: stalkers (in pairs), husks and wisps come out on the
+  // surface after dark. Their odds scale with how far the spot is from
+  // your lights — 12 m of a torch spawns nothing, 50 m out is open season
+  if (night && game.pos.y > game.gen.height(game.pos.x, game.pos.z) - 3){
+    const ld = nearestLightDist(x, h, z);
+    const f = Math.max(0, Math.min(1, (ld - 12) / 38));
+    if (f > 0 && Math.random() < f * 0.7){
+      const roll = Math.random();
+      if (roll < 0.42 && counts.stalker + 1 < ENT_DEF.stalker.cap){
+        spawnEntity('stalker', x, h + 0.4, z);
+        const a2 = Math.random() * Math.PI * 2;
+        const e2 = spawnEntity('stalker', x + Math.cos(a2) * 2.5, h + 0.4, z + Math.sin(a2) * 2.5);
+        e2.pairOf = 1;
+        return;
+      }
+      if (roll < 0.72 && counts.husk < ENT_DEF.husk.cap){ spawnEntity('husk', x, h + 0.5, z); return; }
+      if (counts.wisp < ENT_DEF.wisp.cap){ spawnEntity('wisp', x, h + 1.8, z); return; }
+    }
+  }
   // lurkers spawn in the dark (survival only): night surface, or an
   // underground air pocket
   if (counts.lurker < ENT_DEF.lurker.cap){
@@ -11900,8 +12019,17 @@ function updateEntities(dt, now){
       game.entities.splice(i, 1);
       continue;
     }
-    // night hunters can't survive the sun: surface lurkers ignite at dawn
-    if (e.type === 'lurker' && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
+    // the night shift at dawn: wisps gutter out, stalkers slink off
+    if (game.dayF > 0.45 && (e.type === 'wisp' || e.type === 'stalker')){
+      e.dawnT = (e.dawnT || 0) + dt;
+      if (e.type === 'wisp' && e.dawnT > 1.5){
+        Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
+        killEntity(e, false); continue;
+      }
+      if (e.type === 'stalker' && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+    }
+    // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
+    if ((e.type === 'lurker' || e.type === 'husk') && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
       e.burnT = (e.burnT || 0) + dt;
       if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 1.2, e.z, 0.3, [0xff8830, 0xffb347, 0x442211], 2, 1.4);
       if (e.burnT > 0.4){ e.burnT = 0; e.hp -= 5; e.flash = 0.1; }
@@ -11917,6 +12045,69 @@ function updateEntities(dt, now){
       if (d3 < 1.6 && e.atkT <= 0){
         e.atkT = 1;
         damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5);
+      }
+    } else if (e.type === 'stalker'){
+      // fast and low: it circles in rather than charging, backs off from
+      // torchlight, and at dawn it runs
+      const ld = nearestLightDist(e.x, e.y, e.z);
+      e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
+      if (game.dayF > 0.45){ sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.2; }
+      else if (ld < 9){
+        // find the light and run from it
+        let lx = e.x, lz = e.z, bd = 1e9;
+        for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
+        for (const b of game.beacons){ const d = Math.hypot(b[0]-e.x, b[2]-e.z) * 0.6; if (d < bd){ bd = d; lx = b[0]; lz = b[2]; } }
+        sx = e.x - lx; sz = e.z - lz; sp *= 1.1;
+      } else if (pd < 24){
+        const dx = game.pos.x - e.x, dz = game.pos.z - e.z;
+        const px2 = -dz * e.orbit, pz2 = dx * e.orbit;             // sideways
+        const close = Math.max(0, Math.min(1, (pd - 2.5) / 6));   // spiral in
+        sx = dx + px2 * close * 0.9; sz = dz + pz2 * close * 0.9;
+        const d3 = Math.hypot(dx, e.y - game.pos.y, dz);
+        if (d3 < 1.5 && e.atkT <= 0){
+          e.atkT = 0.55;
+          damagePlayer(5, (game.pos.x - e.x) * 1.5, (game.pos.z - e.z) * 1.5);
+          if (Math.random() < 0.3) e.orbit = -e.orbit;
+        }
+      } else {
+        if (e.tt <= 0){ e.tt = 2 + Math.random() * 3; e.tx = e.x + (Math.random() - 0.5) * 20; e.tz = e.z + (Math.random() - 0.5) * 20; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
+    } else if (e.type === 'husk'){
+      // it saw you. it is coming. nothing about that changes.
+      if (pd < 36){
+        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+        const d3 = Math.hypot(sx, e.y - game.pos.y, sz);
+        if (d3 < 2.3 && e.atkT <= 0){
+          e.atkT = 1.7;
+          damagePlayer(18, (game.pos.x - e.x) * 4, (game.pos.z - e.z) * 4);
+          AudioSys.sfx('hit');
+        }
+        if (e.atkT > 1.3) sp *= 0.2;                              // the swing plants its feet
+      } else {
+        if (e.tt <= 0){ e.tt = 5 + Math.random() * 5; e.tx = e.x + (Math.random() - 0.5) * 14; e.tz = e.z + (Math.random() - 0.5) * 14; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
+    } else if (e.type === 'wisp'){
+      // a light that drifts toward you and pops: TNT with a grudge
+      e.fuse = e.fuse || 0;
+      if (pd < 30){
+        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+        const d3 = Math.hypot(sx, e.y - (game.pos.y + 0.9), sz);
+        if (d3 < 6) sp *= 1.6;                                      // the last rush
+        if (d3 < 2.2){
+          e.fuse += dt * 4;
+          if (e.fuse > 1){
+            explode(e.x, e.y, e.z, 1.5, 26);
+            killEntity(e, false); continue;
+          }
+        } else e.fuse = Math.max(0, e.fuse - dt * 2);
+      } else {
+        if (e.tt <= 0){ e.tt = 3 + Math.random() * 4; e.tx = e.x + (Math.random() - 0.5) * 16; e.tz = e.z + (Math.random() - 0.5) * 16; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
@@ -11982,6 +12173,30 @@ function updateEntities(dt, now){
     const wx = sx / sl * sp, wz = sz / sl * sp;
     e.vx += (wx - e.vx) * Math.min(1, 8 * dt);
     e.vz += (wz - e.vz) * Math.min(1, 8 * dt);
+    if (def.fly){
+      // a floating thing: no gravity, it holds a height over the ground (or
+      // over you), bobs, and slides around solid rock rather than through it
+      const gh = game.gen.height(e.x, e.z);
+      const want = (pd < 30 ? Math.max(gh + 1.4, game.pos.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
+      e.vy += ((want - e.y) * 2.2 - e.vy) * Math.min(1, 4 * dt);
+      const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
+      const le2 = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
+      if (sdfWorld(nx, ny, nz, le2) > def.r){ e.x = nx; e.y = ny; e.z = nz; }
+      else { e.vx *= -0.3; e.vz *= -0.3; e.vy = Math.max(e.vy, 1.5); }
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+      e.mesh.position.set(e.x, e.y, e.z);
+      const ud = e.mesh.userData;
+      ud.phase += dt * (3 + (e.fuse || 0) * 12);
+      if (ud.flecks) for (let fi = 0; fi < ud.flecks.length; fi++){
+        const a = ud.phase * 1.7 + fi * 2.1;
+        ud.flecks[fi].position.set(Math.cos(a) * 0.36, Math.sin(a * 1.3) * 0.2, Math.sin(a) * 0.36);
+      }
+      if (ud.core){ const pulse = 1 + Math.sin(ud.phase * 4) * 0.12 + (e.fuse || 0) * 0.5; ud.core.scale.setScalar(pulse); }
+      if (ud.halo) ud.halo.material.opacity = 0.55 + Math.sin(ud.phase * 4) * 0.2 + (e.fuse || 0) * 0.3;
+      e.mesh.scale.setScalar(e.flash > 0 ? 1.15 : 1);
+      if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, [0x9fe8ff, 0xd8f6ff], 1, 0.4);
+      continue;
+    }
     e.vy -= 22 * dt;
     const ox = e.x;
     const oz = e.z;
@@ -15655,7 +15870,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -15779,6 +15994,22 @@ function itemIconURL(it){
   } else if (it.kind === 'kelp'){
     c.fillStyle = '#2f7a4d'; c.fillRect(4, 1, 2, 14); c.fillRect(9, 3, 2, 12);
     c.fillStyle = '#3f9a5d'; c.fillRect(6, 4, 2, 3); c.fillRect(2, 7, 2, 3); c.fillRect(11, 6, 2, 3); c.fillRect(7, 10, 2, 3);
+  } else if (it.kind === 'fang'){
+    // a curved tooth, root up
+    c.fillStyle = '#e8e2d0'; c.fillRect(6, 2, 5, 3); c.fillRect(7, 5, 4, 3); c.fillRect(8, 8, 3, 3); c.fillRect(9, 11, 2, 3);
+    c.fillStyle = '#b8b0a0'; c.fillRect(6, 2, 1, 3); c.fillRect(7, 5, 1, 3); c.fillRect(8, 8, 1, 3);
+    c.fillStyle = '#7a2f2f'; c.fillRect(6, 1, 5, 1);
+  } else if (it.kind === 'huskmeat'){
+    // a dark, dry slab
+    c.fillStyle = '#6a4a3a'; c.fillRect(3, 4, 10, 8);
+    c.fillStyle = '#4a3028'; c.fillRect(3, 4, 10, 2); c.fillRect(5, 9, 3, 1); c.fillRect(9, 7, 2, 1);
+    c.fillStyle = '#8a6a5a'; c.fillRect(4, 7, 2, 1); c.fillRect(8, 10, 3, 1);
+  } else if (it.kind === 'wispcore'){
+    // a caged light
+    c.fillStyle = '#2a3a55'; c.fillRect(4, 3, 8, 10);
+    c.fillStyle = '#6fd8ff'; c.fillRect(6, 5, 4, 6);
+    c.fillStyle = '#ffffff'; c.fillRect(7, 6, 2, 3);
+    c.fillStyle = '#1a2436'; c.fillRect(5, 5, 1, 6); c.fillRect(10, 5, 1, 6); c.fillRect(6, 4, 4, 1); c.fillRect(6, 11, 4, 1);
   } else if (it.kind === 'lscale'){
     c.fillStyle = '#1f5f7a'; c.fillRect(4, 2, 8, 12); c.fillRect(3, 4, 10, 8);
     c.fillStyle = '#2f8aa8'; c.fillRect(5, 3, 6, 9);
@@ -16204,6 +16435,9 @@ function itemLabel(it){
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
   if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
+  if (it.kind === 'fang') return 'stalker fang';
+  if (it.kind === 'huskmeat') return 'husk meat';
+  if (it.kind === 'wispcore') return 'wisp core';
   if (it.kind === 'motorboat') return (it.wrecked ? 'wrecked ' : '') + 'motorboat';
   if (it.kind === 'repair') return 'repair bench';
   if (it.kind === 'rail') return 'rails';
@@ -17321,6 +17555,12 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'divehelm'){
     html = '<div class="t1">diving helmet</div><div class="t2">wear it in the helmet slot (E, shift-click) — ninety seconds of air under water</div>';
+  } else if (it.kind === 'fang'){
+    html = '<div class="t1">stalker fang</div><div class="t2">three of them and a coal make 32 hard rounds</div>';
+  } else if (it.kind === 'huskmeat'){
+    html = '<div class="t1">husk meat</div><div class="t2">dry and bitter raw (10 hp) — the stove makes it a proper meal</div>';
+  } else if (it.kind === 'wispcore'){
+    html = '<div class="t1">wisp core</div><div class="t2">a charge that still wants to go off: TNT, rockets or mining charges at a crafting table</div>';
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
   } else if (it.kind === 'cannon'){
@@ -17620,8 +17860,8 @@ function tryEat(){
   // banking more than you can use would just throw the meal away
   const roomLeft = () => Math.max(0, 100 - game.hp - game.heal);
   if (roomLeft() < 1){ toast(game.heal > 0 ? 'already mending' : 'already at full health'); return; }
-  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat' || it.kind === 'fish' || it.kind === 'cookedfish')){
-    const gain = it.kind === 'meat' ? HEAL_RAW : it.kind === 'fish' ? 15 : it.kind === 'cookedfish' ? 45 : HEAL_COOKED;
+  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat' || it.kind === 'fish' || it.kind === 'cookedfish' || it.kind === 'huskmeat')){
+    const gain = it.kind === 'meat' ? HEAL_RAW : it.kind === 'fish' ? 15 : it.kind === 'cookedfish' ? 45 : it.kind === 'huskmeat' ? 10 : HEAL_COOKED;
     it.count -= 1;
     if (it.count === 0) game.slots[game.hotSel] = null;
     game.heal = Math.min(game.heal + gain, 100 - game.hp);
@@ -19618,6 +19858,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
