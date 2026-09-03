@@ -507,9 +507,9 @@ const BEDROCK_Y = -249.99;    // everything below is permanently solid
 const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18 };
-const NMAT = 18;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18, MARBLE:19 };
+const NMAT = 19;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -1212,6 +1212,9 @@ function makeGen(seed){
       const y = 58 + (hashInt(h0 ^ 7) / 4294967296) * 26;      // the flat top sits at y
       const depth = 10 + rx * 0.35;                              // how far the underside hangs
       S = { x, z, y, rx, depth, top: y, bottom: y - depth, seed: h0, key };
+      // one island in three carries a Sky Spire: a white tower on its crown
+      S.spire = (hashInt(h0 ^ 11) % 3) === 0 && rx > 20;
+      S.spireTop = S.spire ? y + 38 : y;
     }
     skyCache.set(key, S);
     if (skyCache.size > 400) skyCache.clear();
@@ -1249,6 +1252,56 @@ function makeGen(seed){
     }
     return Math.min(dome, cone);
   }
+  // ---- the Sky Spire: a marble tower on the crown of some islands ----
+  // A plinth with the treasury inside it (a room with one door on the
+  // south side), a tapering column, an open gallery ring halfway up on six
+  // pillars, the roost — a railed platform at the top — and a pinnacle.
+  // All of it is SDF-native so it meshes, collides and mines like rock.
+  const SPIRE_H = 30;
+  function spireSDF(x, y, z){
+    if (y < 40) return 1e9;
+    const S = skyNear(x, z);
+    if (!S || !S.spire) return 1e9;
+    const B = S.top;
+    if (y > B + 40 || y < B - 2) return 1e9;
+    const dx = x - S.x, dz = z - S.z;
+    if (Math.abs(dx) > 10 || Math.abs(dz) > 10) return 1e9;
+    const r2 = Math.hypot(dx, dz);
+    const box = (bx, by, bz, hx, hy, hz) => {
+      const qx = Math.abs(dx - bx) - hx, qy = Math.abs(y - by) - hy, qz = Math.abs(dz - bz) - hz;
+      return Math.max(qx, qy, qz);
+    };
+    const disc = (cy, hy, r) => Math.max(r2 - r, Math.abs(y - cy) - hy);
+    // plinth, hollowed into the treasury, with its door
+    let d = box(0, B + 2.5, 0, 7, 3.5, 7);
+    d = Math.max(d, -box(0, B + 3.4, 0, 5.5, 2.0, 5.5));
+    d = Math.max(d, -box(0, B + 2.9, -6.5, 1.2, 1.5, 1.6));
+    // the column: a frustum from the plinth to the roost
+    const t = Math.max(0, Math.min(1, (y - (B + 6)) / (SPIRE_H - 6)));
+    const cr = 4.6 - 1.8 * t;
+    d = Math.min(d, Math.max(r2 - cr, B + 6 - y, y - (B + SPIRE_H)));
+    // the gallery: a ring floor, six pillars, a ring roof
+    d = Math.min(d, disc(B + 15.8, 0.4, 8));
+    d = Math.min(d, disc(B + 20.6, 0.4, 8));
+    const ang = Math.atan2(dz, dx), k = Math.round(ang / (Math.PI / 3)) * (Math.PI / 3);
+    const pxp = Math.cos(k) * 7, pzp = Math.sin(k) * 7;
+    d = Math.min(d, Math.max(Math.hypot(dx - pxp, dz - pzp) - 0.55, B + 16.2 - y, y - (B + 20.2)));
+    // the roost: a railed platform, and the pinnacle above it
+    d = Math.min(d, disc(B + SPIRE_H + 0.5, 0.5, 6.5));
+    d = Math.min(d, Math.max(Math.max(r2 - 6.5, 5.9 - r2), Math.abs(y - (B + SPIRE_H + 1.45)) - 0.45));
+    const tp = Math.max(0, Math.min(1, (y - (B + SPIRE_H + 1)) / 7));
+    d = Math.min(d, Math.max(r2 - (1.3 - 1.25 * tp), B + SPIRE_H + 1 - y, y - (B + SPIRE_H + 8)));
+    return d * 0.85;   // Chebyshev boxes over-estimate: stay a lower bound
+  }
+  function spireMat(x, y, z){
+    if (y < 40) return 0;
+    const S = skyNear(x, z);
+    if (!S || !S.spire || y > S.top + 40 || y < S.top - 2) return 0;
+    if (spireSDF(x, y, z) > 0.5) return 0;
+    const B = S.top;
+    if (Math.abs(y - (B + 15.8)) < 0.5 || Math.abs(y - (B + SPIRE_H + 0.5)) < 0.6) return MAT.STONEBRICK;   // the floors you stand on
+    return MAT.MARBLE;
+  }
   function skyMat(x, y, z){
     if (y < 40) return 0;
     const S = skyNear(x, z);
@@ -1260,9 +1313,17 @@ function makeGen(seed){
     if (v > 1.36 && y < S.top - 2.0) return MAT.AETHER;
     return MAT.ROCK;
   }
+  // Sky islands and their spires are unioned AFTER the terrain's caves are
+  // carved: the cave field flares open above an entrance (its mouth term
+  // grows with height above the ground), and an island over a cave mouth
+  // used to come out hollow through the middle.
   function sdfFromH(h, x, y, z, prims){
+    const d = sdfTerrain(h, x, y, z, prims);
+    if (y >= 40){ const sk = Math.min(skySDF(x, y, z), spireSDF(x, y, z)); return sk < d ? sk : d; }
+    return d;
+  }
+  function sdfTerrain(h, x, y, z, prims){
     let d = (y - h) * 0.65;
-    if (y >= 40){ const sk = skySDF(x, y, z); if (sk < d) d = sk; }   // islands hang above everything
     const net = prims && prims.length;
     if (!net){
       if (d > 2.5){
@@ -1311,7 +1372,7 @@ function makeGen(seed){
   function mat(x, y, z){
     const rm = ruinMat(x, y, z);
     if (rm) return rm;
-    if (y >= 40){ const sm = skyMat(x, y, z); if (sm) return sm; }
+    if (y >= 40){ const sm = spireMat(x, y, z) || skyMat(x, y, z); if (sm) return sm; }
     const ore = oreAt(x, y, z);
     if (ore) return ore;
     if (y < -6){
@@ -1389,7 +1450,7 @@ function makeGen(seed){
       for (let cz = Math.floor((z0 - 60) / SKY_CELL); cz <= Math.floor((z1 + 60) / SKY_CELL); cz++){
         const S = skyInCell(cx, cz);
         if (S && S.x + S.rx + 6 > x0 && S.x - S.rx - 6 < x1 && S.z + S.rx + 6 > z0 && S.z - S.rx - 6 < z1)
-          mx = Math.max(mx, S.top + 1);
+          mx = Math.max(mx, S.spire ? S.top + 40 : S.top + 1);
       }
     return [mn - 4, mx + 4];
   }
@@ -1550,6 +1611,37 @@ function makeGen(seed){
       }
     return { x: fx, z: fz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- the Ziggurat: one candidate per ZIG_CELL, half of them real, on
+  // flat plains, mesa or dunes, clear of villages and forts. Its geometry
+  // is stamped at runtime (zigSys) — this only decides where.
+  function zigAt(cx, cz){
+    const h0 = hashInt(sX ^ 0x2166 ^ hashInt((cx * 1364987 ^ 0x7a1) ^ hashInt(cz * 998244353)));
+    if ((h0 & 1) === 0) return null;
+    const zx = cx * ZIG_CELL + 200 + (h0 % (ZIG_CELL - 400));
+    const zz = cz * ZIG_CELL + 200 + (hashInt(h0 ^ 5) % (ZIG_CELL - 400));
+    const hc = height(zx, zz);
+    if (hc < seaLevel + 3) return null;
+    const a = archAt(zx, zz);
+    if (a !== 0 && a !== 3 && a !== 4) return null;
+    let mn = hc, mx = hc;
+    for (const [dx, dz] of [[-22, 0], [22, 0], [0, -22], [0, 22], [16, 16], [-16, -16], [16, -16], [-16, 16], [0, 34]]){
+      const hh = height(zx + dx, zz + dz);
+      if (hh < mn) mn = hh;
+      if (hh > mx) mx = hh;
+    }
+    if (mx - mn > 7) return null;
+    for (let vx = Math.floor((zx - 260) / VILLAGE_CELL); vx <= Math.floor((zx + 260) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((zz - 260) / VILLAGE_CELL); vz <= Math.floor((zz + 260) / VILLAGE_CELL); vz++){
+        const v = villageAt(vx, vz);
+        if (v && Math.hypot(v.x - zx, v.z - zz) < 260) return null;
+      }
+    for (let fx = Math.floor((zx - 260) / FORT_CELL); fx <= Math.floor((zx + 260) / FORT_CELL); fx++)
+      for (let fz = Math.floor((zz - 260) / FORT_CELL); fz <= Math.floor((zz + 260) / FORT_CELL); fz++){
+        const f = fortAt(fx, fz);
+        if (f && Math.hypot(f.x - zx, f.z - zz) < 260) return null;
+      }
+    return { x: zx, z: zz, y: hc, seed: h0, key: cx + ',' + cz };
+  }
   // ---- mega-cities: one candidate per CITY_CELL (km-scale spacing), on
   // gentle dry ground the foundation slab can iron flat, clear of both
   // village and fort candidates
@@ -1596,11 +1688,12 @@ function makeGen(seed){
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
+const ZIG_CELL = 1400;
 const WRECK_CELL = 360;
 const SKY_CELL = 640;
 const CITY_CELL = 1800;
@@ -2407,7 +2500,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'b
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
@@ -2526,7 +2619,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -2658,6 +2751,8 @@ const RECIPES = [];
 // the night shift pays in reagents: stalker fangs make hard rounds, a wisp's
 // core is a charge that already wants to go off
 RECIPES.push({ kind: 'rounds',  yields: 32, costs: [{ item: 'fang', n: 3 }, { item: 'coal', n: 1 }] });
+// the long way to wings: pluck the garrison
+RECIPES.push({ kind: 'wings', station: true, costs: [{ item: 'feather', n: 24 }, { item: 'aetheringot', n: 6 }, { item: 'diamond', n: 2 }] });
 RECIPES.push({ kind: 'tnt',     yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { mat: MAT.SAND, n: 2 }] });
 RECIPES.push({ kind: 'rockets', yields: 4, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
 RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
@@ -2808,6 +2903,7 @@ function craft(slots, r, free){
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
+                  : r.kind === 'wings' ? { kind: 'wings' }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
                   : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
@@ -2931,7 +3027,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, SKY_CELL, CITY_CELL, FISH_NAME, fishFor,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, SKY_CELL, CITY_CELL, ZIG_CELL, FISH_NAME, fishFor,
   HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN, addItemN, uncraftRecipeFor, uncraft,
   BATTERY_CAP, BATTERY_NAME, batteryCap, chargeField,
 };
@@ -2988,6 +3084,15 @@ function makeTileDrawers(){
         const x = (rng()*14)|0, y = (rng()*14)|0;
         ctx.fillStyle = '#141317'; ctx.fillRect(x, y, 2, 2);
       }
+    },
+    [CORE.MAT.MARBLE](ctx, rng){
+      // white stone with grey veins and a gold fleck
+      speckle(ctx, rng, '#e9e7ee', '#d8d5df', '#f6f5f9', 0.16, 0.2);
+      ctx.fillStyle = '#b9b5c4';
+      let x = (rng() * 16) | 0, y = 0;
+      while (y < 16){ ctx.fillRect(x, y, 1, 1); if (rng() < 0.4) x += rng() < 0.5 ? 1 : -1; y++; x = (x + 16) % 16; }
+      ctx.fillStyle = '#c9c5d2'; ctx.fillRect((rng() * 12) | 0, (rng() * 12) | 0, 3, 1);
+      ctx.fillStyle = '#d9b85a'; ctx.fillRect((rng() * 14) | 0, (rng() * 14) | 0, 1, 1);
     },
     [CORE.MAT.AETHER](ctx, rng){
       // pale sky-stone shot with violet aether crystals
@@ -4501,7 +4606,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -4779,6 +4884,24 @@ const playerBody = {
         this.upper.add(noz); this.armorMeshes.push(noz);
       }
     }
+    if (A.back && A.back.kind === 'wings'){
+      // two white wings, gold-tipped, swept back off the shoulders
+      const wings = [];
+      for (const sx of [-1, 1]){
+        const w = new THREE.Group();
+        w.position.set(sx * 0.16, 1.2, 0.2);
+        const feathers = [[0.5, 0.16, 0.05, 0.28, 0.1], [0.42, 0.12, 0.05, 0.68, 0.02], [0.3, 0.1, 0.05, 0.98, -0.08]];
+        for (const [w1, h1, d1, ox, oy] of feathers){
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w1, h1, d1), new THREE.MeshBasicMaterial({ color: 0xf4f2f8 }));
+          m.position.set(sx * ox, oy, 0); w.add(m); this.armorMeshes.push(m);
+        }
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), new THREE.MeshBasicMaterial({ color: 0xd9b85a }));
+        tip.position.set(sx * 1.16, -0.1, 0); w.add(tip); this.armorMeshes.push(tip);
+        w.rotation.y = sx * 0.55; w.rotation.z = sx * 0.35;
+        this.upper.add(w); wings.push(w);
+      }
+      this.wings = wings;
+    } else this.wings = null;
     if (A.head && A.head.kind === 'divehelm'){
       // the diving helmet: a glass globe with a brass collar
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.37, 12, 10),
@@ -4796,7 +4919,7 @@ const playerBody = {
     this.root.visible = show;
     if (!show) return;
     const A = game.armor || {};
-    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
+    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? A.back.kind : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
     if (game.driving){
       const e2 = game.driving;
@@ -5574,7 +5697,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8776,6 +8899,8 @@ const ENT_DEF = {
   stalker: { hp: 22, speed: 5.4, r: 0.36, h: 0.8, cap: 4 },     // fast, low, hunts in pairs, hates torchlight
   husk:    { hp: 95, speed: 1.45, r: 0.48, h: 2.0, cap: 3 },    // slow, tanky, walks straight at you, hits hard, burns at dawn
   wisp:    { hp: 12, speed: 2.4, r: 0.3, h: 0.5, cap: 3, fly: true },   // a floating light with a grudge: drifts at you and detonates
+  // the Sky Spire's garrison: winged, fast, and they never leave their island
+  angel:   { hp: 70, speed: 7.5, r: 0.45, h: 1.8, cap: 0, fly: true },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
@@ -8793,6 +8918,8 @@ const ENT_DEF = {
   tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
   architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
   leviathan: { hp: 700, speed: 9.5, r: 2.0, h: 3.0, cap: 0, boss: 'THE LEVIATHAN' },
+  archangel: { hp: 900, speed: 9.0, r: 1.6, h: 3.6, cap: 0, boss: 'THE ARCHANGEL' },
+  guardian:  { hp: 420, speed: 2.6, r: 0.9, h: 2.8, cap: 0, boss: 'THE TOMB GUARDIAN' },
 };
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
@@ -9422,6 +9549,67 @@ function entMesh(type, ent){
       const leg = box(0.22, 0.75, 0.24, 0x4e3a2e, sx, 0.37, 0);
       legs.push(leg);
     }
+  } else if (type === 'guardian'){
+    // a sandstone golem: square, heavy, a ruby slit for an eye
+    const sand = 0xc9a86a, dark = 0x9a7d48, deep = 0x6e5730;
+    box(1.3, 1.2, 0.9, sand, 0, 1.55, 0);                    // chest
+    box(1.5, 0.3, 1.0, dark, 0, 2.2, 0);                     // shoulders
+    box(1.0, 0.7, 0.8, dark, 0, 0.75, 0);                    // hips
+    for (const [cx, cy] of [[-0.3, 1.4], [0.25, 1.9], [0.4, 1.2]]) box(0.08, 0.3, 0.92, deep, cx, cy, 0);   // the cracks
+    const head = box(0.7, 0.55, 0.6, sand, 0, 2.62, 0);
+    box(0.46, 0.08, 0.05, 0xa5233c, 0, 0.02, -0.31, head);   // the eye slit
+    box(0.5, 0.06, 0.05, 0xff3b3b, 0, 0.02, -0.32, head);
+    for (const sx of [-0.95, 0.95]){
+      const arm = box(0.42, 1.4, 0.46, dark, sx, 1.5, 0);
+      box(0.5, 0.36, 0.52, deep, 0, -0.75, 0, arm);          // the fist
+      legs.push(arm);
+    }
+    for (const sx of [-0.32, 0.32]){
+      const leg = box(0.44, 0.8, 0.48, deep, sx, 0.4, 0);
+      legs.push(leg);
+    }
+  } else if (type === 'angel' || type === 'archangel'){
+    // a white figure in gold, eyes lit, wings that beat. The Archangel is
+    // the same shape at twice the size with four wings and a halo.
+    const big = type === 'archangel';
+    const white = 0xf4f2f8, gold = 0xd9b85a, robe = 0xe6e2ee;
+    box(0.44, 0.7, 0.3, white, 0, 1.05, 0);                  // torso
+    box(0.5, 0.6, 0.34, robe, 0, 0.45, 0);                    // the robe
+    box(0.52, 0.08, 0.36, gold, 0, 0.78, 0);                  // belt
+    const head = box(0.32, 0.32, 0.3, white, 0, 1.58, 0);
+    const eyeM = new THREE.MeshBasicMaterial({ color: big ? 0xfff0a0 : 0x9fe8ff });
+    for (const sx of [-0.08, 0.08]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.04), eyeM);
+      eye.position.set(sx, 0.02, -0.16); head.add(eye);
+    }
+    box(0.36, 0.04, 0.34, gold, 0, 0.2, 0, head);              // the circlet
+    for (const sx of [-0.3, 0.3]){
+      const arm = box(0.12, 0.62, 0.14, white, sx, 1.05, 0);
+      box(0.14, 0.1, 0.16, gold, 0, -0.34, 0, arm);            // the gauntlet
+      legs.push(arm);
+    }
+    const wings = [];
+    const wingRows = big ? [[1.3, 0.16], [1.0, -0.2]] : [[1.25, 0]];
+    for (const [wy, wz] of wingRows) for (const sx of [-1, 1]){
+      const w = new THREE.Group();
+      w.position.set(sx * 0.22, wy, 0.16 + wz);
+      const feathers = [[0.7, 0.2, 0.06, 0.35, 0.12], [0.6, 0.15, 0.06, 0.95, 0.02], [0.45, 0.12, 0.06, 1.45, -0.1]];
+      for (const [w1, h1, d1, ox, oy] of feathers){
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w1, h1, d1), new THREE.MeshBasicMaterial({ color: white }));
+        m.position.set(sx * ox, oy, 0); w.add(m);
+      }
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.06), new THREE.MeshBasicMaterial({ color: gold }));
+      tip.position.set(sx * 1.72, -0.14, 0); w.add(tip);
+      w.userData.side = sx;
+      g.add(w); wings.push(w);
+    }
+    if (big){
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.04, 6, 18), new THREE.MeshBasicMaterial({ color: 0xfff0a0 }));
+      halo.position.set(0, 1.95, 0); halo.rotation.x = Math.PI / 2;
+      g.add(halo); g.userData.halo = halo;
+      g.scale.setScalar(2.1);
+    }
+    g.userData.wings = wings;
   } else if (type === 'wisp'){
     // a caged light: a bright core, two flecks that orbit it, a soft halo
     const core = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), new THREE.MeshBasicMaterial({ color: 0xd8f6ff }));
@@ -9514,7 +9702,7 @@ function killEntity(e, byPlayer){
   if (i >= 0) game.entities.splice(i, 1);
   if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
-    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : 0x1c1626], 24, 2.2);
+    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : e.type === 'angel' || e.type === 'archangel' ? 0xf4f2f8 : e.type === 'guardian' ? 0xc9a86a : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
   if (VEH[e.type]){
     if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
@@ -9542,6 +9730,35 @@ function killEntity(e, byPlayer){
     else if (e.type === 'wisp'){
       addStackItem('wispcore', 1); addStackItem('coin', 3);
       toast('+1 wisp core  ·  +3 coins');
+    }
+    else if (e.type === 'angel'){
+      const n = 1 + ((Math.random() * 2) | 0);
+      addStackItem('feather', n); addStackItem('coin', 5);
+      const rec = game.spires && game.spires[e.spireKey];
+      if (rec){ rec.kills = (rec.kills || 0) + 1; }
+      toast('+' + n + ' angel feather  ·  +5 coins' + (rec && !rec.bossDead ? '  ·  garrison ' + Math.max(0, 8 - rec.kills) + ' from thin' : ''));
+    }
+    else if (e.bossType === 'guardian'){
+      const rec = game.zigs && game.zigs[e.zigKey];
+      if (rec) rec.bossDead = true;
+      addStackItem('coin', 150); addStackItem('diamond', 4); addStackItem('rubyingot', 8);
+      toast('THE TOMB GUARDIAN crumbles — +150 coins · +4 diamond · +8 ruby ingot');
+      markSave();
+    }
+    else if (e.bossType === 'archangel'){
+      const rec = game.spires && game.spires[e.spireKey];
+      if (rec) rec.bossDead = true;
+      game.bossKills = game.bossKills || {};
+      addStackItem('tkey', 1); addStackItem('coin', 200);
+      if (!game.bossKills.archangel){
+        game.bossKills.archangel = true;
+        giveItem({ kind: 'wings' }, 1); addStackItem('aetheringot', 12);
+        toast('THE ARCHANGEL falls — WINGS, the treasury key and 12 aether ingots are yours (+200 coins)');
+      } else {
+        addStackItem('aetheringot', 16); addStackItem('diamond', 6);
+        toast('THE ARCHANGEL falls again — the treasury key · +16 aether ingot · +6 diamond · +200 coins');
+      }
+      markSave();
     }
     else if (e.type === 'sheep'){
       const n = 2 + ((Math.random() * 2) | 0);
@@ -9622,6 +9839,7 @@ function killEntity(e, byPlayer){
     else {
       let coins = 3 + ((Math.random() * 4) | 0);
       if (e.raider) coins = coins * 2 + 4;                    // raiders pay
+      if (game.slots.some(sl => sl && sl.kind === 'idol')) coins *= 2;   // the sun idol doubles it
       addStackItem('ironore', 2); addStackItem('coin', coins);
       toast('+' + coins + ' coins  ·  +2 iron ore');
     }
@@ -9981,6 +10199,20 @@ const objectiveSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
       out.push({ id: 'fort' + key, x: rec.x, z: rec.z, fort: true,
                  label: rec.bossDead ? 'VAULT' : 'RAID FORT', rec: { name: 'raid fort' } });
+    }
+    for (const key in (game.zigs || {})){
+      const rec = game.zigs[key];
+      if (!rec.stamped || rec.looted) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 700) continue;
+      out.push({ id: 'zig' + key, x: rec.x, z: rec.z, y: rec.gy + 24, zig: true,
+                 label: rec.bossDead ? 'TOMB' : rec.sealBroken ? 'THE GUARDIAN' : 'ZIGGURAT', rec: { name: 'ziggurat' } });
+    }
+    for (const key in (game.spires || {})){
+      const rec = game.spires[key];
+      if (rec.looted) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 900) continue;
+      out.push({ id: 'spire' + key, x: rec.x, z: rec.z, y: rec.top + 20, spire: true,
+                 label: rec.bossDead ? 'TREASURY' : 'SKY SPIRE', rec: { name: 'sky spire' } });
     }
     return out;
   },
@@ -10614,6 +10846,8 @@ const bossSys = {
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
     else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
     else if (e.bossType === 'architect'){ this.architect(e, dt); return; }
+    else if (e.bossType === 'archangel'){ spireSys.archangel(e, dt); return; }
+    else if (e.bossType === 'guardian'){ zigSys.guardian(e, dt); return; }
     // record the path for the trailing segments
     e.trail.unshift([e.x, e.y, e.z]);
     if (e.trail.length > 40) e.trail.pop();
@@ -10855,6 +11089,475 @@ function bossSysTyrant(){
 // erasing the floor under you (subtract), and replaying corrupted obsidian
 // copies of YOUR OWN builds from the edit list.
 bossSysArchitect();
+// ---------- the Sky Spire ----------
+// One island in three carries a spire (SDF-native, in CORE). This runs
+// what lives on it: a garrison of ANGELS that respawns while you are near,
+// a sealed treasury under the plinth, and THE ARCHANGEL at the roost once
+// the garrison is thinned. Nothing here ever leaves its island.
+const SPIRE_GARRISON = 6, SPIRE_THIN = 8;
+const spireSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.skyInCell) return [];
+    const C = CORE.SKY_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const S = game.gen.skyInCell(cx, cz);
+        if (S && S.spire && Math.hypot(S.x - x, S.z - z) < r) out.push(S);
+      }
+    return out;
+  },
+  // the treasury chest under the plinth, sealed; two small chests on the gallery
+  stamp(S, rec){
+    const B = S.top;
+    const rng = CORE.mulberry32(S.seed);
+    const tc = pnodeSys.add('chest', S.x, B + 1.4 + 0.95, S.z + 3.2, Math.PI, { sc: 1.3 });
+    tc.inv = new Array(chestSlots(1.3)).fill(null);
+    tc.inv[0] = { kind: 'aetheringot', count: 24 + ((rng() * 16) | 0) };
+    tc.inv[1] = { kind: 'diamond', count: 8 + ((rng() * 5) | 0) };
+    tc.inv[2] = { kind: 'coin', count: 400 + ((rng() * 200) | 0) };
+    tc.inv[3] = CORE.makeFirearm(8 + ((rng() * 2) | 0));
+    tc.inv[4] = { kind: 'cells', count: 120 };
+    tc.inv[5] = { kind: 'rockets', count: 12 };
+    tc.inv[6] = { kind: 'mcharge', count: 8 };
+    tc.inv[7] = { kind: 'aetherore', count: 20 };
+    tc.locked = true; tc.lockKind = 'tkey'; tc.skey = rec.key;
+    for (const sx of [-6, 6]){
+      const gc = pnodeSys.add('chest', S.x + sx, B + 16.2 + 0.7, S.z, sx < 0 ? Math.PI / 2 : -Math.PI / 2, { sc: 0.7 });
+      gc.inv = new Array(chestSlots(0.7)).fill(null);
+      gc.inv[0] = { kind: 'aetheringot', count: 4 + ((rng() * 4) | 0) };
+      gc.inv[1] = { kind: 'coin', count: 30 + ((rng() * 30) | 0) };
+      gc.inv[2] = { kind: 'feather', count: 2 };
+    }
+    rec.stamped = true;
+  },
+  ensure(){
+    game.spires = game.spires || {};
+    for (const S of this.candidatesNear(game.pos.x, game.pos.z, 700)){
+      const key = 's' + S.key;
+      let rec = game.spires[key];
+      if (!rec){
+        rec = { key, x: +S.x.toFixed(1), z: +S.z.toFixed(1), top: +S.top.toFixed(1), rx: +S.rx.toFixed(1), seed: S.seed,
+                stamped: false, bossDead: false, looted: false, kills: 0 };
+        game.spires[key] = rec;
+      }
+      if (!rec.stamped && Math.hypot(S.x - game.pos.x, S.z - game.pos.z) < 300){
+        this.stamp(S, rec);
+        toast('a SKY SPIRE — the angels are watching');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    for (const key in (game.spires || {})){
+      const rec = game.spires[key];
+      if (rec.bossDead) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 150) continue;
+      const island = { x: rec.x, z: rec.z, top: rec.top, rx: rec.rx };
+      const troops = game.entities.filter(e => e.spireKey === key && e.type === 'angel').length;
+      if (troops < SPIRE_GARRISON){
+        const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * (rec.rx * 0.6);
+        const e = spawnEntity('angel', rec.x + Math.cos(a) * r, rec.top + 6 + Math.random() * 12, rec.z + Math.sin(a) * r);
+        e.spireKey = key; e.island = island;
+        e.tier = Math.random() < 0.5 ? 0 : Math.random() < 0.6 ? 1 : 2;   // in tiers: white, then the captains
+        e.hp = [55, 75, 95][e.tier];
+        e.orbA = a; e.orbR = 4 + Math.random() * (rec.rx * 0.7); e.orbH = 4 + Math.random() * 18; e.orbDir = Math.random() < 0.5 ? 1 : -1;
+      }
+      // the boss, once the garrison is thinned and you are on its island
+      const bossAlive = game.entities.some(e => e.bossType === 'archangel');
+      if (!bossAlive && (rec.kills || 0) >= SPIRE_THIN && pd < rec.rx + 30 && game.pos.y > rec.top - 10 && !bossSys.anyBoss()){
+        const e = bossSys.spawn('archangel', rec.x + 9, rec.top + 40, rec.z);
+        e.spireKey = key; e.island = island; e.state = 'hover'; e.stateT = 0;
+        toast('THE ARCHANGEL descends from the roost');
+        AudioSys.sfx('boom');
+      }
+    }
+  },
+  // keep a flyer over its island: inside the rim (plus a little air) and
+  // between the meadow and the sky above the spire
+  bound(e, S, pad, hi){
+    const dx = e.x - S.x, dz = e.z - S.z, r = Math.hypot(dx, dz), R = S.rx + pad;
+    if (r > R){ e.x = S.x + dx / r * R; e.z = S.z + dz / r * R; e.vx *= -0.5; e.vz *= -0.5; }
+    if (e.y < S.top - 1){ e.y = S.top - 1; e.vy = Math.max(e.vy, 0); }
+    if (e.y > S.top + hi){ e.y = S.top + hi; e.vy = Math.min(e.vy, 0); }
+  },
+  // steer toward a point through the air. Like every other mover: take the
+  // step, then resolve any penetration along the field's gradient (refusing
+  // steps that lose clearance froze flyers skimming a surface at exactly
+  // their own radius)
+  fly(e, tx, ty, tz, sp, dt, r){
+    const dx = tx - e.x, dy = ty - e.y, dz = tz - e.z, L = Math.hypot(dx, dy, dz) || 1;
+    const k = Math.min(1, 4 * dt);
+    e.vx += (dx / L * sp - e.vx) * k; e.vy += (dy / L * sp - e.vy) * k; e.vz += (dz / L * sp - e.vz) * k;
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    const le = nearEdits([e.x - 3, e.y - 3, e.z - 3, e.x + 3, e.y + 3, e.z + 3]);
+    for (let it = 0; it < 2; it++){
+      const d = sdfWorld(e.x, e.y, e.z, le);
+      if (d >= r) break;
+      const g = gradWorld(e.x, e.y, e.z, le), dTrue = d / g[3];
+      if (dTrue >= r) break;
+      const push = Math.min(r - dTrue, 0.6);
+      e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
+      const vn = e.vx * g[0] + e.vy * g[1] + e.vz * g[2];
+      if (vn < 0){ e.vx -= g[0] * vn * 1.3; e.vy -= g[1] * vn * 1.3; e.vz -= g[2] * vn * 1.3; }   // glance off
+    }
+  },
+  // the gallery rings (15-21 m up, 8 m out) shade the meadow: a flyer
+  // that needs to cross their height inside their radius goes out past
+  // the rim on the target's side first, and comes back in beyond them
+  route(e, S, tx, ty, tz){
+    const RING = 10.5, side = y => y > S.top + 21.5 ? 1 : y < S.top + 14.5 ? -1 : 0;
+    const br = Math.hypot(e.x - S.x, e.z - S.z), tr = Math.hypot(tx - S.x, tz - S.z);
+    const sb = side(e.y), st = side(ty);
+    if (sb === st || (br >= RING && tr >= RING)) return [tx, ty, tz];
+    const ux = tr > 0.5 ? (tx - S.x) / tr : br > 0.5 ? (e.x - S.x) / br : 1;
+    const uz = tr > 0.5 ? (tz - S.z) / tr : br > 0.5 ? (e.z - S.z) / br : 0;
+    if (br < RING - 0.5) return [S.x + ux * 13, e.y, S.z + uz * 13];            // out to the rim at this height
+    if (sb !== 0 && sb !== st) return [S.x + ux * 13, st > sb ? S.top + 23 : S.top + 13, S.z + uz * 13];   // past the band
+    return [tx, ty, tz];
+  },
+  playerOnIsland(S){
+    return Math.hypot(game.pos.x - S.x, game.pos.z - S.z) < S.rx + 14 && game.pos.y > S.top - 12;
+  },
+  wingbeat(e, dt, rate){
+    if (!e.mesh) return;
+    const ud = e.mesh.userData;
+    ud.phase = (ud.phase || 0) + dt * rate;
+    if (ud.wings) for (const w of ud.wings) w.rotation.z = w.userData.side * (0.25 + Math.sin(ud.phase) * 0.6);
+    if (ud.halo) ud.halo.rotation.z += dt * 2;
+    const spd = Math.hypot(e.vx, e.vz);
+    if (spd > 0.5) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    e.mesh.rotation.x = Math.max(-0.6, Math.min(0.6, -e.vy * 0.06));
+    e.mesh.position.set(e.x, e.y, e.z);
+  },
+  angel(e, dt, now, pd){
+    const def = ENT_DEF.angel;
+    if (!e.island){
+      const S = game.gen.skyNear ? game.gen.skyNear(e.x, e.z) : null;
+      if (!S){ killEntity(e, false); return; }
+      e.island = { x: S.x, z: S.z, top: S.top, rx: S.rx };
+      e.spireKey = 's' + S.key;
+      e.orbA = Math.random() * Math.PI * 2; e.orbR = 4 + Math.random() * (S.rx * 0.7); e.orbH = 4 + Math.random() * 18; e.orbDir = 1;
+    }
+    const S = e.island;
+    e.mode = e.mode || 'orbit'; e.modeT = (e.modeT || 0) + dt;
+    const onIsland = this.playerOnIsland(S);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    let sp = def.speed * (1 + (e.tier || 0) * 0.12);
+    if (e.mode === 'orbit'){
+      e.orbA += dt * 0.45 * e.orbDir;
+      const tx = S.x + Math.cos(e.orbA) * e.orbR, tz = S.z + Math.sin(e.orbA) * e.orbR;
+      const ty = S.top + e.orbH + Math.sin(now * 0.002 + e.orbA) * 0.8;
+      this.fly(e, tx, ty, tz, sp * 0.55, dt, def.r);
+      if (onIsland && pd < 50 && e.atkT <= 0 && e.modeT > 1.5 && Math.random() < dt * 0.6){ e.mode = 'swoop'; e.modeT = 0; }
+    } else if (e.mode === 'swoop'){
+      this.fly(e, px, py + 1.0, pz, sp * 1.35, dt, def.r);
+      const d3 = Math.hypot(e.x - px, e.y - (py + 1.0), e.z - pz);
+      if (d3 < 2.0){
+        damagePlayer(9 + (e.tier || 0) * 3, (px - e.x) * 3, (pz - e.z) * 3);
+        AudioSys.sfx('hit');
+        e.atkT = 1.4 + Math.random(); e.mode = 'climb'; e.modeT = 0;
+      } else if (e.modeT > 4 || !onIsland){ e.mode = 'climb'; e.modeT = 0; }
+    } else {
+      // climb away after the pass, then back to the circuit
+      this.fly(e, e.x + e.vx * 0.5, S.top + e.orbH + 6, e.z + e.vz * 0.5, sp, dt, def.r);
+      if (e.modeT > 1.2){ e.mode = 'orbit'; e.modeT = 0; e.orbDir = Math.random() < 0.5 ? 1 : -1; }
+    }
+    this.bound(e, S, 6, 50);
+    if (!e.mesh){ e.mesh = entMesh('angel', e); game.scene.add(e.mesh); e.mesh.scale.setScalar(1 + (e.tier || 0) * 0.1); }
+    this.wingbeat(e, dt, 9 + (e.mode === 'swoop' ? 6 : 0));
+    e.mesh.scale.setScalar((1 + (e.tier || 0) * 0.1) * (e.flash > 0 ? 1.12 : 1));
+    if (e.mesh.userData.wings && e.tier === 2) for (const w of e.mesh.userData.wings) w.children[3].material.color.setHex(0xffb040);
+  },
+  // THE ARCHANGEL: it circles the roost, dives to slash, throws light in
+  // fans, and heals if you run off its island. It never crosses the rim.
+  archangel(e, dt){
+    const def = ENT_DEF.archangel;
+    if (!e.island){
+      const S = game.gen.skyNear ? game.gen.skyNear(e.x, e.z) : null;
+      if (!S){ killEntity(e, false); return; }
+      e.island = { x: S.x, z: S.z, top: S.top, rx: S.rx }; e.spireKey = 's' + S.key;
+    }
+    const S = e.island;
+    if (e.state === 'burrow' || !e.state){ e.state = 'hover'; e.stateT = 0; }
+    e.stateT = (e.stateT || 0) + dt;
+    e.lightT = Math.max(0, (e.lightT == null ? 4 : e.lightT) - dt);
+    e.orbA = (e.orbA || 0) + dt * 0.6;
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    const onIsland = this.playerOnIsland(S);
+    const enraged = e.hp < def.hp * 0.5;
+    const roostY = S.top + 36;
+    if (!onIsland){
+      // you left: it goes home and mends
+      this.fly(e, S.x + Math.cos(e.orbA) * 6, roostY, S.z + Math.sin(e.orbA) * 6, def.speed * 0.5, dt, def.r);
+      e.hp = Math.min(def.hp, e.hp + 6 * dt);
+      e.state = 'hover'; e.stateT = 0;
+    } else if (e.state === 'hover'){
+      const w = this.route(e, S, S.x + Math.cos(e.orbA) * 9, roostY - 4 + Math.sin(e.stateT * 1.3) * 2, S.z + Math.sin(e.orbA) * 9);
+      this.fly(e, w[0], w[1], w[2], def.speed * 0.6, dt, def.r);
+      if (e.lightT <= 0 && pd < 70){
+        // a fan of light
+        const n = enraged ? 5 : 3, spread = enraged ? 0.32 : 0.22;
+        const dx = px - e.x, dy = (py + 0.9) - e.y, dz = pz - e.z, L = Math.hypot(dx, dy, dz) || 1;
+        const base = Math.atan2(dz, dx);
+        for (let i = 0; i < n; i++){
+          const a = base + (i - (n - 1) / 2) * spread, sp = 26;
+          (game.projectiles = game.projectiles || []).push({ x: e.x, y: e.y + 0.6, z: e.z, vx: Math.cos(a) * sp * (Math.hypot(dx, dz) / L), vy: dy / L * sp, vz: Math.sin(a) * sp * (Math.hypot(dx, dz) / L),
+                                  t: 3.5, dmg: enraged ? 16 : 12, r: 0.5, src: e, beam: true });
+        }
+        AudioSys.sfx('laser');
+        e.lightT = enraged ? 3 : 5;
+      }
+      if (e.stateT > (enraged ? 2.2 : 3.5) && pd < 60){ e.state = 'dive'; e.stateT = 0; }
+    } else if (e.state === 'dive'){
+      const w = this.route(e, S, px, py + 0.8, pz);
+      this.fly(e, w[0], w[1], w[2], def.speed * (enraged ? 1.8 : 1.5), dt, def.r);
+      const d3 = Math.hypot(e.x - px, e.y - (py + 0.8), e.z - pz);
+      if (d3 < 2.8){
+        damagePlayer(enraged ? 28 : 22, (px - e.x) * 4, (pz - e.z) * 4);
+        AudioSys.sfx('boom');
+        Particles.burst(px, py + 0.9, pz, 0.6, [0xfff0a0, 0xffffff], 14, 3);
+        e.state = 'climb'; e.stateT = 0;
+      } else if (e.stateT > 5.5){ e.state = 'climb'; e.stateT = 0; }
+    } else {
+      const w = this.route(e, S, S.x + Math.cos(e.orbA) * 9, roostY, S.z + Math.sin(e.orbA) * 9);
+      this.fly(e, w[0], w[1], w[2], def.speed, dt, def.r);
+      if (e.stateT > 2.2){ e.state = 'hover'; e.stateT = 0; }
+    }
+    this.bound(e, S, 10, 52);
+    this.wingbeat(e, dt, e.state === 'dive' ? 14 : 7);
+    e.mesh.scale.setScalar(2.1 * (e.flash > 0 ? 1.08 : 1));
+    if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
+  },
+};
+// ---------- the Ziggurat ----------
+// A stepped stone pyramid on the plains, mesa or dunes, rarer than a fort:
+// a processional ramp up the south face to a shrine, and under it a hall
+// of trapped corridors — a floor that drops from under you, a pit of
+// spikes, a hall that floods — and beyond the hall a SEALED tomb: no
+// door, a glyph on the wall, and behind four metres of stone a strongbox
+// and the SUN IDOL. Break the seal and THE TOMB GUARDIAN wakes.
+const zigSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.zigAt) return [];
+    const C = CORE.ZIG_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const f = game.gen.zigAt(cx, cz);
+        if (f && Math.hypot(f.x - x, f.z - z) < r) out.push(f);
+      }
+    return out;
+  },
+  stamp(f, rec){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz;
+      if (nl) e.noLod = 1;
+      applyEdit(e);
+      return e;
+    };
+    let g = game.gen.height(f.x, f.z);
+    for (const [dx, dz] of [[-20, -20], [20, -20], [-20, 20], [20, 20], [0, 34]]) g = Math.max(g, game.gen.height(f.x + dx, f.z + dz));
+    g = +g.toFixed(1);
+    rec.gy = g;
+    const X = f.x, Z = f.z;
+    // the tiers, sand on their tops; the ground under it levelled solid
+    EB(1, X, g - 3, Z, 46, 6, 46, MAT.ROCK);
+    const tiers = [[40, 5], [32, 5], [24, 5], [16, 4]];
+    let y = g;
+    for (const [w, h] of tiers){
+      EB(1, X, y + h / 2, Z, w, h, w, MAT.STONEBRICK);
+      const pt = EB(2, X, y + h - 0.2, Z, w, 0.5, w, MAT.SAND); pt.noLod = 1;
+      y += h;
+    }
+    const top = y;                                              // g + 19
+    // the shrine on top, open to the south
+    EB(1, X, top + 2, Z, 8, 4, 8, MAT.STONEBRICK);
+    EB(0, X, top + 1.9, Z, 6, 3.2, 6, 0, 1);
+    EB(0, X, top + 1.5, Z + 3.5, 2.2, 2.6, 2, 0, 1);
+    // the processional ramp up the south face, ground to the shrine
+    const rise = top - g, run = 26, L = Math.hypot(rise, run) + 2;
+    const ramp = CORE.makeEdit(1, 1, +X.toFixed(2), +(g + rise / 2).toFixed(2), +(Z + 8 + run / 2).toFixed(2), 6, MAT.STONEBRICK, 0);
+    ramp.sy = 1.6; ramp.sz = +L.toFixed(2); ramp.rx = +Math.atan2(rise, run).toFixed(4);   // +rx tilts local +z (south) downward
+    applyEdit(ramp);
+    // ---- under it: the corridors (interior detail drops out of the LOD) ----
+    EB(0, X, g + 1.5, Z + 12, 2.4, 2.6, 16.4, 0, 1);            // entrance passage, south face to the hall
+    EB(0, X, g + 1.8, Z, 8, 3.2, 8, 0, 1);                      // the hall
+    EB(0, X + 9, g + 1.5, Z, 10.4, 2.6, 2.4, 0, 1);             // east corridor
+    EB(0, X - 9, g + 1.5, Z, 10.4, 2.6, 2.4, 0, 1);             // west corridor
+    EB(0, X + 15.5, g + 1.6, Z, 4, 2.8, 4, 0, 1);               // east room
+    EB(0, X - 15.5, g + 1.6, Z, 4, 2.8, 4, 0, 1);               // west room
+    // the east corridor's falling floor: a half-metre slab over a nine-metre pit
+    EB(0, X + 11.5, g - 4.5, Z, 3, 8.4, 3, 0, 1);               // the pit (floor at g-8.7)
+    const slab = EB(1, X + 11.5, g - 0.1, Z, 3, 0.6, 3, MAT.STONEBRICK, 1);
+    rec.slab = game.edits.indexOf(slab);
+    // the west corridor's spike pit: open, four metres deep, obsidian spikes
+    EB(0, X - 11.5, g - 1.8, Z, 3, 4.2, 3, 0, 1);
+    for (const [sx, sz] of [[-0.9, -0.9], [0, -0.9], [0.9, -0.9], [-0.9, 0], [0, 0], [0.9, 0], [-0.9, 0.9], [0, 0.9], [0.9, 0.9]])
+      EB(1, X - 11.5 + sx, g - 3.4, Z + sz, 0.28, 1.3, 0.28, MAT.OBSIDIAN, 1);
+    // the tomb beyond the hall, sealed: four metres of stone and a ruby glyph
+    EB(0, X, g + 1.6, Z - 11, 6, 3, 6, 0, 1);
+    const glyph = EB(2, X, g + 1.6, Z - 4.1, 2, 2, 0.5, MAT.RUBY); glyph.noLod = 1;
+    // torches at the door, the tomb strongbox, bait in the side rooms
+    game.torches.push([X - 1.6, g + 1.6, Z + 20.4], [X + 1.6, g + 1.6, Z + 20.4]);
+    torchSys.rebuild();
+    const rng = CORE.mulberry32(f.seed);
+    const tc = pnodeSys.add('chest', X, g + 0.2 + 0.95, Z - 12.5, 0, { sc: 1.0 });
+    tc.inv = new Array(chestSlots(1.0)).fill(null);
+    tc.inv[0] = { kind: 'idol' };
+    tc.inv[1] = { kind: 'diamond', count: 6 + ((rng() * 3) | 0) };
+    tc.inv[2] = { kind: 'coin', count: 250 + ((rng() * 120) | 0) };
+    tc.inv[3] = { kind: 'rubyingot', count: 10 };
+    tc.inv[4] = CORE.makeFirearm(5 + ((rng() * 3) | 0));
+    tc.inv[5] = { kind: 'cells', count: 60 };
+    tc.inv[6] = { kind: 'mcharge', count: 4 };
+    tc.zkey = rec.key;
+    for (const sx of [-15.5, 15.5]){
+      const bc = pnodeSys.add('chest', X + sx, g + 0.2 + 0.7, Z + 1.4, Math.PI, { sc: 0.7 });
+      bc.inv = new Array(chestSlots(0.7)).fill(null);
+      bc.inv[0] = { kind: 'coin', count: 20 + ((rng() * 20) | 0) };
+      bc.inv[1] = { kind: 'rounds', count: 24 };
+    }
+    rec.stamped = true;
+  },
+  ensure(){
+    game.zigs = game.zigs || {};
+    for (const f of this.candidatesNear(game.pos.x, game.pos.z, 520)){
+      const key = 'z' + f.key;
+      let rec = game.zigs[key];
+      if (!rec){
+        rec = { key, x: f.x, z: f.z, seed: f.seed, stamped: false, sealBroken: false, bossDead: false, looted: false, dropped: false, flooded: false };
+        game.zigs[key] = rec;
+      }
+      if (!rec.stamped){
+        this.stamp(f, rec);
+        toast('a ZIGGURAT rises on the plain');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 0.25) return;
+    const step = this.accT; this.accT = 0;
+    this.ensT = (this.ensT || 0) + step;
+    if (this.ensT >= 1){ this.ensT = 0; this.ensure(); }
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    for (const key in (game.zigs || {})){
+      const rec = game.zigs[key];
+      if (!rec.stamped) continue;
+      const g = rec.gy, X = rec.x, Z = rec.z;
+      if (Math.abs(px - X) > 30 || Math.abs(pz - Z) > 30 || py < g - 12 || py > g + 26) continue;
+      // the falling floor: stand on the slab and it goes
+      if (!rec.dropped && Math.abs(px - (X + 11.5)) < 1.5 && Math.abs(pz - Z) < 1.5 && py > g - 0.5 && py < g + 1.2){
+        const e = game.edits[rec.slab];
+        if (e && e.op === 1 && e.shape === 1 && Math.abs(e.x - (X + 11.5)) < 0.1){
+          const cut = CORE.makeEdit(0, 1, e.x, e.y, e.z, 3.2, 0, 0); cut.sy = 0.9; cut.sz = 3.2; cut.noLod = 1;
+          applyEdit(cut);
+        }
+        rec.dropped = true;
+        toast('the floor gives way');
+        AudioSys.sfx('break');
+        markSave();
+      }
+      // the spikes: standing in the pit's bottom bites every half second
+      if (Math.abs(px - (X - 11.5)) < 1.5 && Math.abs(pz - Z) < 1.5 && py < g - 2.0 && py > g - 4.5){
+        rec.spikeT = (rec.spikeT || 0) + step;
+        if (rec.spikeT > 0.5){ rec.spikeT = 0; damagePlayer(12, 0, 0); toast('SPIKES'); }
+      }
+      // the hall floods the first time you stand in it
+      if (!rec.flooded && Math.abs(px - X) < 4 && Math.abs(pz - Z) < 4 && py > g - 0.5 && py < g + 3.2){
+        rec.flooded = true;
+        const gy = Math.round(g + 2.8);
+        for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]){
+          const gx = Math.round(X + dx), gz = Math.round(Z + dz);
+          const ck = waterSys.keyOf(gx, gy, gz);
+          const a = waterSys.cells.get(ck) || waterSys.materialize(ck);
+          const q = waterSys.idx(gx & 7, gy & 7, gz & 7);
+          if (a[q] !== 255){ a[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+        }
+        toast('the hall groans — water pours from the ceiling');
+        AudioSys.sfx('break');
+        markSave();
+      }
+      // the seal: air where the wall was means someone dug through
+      if (!rec.sealBroken){
+        const le = nearEdits([X - 2, g, Z - 8, X + 2, g + 3, Z - 4]);
+        let open = false;
+        for (const [dx, dy, dz] of [[0, 1.2, -5], [0, 1.2, -6.5], [0, 2.2, -5.5], [1, 1.5, -6], [-1, 1.5, -6]])
+          if (sdfWorld(X + dx, g + dy, Z + dz, le) > 0.3){ open = true; break; }
+        if (open){
+          rec.sealBroken = true;
+          if (!rec.bossDead && !bossSys.anyBoss()){
+            const e = bossSys.spawn('guardian', X, g + 0.3, Z - 1);
+            e.zigKey = key; e.home = { x: X, z: Z, g }; e.state = 'walk'; e.stateT = 0;
+            toast('the seal breaks — THE TOMB GUARDIAN wakes');
+            AudioSys.sfx('boom');
+          }
+          markSave();
+        }
+      }
+      const tc = game.pnodes.find(n => n.t === 'chest' && n.zkey === key);
+      if (tc && !rec.looted && tc.inv && !tc.inv.some(x => x && x.kind === 'idol')){ rec.looted = true; markSave(); }
+    }
+  },
+  // THE TOMB GUARDIAN: a golem that walks straight at you through its own
+  // corridors, slams up close, and pounds the floor under your feet from
+  // a distance. It stays under its pyramid.
+  guardian(e, dt){
+    const def = ENT_DEF.guardian;
+    if (!e.home){ e.home = { x: e.x, z: e.z, g: game.gen.height(e.x, e.z) }; }
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.poundT = Math.max(0, (e.poundT == null ? 5 : e.poundT) - dt);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    const hd = Math.hypot(px - e.home.x, pz - e.home.z);
+    let tx = px, tz = pz;
+    const home = hd > 34 || Math.abs(py - e.home.g) > 14;
+    if (home){ tx = e.home.x; tz = e.home.z; e.hp = Math.min(def.hp, e.hp + 4 * dt); }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    const sp = e.atkT > 1.2 ? 0 : def.speed;
+    let nx = e.x + dx / L * sp * dt, nz = e.z + dz / L * sp * dt;
+    // ground follow inside the corridors: find the floor under the step
+    const le = nearEdits([nx - 2, e.y - 3, nz - 2, nx + 2, e.y + 4, nz + 2]);
+    let gy = null;
+    for (let yy = e.y + 1.2; yy > e.y - 3; yy -= 0.25){
+      if (sdfWorld(nx, yy, nz, le) < 0.05){ gy = yy + 0.1; break; }
+    }
+    // a wall at chest height stops it
+    const blocked = sdfWorld(nx, (gy != null ? gy : e.y) + 1.4, nz, le) < def.r * 0.8;
+    if (!blocked && L > 0.5){ e.x = nx; e.z = nz; }
+    if (gy != null) e.y += (gy - e.y) * Math.min(1, 10 * dt);
+    else e.y -= 6 * dt;
+    if (!home && pd < 2.9 && Math.abs(py - e.y) < 3 && e.atkT <= 0){
+      e.atkT = 1.9;
+      damagePlayer(20, (px - e.x) * 3.5, (pz - e.z) * 3.5);
+      AudioSys.sfx('boom');
+      Particles.burst(px, py + 0.6, pz, 0.5, [0xc9a86a, 0x6e5730], 12, 3);
+    } else if (!home && pd >= 2.9 && pd < 14 && e.poundT <= 0){
+      // the pound: the floor under your feet breaks
+      e.poundT = 7;
+      explode(px, py - 0.4, pz, 1.1, 14);
+    }
+    if (!e.mesh){ e.mesh = entMesh('guardian', e); game.scene.add(e.mesh); }
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (L > 0.5 && sp > 0) e.mesh.rotation.y = Math.atan2(-dx, -dz);
+    const ud = e.mesh.userData;
+    ud.phase = (ud.phase || 0) + dt * (sp > 0 ? 3.2 : 0);
+    for (let li = 0; li < (ud.legs || []).length; li++) ud.legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * (sp > 0 ? 0.5 : 0);
+    if (e.atkT > 1.2 && ud.legs) for (let li = 0; li < 2; li++) ud.legs[li].rotation.x = -1.6 + (1.9 - e.atkT) * 3;   // the arms come down
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.06 : 1);
+  },
+};
 function bossSysArchitect(){
   bossSys.architect = function(e, dt){
     const def = ENT_DEF.architect;
@@ -12038,6 +12741,7 @@ function updateEntities(dt, now){
     // steering
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
+    if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
     if (e.type === 'lurker' && (pd < 15 || e.raider)){
       if (e.raider) sp *= 1.15;
       sx = game.pos.x - e.x; sz = game.pos.z - e.z;
@@ -12419,17 +13123,25 @@ function updateProjectiles(dt){
     let done = false;
     for (let k = 0; k < steps && !done; k++){
       const h = dt / steps;
-      p.vy -= 3.5 * h;
+      if (!p.beam) p.vy -= 3.5 * h;
       p.x += p.vx * h; p.y += p.vy * h; p.z += p.vz * h;
       const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
       if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
-      if (!done) for (const en of game.entities){
+      if (!done && !p.beam) for (const en of game.entities){
         if (en === p.src) continue;          // never detonate on the thrower
         const def = ENT_DEF[en.type];
         if (Math.hypot(en.x - p.x, en.y + def.h * 0.5 - p.y, en.z - p.z) < def.r + 0.5){ done = true; break; }
       }
     }
     p.t -= dt;
+    if (p.beam){
+      // thrown light: it burns what it touches and carves nothing
+      Particles.burst(p.x, p.y, p.z, 0.1, [0xfff0a0, 0xffffff], 2, 0.4);
+      const pd = Math.hypot(game.pos.x - p.x, game.pos.y + 0.9 - p.y, game.pos.z - p.z);
+      if (pd < 1.7){ damagePlayer(p.dmg, (game.pos.x - p.x) * 2, (game.pos.z - p.z) * 2); done = true; }
+      if (done || p.t <= 0){ Particles.burst(p.x, p.y, p.z, 0.5, [0xfff0a0, 0xffffff], 10, 2); ps.splice(i, 1); }
+      continue;
+    }
     Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
     if (done || p.t <= 0){
       explode(p.x, p.y, p.z, p.r, p.dmg);
@@ -12628,6 +13340,22 @@ function bindInput(){
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'decrafter'){ openDecrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'chest' && pn.locked && pn.lockKind === 'tkey'){
+          if (CORE.countItem(game.slots, 'tkey') >= 1){
+            CORE.consumeItem(game.slots, 'tkey', 1);
+            pn.locked = false;
+            const sr = game.spires && game.spires[pn.skey];
+            if (sr) sr.looted = true;
+            toast('the treasury opens');
+            AudioSys.sfx('craft');
+            refreshHotbar(); markSave();
+            openMachine(pn);
+          } else {
+            toast('sealed — THE ARCHANGEL at the top holds the key');
+            AudioSys.sfx('deny');
+          }
+          return;
+        }
         if (pn.t === 'chest' && pn.locked){
           if (CORE.countItem(game.slots, 'vkey') >= 1){
             CORE.consumeItem(game.slots, 'vkey', 1);
@@ -13593,6 +14321,17 @@ function updatePlayer(dt){
       if (Math.random() < 0.5)
         Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.15, [0xffb347, 0xff8830], 1, 1.2);
     } else game.jetOn = false;
+    // worn WINGS: hold space while falling to spread them — the fall slows
+    // to a drift and you ride forward wherever you look. No fuel, no limit,
+    // and a landing that gentle never hurts.
+    const wg = game.armor && game.armor.back;
+    if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
+      game.vel.y += (-2.4 - game.vel.y) * Math.min(1, 7 * dt);
+      const gfx = -Math.sin(game.yaw), gfz = -Math.cos(game.yaw);
+      game.vel.x += (gfx * 9.5 - game.vel.x) * Math.min(1, 2.2 * dt);
+      game.vel.z += (gfz * 9.5 - game.vel.z) * Math.min(1, 2.2 * dt);
+      game.gliding = true;
+    } else game.gliding = false;
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
     if (game.vel.y < -40) game.vel.y = -40;
   }
@@ -15870,7 +16609,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -15994,6 +16733,30 @@ function itemIconURL(it){
   } else if (it.kind === 'kelp'){
     c.fillStyle = '#2f7a4d'; c.fillRect(4, 1, 2, 14); c.fillRect(9, 3, 2, 12);
     c.fillStyle = '#3f9a5d'; c.fillRect(6, 4, 2, 3); c.fillRect(2, 7, 2, 3); c.fillRect(11, 6, 2, 3); c.fillRect(7, 10, 2, 3);
+  } else if (it.kind === 'idol'){
+    // a squat gold figure with a ruby eye
+    c.fillStyle = '#d9b85a'; c.fillRect(5, 2, 6, 5); c.fillRect(4, 7, 8, 6); c.fillRect(3, 13, 10, 2);
+    c.fillStyle = '#f4e2a0'; c.fillRect(6, 3, 1, 1); c.fillRect(5, 8, 1, 4);
+    c.fillStyle = '#a5233c'; c.fillRect(8, 4, 2, 2);
+    c.fillStyle = '#8a6a1a'; c.fillRect(4, 12, 8, 1);
+  } else if (it.kind === 'feather'){
+    // a white quill, gold at the tip
+    c.fillStyle = '#f4f2f8'; c.fillRect(7, 2, 3, 9); c.fillRect(5, 4, 7, 5); c.fillRect(6, 3, 5, 7);
+    c.fillStyle = '#d8d4e2'; c.fillRect(8, 3, 1, 10);
+    c.fillStyle = '#d9b85a'; c.fillRect(7, 2, 3, 1);
+    c.fillStyle = '#9a9aa8'; c.fillRect(8, 12, 1, 3);
+  } else if (it.kind === 'tkey'){
+    // a gold key with a winged bow
+    c.fillStyle = '#d9b85a'; c.fillRect(6, 3, 4, 4); c.fillRect(7, 7, 2, 7); c.fillRect(9, 11, 2, 1); c.fillRect(9, 13, 2, 1);
+    c.fillStyle = '#f4e2a0'; c.fillRect(7, 4, 1, 1);
+    c.fillStyle = '#f4f2f8'; c.fillRect(3, 4, 3, 2); c.fillRect(10, 4, 3, 2);
+  } else if (it.kind === 'wings'){
+    // two white wings, gold-tipped
+    c.fillStyle = '#f4f2f8';
+    c.fillRect(1, 5, 6, 3); c.fillRect(2, 8, 4, 2); c.fillRect(3, 10, 2, 2); c.fillRect(2, 3, 4, 2);
+    c.fillRect(9, 5, 6, 3); c.fillRect(10, 8, 4, 2); c.fillRect(11, 10, 2, 2); c.fillRect(10, 3, 4, 2);
+    c.fillStyle = '#d9b85a'; c.fillRect(1, 5, 1, 3); c.fillRect(14, 5, 1, 3); c.fillRect(7, 6, 2, 3);
+    c.fillStyle = '#c8c4d4'; c.fillRect(3, 8, 1, 2); c.fillRect(12, 8, 1, 2);
   } else if (it.kind === 'fang'){
     // a curved tooth, root up
     c.fillStyle = '#e8e2d0'; c.fillRect(6, 2, 5, 3); c.fillRect(7, 5, 4, 3); c.fillRect(8, 8, 3, 3); c.fillRect(9, 11, 2, 3);
@@ -16436,6 +17199,10 @@ function itemLabel(it){
   if (it.kind === 'kelp') return 'kelp';
   if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
   if (it.kind === 'fang') return 'stalker fang';
+  if (it.kind === 'feather') return 'angel feather';
+  if (it.kind === 'tkey') return 'treasury key';
+  if (it.kind === 'wings') return 'WINGS';
+  if (it.kind === 'idol') return 'SUN IDOL';
   if (it.kind === 'huskmeat') return 'husk meat';
   if (it.kind === 'wispcore') return 'wisp core';
   if (it.kind === 'motorboat') return (it.wrecked ? 'wrecked ' : '') + 'motorboat';
@@ -16598,6 +17365,8 @@ function buildMissionsUI(){
     const t1 = document.createElement('div');
     t1.className = 't1';
     t1.textContent = o.fort ? 'raid fort'
+                   : o.spire ? 'sky spire'
+                   : o.zig ? 'ziggurat'
                    : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
@@ -16657,7 +17426,7 @@ function sortInventory(){
 const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
@@ -17157,7 +17926,7 @@ function uiMove(from, to){
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm'){ toast('that slot wants a helmet'); return 'none'; }
   if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
-  if (to === 'aback' && A.kind !== 'jetpack'){ toast('that slot wants a jetpack'); return 'none'; }
+  if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings'){ toast('that slot wants a jetpack or wings'); return 'none'; }
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)){ toast('the stand holds armor'); return 'none'; }
   if (B && CORE.stackableWith(A, B)){ B.count += A.count; set(from, null); return 'merged'; }
@@ -17255,9 +18024,9 @@ function quickMove(key, n){
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
-  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack')){
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm')){
     // shift-click armor in your inventory = wear it (swaps what you had on)
-    const slot = it.kind === 'helm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const slot = it.kind === 'helm' || it.kind === 'divehelm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
     const prev = game.armor[slot];
     game.armor[slot] = it;
     game.slots[key] = prev || null;
@@ -17321,7 +18090,7 @@ function slotRefuses(to, A){
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm') return 'that slot wants a helmet';
   if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
-  if (to === 'aback' && A.kind !== 'jetpack') return 'that slot wants a jetpack';
+  if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings') return 'that slot wants a jetpack or wings';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)) return 'the stand holds armor';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'charger' && A.kind !== 'battery') return 'the charger holds batteries';
@@ -17555,6 +18324,14 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'divehelm'){
     html = '<div class="t1">diving helmet</div><div class="t2">wear it in the helmet slot (E, shift-click) — ninety seconds of air under water</div>';
+  } else if (it.kind === 'idol'){
+    html = '<div class="t1">SUN IDOL</div><div class="t2">from a ziggurat\'s tomb — while it rides in your pack, everything you kill pays double coin</div>';
+  } else if (it.kind === 'feather'){
+    html = '<div class="t1">angel feather</div><div class="t2">from the garrison of a Sky Spire — 24 of them, aether and diamond make WINGS at a table</div>';
+  } else if (it.kind === 'tkey'){
+    html = '<div class="t1">treasury key</div><div class="t2">opens the sealed chest under a Sky Spire</div>';
+  } else if (it.kind === 'wings'){
+    html = '<div class="t1">WINGS</div><div class="t2">wear them on your back (E, shift-click) — hold SPACE while falling to glide from any height</div>';
   } else if (it.kind === 'fang'){
     html = '<div class="t1">stalker fang</div><div class="t2">three of them and a coal make 32 hard rounds</div>';
   } else if (it.kind === 'huskmeat'){
@@ -18099,6 +18876,8 @@ function drawMap(){
     c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
   };
   for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
+  for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
+  for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
   for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
@@ -18361,6 +19140,8 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    spires: game.spires || {},
+    zigs: game.zigs || {},
     wrecks: game.wrecks || {},
     cities: game.cities || {},
     bossKills: game.bossKills || {},
@@ -18415,6 +19196,8 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.spires = data.spires || {};
+  game.zigs = data.zigs || {};
   game.wrecks = data.wrecks || {};
   endFishing();
   game.cities = data.cities || {};
@@ -19651,6 +20434,8 @@ function frame(now){
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
+  spireSys.tick(dt);
+  zigSys.tick(dt);
   citySys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -19858,7 +20643,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
