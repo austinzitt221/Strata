@@ -157,6 +157,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #sleepfade{position:fixed;inset:0;background:#000;opacity:0.92;pointer-events:none;z-index:4;transition:opacity 0.8s;}
 #fatal .panel{border-color:#a33;}
 #fatal pre{white-space:pre-wrap; color:#ff9b9b; font-size:12px; margin:10px 0; max-width:60vw;}
+#itemtip{position:fixed; z-index:60; pointer-events:none; max-width:300px; background:rgba(12,10,20,0.94); border:2px solid var(--ui-border); padding:8px 10px; font-size:12px; line-height:1.35; color:#ddd;}
+#itemtip .t1{color:#fff; font-weight:bold; margin-bottom:3px;}
+#itemtip .t2{color:#bbb;}
+#itemtip .on{color:#7fe8e8;}
 </style>
 </head>
 <body>
@@ -302,6 +306,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="dot"></div>
   <div class="zl" id="scopezoom">4.0x</div>
 </div>
+<div id="itemtip" class="hidden"></div>
 <div id="bossbar" class="hidden">
   <div id="bossname">BOSS</div>
   <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
@@ -320,6 +325,12 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="invlabel">HOTBAR</div>
     <div class="invgrid" id="invhot"></div>
     <div class="sub" style="margin-top:12px;">with a dispenser slotted, any material you hold becomes buildable &nbsp;·&nbsp; E to close</div>
+    <div id="creativeenv" class="hidden">
+      <div class="invlabel">CREATIVE — WEATHER <span id="envweather" style="color:#fff; margin-left:8px;">clear</span></div>
+      <input type="range" id="envweatherslider" min="0" max="4" value="0" style="width:100%;" onmousedown="event.stopPropagation()">
+      <div class="invlabel">CREATIVE — SEASON <span id="envseason" style="color:#fff; margin-left:8px;">spring</span></div>
+      <input type="range" id="envseasonslider" min="0" max="3" value="0" style="width:100%;" onmousedown="event.stopPropagation()">
+    </div>
   </div>
   <div class="panel hidden" id="vehiclepanel">
     <h2>VEHICLE</h2>
@@ -6309,7 +6320,7 @@ const WEATHER = {
   fog:   { dark: 0.86, fog: 0.1 },
 };
 const weatherSys = {
-  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [],
+  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [], puddles: [],
   set(kind, dur){
     this.kind = kind; this.cur = WEATHER[kind] || WEATHER.clear; this.t = dur; this.painted = 0;
     this.boltT = 4 + Math.random() * 6;
@@ -6382,13 +6393,37 @@ const weatherSys = {
             for (let yy = Math.round(hg) - 1; yy > hg - 13; yy--){
               if (CORE.evalSDF(x, yy, z, le, game.gen) <= 0){ fy = yy + 1; break; }
             }
-            if (fy != null && hg - fy > 1.2){
+            if (fy != null && hg - fy > 1.2 && this.smallHole(x, fy, z)){
               const gx = Math.floor(x), gz = Math.floor(z), ck = waterSys.keyOf(gx, fy, gz);
               const arr = waterSys.cells.get(ck) || waterSys.materialize(ck);
               const q = waterSys.idx(gx & 7, fy & 7, gz & 7);
-              if (arr[q] === 0){ arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+              if (arr[q] === 0){
+                arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck);
+                this.puddles.push([gx, fy, gz]);
+                if (this.puddles.length > 200) this.puddles.shift();
+              }
             }
           }
+        }
+      }
+    }
+    // the sun takes the puddles back: in clear daylight the oldest rain
+    // puddle near you dries every few seconds
+    if (!W.rain && !W.snow && game.dayF > 0.5 && this.puddles.length){
+      this.dryT = (this.dryT || 0) + dt;
+      if (this.dryT > 6){
+        this.dryT = 0;
+        const i = this.puddles.findIndex(pd => Math.hypot(pd[0] - game.pos.x, pd[2] - game.pos.z) < 90);
+        if (i >= 0){
+          const [gx, gy, gz] = this.puddles.splice(i, 1)[0];
+          for (let dy = -1; dy <= 1; dy++) for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++){
+            const ck = waterSys.keyOf(gx + dx, gy + dy, gz + dz);
+            const arr = waterSys.cells.get(ck);
+            if (!arr) continue;
+            const q = waterSys.idx((gx + dx) & 7, (gy + dy) & 7, (gz + dz) & 7);
+            if (waterSys.isW(arr[q])){ arr[q] = 0; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+          }
+          markSave();
         }
       }
     }
@@ -6425,6 +6460,31 @@ const weatherSys = {
       if (Math.random() < dt * 14) Embers.burst(f.x, f.y + 3 + Math.random() * 3, f.z, 1.2, [0xffb347, 0xffdd66, 0xff8830], 3, 2.5);
       if (f.t <= 0){ treeSys.fell(f.k, false); this.fires.splice(i, 1); }
     }
+  },
+  // a puddle only forms in a SMALL hole: flood the open floor cells around
+  // the spot (air with the natural ground well above — carved ground, not a
+  // walled yard on a lawn) and give up past 36 of them, so potholes fill
+  // and quarries, courtyards and roofs stay dry
+  smallHole(x, fy, z){
+    const gx0 = Math.floor(x), gz0 = Math.floor(z);
+    const seen = new Set([gx0 + ',' + gz0]), stack = [[gx0, gz0]];
+    const le = nearEdits([x - 9, fy - 2, z - 9, x + 9, fy + 3, z + 9]);
+    let n = 0;
+    while (stack.length){
+      const [gx, gz] = stack.pop();
+      if (++n > 36) return false;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        const ax = gx + dx, az = gz + dz, k = ax + ',' + az;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const cx = ax + 0.5, cz = az + 0.5;
+        if (CORE.evalSDF(cx, fy, cz, le, game.gen) <= 0) continue;                      // a wall of the hole
+        if (CORE.evalSDF(cx, fy - 1, cz, le, game.gen) > 0) continue;                    // no floor: a shaft, its own hole
+        if (game.gen.height(cx, cz) - fy < 1.2) continue;                                 // natural ground level: not a hole
+        stack.push([ax, az]);
+      }
+    }
+    return true;
   },
   strike(){
     // a bolt lands within 60 m; a tree nearby catches, wood at the strike burns away
@@ -6477,11 +6537,16 @@ const collapseSys = {
   check(cx, cy, cz, r){
     const R = Math.ceil(r), H = 19, DN = 3;
     const x0 = Math.floor(cx) - R, z0 = Math.floor(cz) - R, y0 = Math.floor(cy) - DN;
-    // nothing over the cut (a quarry floor, a field): nothing can fall
+    // nothing loose over the cut (a quarry floor, a field, a rock roof):
+    // nothing can fall
     const le0 = nearEdits([cx - 4, cy - 1, cz - 4, cx + 4, cy + 6, cz + 4]);
     let over = false;
     for (const [dx, dz] of [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5], [1.8, 1.8], [-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8]])
-      for (const dy of [1.5, 3, 5]) if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) <= 0.12){ over = true; break; }
+      for (const dy of [1.5, 3, 5]){
+        if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) > 0.12) continue;
+        const m = CORE.materialAt(cx + dx, cy + dy, cz + dz, le0, game.gen);
+        if (m === CORE.MAT.SAND || m === CORE.MAT.SNOW){ over = true; break; }
+      }
     if (!over) return;
     const W = 2 * R + 1, D = 2 * R + 1;
     const box = [x0 - 1, y0 - 1, z0 - 1, x0 + W + 1, y0 + H + 1, z0 + D + 1];
@@ -6556,7 +6621,10 @@ const collapseSys = {
       }
       let best = CORE.MAT.ROCK, bn = 0;
       for (const m in mats) if (mats[m] > bn){ bn = mats[m]; best = +m; }
-      if (best === CORE.MAT.BEDROCK) continue;
+      // only loose ground falls — sand and snow. Rock, brick and everything
+      // you build holds itself up (playtest: collapse on every material
+      // made building miserable)
+      if (best !== CORE.MAT.SAND && best !== CORE.MAT.SNOW) continue;
       for (const [j, L] of layers){
         const e = CORE.makeEdit(0, 1, +(x0 + (L[0] + L[2] + 1) / 2).toFixed(2), +(y0 + j + 0.5).toFixed(2), +(z0 + (L[1] + L[3] + 1) / 2).toFixed(2), L[2] - L[0] + 1.04, 0, 0);
         e.sy = 1.04; e.sz = L[3] - L[1] + 1.04;
@@ -14650,7 +14718,7 @@ function updatePlayer(dt){
   } else {
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1);
     // snappy ground control, mild air control
-    const a = game.grounded ? 22 : 6;
+    const a = game.grounded ? 22 : game.gliding ? 0.4 : 6;
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
     game.vel.y -= PLAYER.gravity * dt;
@@ -14668,10 +14736,13 @@ function updatePlayer(dt){
     // and a landing that gentle never hurts.
     const wg = game.armor && game.armor.back;
     if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
+      // the same slow fall; hold W to drive forward at half again a sprint
+      // and cross the map on one glide
       game.vel.y += (-2.4 - game.vel.y) * Math.min(1, 7 * dt);
       const gfx = -Math.sin(game.yaw), gfz = -Math.cos(game.yaw);
-      game.vel.x += (gfx * 9.5 - game.vel.x) * Math.min(1, 2.2 * dt);
-      game.vel.z += (gfz * 9.5 - game.vel.z) * Math.min(1, 2.2 * dt);
+      const gsp = fwd > 0 ? PLAYER.walk * PLAYER.sprintMul * 1.5 : 3.5;
+      game.vel.x += (gfx * gsp - game.vel.x) * Math.min(1, 5 * dt);
+      game.vel.z += (gfz * gsp - game.vel.z) * Math.min(1, 5 * dt);
       game.gliding = true;
     } else game.gliding = false;
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
@@ -17680,7 +17751,6 @@ function paintSlot(el){
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
   cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
   paintChargeBar(el, it);
-  el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
 function buildHotbar(){
@@ -17737,6 +17807,22 @@ function buildInvUI(){
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildMissionsUI();
   $('btnInvSort').onclick = sortInventory;
+  // creative: dial the weather and the season from here (and see them)
+  const env = $('creativeenv');
+  env.classList.toggle('hidden', game.mode !== 'creative');
+  if (game.mode === 'creative'){
+    const ws = $('envweatherslider'), ss = $('envseasonslider');
+    const WK = ['clear', 'rain', 'storm', 'snow', 'fog'];
+    ws.value = Math.max(0, WK.indexOf(weatherSys.kind));
+    ss.value = seasonSys.idx;
+    $('envweather').textContent = weatherSys.kind; $('envseason').textContent = seasonSys.name;
+    if (!game._envWired){
+      game._envWired = true;
+      for (const el of [ws, ss]){ el.addEventListener('keydown', ev => ev.stopPropagation()); el.addEventListener('keyup', ev => ev.stopPropagation()); }
+      ws.addEventListener('input', () => { weatherSys.set(WK[+ws.value], 900); $('envweather').textContent = weatherSys.kind; });
+      ss.addEventListener('input', () => { game.day = (+ss.value) * SEASON_DAYS; updateDayNight(0); $('envseason').textContent = seasonSys.name; markSave(); });
+    }
+  }
   $('vehiclepanel').classList.toggle('hidden', !game.driving || !!(VEH[game.driving.type] && VEH[game.driving.type].paddle));
   const vh = $('invveh'); vh.innerHTML = '';
   if (game.driving) vh.appendChild(slotEl('vbat'));
@@ -18593,24 +18679,10 @@ function toast(msg){
   clearTimeout(toastT);
   toastT = setTimeout(() => { t.style.opacity = 0; }, 1600);
 }
-function refreshToolHUD(){
-  const it = selectedItem();
-  const tool = activeTool();
-  const el = $('toolinfo');
+// what an item is and does — the bottom-left panel's text, also the
+// tooltip under the cursor in every inventory
+function itemInfoHTML(it, tool){
   let html = '';
-  if (game.driving){
-    const e = game.driving;
-    const V = VEH[e.type] || VEH.car;
-    el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
-      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
-      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
-      (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
-      '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
-                                   : V.fly ? 'W/S throttle · A/D bank · SPACE nose up · C nose down · land slow and level'
-                                   : 'W/S throttle · A/D steer') + '</div>' +
-      '<div class="t2">right click to step out</div>';
-    return;
-  }
   if (!it){
     html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
       (game.carried
@@ -18850,6 +18922,27 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + '</div>' +
            '<div class="t2">goes in the dispenser slot (E)</div>';
   }
+  return html;
+}
+function refreshToolHUD(){
+  const it = selectedItem();
+  const tool = activeTool();
+  const el = $('toolinfo');
+  let html = '';
+  if (game.driving){
+    const e = game.driving;
+    const V = VEH[e.type] || VEH.car;
+    el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
+      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
+      (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
+      '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
+                                   : V.fly ? 'W/S throttle · A/D bank · SPACE nose up · C nose down · land slow and level'
+                                   : 'W/S throttle · A/D steer') + '</div>' +
+      '<div class="t2">right click to step out</div>';
+    return;
+  }
+  html = itemInfoHTML(it, tool);
   if (game.fly) html += '<div class="t2 on">flying</div>';
   el.innerHTML = html;
 }
@@ -19006,6 +19099,44 @@ function tryEat(){
 // ---------- overlays / menus ----------
 function show(id){ $(id).classList.remove('hidden'); }
 function hide(id){ $(id).classList.add('hidden'); }
+// hover any slot in any screen: the item's full text under the cursor
+function wireItemTips(){
+  const tip = $('itemtip');
+  let cur = null;
+  const place = ev => {
+    const x = Math.min(window.innerWidth - 316, ev.clientX + 16), y = Math.min(window.innerHeight - tip.offsetHeight - 12, ev.clientY + 14);
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  };
+  document.addEventListener('mouseover', ev => {
+    const el = ev.target.closest && ev.target.closest('.slot');
+    if (!el || game.ui === 'none'){ if (cur){ cur = null; tip.classList.add('hidden'); } return; }
+    let it = null;
+    try { it = el.dataset.slot != null ? slotItem(slotKeyOf(el)) : null; } catch (e){ it = null; }
+    if (!it && el.__item) it = el.__item;
+    if (!it){ cur = null; tip.classList.add('hidden'); return; }
+    cur = el;
+    const html = itemInfoHTML(it, activeToolOf(it));
+    tip.innerHTML = html || ('<div class="t1">' + itemLabel(it) + '</div>');
+    tip.classList.remove('hidden');
+    place(ev);
+  });
+  document.addEventListener('mousemove', ev => { if (cur) place(ev); });
+  document.addEventListener('mouseout', ev => {
+    const el = ev.target.closest && ev.target.closest('.slot');
+    if (el && el === cur && !(ev.relatedTarget && el.contains(ev.relatedTarget))){ cur = null; tip.classList.add('hidden'); }
+  });
+}
+// the tool-shaped view of any item (what activeTool() makes of the held one)
+function activeToolOf(it){
+  if (!it) return null;
+  if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
+  if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
+  if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
+  if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
+  if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
+  return { kind: it.kind, tier: it.tier || 0, item: it };
+}
 function openInventory(){
   game.ui = 'inv'; buildInvUI(); show('invscreen'); document.exitPointerLock();
 }
@@ -19490,7 +19621,7 @@ function saveNow(){
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay, day: game.day || 0,
-    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t) },
+    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t), puddles: weatherSys.puddles.slice(-200) },
     torches: game.torches,
     beacons: game.beacons,
     beds: game.beds,
@@ -19570,7 +19701,7 @@ function startWorld(id){
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.day = data.day || 0;
   if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
-  weatherSys.fires = []; weatherSys.thunder = [];
+  weatherSys.fires = []; weatherSys.thunder = []; weatherSys.puddles = (data.weather && data.weather.puddles) || [];
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -20982,6 +21113,7 @@ function bindMenus(){
 
 initRenderer();
 bindInput();
+wireItemTips();
 bindInvDnD();
 bindMenus();
 requestAnimationFrame(frame);

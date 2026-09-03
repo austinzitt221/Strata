@@ -2,6 +2,35 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 19.1 — playtest notes (2026-09-03)
+
+- **Collapse is for loose ground only.** Only sand and snow fall now;
+  rock, brick and everything you build holds itself up (collapse on
+  every material made building miserable). The pre-check reads the
+  material over the cut, so nothing is even sampled unless there is
+  sand or snow up there.
+- **Creative dials for the sky.** In creative the inventory (E) carries
+  two sliders: WEATHER (clear · rain · storm · snow · fog) and SEASON
+  (spring · summer · autumn · winter). Drag them and the world changes
+  as you watch — the fastest way to see what they look like.
+- **Tooltips.** Hover any slot in any inventory and the item's full text
+  appears under the cursor: the same name and description the
+  bottom-left panel shows when you hold it. The two share one source
+  (`itemInfoHTML`), so anything either learns the other knows.
+- **Rain that knows when to stop.** A puddle only forms in a SMALL hole:
+  the floor cells around the spot are flooded and if the open carved
+  floor runs past 36 cells (a quarry) there is no puddle. A walled yard
+  or a roofed room on natural ground is never a hole at all — its floor
+  is the lawn, not a cut. And the sun takes the puddles back: in clear
+  daylight the oldest rain puddle near you dries every six seconds
+  (its water cells are cleared, three metres around). Puddles are
+  remembered in the save so they still dry after a reload.
+- **Wings go forward.** The same slow fall (2.4 m/s), but hold W and you
+  drive forward at half again a sprint (12.9 m/s) — a glide from the
+  roost crosses the map. Without W you drift at 3.5. While gliding the
+  wings own the air (the walking branch's air control no longer drags
+  you back to a walking pace).
+
 ## Build 19 — THE LIVING WORLD (2026-09-03)
 
 Things that hunt, and places that hide them: three night enemies for
