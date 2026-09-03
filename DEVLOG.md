@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 18.1 — flight notes (2026-09-02)
+
+- **The rider banks with the plane.** The body model's driving branch
+  only knew heading; in a turn the pilot stuck straight out of the
+  banked airframe. The plane (and the hoverbike) now seat the body in
+  the vehicle's own frame — pitch, heading, roll — with the seat offset
+  rotated through it, the same trick the motorcycle uses for flips.
+- **The cockpit eye.** The first-person seat sat inside the fuselage
+  box, so you looked at its inner walls and past the dash. The eye now
+  sits up in the glass, ahead of the wing, over a proper dash with a
+  gauge cluster nearly twice the size, and the cabin behind it is roofed.
+- **Ceiling 150.** The plane could not clear the ranges at 100 m. It
+  climbs to 150 now, half again higher than every mountain.
+- **Roads through mountains — the invisible wall, found.** A CSG box
+  tilts about its own centre. A graded road's slab is up to 48 m tall
+  (it reaches down to the ground under an embankment), so tilting it
+  slides its TOP face along the road by up to 0.4 m; the corridor cut,
+  centred 3.5 m above the road, slides its FLOOR the other way. Where a
+  corridor cut follows a slab the two no longer meet at the segment
+  boundary: a half-metre-wide, metre-deep trench across the tarmac at
+  every boundary on every graded stretch, invisible at speed and exactly
+  where the road enters a mountain. Every box is now shifted along the
+  road so its working face (a slab's top, a cut's floor) lands where the
+  untilted face would have. Probed at 25 cm steps across a boundary over
+  a 24 m embankment: a 1.02 m drop before, 1 cm after. Also: the range
+  check that decides where the corridor is cut now covers a segment's
+  ends (it sampled an 18 m box around a 24.6 m segment's midpoint) and
+  the corridor is cut a segment early on either side of a rise, so a
+  tunnel mouth never has a lip. Wall clips scale with penetration, so a
+  graze barely slows you. Roads restamp (version 4) in every world.
+- **Roadmap.** Build 19 grows teeth: three night enemies for Earth
+  (stalker, husk, wisp), the Sky Spire on floating islands with winged
+  angels that never leave their island and THE ARCHANGEL at the top,
+  and the Ziggurat, a unique trapped pyramid on the ground. Weather,
+  seasons and collapse stay in the same build after them.
+
 ## Build 18 — WINGS (2026-09-02)
 
 Leaving the ground.

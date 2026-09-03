@@ -360,14 +360,41 @@ portable.
 - Hangars, airstrips and windsocks as buildable props; a simple
   altimeter/artificial-horizon HUD while flying.
 
-## Build 19 — THE LIVING WORLD (weather, seasons, physics)
-- **Weather** — rain that fills your carve-holes into real puddles,
-  snowstorms that paint snow, lightning that starts fires on wood,
-  fog mornings.
+## Build 19 — THE LIVING WORLD (things that hunt, and places that hide them)
+The world gets teeth: new enemies for the nights, a sky fortress for the
+islands, a unique ruin for the ground, and then the weather.
+- **Night enemies for Earth.** Three new kinds that spawn naturally
+  after dark, each with a habit: the **stalker** (fast, low, hunts in
+  pairs, flees torchlight), the **husk** (slow, tanky, walks straight at
+  you and hits hard, burns at dawn like lurkers), and the **wisp** (a
+  floating light that drifts toward you and detonates — TNT with a
+  grudge). Drops feed the arsenal and the stove. Caps and spawn odds
+  scale with how far you are from your torches and beacons, so a lit base
+  stays a base.
+- **The Sky Spire.** A single tall building on some floating islands
+  (one island in three carries one): a white spire with an open gallery,
+  a treasury, and a roost. It runs on the raid-fort system — a garrison
+  that respawns while you're near, a vault, and a boss — but everything
+  here **flies**. **Angels** (winged, fast, they swoop and slash, they
+  never leave their island) guard it in tiers, and at the top, once the
+  garrison is thinned, **THE ARCHANGEL**: a winged boss that fights over
+  the island, dives, throws light, and never crosses the rim either.
+  The loot is a tier above the raid forts: aether ingots by the stack,
+  diamonds, a winged unique (glide from any height), and a key to the
+  treasury. Getting up there is the point of the plane, the hoverbike,
+  the jetpack and the cannon.
+- **The Ziggurat.** A unique ground structure for Earth: a stepped stone
+  pyramid on the plains, mesa or dunes (rarer than forts), with a
+  processional stair, a hollow interior of trapped corridors (falling
+  floors, spike pits, a flooding hall — real CSG traps), a sealed tomb
+  at its heart with a strongbox and a relic, and a guardian that wakes
+  when the seal breaks. One per world region, findable by its silhouette
+  from the plane.
+- **Weather** — rain that fills your carve-holes into real puddles (the
+  water cells make this cheap now), snowstorms that paint snow, lightning
+  that starts fires on wood, fog mornings.
 - **Seasons** — a slow world clock that recolors biomes, freezes lakes
   walkable in winter, boosts summer food yields.
-- **Fluid slump** — carve next to a lava or water pool and it flows into
-  the hole (a cheap cellular pass over edits, not a full fluid sim).
 - **Structural collapse** — mine out a tower's base and the disconnected
   top becomes falling debris and drops. The most CSG-native mechanic on
   the list, and a genuine danger underground.
