@@ -360,7 +360,7 @@ portable.
 - Hangars, airstrips and windsocks as buildable props; a simple
   altimeter/artificial-horizon HUD while flying.
 
-## Build 19 — THE LIVING WORLD (things that hunt, and places that hide them)
+## Build 19 — THE LIVING WORLD (things that hunt, and places that hide them) (DONE)
 The world gets teeth: new enemies for the nights, a sky fortress for the
 islands, a unique ruin for the ground, and then the weather.
 - **Night enemies for Earth.** Three new kinds that spawn naturally

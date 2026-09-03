@@ -507,9 +507,9 @@ const BEDROCK_Y = -249.99;    // everything below is permanently solid
 const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) meters
 
 // materials (0 = air / none)
-const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18 };
-const NMAT = 18;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore'];
+const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18, MARBLE:19 };
+const NMAT = 19;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble'];
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -1212,6 +1212,9 @@ function makeGen(seed){
       const y = 58 + (hashInt(h0 ^ 7) / 4294967296) * 26;      // the flat top sits at y
       const depth = 10 + rx * 0.35;                              // how far the underside hangs
       S = { x, z, y, rx, depth, top: y, bottom: y - depth, seed: h0, key };
+      // one island in three carries a Sky Spire: a white tower on its crown
+      S.spire = (hashInt(h0 ^ 11) % 3) === 0 && rx > 20;
+      S.spireTop = S.spire ? y + 38 : y;
     }
     skyCache.set(key, S);
     if (skyCache.size > 400) skyCache.clear();
@@ -1249,6 +1252,56 @@ function makeGen(seed){
     }
     return Math.min(dome, cone);
   }
+  // ---- the Sky Spire: a marble tower on the crown of some islands ----
+  // A plinth with the treasury inside it (a room with one door on the
+  // south side), a tapering column, an open gallery ring halfway up on six
+  // pillars, the roost — a railed platform at the top — and a pinnacle.
+  // All of it is SDF-native so it meshes, collides and mines like rock.
+  const SPIRE_H = 30;
+  function spireSDF(x, y, z){
+    if (y < 40) return 1e9;
+    const S = skyNear(x, z);
+    if (!S || !S.spire) return 1e9;
+    const B = S.top;
+    if (y > B + 40 || y < B - 2) return 1e9;
+    const dx = x - S.x, dz = z - S.z;
+    if (Math.abs(dx) > 10 || Math.abs(dz) > 10) return 1e9;
+    const r2 = Math.hypot(dx, dz);
+    const box = (bx, by, bz, hx, hy, hz) => {
+      const qx = Math.abs(dx - bx) - hx, qy = Math.abs(y - by) - hy, qz = Math.abs(dz - bz) - hz;
+      return Math.max(qx, qy, qz);
+    };
+    const disc = (cy, hy, r) => Math.max(r2 - r, Math.abs(y - cy) - hy);
+    // plinth, hollowed into the treasury, with its door
+    let d = box(0, B + 2.5, 0, 7, 3.5, 7);
+    d = Math.max(d, -box(0, B + 3.4, 0, 5.5, 2.0, 5.5));
+    d = Math.max(d, -box(0, B + 2.9, -6.5, 1.2, 1.5, 1.6));
+    // the column: a frustum from the plinth to the roost
+    const t = Math.max(0, Math.min(1, (y - (B + 6)) / (SPIRE_H - 6)));
+    const cr = 4.6 - 1.8 * t;
+    d = Math.min(d, Math.max(r2 - cr, B + 6 - y, y - (B + SPIRE_H)));
+    // the gallery: a ring floor, six pillars, a ring roof
+    d = Math.min(d, disc(B + 15.8, 0.4, 8));
+    d = Math.min(d, disc(B + 20.6, 0.4, 8));
+    const ang = Math.atan2(dz, dx), k = Math.round(ang / (Math.PI / 3)) * (Math.PI / 3);
+    const pxp = Math.cos(k) * 7, pzp = Math.sin(k) * 7;
+    d = Math.min(d, Math.max(Math.hypot(dx - pxp, dz - pzp) - 0.55, B + 16.2 - y, y - (B + 20.2)));
+    // the roost: a railed platform, and the pinnacle above it
+    d = Math.min(d, disc(B + SPIRE_H + 0.5, 0.5, 6.5));
+    d = Math.min(d, Math.max(Math.max(r2 - 6.5, 5.9 - r2), Math.abs(y - (B + SPIRE_H + 1.45)) - 0.45));
+    const tp = Math.max(0, Math.min(1, (y - (B + SPIRE_H + 1)) / 7));
+    d = Math.min(d, Math.max(r2 - (1.3 - 1.25 * tp), B + SPIRE_H + 1 - y, y - (B + SPIRE_H + 8)));
+    return d * 0.85;   // Chebyshev boxes over-estimate: stay a lower bound
+  }
+  function spireMat(x, y, z){
+    if (y < 40) return 0;
+    const S = skyNear(x, z);
+    if (!S || !S.spire || y > S.top + 40 || y < S.top - 2) return 0;
+    if (spireSDF(x, y, z) > 0.5) return 0;
+    const B = S.top;
+    if (Math.abs(y - (B + 15.8)) < 0.5 || Math.abs(y - (B + SPIRE_H + 0.5)) < 0.6) return MAT.STONEBRICK;   // the floors you stand on
+    return MAT.MARBLE;
+  }
   function skyMat(x, y, z){
     if (y < 40) return 0;
     const S = skyNear(x, z);
@@ -1260,9 +1313,17 @@ function makeGen(seed){
     if (v > 1.36 && y < S.top - 2.0) return MAT.AETHER;
     return MAT.ROCK;
   }
+  // Sky islands and their spires are unioned AFTER the terrain's caves are
+  // carved: the cave field flares open above an entrance (its mouth term
+  // grows with height above the ground), and an island over a cave mouth
+  // used to come out hollow through the middle.
   function sdfFromH(h, x, y, z, prims){
+    const d = sdfTerrain(h, x, y, z, prims);
+    if (y >= 40){ const sk = Math.min(skySDF(x, y, z), spireSDF(x, y, z)); return sk < d ? sk : d; }
+    return d;
+  }
+  function sdfTerrain(h, x, y, z, prims){
     let d = (y - h) * 0.65;
-    if (y >= 40){ const sk = skySDF(x, y, z); if (sk < d) d = sk; }   // islands hang above everything
     const net = prims && prims.length;
     if (!net){
       if (d > 2.5){
@@ -1311,7 +1372,7 @@ function makeGen(seed){
   function mat(x, y, z){
     const rm = ruinMat(x, y, z);
     if (rm) return rm;
-    if (y >= 40){ const sm = skyMat(x, y, z); if (sm) return sm; }
+    if (y >= 40){ const sm = spireMat(x, y, z) || skyMat(x, y, z); if (sm) return sm; }
     const ore = oreAt(x, y, z);
     if (ore) return ore;
     if (y < -6){
@@ -1389,7 +1450,7 @@ function makeGen(seed){
       for (let cz = Math.floor((z0 - 60) / SKY_CELL); cz <= Math.floor((z1 + 60) / SKY_CELL); cz++){
         const S = skyInCell(cx, cz);
         if (S && S.x + S.rx + 6 > x0 && S.x - S.rx - 6 < x1 && S.z + S.rx + 6 > z0 && S.z - S.rx - 6 < z1)
-          mx = Math.max(mx, S.top + 1);
+          mx = Math.max(mx, S.spire ? S.top + 40 : S.top + 1);
       }
     return [mn - 4, mx + 4];
   }
@@ -1550,6 +1611,37 @@ function makeGen(seed){
       }
     return { x: fx, z: fz, y: hc, seed: h0, key: cx + ',' + cz };
   }
+  // ---- the Ziggurat: one candidate per ZIG_CELL, half of them real, on
+  // flat plains, mesa or dunes, clear of villages and forts. Its geometry
+  // is stamped at runtime (zigSys) — this only decides where.
+  function zigAt(cx, cz){
+    const h0 = hashInt(sX ^ 0x2166 ^ hashInt((cx * 1364987 ^ 0x7a1) ^ hashInt(cz * 998244353)));
+    if ((h0 & 1) === 0) return null;
+    const zx = cx * ZIG_CELL + 200 + (h0 % (ZIG_CELL - 400));
+    const zz = cz * ZIG_CELL + 200 + (hashInt(h0 ^ 5) % (ZIG_CELL - 400));
+    const hc = height(zx, zz);
+    if (hc < seaLevel + 3) return null;
+    const a = archAt(zx, zz);
+    if (a !== 0 && a !== 3 && a !== 4) return null;
+    let mn = hc, mx = hc;
+    for (const [dx, dz] of [[-22, 0], [22, 0], [0, -22], [0, 22], [16, 16], [-16, -16], [16, -16], [-16, 16], [0, 34]]){
+      const hh = height(zx + dx, zz + dz);
+      if (hh < mn) mn = hh;
+      if (hh > mx) mx = hh;
+    }
+    if (mx - mn > 7) return null;
+    for (let vx = Math.floor((zx - 260) / VILLAGE_CELL); vx <= Math.floor((zx + 260) / VILLAGE_CELL); vx++)
+      for (let vz = Math.floor((zz - 260) / VILLAGE_CELL); vz <= Math.floor((zz + 260) / VILLAGE_CELL); vz++){
+        const v = villageAt(vx, vz);
+        if (v && Math.hypot(v.x - zx, v.z - zz) < 260) return null;
+      }
+    for (let fx = Math.floor((zx - 260) / FORT_CELL); fx <= Math.floor((zx + 260) / FORT_CELL); fx++)
+      for (let fz = Math.floor((zz - 260) / FORT_CELL); fz <= Math.floor((zz + 260) / FORT_CELL); fz++){
+        const f = fortAt(fx, fz);
+        if (f && Math.hypot(f.x - zx, f.z - zz) < 260) return null;
+      }
+    return { x: zx, z: zz, y: hc, seed: h0, key: cx + ',' + cz };
+  }
   // ---- mega-cities: one candidate per CITY_CELL (km-scale spacing), on
   // gentle dry ground the foundation slab can iron flat, clear of both
   // village and fort candidates
@@ -1596,11 +1688,12 @@ function makeGen(seed){
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
+const ZIG_CELL = 1400;
 const WRECK_CELL = 360;
 const SKY_CELL = 640;
 const CITY_CELL = 1800;
@@ -2407,13 +2500,13 @@ const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'b
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
 const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
-const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot' };
+const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat' };
 // what bites where: the fish of each region
 const FISH_NAME = { perch: 'perch', trout: 'trout', catfish: 'catfish', carp: 'carp', snapper: 'snapper', eel: 'ember eel', cod: 'cod' };
 function fishFor(arch, deep){
@@ -2526,7 +2619,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -2655,6 +2748,14 @@ const RECIPES = [];
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'wtable', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }, { item: 'coin', n: 40 }] });
   RECIPES.push({ kind: 'rounds', yields: 24, costs: [{ item: 'ironingot', n: 1 }, { item: 'coal', n: 1 }] });
+// the night shift pays in reagents: stalker fangs make hard rounds, a wisp's
+// core is a charge that already wants to go off
+RECIPES.push({ kind: 'rounds',  yields: 32, costs: [{ item: 'fang', n: 3 }, { item: 'coal', n: 1 }] });
+// the long way to wings: pluck the garrison
+RECIPES.push({ kind: 'wings', station: true, costs: [{ item: 'feather', n: 24 }, { item: 'aetheringot', n: 6 }, { item: 'diamond', n: 2 }] });
+RECIPES.push({ kind: 'tnt',     yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { mat: MAT.SAND, n: 2 }] });
+RECIPES.push({ kind: 'rockets', yields: 4, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
+RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispcore', n: 1 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'cells', yields: 16, costs: [{ item: 'rubyingot', n: 1 }, { item: 'coal', n: 1 }] });
   RECIPES.push({ kind: 'rockets', yields: 2, station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'tnt', yields: 2, station: true, costs: [{ item: 'coal', n: 6 }, { item: 'ironingot', n: 1 }, { mat: MAT.SAND, n: 4 }] });
@@ -2802,6 +2903,7 @@ function craft(slots, r, free){
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
+                  : r.kind === 'wings' ? { kind: 'wings' }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
                   : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
@@ -2925,7 +3027,7 @@ return {
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
-  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, SKY_CELL, CITY_CELL, FISH_NAME, fishFor,
+  makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, SKY_CELL, CITY_CELL, ZIG_CELL, FISH_NAME, fishFor,
   HARDNESS, mineDuration, placeDuration, volFactor, craftableCount, craftN, addItemN, uncraftRecipeFor, uncraft,
   BATTERY_CAP, BATTERY_NAME, batteryCap, chargeField,
 };
@@ -2982,6 +3084,15 @@ function makeTileDrawers(){
         const x = (rng()*14)|0, y = (rng()*14)|0;
         ctx.fillStyle = '#141317'; ctx.fillRect(x, y, 2, 2);
       }
+    },
+    [CORE.MAT.MARBLE](ctx, rng){
+      // white stone with grey veins and a gold fleck
+      speckle(ctx, rng, '#e9e7ee', '#d8d5df', '#f6f5f9', 0.16, 0.2);
+      ctx.fillStyle = '#b9b5c4';
+      let x = (rng() * 16) | 0, y = 0;
+      while (y < 16){ ctx.fillRect(x, y, 1, 1); if (rng() < 0.4) x += rng() < 0.5 ? 1 : -1; y++; x = (x + 16) % 16; }
+      ctx.fillStyle = '#c9c5d2'; ctx.fillRect((rng() * 12) | 0, (rng() * 12) | 0, 3, 1);
+      ctx.fillStyle = '#d9b85a'; ctx.fillRect((rng() * 14) | 0, (rng() * 14) | 0, 1, 1);
     },
     [CORE.MAT.AETHER](ctx, rng){
       // pale sky-stone shot with violet aether crystals
@@ -3259,6 +3370,7 @@ uniform sampler2D uShadowMap;
 uniform float uShadowOn;
 uniform float uShadowTexel;
 uniform float uTime;
+uniform vec3 uSeason;
 uniform float uUnderwater;
 varying vec4 vShadowCoord;
 varying vec3 vPos;
@@ -3369,6 +3481,7 @@ void main(){
   if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
   if (m == 15.0) col = max(col, tex.rgb * 1.2);                          // lava is its own light
   if (m == 16.0) col = max(col, tex.rgb * 0.8 * (0.4 + 0.6 * dark));    // crystal shimmers
+  if (m == 6.0) col *= uSeason;                                          // the meadows turn with the season
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   // fog range scales with skylight: the surface sees kilometres, caves fade
   // to black within ~80m so depth still feels enclosed. Underwater overrides
@@ -4248,6 +4361,36 @@ function contactReal(x, y, z, dTrue, g, edits){
   return sdfWorld(x - g[0] * t, y - g[1] * t, z - g[2] * t, edits) < 0.015 ||
          sdfWorld(x - g[0] * t1, y - g[1] * t1, z - g[2] * t1, edits) < -0.005;
 }
+// sphere-vs-world contact for vehicles: null when clear, else the unit
+// normal and how far to push. Only REAL contact counts — the CSG field is
+// a lower bound, not a distance: two subtracts that overlap (the corridor
+// cuts of neighbouring road segments) both claim "solid this close" at
+// their own end faces, a cave carve flattens the field near its mouth, and
+// a car that trusts the raw number stops dead on open tarmac. (Playtest:
+// "invisible walls on mountain roads, and where a cave comes close".)
+function sphereContact(x, y, z, R, edits){
+  const dd = sdfWorld(x, y, z, edits);
+  if (dd >= R) return null;
+  const g = gradWorld(x, y, z, edits);
+  const dTrue = dd / g[3];
+  if (dTrue >= R) return null;
+  if (!contactReal(x, y, z, dTrue, g, edits)) return null;
+  return { g, push: R - dTrue };
+}
+// a wheel climbs a kerb: when a real wall stops a grounded vehicle, take the
+// lowest lift (up to maxStep) that puts the sphere in clear air both here
+// and a little way ahead. The mesh and camera ease up over a few frames
+// (e.stepVis) so it reads as a bump, not a teleport.
+function vehicleStepUp(e, R, fx, fz, edits, maxStep){
+  for (let s = 0.1; s <= maxStep + 1e-6; s += 0.1){
+    const y = e.y + s + R;
+    if (sphereContact(e.x, y, e.z, R * 0.98, edits)) continue;
+    if (sphereContact(e.x + fx * 0.7, y, e.z + fz * 0.7, R * 0.98, edits)) continue;
+    e.y += s; e.stepVis = (e.stepVis || 0) + s;
+    return true;
+  }
+  return false;
+}
 function capsuleFree(x, y, z, edits){
   const r = PLAYER.radius, h = playerHeight();
   for (const c of [r + 0.02, h * 0.5, h - r - 0.02]){
@@ -4315,6 +4458,7 @@ function buildScene(){
       uShadowOn: { value: 0 },
       uShadowTexel: { value: 1 / 4096 },
       uTime: { value: 0 },
+      uSeason: { value: new THREE.Vector3(1, 1, 1) },
       uUnderwater: { value: 0 },
     },
     side: THREE.DoubleSide,
@@ -4465,7 +4609,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -4743,6 +4887,24 @@ const playerBody = {
         this.upper.add(noz); this.armorMeshes.push(noz);
       }
     }
+    if (A.back && A.back.kind === 'wings'){
+      // two white wings, gold-tipped, swept back off the shoulders
+      const wings = [];
+      for (const sx of [-1, 1]){
+        const w = new THREE.Group();
+        w.position.set(sx * 0.16, 1.2, 0.2);
+        const feathers = [[0.5, 0.16, 0.05, 0.28, 0.1], [0.42, 0.12, 0.05, 0.68, 0.02], [0.3, 0.1, 0.05, 0.98, -0.08]];
+        for (const [w1, h1, d1, ox, oy] of feathers){
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w1, h1, d1), new THREE.MeshBasicMaterial({ color: 0xf4f2f8 }));
+          m.position.set(sx * ox, oy, 0); w.add(m); this.armorMeshes.push(m);
+        }
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.05), new THREE.MeshBasicMaterial({ color: 0xd9b85a }));
+        tip.position.set(sx * 1.16, -0.1, 0); w.add(tip); this.armorMeshes.push(tip);
+        w.rotation.y = sx * 0.55; w.rotation.z = sx * 0.35;
+        this.upper.add(w); wings.push(w);
+      }
+      this.wings = wings;
+    } else this.wings = null;
     if (A.head && A.head.kind === 'divehelm'){
       // the diving helmet: a glass globe with a brass collar
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.37, 12, 10),
@@ -4760,7 +4922,7 @@ const playerBody = {
     this.root.visible = show;
     if (!show) return;
     const A = game.armor || {};
-    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? 'j' : '-');
+    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? A.back.kind : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
     if (game.driving){
       const e2 = game.driving;
@@ -5538,7 +5700,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -6052,11 +6214,20 @@ const SUN_BASE = new THREE.Color(0.42, 0.40, 0.36);
 const AMB_DAY = new THREE.Color(0.62, 0.63, 0.68);
 const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
 function updateDayNight(dt){
-  if (game.ui === 'none' && !game.photo) game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
+  if (game.ui === 'none' && !game.photo){
+    const t2 = game.timeOfDay + dt / DAY_CYCLE;
+    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); }
+    game.timeOfDay = t2 % 1;
+  }
   const phase = game.timeOfDay * Math.PI * 2;
   const sunH = Math.sin(phase);
-  const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
+  let dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
   game.dayF = dayF;
+  // weather dims the day (the spawn rules and burns read the true dayF above)
+  const W = weatherSys.cur;
+  const wdark = W.dark == null ? 1 : W.dark;
+  dayF *= wdark;
+  const tint = seasonSys.tint;
   // unlit vegetation (decor + trees are MeshBasic) tracks the sky, or it
   // glows through the night
   {
@@ -6065,22 +6236,349 @@ function updateDayNight(dt){
       for (const k in decorSys.meshes) decorSys.meshes[k].material.color.setScalar(L);
     if (treeSys.mats){
       treeSys.mats.bark.color.setScalar(L);
-      treeSys.mats.leaf.color.setScalar(L);
-      treeSys.mats.leaf2.color.setScalar(L);
+      treeSys.mats.leaf.color.setRGB(L * tint[0], L * tint[1], L * tint[2]);
+      treeSys.mats.leaf2.color.setRGB(L * tint[0], L * tint[1], L * tint[2]);
     }
   }
   const u = game.terrainMat.uniforms;
   u.uSunDir.value.set(Math.cos(phase) * 0.5, Math.max(sunH, 0.12), 0.35).normalize();
   u.uSunCol.value.copy(SUN_BASE).multiplyScalar(dayF);
   u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
-  u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
+  u.uLampSky.value = 0.85 * game.dayF;       // headlamp works on the surface at night
   game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
+  if (wdark < 1){
+    // overcast: the sky goes grey and the light flattens
+    const grey = 0.3 + 0.7 * wdark;
+    game.skyNow.lerp(new THREE.Color(0.55 * grey, 0.58 * grey, 0.64 * grey), 1 - wdark);
+    u.uAmbCol.value.lerp(new THREE.Color(0.5, 0.52, 0.56), (1 - wdark) * 0.6 * game.dayF);
+  }
+  if (weatherSys.flashT > 0){ game.skyNow.addScalar(0.6); u.uAmbCol.value.addScalar(0.9); u.uSunCol.value.addScalar(0.5); }
   if (!game.underwater) u.uFogCol.value.copy(game.skyNow);
+  u.uFogFar.value = FOG_BASE * (W.fog == null ? 1 : W.fog);
+  u.uSeason.value.set(tint[0], tint[1], tint[2]);
   if (treeSys.mats){
     const b = 0.3 + 0.7 * dayF;                    // trees darken with the sky
-    for (const k in treeSys.mats) treeSys.mats[k].color.setScalar(b);
+    treeSys.mats.bark.color.setScalar(b);
+    treeSys.mats.leaf.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
+    treeSys.mats.leaf2.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
   }
+  if (farTreeSys && farTreeSys.canopy) farTreeSys.canopy.material.color.setRGB(b2(dayF) * tint[0], b2(dayF) * tint[1], b2(dayF) * tint[2]);
 }
+function b2(dayF){ return 0.3 + 0.7 * dayF; }
+const FOG_BASE = 3200;
+
+// ---------- seasons ----------
+// A slow world clock: eight days a season. Spring greens, summer yellows
+// the grass and doubles the meat, autumn turns the meadows and the
+// canopies, winter greys them, freezes the lakes walkable and turns rain
+// to snow.
+const SEASON_DAYS = 8;
+const SEASON_NAME = ['spring', 'summer', 'autumn', 'winter'];
+const SEASON_TINT = [[0.94, 1.06, 0.9], [1.04, 1.0, 0.82], [1.16, 0.84, 0.5], [0.8, 0.86, 0.92]];
+const seasonSys = {
+  get idx(){ return Math.floor((game.day || 0) / SEASON_DAYS) % 4; },
+  get name(){ return SEASON_NAME[this.idx]; },
+  get tint(){ return SEASON_TINT[this.idx]; },
+  get winter(){ return this.idx === 3; },
+  get summer(){ return this.idx === 1; },
+  onNewDay(){
+    if ((game.day || 0) % SEASON_DAYS === 0) toast(this.name === 'winter' ? 'winter — the lakes freeze' : this.name === 'summer' ? 'summer — the herds fatten' : this.name + ' comes');
+    markSave();
+  },
+  // frozen lakes: in winter the surface of any still water holds you
+  ice(){
+    if (!this.winter || game.fly || game.driving) return false;
+    const wt = waterTopAt(game.pos.x, game.pos.z, game.pos.y);
+    if (wt == null || game.pos.y < wt - 0.9 || game.pos.y > wt + 0.6) return false;
+    game.pos.y = Math.max(game.pos.y, wt + 0.02);
+    if (game.vel.y < 0) game.vel.y = 0;
+    game.grounded = true; game.swim = false; game.onIce = true;
+    return true;
+  },
+};
+
+// ---------- weather ----------
+// Rain that fills your carve-holes into real puddles, storms with
+// lightning that fires the trees, snow that paints the ground, fog
+// mornings. One episode at a time, rolled when the last one ends.
+const WEATHER = {
+  clear: { dark: 1, fog: 1 },
+  rain:  { dark: 0.72, fog: 0.55, rain: 1 },
+  storm: { dark: 0.5, fog: 0.3, rain: 1.6, lightning: 1 },
+  snow:  { dark: 0.8, fog: 0.45, snow: 1 },
+  fog:   { dark: 0.86, fog: 0.1 },
+};
+const weatherSys = {
+  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [],
+  set(kind, dur){
+    this.kind = kind; this.cur = WEATHER[kind] || WEATHER.clear; this.t = dur; this.painted = 0;
+    this.boltT = 4 + Math.random() * 6;
+  },
+  roll(){
+    const r = Math.random(), snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
+    const morning = game.timeOfDay > 0.02 && game.timeOfDay < 0.12;
+    if (r < 0.5) this.set('clear', 240 + Math.random() * 600);
+    else if (r < 0.72) this.set(snowy ? 'snow' : 'rain', 120 + Math.random() * 240);
+    else if (r < 0.8) this.set(snowy ? 'snow' : 'storm', 90 + Math.random() * 120);
+    else if (r < 0.92 && morning) this.set('fog', 120 + Math.random() * 180);
+    else this.set('clear', 180 + Math.random() * 400);
+    if (this.kind !== 'clear') toast(this.kind === 'storm' ? 'a storm rolls in' : this.kind === 'fog' ? 'fog on the ground' : this.kind === 'snow' ? 'it begins to snow' : 'rain');
+  },
+  // the drops: a cloud of points around the camera that fall and wrap
+  ensurePts(){
+    if (this.pts) return;
+    const N = 1400, pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++){ pos[i * 3] = (Math.random() - 0.5) * 40; pos[i * 3 + 1] = Math.random() * 24 - 4; pos[i * 3 + 2] = (Math.random() - 0.5) * 40; }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfd6ee, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.pts.frustumCulled = false; this.pts.renderOrder = 3;
+    game.scene.add(this.pts);
+    this.pts.visible = false;
+  },
+  tick(dt){
+    if (!game.running) return;
+    this.t -= dt;
+    if (this.t <= 0) this.roll();
+    this.flashT = Math.max(0, this.flashT - dt);
+    const W = this.cur;
+    const wet = W.rain || W.snow;
+    if (this.pts || wet) this.ensurePts();
+    if (this.pts){
+      this.pts.visible = !!wet && !game.underwater;
+      if (wet){
+        const a = this.pts.geometry.attributes.position.array, cam = game.camera.position;
+        this.pts.position.set(cam.x, cam.y, cam.z);
+        const fall = W.snow ? 1.6 : 14 * (W.rain || 1);
+        const drift = W.snow ? 0.6 : 0.2;
+        for (let i = 0; i < a.length; i += 3){
+          a[i + 1] -= fall * dt; a[i] += drift * dt * Math.sin(i + a[i + 1]);
+          if (a[i + 1] < -4){ a[i + 1] += 24; a[i] = (Math.random() - 0.5) * 40; a[i + 2] = (Math.random() - 0.5) * 40; }
+        }
+        this.pts.geometry.attributes.position.needsUpdate = true;
+        this.pts.material.color.setHex(W.snow ? 0xffffff : 0xbfd6ee);
+        this.pts.material.size = W.snow ? 3.2 : 2.2;
+        this.pts.material.opacity = W.snow ? 0.85 : 0.5;
+        // no rain under a roof: hide the cloud when the sky is shut
+        const skyOpen = game.gen.height(cam.x, cam.z) < cam.y + 1;
+        this.pts.visible = skyOpen;
+      }
+    }
+    if (W.rain){
+      // rain fills the holes you dug: a source at the floor of any carve
+      // open to the sky (the natural ground must be well above the floor)
+      this.dripT += dt * W.rain;
+      if (this.dripT > 0.5){
+        this.dripT = 0;
+        const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * 24;
+        const x = Math.floor(game.pos.x + Math.cos(a) * d) + 0.5, z = Math.floor(game.pos.z + Math.sin(a) * d) + 0.5;
+        const hg = game.gen.height(x, z);
+        if (hg > game.gen.seaLevel + 0.5){
+          const le = nearEdits([x - 1, hg - 14, z - 1, x + 1, hg + 2, z + 1]);
+          if (CORE.evalSDF(x, hg - 0.6, z, le, game.gen) > 0){
+            // march down cell centres to the floor; the puddle starts in the
+            // first fully-open cell above it
+            let fy = null;
+            for (let yy = Math.round(hg) - 1; yy > hg - 13; yy--){
+              if (CORE.evalSDF(x, yy, z, le, game.gen) <= 0){ fy = yy + 1; break; }
+            }
+            if (fy != null && hg - fy > 1.2){
+              const gx = Math.floor(x), gz = Math.floor(z), ck = waterSys.keyOf(gx, fy, gz);
+              const arr = waterSys.cells.get(ck) || waterSys.materialize(ck);
+              const q = waterSys.idx(gx & 7, fy & 7, gz & 7);
+              if (arr[q] === 0){ arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+            }
+          }
+        }
+      }
+    }
+    if (W.snow){
+      // snow settles: paint the open ground white, a patch at a time
+      this.snowT += dt;
+      if (this.snowT > 0.7 && this.painted < 80){
+        this.snowT = 0;
+        const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 20;
+        const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+        const hg = game.gen.height(x, z);
+        const le = nearEdits([x - 3, hg - 3, z - 3, x + 3, hg + 3, z + 3]);
+        const m = CORE.materialAt(x, hg - 0.3, z, le, game.gen);
+        const fresh = !le.some(e => e.op === 2 && e.mat === CORE.MAT.SNOW && Math.hypot(e.x - x, e.z - z) < 2.6);
+        if (fresh && (m === CORE.MAT.GRASS || m === CORE.MAT.SAND || m === CORE.MAT.ROCK) && CORE.evalSDF(x, hg + 0.6, z, le, game.gen) > 0){
+          const pe = CORE.makeEdit(2, 1, +x.toFixed(1), +(hg - 0.1).toFixed(1), +z.toFixed(1), 3.2, CORE.MAT.SNOW, Math.random() * 3);
+          pe.sy = 0.7; pe.noLod = 1;
+          applyEdit(pe); this.painted++;
+        }
+      }
+    }
+    if (W.lightning){
+      this.boltT -= dt;
+      if (this.boltT <= 0){
+        this.boltT = 5 + Math.random() * 9;
+        this.strike();
+      }
+    }
+    // thunder arrives after the flash
+    for (let i = this.thunder.length - 1; i >= 0; i--){ this.thunder[i] -= dt; if (this.thunder[i] <= 0){ AudioSys.sfx('boom'); this.thunder.splice(i, 1); } }
+    // burning trees fall after a breath of embers
+    for (let i = this.fires.length - 1; i >= 0; i--){
+      const f = this.fires[i]; f.t -= dt;
+      if (Math.random() < dt * 14) Embers.burst(f.x, f.y + 3 + Math.random() * 3, f.z, 1.2, [0xffb347, 0xffdd66, 0xff8830], 3, 2.5);
+      if (f.t <= 0){ treeSys.fell(f.k, false); this.fires.splice(i, 1); }
+    }
+  },
+  strike(){
+    // a bolt lands within 60 m; a tree nearby catches, wood at the strike burns away
+    let x = game.pos.x + (Math.random() - 0.5) * 120, z = game.pos.z + (Math.random() - 0.5) * 120, tk = null;
+    if (Math.random() < 0.45 && treeSys.visible && treeSys.visible.size){
+      const list = [...treeSys.visible];
+      const [k, v] = list[(Math.random() * list.length) | 0];
+      x = v.t.x; z = v.t.z; tk = k;
+    }
+    const y = game.gen.height(x, z);
+    this.flashT = 0.14;
+    this.thunder.push(0.3 + Math.hypot(x - game.pos.x, z - game.pos.z) / 340 * 2.5);
+    Particles.burst(x, y + 1, z, 1.2, [0xffffff, 0xd8e8ff, 0xfff0a0], 30, 6);
+    Embers.burst(x, y + 0.5, z, 0.8, [0xffb347, 0xffdd66], 12, 3);
+    if (tk && !this.fires.some(f => f.k === tk)) this.fires.push({ k: tk, x, y, z, t: 2.6 });
+    const le = nearEdits([x - 2, y - 2, z - 2, x + 2, y + 2, z + 2]);
+    const m = CORE.materialAt(x, y - 0.3, z, le, game.gen);
+    if (m === CORE.MAT.WOOD || m === CORE.MAT.PLANKS){
+      applyEdit(CORE.makeEdit(0, 0, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), 2.6, 0, 0));   // the planks burn through
+    }
+    const pd = Math.hypot(x - game.pos.x, z - game.pos.z);
+    if (pd < 3.5) damagePlayer(30, (game.pos.x - x) * 3, (game.pos.z - z) * 3);
+  },
+};
+
+// ---------- structural collapse ----------
+// Mine out what holds something up and the disconnected mass falls: after
+// a mine, a 1 m grid around the cut is flood-filled from its boundary;
+// solid that no longer touches the world is subtracted, showers debris
+// and drops its material. The most CSG-native thing in the game, and a
+// real danger under a ceiling.
+const collapseSys = {
+  accT: 0, pending: null,
+  note(p, eff){
+    // merge mines into one region, checked at most twice a second
+    const r = Math.min(9, eff * 0.5 + 6);
+    if (!this.pending) this.pending = { x: p.x, y: p.y, z: p.z, r };
+    else {
+      const q = this.pending;
+      q.x = (q.x + p.x) / 2; q.z = (q.z + p.z) / 2; q.y = Math.min(q.y, p.y); q.r = Math.min(12, Math.max(q.r, r + Math.hypot(p.x - q.x, p.z - q.z) * 0.5));
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 0.5 || !this.pending) return;
+    this.accT = 0;
+    const q = this.pending; this.pending = null;
+    this.check(q.x, q.y, q.z, q.r);
+  },
+  check(cx, cy, cz, r){
+    const R = Math.ceil(r), H = 19, DN = 3;
+    const x0 = Math.floor(cx) - R, z0 = Math.floor(cz) - R, y0 = Math.floor(cy) - DN;
+    // nothing over the cut (a quarry floor, a field): nothing can fall
+    const le0 = nearEdits([cx - 4, cy - 1, cz - 4, cx + 4, cy + 6, cz + 4]);
+    let over = false;
+    for (const [dx, dz] of [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5], [1.8, 1.8], [-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8]])
+      for (const dy of [1.5, 3, 5]) if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) <= 0.12){ over = true; break; }
+    if (!over) return;
+    const W = 2 * R + 1, D = 2 * R + 1;
+    const box = [x0 - 1, y0 - 1, z0 - 1, x0 + W + 1, y0 + H + 1, z0 + D + 1];
+    const le = nearEdits(box);
+    const gen = game.gen;
+    const N = W * H * D;
+    const solid = new Uint8Array(N);
+    const idx = (i, j, k) => (j * D + k) * W + i;
+    let any = 0;
+    for (let j = 0; j < H; j++) for (let k = 0; k < D; k++) for (let i = 0; i < W; i++){
+      const d = CORE.evalSDF(x0 + i + 0.5, y0 + j + 0.5, z0 + k + 0.5, le, gen);
+      if (d <= 0.12){ solid[idx(i, j, k)] = 1; any++; }
+    }
+    if (!any) return;
+    // flood from every solid cell on the box's faces: that is "the world"
+    const seen = new Uint8Array(N), stack = [];
+    for (let j = 0; j < H; j++) for (let k = 0; k < D; k++) for (let i = 0; i < W; i++){
+      if (i === 0 || k === 0 || j === 0 || i === W - 1 || k === D - 1 || j === H - 1){
+        const q = idx(i, j, k);
+        if (solid[q] && !seen[q]){ seen[q] = 1; stack.push(q); }
+      }
+    }
+    while (stack.length){
+      const q = stack.pop();
+      const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+      const nb = [[i - 1, j, k], [i + 1, j, k], [i, j - 1, k], [i, j + 1, k], [i, j, k - 1], [i, j, k + 1]];
+      for (const [a, b, c] of nb){
+        if (a < 0 || b < 0 || c < 0 || a >= W || b >= H || c >= D) continue;
+        const q2 = idx(a, b, c);
+        if (solid[q2] && !seen[q2]){ seen[q2] = 1; stack.push(q2); }
+      }
+    }
+    // what is left is floating: group it into components and drop each
+    const comp = new Int32Array(N).fill(-1);
+    let nc = 0;
+    const comps = [];
+    for (let q0 = 0; q0 < N; q0++){
+      if (!solid[q0] || seen[q0] || comp[q0] >= 0) continue;
+      const cells = [];
+      comp[q0] = nc; stack.push(q0);
+      while (stack.length){
+        const q = stack.pop(); cells.push(q);
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        for (const [a, b, c] of [[i - 1, j, k], [i + 1, j, k], [i, j - 1, k], [i, j + 1, k], [i, j, k - 1], [i, j, k + 1]]){
+          if (a < 0 || b < 0 || c < 0 || a >= W || b >= H || c >= D) continue;
+          const q2 = idx(a, b, c);
+          if (solid[q2] && !seen[q2] && comp[q2] < 0){ comp[q2] = nc; stack.push(q2); }
+        }
+      }
+      comps.push(cells); nc++;
+    }
+    for (const cells of comps){
+      if (cells.length < 3) continue;                       // crumbs
+      // per-layer boxes: one subtract per y-layer's bounding rectangle
+      const layers = new Map();
+      let sx = 0, sy = 0, sz = 0, minY = 1e9;
+      for (const q of cells){
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        let L = layers.get(j);
+        if (!L){ L = [i, k, i, k]; layers.set(j, L); }
+        if (i < L[0]) L[0] = i; if (k < L[1]) L[1] = k; if (i > L[2]) L[2] = i; if (k > L[3]) L[3] = k;
+        sx += x0 + i + 0.5; sy += y0 + j + 0.5; sz += z0 + k + 0.5; minY = Math.min(minY, y0 + j);
+      }
+      const n = cells.length, mx = sx / n, my = sy / n, mz = sz / n;
+      // what it was made of
+      const mats = {};
+      for (let t = 0; t < Math.min(12, n); t++){
+        const q = cells[(t * 7919) % n];
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        const m = CORE.materialAt(x0 + i + 0.5, y0 + j + 0.5, z0 + k + 0.5, le, gen);
+        mats[m] = (mats[m] || 0) + 1;
+      }
+      let best = CORE.MAT.ROCK, bn = 0;
+      for (const m in mats) if (mats[m] > bn){ bn = mats[m]; best = +m; }
+      if (best === CORE.MAT.BEDROCK) continue;
+      for (const [j, L] of layers){
+        const e = CORE.makeEdit(0, 1, +(x0 + (L[0] + L[2] + 1) / 2).toFixed(2), +(y0 + j + 0.5).toFixed(2), +(z0 + (L[1] + L[3] + 1) / 2).toFixed(2), L[2] - L[0] + 1.04, 0, 0);
+        e.sy = 1.04; e.sz = L[3] - L[1] + 1.04;
+        applyEdit(e);
+      }
+      // the fall: debris, a noise, the material on the ground, hurt under it
+      Particles.burst(mx, my, mz, Math.min(6, 1 + Math.cbrt(n)), [MAT_COLOR[best] || 0x7d7d84, 0x51484f], Math.min(80, 10 + n), 4);
+      AudioSys.sfx('boom');
+      const yieldN = Math.max(1, Math.round(n * 0.4));
+      const oreKind = CORE.ORE_ITEM[best];
+      dropItem(oreKind ? { kind: oreKind, count: yieldN } : { kind: 'mat', mat: best, count: yieldN }, { x: mx, y: minY + 0.3, z: mz });
+      const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+      const hx = Math.abs(px - mx), hz = Math.abs(pz - mz);
+      if (hx < (layers.size ? R : 2) + 1 && hz < R + 1 && py < minY + 0.5 && py > minY - 9) damagePlayer(Math.min(60, Math.round(6 + n * 1.2)), (px - mx) * 2, (pz - mz) * 2);
+      for (const en of [...game.entities]){
+        if (Math.abs(en.x - mx) < R && Math.abs(en.z - mz) < R && en.y < minY + 0.5 && en.y > minY - 9) hurtEntity(en, Math.min(80, 8 + n * 1.5), 0, 0);
+      }
+      toast('the ' + (CORE.MAT_NAME[best] || 'rock') + ' above gives way');
+    }
+  },
+};
+
 
 // ---------- beacons: craftable home anchor ----------
 // the LAST placed beacon is "home": the compass points to it and survival
@@ -6215,9 +6713,10 @@ const skySys = {
     this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
     // clouds: slow drift, wrapped into a band around the player; fade and
     // darken at night
-    const b = 0.35 + 0.65 * game.dayF;
+    const wd = weatherSys.cur.dark == null ? 1 : weatherSys.cur.dark;
+    const b = (0.35 + 0.65 * game.dayF) * (0.45 + 0.55 * wd);
     this.cloudMat.color.setScalar(b);
-    this.cloudMat.opacity = 0.25 + 0.57 * game.dayF;
+    this.cloudMat.opacity = Math.min(0.95, (0.25 + 0.57 * game.dayF) + (1 - wd) * 0.8);
     for (const c of this.clouds){
       c.position.x += dt * 1.3;
       if (c.position.x - cam.x > 340) c.position.x -= 680;
@@ -8691,16 +9190,17 @@ function addTorchesToInv(n){ return addStackItem('torch', n); }
 // sphere, seat = camera offsets, kmh = the gauge's full scale.
 // air: it leaves the ground on purpose (tricks, crashes)
 const VEH = {
-  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.065, r: 0.85, ride: 0.4, kmh: 50, repair: 6,
+  // step: the kerb a wheel climbs without slowing (m)
+  car:       { name: 'electric car', top: 13.5, rev: 5, accel: 9, brake: 7, steer: 1.7, drain: 0.065, r: 0.85, ride: 0.4, kmh: 50, repair: 6, step: 0.9,
                seat: { seatX: -0.45, seatY: 1.44, seatZ: 0.35, back: 7.2, up: 3.0, look: 1.3 } },
-  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 0.13, r: 0.75, ride: 0.3, kmh: 120, repair: 10,
+  sportscar: { name: 'sports car', top: 27, rev: 6, accel: 15, brake: 9, steer: 2.4, drain: 0.13, r: 0.75, ride: 0.3, kmh: 120, repair: 10, step: 0.7,
                seat: { seatX: -0.42, seatY: 1.14, seatZ: 0.3, back: 8.0, up: 3.0, look: 1.4 } },
-  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.05, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true,
+  bike:      { name: 'electric motorcycle', top: 21, rev: 3, accel: 13, brake: 8, steer: 2.6, drain: 0.05, r: 0.55, ride: 0.35, kmh: 90, repair: 4, air: true, step: 0.8,
                seat: { seatX: 0, seatY: 1.38, seatZ: 0.15, back: 6.0, up: 2.4, look: 1.2 } },
   // water: floats on the surface (draft below), crawls when beached
-  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22,
+  boat:      { name: 'paddle boat', top: 5.5, rev: 2.5, accel: 3, brake: 2.5, steer: 1.6, drain: 0, r: 0.6, ride: 0.35, kmh: 30, repair: 3, water: true, paddle: true, draft: 0.22, step: 0.4,
                seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
-  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3,
+  motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3, step: 0.4,
                seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
@@ -8735,6 +9235,12 @@ function isVehicle(e){ return !!(e && VEH[e.type]); }
 const ENT_DEF = {
   grazer: { hp: 20, speed: 1.7, r: 0.42, h: 0.7, cap: 5 },
   lurker: { hp: 30, speed: 3.1, r: 0.42, h: 1.05, cap: 6 },
+  // the night shift (Build 19): each with a habit
+  stalker: { hp: 22, speed: 5.4, r: 0.36, h: 0.8, cap: 4 },     // fast, low, hunts in pairs, hates torchlight
+  husk:    { hp: 95, speed: 1.45, r: 0.48, h: 2.0, cap: 3 },    // slow, tanky, walks straight at you, hits hard, burns at dawn
+  wisp:    { hp: 12, speed: 2.4, r: 0.3, h: 0.5, cap: 3, fly: true },   // a floating light with a grudge: drifts at you and detonates
+  // the Sky Spire's garrison: winged, fast, and they never leave their island
+  angel:   { hp: 70, speed: 7.5, r: 0.45, h: 1.8, cap: 0, fly: true },
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
@@ -8752,6 +9258,8 @@ const ENT_DEF = {
   tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
   architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
   leviathan: { hp: 700, speed: 9.5, r: 2.0, h: 3.0, cap: 0, boss: 'THE LEVIATHAN' },
+  archangel: { hp: 900, speed: 9.0, r: 1.6, h: 3.6, cap: 0, boss: 'THE ARCHANGEL' },
+  guardian:  { hp: 420, speed: 2.6, r: 0.9, h: 2.8, cap: 0, boss: 'THE TOMB GUARDIAN' },
 };
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
@@ -9341,6 +9849,128 @@ function entMesh(type, ent){
       const leg = box(0.14, 0.4, 0.14, 0x9a8c76, sx, 0.2, sz);
       legs.push(leg);
     }
+  } else if (type === 'stalker'){
+    // low and long: a grey-blue hound with pale eyes and a whip tail
+    box(0.34, 0.3, 0.9, 0x2c3444, 0, 0.5, 0.05);             // body
+    box(0.3, 0.1, 0.5, 0x1e2431, 0, 0.68, 0.05);             // spine ridge
+    const head = box(0.28, 0.24, 0.34, 0x343d50, 0, 0.58, -0.55);
+    box(0.16, 0.1, 0.14, 0x1e2431, 0, -0.06, -0.22, head);   // muzzle
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xd8ffe8 });
+    for (const sx of [-0.08, 0.08]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), eyeM);
+      eye.position.set(sx, 0.04, -0.17); head.add(eye);
+    }
+    for (const tx of [-0.05, 0.05]) box(0.025, 0.05, 0.03, 0xe8e2d0, tx, -0.12, -0.28, head);   // fangs
+    box(0.06, 0.06, 0.5, 0x1e2431, 0, 0.55, 0.7);             // tail
+    for (const [sx, sz] of [[-0.14,-0.3],[0.14,-0.3],[-0.14,0.32],[0.14,0.32]]){
+      const leg = box(0.1, 0.4, 0.1, 0x1e2431, sx, 0.2, sz);
+      legs.push(leg);
+    }
+  } else if (type === 'husk'){
+    // a dried giant: cracked hide, hollow amber eyes, arms like beams
+    box(0.72, 0.95, 0.5, 0x6a5040, 0, 1.15, 0);              // torso
+    box(0.9, 0.2, 0.56, 0x4e3a2e, 0, 1.68, 0);               // shoulders
+    box(0.6, 0.35, 0.42, 0x5a4436, 0, 0.55, 0);              // hips
+    for (const [cx, cy] of [[-0.2, 1.3],[0.15, 0.95],[0.28, 1.45]]) box(0.06, 0.28, 0.52, 0x3a2a20, cx, cy, 0);   // cracks
+    const head = box(0.42, 0.44, 0.4, 0x5e4838, 0, 1.98, -0.04);
+    const eyeM = new THREE.MeshBasicMaterial({ color: 0xffb040 });
+    for (const sx of [-0.1, 0.1]){
+      box(0.12, 0.1, 0.05, 0x1a120c, sx, 0.04, -0.2, head);  // sockets
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.04), eyeM);
+      eye.position.set(sx, 0.04, -0.21); head.add(eye);
+    }
+    box(0.2, 0.05, 0.04, 0x1a120c, 0, -0.12, -0.2, head);    // a mouth sewn shut
+    for (const sx of [-0.5, 0.5]){
+      const arm = box(0.2, 1.0, 0.22, 0x5a4436, sx, 1.1, 0);
+      box(0.24, 0.16, 0.26, 0x3a2a20, 0, -0.55, 0, arm);     // fist
+      legs.push(arm);
+    }
+    for (const sx of [-0.18, 0.18]){
+      const leg = box(0.22, 0.75, 0.24, 0x4e3a2e, sx, 0.37, 0);
+      legs.push(leg);
+    }
+  } else if (type === 'guardian'){
+    // a sandstone golem: square, heavy, a ruby slit for an eye
+    const sand = 0xc9a86a, dark = 0x9a7d48, deep = 0x6e5730;
+    box(1.3, 1.2, 0.9, sand, 0, 1.55, 0);                    // chest
+    box(1.5, 0.3, 1.0, dark, 0, 2.2, 0);                     // shoulders
+    box(1.0, 0.7, 0.8, dark, 0, 0.75, 0);                    // hips
+    for (const [cx, cy] of [[-0.3, 1.4], [0.25, 1.9], [0.4, 1.2]]) box(0.08, 0.3, 0.92, deep, cx, cy, 0);   // the cracks
+    const head = box(0.7, 0.55, 0.6, sand, 0, 2.62, 0);
+    box(0.46, 0.08, 0.05, 0xa5233c, 0, 0.02, -0.31, head);   // the eye slit
+    box(0.5, 0.06, 0.05, 0xff3b3b, 0, 0.02, -0.32, head);
+    for (const sx of [-0.95, 0.95]){
+      const arm = box(0.42, 1.4, 0.46, dark, sx, 1.5, 0);
+      box(0.5, 0.36, 0.52, deep, 0, -0.75, 0, arm);          // the fist
+      legs.push(arm);
+    }
+    for (const sx of [-0.32, 0.32]){
+      const leg = box(0.44, 0.8, 0.48, deep, sx, 0.4, 0);
+      legs.push(leg);
+    }
+  } else if (type === 'angel' || type === 'archangel'){
+    // a white figure in gold, eyes lit, wings that beat. The Archangel is
+    // the same shape at twice the size with four wings and a halo.
+    const big = type === 'archangel';
+    const white = 0xf4f2f8, gold = 0xd9b85a, robe = 0xe6e2ee;
+    box(0.44, 0.7, 0.3, white, 0, 1.05, 0);                  // torso
+    box(0.5, 0.6, 0.34, robe, 0, 0.45, 0);                    // the robe
+    box(0.52, 0.08, 0.36, gold, 0, 0.78, 0);                  // belt
+    const head = box(0.32, 0.32, 0.3, white, 0, 1.58, 0);
+    const eyeM = new THREE.MeshBasicMaterial({ color: big ? 0xfff0a0 : 0x9fe8ff });
+    for (const sx of [-0.08, 0.08]){
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.05, 0.04), eyeM);
+      eye.position.set(sx, 0.02, -0.16); head.add(eye);
+    }
+    box(0.36, 0.04, 0.34, gold, 0, 0.2, 0, head);              // the circlet
+    for (const sx of [-0.3, 0.3]){
+      const arm = box(0.12, 0.62, 0.14, white, sx, 1.05, 0);
+      box(0.14, 0.1, 0.16, gold, 0, -0.34, 0, arm);            // the gauntlet
+      legs.push(arm);
+    }
+    const wings = [];
+    const wingRows = big ? [[1.3, 0.16], [1.0, -0.2]] : [[1.25, 0]];
+    for (const [wy, wz] of wingRows) for (const sx of [-1, 1]){
+      const w = new THREE.Group();
+      w.position.set(sx * 0.22, wy, 0.16 + wz);
+      const feathers = [[0.7, 0.2, 0.06, 0.35, 0.12], [0.6, 0.15, 0.06, 0.95, 0.02], [0.45, 0.12, 0.06, 1.45, -0.1]];
+      for (const [w1, h1, d1, ox, oy] of feathers){
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w1, h1, d1), new THREE.MeshBasicMaterial({ color: white }));
+        m.position.set(sx * ox, oy, 0); w.add(m);
+      }
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.06), new THREE.MeshBasicMaterial({ color: gold }));
+      tip.position.set(sx * 1.72, -0.14, 0); w.add(tip);
+      w.userData.side = sx;
+      g.add(w); wings.push(w);
+    }
+    if (big){
+      const halo = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.04, 6, 18), new THREE.MeshBasicMaterial({ color: 0xfff0a0 }));
+      halo.position.set(0, 1.95, 0); halo.rotation.x = Math.PI / 2;
+      g.add(halo); g.userData.halo = halo;
+      g.scale.setScalar(2.1);
+    }
+    g.userData.wings = wings;
+  } else if (type === 'wisp'){
+    // a caged light: a bright core, two flecks that orbit it, a soft halo
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), new THREE.MeshBasicMaterial({ color: 0xd8f6ff }));
+    g.add(core);
+    const inner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    core.add(inner);
+    const flecks = [];
+    for (let i = 0; i < 2; i++){
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.08), new THREE.MeshBasicMaterial({ color: 0x9fe8ff }));
+      g.add(f); flecks.push(f);
+    }
+    const hc = document.createElement('canvas'); hc.width = hc.height = 32;
+    const hx = hc.getContext('2d');
+    const grd = hx.createRadialGradient(16, 16, 2, 16, 16, 16);
+    grd.addColorStop(0, 'rgba(200,245,255,0.9)'); grd.addColorStop(0.5, 'rgba(120,200,255,0.35)'); grd.addColorStop(1, 'rgba(80,160,255,0)');
+    hx.fillStyle = grd; hx.fillRect(0, 0, 32, 32);
+    const ht = new THREE.CanvasTexture(hc);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: ht, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.set(1.6, 1.6, 1);
+    g.add(halo);
+    g.userData.core = core; g.userData.flecks = flecks; g.userData.halo = halo; g.userData.noShadow = true;
   } else {
     box(0.5, 0.7, 0.42, 0x1c1626, 0, 0.85, 0);               // hunched torso
     box(0.62, 0.16, 0.5, 0x120e1c, 0, 1.24, -0.02);          // shoulder ridge
@@ -9412,7 +10042,7 @@ function killEntity(e, byPlayer){
   if (i >= 0) game.entities.splice(i, 1);
   if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
-    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : 0x1c1626], 24, 2.2);
+    [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : e.type === 'angel' || e.type === 'archangel' ? 0xf4f2f8 : e.type === 'guardian' ? 0xc9a86a : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
   if (VEH[e.type]){
     if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
@@ -9427,11 +10057,53 @@ function killEntity(e, byPlayer){
     return;
   }
   if (byPlayer){
-    if (e.type === 'grazer'){ addStackItem('meat', 2); toast('+2 meat'); }
+    if (e.type === 'grazer'){ const n = seasonSys.summer ? 4 : 2; addStackItem('meat', n); toast('+' + n + ' meat' + (n > 2 ? ' (summer)' : '')); }
+    else if (e.type === 'stalker'){
+      const n = 1 + ((Math.random() * 2) | 0);
+      addStackItem('fang', n); addStackItem('coin', 2);
+      toast('+' + n + ' stalker fang  ·  +2 coins');
+    }
+    else if (e.type === 'husk'){
+      addStackItem('huskmeat', 2); addStackItem('ironore', 3); addStackItem('coin', 6);
+      toast('+2 husk meat  ·  +3 iron ore  ·  +6 coins');
+    }
+    else if (e.type === 'wisp'){
+      addStackItem('wispcore', 1); addStackItem('coin', 3);
+      toast('+1 wisp core  ·  +3 coins');
+    }
+    else if (e.type === 'angel'){
+      const n = 1 + ((Math.random() * 2) | 0);
+      addStackItem('feather', n); addStackItem('coin', 5);
+      const rec = game.spires && game.spires[e.spireKey];
+      if (rec){ rec.kills = (rec.kills || 0) + 1; }
+      toast('+' + n + ' angel feather  ·  +5 coins' + (rec && !rec.bossDead ? '  ·  garrison ' + Math.max(0, 8 - rec.kills) + ' from thin' : ''));
+    }
+    else if (e.bossType === 'guardian'){
+      const rec = game.zigs && game.zigs[e.zigKey];
+      if (rec) rec.bossDead = true;
+      addStackItem('coin', 150); addStackItem('diamond', 4); addStackItem('rubyingot', 8);
+      toast('THE TOMB GUARDIAN crumbles — +150 coins · +4 diamond · +8 ruby ingot');
+      markSave();
+    }
+    else if (e.bossType === 'archangel'){
+      const rec = game.spires && game.spires[e.spireKey];
+      if (rec) rec.bossDead = true;
+      game.bossKills = game.bossKills || {};
+      addStackItem('tkey', 1); addStackItem('coin', 200);
+      if (!game.bossKills.archangel){
+        game.bossKills.archangel = true;
+        giveItem({ kind: 'wings' }, 1); addStackItem('aetheringot', 12);
+        toast('THE ARCHANGEL falls — WINGS, the treasury key and 12 aether ingots are yours (+200 coins)');
+      } else {
+        addStackItem('aetheringot', 16); addStackItem('diamond', 6);
+        toast('THE ARCHANGEL falls again — the treasury key · +16 aether ingot · +6 diamond · +200 coins');
+      }
+      markSave();
+    }
     else if (e.type === 'sheep'){
-      const n = 2 + ((Math.random() * 2) | 0);
-      addStackItem('wool', n); addStackItem('meat', 1);
-      toast('+' + n + ' wool  ·  +1 meat');
+      const n = 2 + ((Math.random() * 2) | 0), mt = seasonSys.summer ? 2 : 1;
+      addStackItem('wool', n); addStackItem('meat', mt);
+      toast('+' + n + ' wool  ·  +' + mt + ' meat');
     }
     else if (e.bossType === 'warden'){
       const rec = game.forts && game.forts[e.fortKey];
@@ -9507,6 +10179,7 @@ function killEntity(e, byPlayer){
     else {
       let coins = 3 + ((Math.random() * 4) | 0);
       if (e.raider) coins = coins * 2 + 4;                    // raiders pay
+      if (game.slots.some(sl => sl && sl.kind === 'idol')) coins *= 2;   // the sun idol doubles it
       addStackItem('ironore', 2); addStackItem('coin', coins);
       toast('+' + coins + ' coins  ·  +2 iron ore');
     }
@@ -9535,6 +10208,22 @@ function hurtEntity(e, dmg, kx, kz){
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
   if (e.hp <= 0) killEntity(e, true);
+}
+// how far the nearest LIGHT is — torches, beacons (which count for
+// farther: a beacon reads as a torch 0.6x as far away) and powered bulbs.
+// The night shift spawns on this: a lit base stays a base.
+function nearestLightDist(x, y, z){
+  let best = nearestTorchDist(x, y, z);
+  for (const b of game.beacons){
+    const d = Math.hypot(b[0]-x, b[1]-y, b[2]-z) * 0.6;
+    if (d < best) best = d;
+  }
+  for (const b of game.bulbs){
+    if (powerSys.bulbLight(b[6]) <= 0.02) continue;
+    const d = Math.hypot(b[0]-x, b[1]-y, b[2]-z) * 0.7;
+    if (d < best) best = d;
+  }
+  return best;
 }
 function nearestTorchDist(x, y, z){
   let best = 1e9;
@@ -9850,6 +10539,20 @@ const objectiveSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
       out.push({ id: 'fort' + key, x: rec.x, z: rec.z, fort: true,
                  label: rec.bossDead ? 'VAULT' : 'RAID FORT', rec: { name: 'raid fort' } });
+    }
+    for (const key in (game.zigs || {})){
+      const rec = game.zigs[key];
+      if (!rec.stamped || rec.looted) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 700) continue;
+      out.push({ id: 'zig' + key, x: rec.x, z: rec.z, y: rec.gy + 24, zig: true,
+                 label: rec.bossDead ? 'TOMB' : rec.sealBroken ? 'THE GUARDIAN' : 'ZIGGURAT', rec: { name: 'ziggurat' } });
+    }
+    for (const key in (game.spires || {})){
+      const rec = game.spires[key];
+      if (rec.looted) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 900) continue;
+      out.push({ id: 'spire' + key, x: rec.x, z: rec.z, y: rec.top + 20, spire: true,
+                 label: rec.bossDead ? 'TREASURY' : 'SKY SPIRE', rec: { name: 'sky spire' } });
     }
     return out;
   },
@@ -10483,6 +11186,8 @@ const bossSys = {
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
     else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
     else if (e.bossType === 'architect'){ this.architect(e, dt); return; }
+    else if (e.bossType === 'archangel'){ spireSys.archangel(e, dt); return; }
+    else if (e.bossType === 'guardian'){ zigSys.guardian(e, dt); return; }
     // record the path for the trailing segments
     e.trail.unshift([e.x, e.y, e.z]);
     if (e.trail.length > 40) e.trail.pop();
@@ -10724,6 +11429,475 @@ function bossSysTyrant(){
 // erasing the floor under you (subtract), and replaying corrupted obsidian
 // copies of YOUR OWN builds from the edit list.
 bossSysArchitect();
+// ---------- the Sky Spire ----------
+// One island in three carries a spire (SDF-native, in CORE). This runs
+// what lives on it: a garrison of ANGELS that respawns while you are near,
+// a sealed treasury under the plinth, and THE ARCHANGEL at the roost once
+// the garrison is thinned. Nothing here ever leaves its island.
+const SPIRE_GARRISON = 6, SPIRE_THIN = 8;
+const spireSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.skyInCell) return [];
+    const C = CORE.SKY_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const S = game.gen.skyInCell(cx, cz);
+        if (S && S.spire && Math.hypot(S.x - x, S.z - z) < r) out.push(S);
+      }
+    return out;
+  },
+  // the treasury chest under the plinth, sealed; two small chests on the gallery
+  stamp(S, rec){
+    const B = S.top;
+    const rng = CORE.mulberry32(S.seed);
+    const tc = pnodeSys.add('chest', S.x, B + 1.4 + 0.95, S.z + 3.2, Math.PI, { sc: 1.3 });
+    tc.inv = new Array(chestSlots(1.3)).fill(null);
+    tc.inv[0] = { kind: 'aetheringot', count: 24 + ((rng() * 16) | 0) };
+    tc.inv[1] = { kind: 'diamond', count: 8 + ((rng() * 5) | 0) };
+    tc.inv[2] = { kind: 'coin', count: 400 + ((rng() * 200) | 0) };
+    tc.inv[3] = CORE.makeFirearm(8 + ((rng() * 2) | 0));
+    tc.inv[4] = { kind: 'cells', count: 120 };
+    tc.inv[5] = { kind: 'rockets', count: 12 };
+    tc.inv[6] = { kind: 'mcharge', count: 8 };
+    tc.inv[7] = { kind: 'aetherore', count: 20 };
+    tc.locked = true; tc.lockKind = 'tkey'; tc.skey = rec.key;
+    for (const sx of [-6, 6]){
+      const gc = pnodeSys.add('chest', S.x + sx, B + 16.2 + 0.7, S.z, sx < 0 ? Math.PI / 2 : -Math.PI / 2, { sc: 0.7 });
+      gc.inv = new Array(chestSlots(0.7)).fill(null);
+      gc.inv[0] = { kind: 'aetheringot', count: 4 + ((rng() * 4) | 0) };
+      gc.inv[1] = { kind: 'coin', count: 30 + ((rng() * 30) | 0) };
+      gc.inv[2] = { kind: 'feather', count: 2 };
+    }
+    rec.stamped = true;
+  },
+  ensure(){
+    game.spires = game.spires || {};
+    for (const S of this.candidatesNear(game.pos.x, game.pos.z, 700)){
+      const key = 's' + S.key;
+      let rec = game.spires[key];
+      if (!rec){
+        rec = { key, x: +S.x.toFixed(1), z: +S.z.toFixed(1), top: +S.top.toFixed(1), rx: +S.rx.toFixed(1), seed: S.seed,
+                stamped: false, bossDead: false, looted: false, kills: 0 };
+        game.spires[key] = rec;
+      }
+      if (!rec.stamped && Math.hypot(S.x - game.pos.x, S.z - game.pos.z) < 300){
+        this.stamp(S, rec);
+        toast('a SKY SPIRE — the angels are watching');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    this.ensure();
+    for (const key in (game.spires || {})){
+      const rec = game.spires[key];
+      if (rec.bossDead) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 150) continue;
+      const island = { x: rec.x, z: rec.z, top: rec.top, rx: rec.rx };
+      const troops = game.entities.filter(e => e.spireKey === key && e.type === 'angel').length;
+      if (troops < SPIRE_GARRISON){
+        const a = Math.random() * Math.PI * 2, r = 3 + Math.random() * (rec.rx * 0.6);
+        const e = spawnEntity('angel', rec.x + Math.cos(a) * r, rec.top + 6 + Math.random() * 12, rec.z + Math.sin(a) * r);
+        e.spireKey = key; e.island = island;
+        e.tier = Math.random() < 0.5 ? 0 : Math.random() < 0.6 ? 1 : 2;   // in tiers: white, then the captains
+        e.hp = [55, 75, 95][e.tier];
+        e.orbA = a; e.orbR = 4 + Math.random() * (rec.rx * 0.7); e.orbH = 4 + Math.random() * 18; e.orbDir = Math.random() < 0.5 ? 1 : -1;
+      }
+      // the boss, once the garrison is thinned and you are on its island
+      const bossAlive = game.entities.some(e => e.bossType === 'archangel');
+      if (!bossAlive && (rec.kills || 0) >= SPIRE_THIN && pd < rec.rx + 30 && game.pos.y > rec.top - 10 && !bossSys.anyBoss()){
+        const e = bossSys.spawn('archangel', rec.x + 9, rec.top + 40, rec.z);
+        e.spireKey = key; e.island = island; e.state = 'hover'; e.stateT = 0;
+        toast('THE ARCHANGEL descends from the roost');
+        AudioSys.sfx('boom');
+      }
+    }
+  },
+  // keep a flyer over its island: inside the rim (plus a little air) and
+  // between the meadow and the sky above the spire
+  bound(e, S, pad, hi){
+    const dx = e.x - S.x, dz = e.z - S.z, r = Math.hypot(dx, dz), R = S.rx + pad;
+    if (r > R){ e.x = S.x + dx / r * R; e.z = S.z + dz / r * R; e.vx *= -0.5; e.vz *= -0.5; }
+    if (e.y < S.top - 1){ e.y = S.top - 1; e.vy = Math.max(e.vy, 0); }
+    if (e.y > S.top + hi){ e.y = S.top + hi; e.vy = Math.min(e.vy, 0); }
+  },
+  // steer toward a point through the air. Like every other mover: take the
+  // step, then resolve any penetration along the field's gradient (refusing
+  // steps that lose clearance froze flyers skimming a surface at exactly
+  // their own radius)
+  fly(e, tx, ty, tz, sp, dt, r){
+    const dx = tx - e.x, dy = ty - e.y, dz = tz - e.z, L = Math.hypot(dx, dy, dz) || 1;
+    const k = Math.min(1, 4 * dt);
+    e.vx += (dx / L * sp - e.vx) * k; e.vy += (dy / L * sp - e.vy) * k; e.vz += (dz / L * sp - e.vz) * k;
+    e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
+    const le = nearEdits([e.x - 3, e.y - 3, e.z - 3, e.x + 3, e.y + 3, e.z + 3]);
+    for (let it = 0; it < 2; it++){
+      const d = sdfWorld(e.x, e.y, e.z, le);
+      if (d >= r) break;
+      const g = gradWorld(e.x, e.y, e.z, le), dTrue = d / g[3];
+      if (dTrue >= r) break;
+      const push = Math.min(r - dTrue, 0.6);
+      e.x += g[0] * push; e.y += g[1] * push; e.z += g[2] * push;
+      const vn = e.vx * g[0] + e.vy * g[1] + e.vz * g[2];
+      if (vn < 0){ e.vx -= g[0] * vn * 1.3; e.vy -= g[1] * vn * 1.3; e.vz -= g[2] * vn * 1.3; }   // glance off
+    }
+  },
+  // the gallery rings (15-21 m up, 8 m out) shade the meadow: a flyer
+  // that needs to cross their height inside their radius goes out past
+  // the rim on the target's side first, and comes back in beyond them
+  route(e, S, tx, ty, tz){
+    const RING = 10.5, side = y => y > S.top + 21.5 ? 1 : y < S.top + 14.5 ? -1 : 0;
+    const br = Math.hypot(e.x - S.x, e.z - S.z), tr = Math.hypot(tx - S.x, tz - S.z);
+    const sb = side(e.y), st = side(ty);
+    if (sb === st || (br >= RING && tr >= RING)) return [tx, ty, tz];
+    const ux = tr > 0.5 ? (tx - S.x) / tr : br > 0.5 ? (e.x - S.x) / br : 1;
+    const uz = tr > 0.5 ? (tz - S.z) / tr : br > 0.5 ? (e.z - S.z) / br : 0;
+    if (br < RING - 0.5) return [S.x + ux * 13, e.y, S.z + uz * 13];            // out to the rim at this height
+    if (sb !== 0 && sb !== st) return [S.x + ux * 13, st > sb ? S.top + 23 : S.top + 13, S.z + uz * 13];   // past the band
+    return [tx, ty, tz];
+  },
+  playerOnIsland(S){
+    return Math.hypot(game.pos.x - S.x, game.pos.z - S.z) < S.rx + 14 && game.pos.y > S.top - 12;
+  },
+  wingbeat(e, dt, rate){
+    if (!e.mesh) return;
+    const ud = e.mesh.userData;
+    ud.phase = (ud.phase || 0) + dt * rate;
+    if (ud.wings) for (const w of ud.wings) w.rotation.z = w.userData.side * (0.25 + Math.sin(ud.phase) * 0.6);
+    if (ud.halo) ud.halo.rotation.z += dt * 2;
+    const spd = Math.hypot(e.vx, e.vz);
+    if (spd > 0.5) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    e.mesh.rotation.x = Math.max(-0.6, Math.min(0.6, -e.vy * 0.06));
+    e.mesh.position.set(e.x, e.y, e.z);
+  },
+  angel(e, dt, now, pd){
+    const def = ENT_DEF.angel;
+    if (!e.island){
+      const S = game.gen.skyNear ? game.gen.skyNear(e.x, e.z) : null;
+      if (!S){ killEntity(e, false); return; }
+      e.island = { x: S.x, z: S.z, top: S.top, rx: S.rx };
+      e.spireKey = 's' + S.key;
+      e.orbA = Math.random() * Math.PI * 2; e.orbR = 4 + Math.random() * (S.rx * 0.7); e.orbH = 4 + Math.random() * 18; e.orbDir = 1;
+    }
+    const S = e.island;
+    e.mode = e.mode || 'orbit'; e.modeT = (e.modeT || 0) + dt;
+    const onIsland = this.playerOnIsland(S);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    let sp = def.speed * (1 + (e.tier || 0) * 0.12);
+    if (e.mode === 'orbit'){
+      e.orbA += dt * 0.45 * e.orbDir;
+      const tx = S.x + Math.cos(e.orbA) * e.orbR, tz = S.z + Math.sin(e.orbA) * e.orbR;
+      const ty = S.top + e.orbH + Math.sin(now * 0.002 + e.orbA) * 0.8;
+      this.fly(e, tx, ty, tz, sp * 0.55, dt, def.r);
+      if (onIsland && pd < 50 && e.atkT <= 0 && e.modeT > 1.5 && Math.random() < dt * 0.6){ e.mode = 'swoop'; e.modeT = 0; }
+    } else if (e.mode === 'swoop'){
+      this.fly(e, px, py + 1.0, pz, sp * 1.35, dt, def.r);
+      const d3 = Math.hypot(e.x - px, e.y - (py + 1.0), e.z - pz);
+      if (d3 < 2.0){
+        damagePlayer(9 + (e.tier || 0) * 3, (px - e.x) * 3, (pz - e.z) * 3);
+        AudioSys.sfx('hit');
+        e.atkT = 1.4 + Math.random(); e.mode = 'climb'; e.modeT = 0;
+      } else if (e.modeT > 4 || !onIsland){ e.mode = 'climb'; e.modeT = 0; }
+    } else {
+      // climb away after the pass, then back to the circuit
+      this.fly(e, e.x + e.vx * 0.5, S.top + e.orbH + 6, e.z + e.vz * 0.5, sp, dt, def.r);
+      if (e.modeT > 1.2){ e.mode = 'orbit'; e.modeT = 0; e.orbDir = Math.random() < 0.5 ? 1 : -1; }
+    }
+    this.bound(e, S, 6, 50);
+    if (!e.mesh){ e.mesh = entMesh('angel', e); game.scene.add(e.mesh); e.mesh.scale.setScalar(1 + (e.tier || 0) * 0.1); }
+    this.wingbeat(e, dt, 9 + (e.mode === 'swoop' ? 6 : 0));
+    e.mesh.scale.setScalar((1 + (e.tier || 0) * 0.1) * (e.flash > 0 ? 1.12 : 1));
+    if (e.mesh.userData.wings && e.tier === 2) for (const w of e.mesh.userData.wings) w.children[3].material.color.setHex(0xffb040);
+  },
+  // THE ARCHANGEL: it circles the roost, dives to slash, throws light in
+  // fans, and heals if you run off its island. It never crosses the rim.
+  archangel(e, dt){
+    const def = ENT_DEF.archangel;
+    if (!e.island){
+      const S = game.gen.skyNear ? game.gen.skyNear(e.x, e.z) : null;
+      if (!S){ killEntity(e, false); return; }
+      e.island = { x: S.x, z: S.z, top: S.top, rx: S.rx }; e.spireKey = 's' + S.key;
+    }
+    const S = e.island;
+    if (e.state === 'burrow' || !e.state){ e.state = 'hover'; e.stateT = 0; }
+    e.stateT = (e.stateT || 0) + dt;
+    e.lightT = Math.max(0, (e.lightT == null ? 4 : e.lightT) - dt);
+    e.orbA = (e.orbA || 0) + dt * 0.6;
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    const onIsland = this.playerOnIsland(S);
+    const enraged = e.hp < def.hp * 0.5;
+    const roostY = S.top + 36;
+    if (!onIsland){
+      // you left: it goes home and mends
+      this.fly(e, S.x + Math.cos(e.orbA) * 6, roostY, S.z + Math.sin(e.orbA) * 6, def.speed * 0.5, dt, def.r);
+      e.hp = Math.min(def.hp, e.hp + 6 * dt);
+      e.state = 'hover'; e.stateT = 0;
+    } else if (e.state === 'hover'){
+      const w = this.route(e, S, S.x + Math.cos(e.orbA) * 9, roostY - 4 + Math.sin(e.stateT * 1.3) * 2, S.z + Math.sin(e.orbA) * 9);
+      this.fly(e, w[0], w[1], w[2], def.speed * 0.6, dt, def.r);
+      if (e.lightT <= 0 && pd < 70){
+        // a fan of light
+        const n = enraged ? 5 : 3, spread = enraged ? 0.32 : 0.22;
+        const dx = px - e.x, dy = (py + 0.9) - e.y, dz = pz - e.z, L = Math.hypot(dx, dy, dz) || 1;
+        const base = Math.atan2(dz, dx);
+        for (let i = 0; i < n; i++){
+          const a = base + (i - (n - 1) / 2) * spread, sp = 26;
+          (game.projectiles = game.projectiles || []).push({ x: e.x, y: e.y + 0.6, z: e.z, vx: Math.cos(a) * sp * (Math.hypot(dx, dz) / L), vy: dy / L * sp, vz: Math.sin(a) * sp * (Math.hypot(dx, dz) / L),
+                                  t: 3.5, dmg: enraged ? 16 : 12, r: 0.5, src: e, beam: true });
+        }
+        AudioSys.sfx('laser');
+        e.lightT = enraged ? 3 : 5;
+      }
+      if (e.stateT > (enraged ? 2.2 : 3.5) && pd < 60){ e.state = 'dive'; e.stateT = 0; }
+    } else if (e.state === 'dive'){
+      const w = this.route(e, S, px, py + 0.8, pz);
+      this.fly(e, w[0], w[1], w[2], def.speed * (enraged ? 1.8 : 1.5), dt, def.r);
+      const d3 = Math.hypot(e.x - px, e.y - (py + 0.8), e.z - pz);
+      if (d3 < 2.8){
+        damagePlayer(enraged ? 28 : 22, (px - e.x) * 4, (pz - e.z) * 4);
+        AudioSys.sfx('boom');
+        Particles.burst(px, py + 0.9, pz, 0.6, [0xfff0a0, 0xffffff], 14, 3);
+        e.state = 'climb'; e.stateT = 0;
+      } else if (e.stateT > 5.5){ e.state = 'climb'; e.stateT = 0; }
+    } else {
+      const w = this.route(e, S, S.x + Math.cos(e.orbA) * 9, roostY, S.z + Math.sin(e.orbA) * 9);
+      this.fly(e, w[0], w[1], w[2], def.speed, dt, def.r);
+      if (e.stateT > 2.2){ e.state = 'hover'; e.stateT = 0; }
+    }
+    this.bound(e, S, 10, 52);
+    this.wingbeat(e, dt, e.state === 'dive' ? 14 : 7);
+    e.mesh.scale.setScalar(2.1 * (e.flash > 0 ? 1.08 : 1));
+    if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
+  },
+};
+// ---------- the Ziggurat ----------
+// A stepped stone pyramid on the plains, mesa or dunes, rarer than a fort:
+// a processional ramp up the south face to a shrine, and under it a hall
+// of trapped corridors — a floor that drops from under you, a pit of
+// spikes, a hall that floods — and beyond the hall a SEALED tomb: no
+// door, a glyph on the wall, and behind four metres of stone a strongbox
+// and the SUN IDOL. Break the seal and THE TOMB GUARDIAN wakes.
+const zigSys = {
+  accT: 0,
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.zigAt) return [];
+    const C = CORE.ZIG_CELL, out = [];
+    for (let cz = Math.floor((z - r) / C); cz <= Math.floor((z + r) / C); cz++)
+      for (let cx = Math.floor((x - r) / C); cx <= Math.floor((x + r) / C); cx++){
+        const f = game.gen.zigAt(cx, cz);
+        if (f && Math.hypot(f.x - x, f.z - z) < r) out.push(f);
+      }
+    return out;
+  },
+  stamp(f, rec){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz;
+      if (nl) e.noLod = 1;
+      applyEdit(e);
+      return e;
+    };
+    let g = game.gen.height(f.x, f.z);
+    for (const [dx, dz] of [[-20, -20], [20, -20], [-20, 20], [20, 20], [0, 34]]) g = Math.max(g, game.gen.height(f.x + dx, f.z + dz));
+    g = +g.toFixed(1);
+    rec.gy = g;
+    const X = f.x, Z = f.z;
+    // the tiers, sand on their tops; the ground under it levelled solid
+    EB(1, X, g - 3, Z, 46, 6, 46, MAT.ROCK);
+    const tiers = [[40, 5], [32, 5], [24, 5], [16, 4]];
+    let y = g;
+    for (const [w, h] of tiers){
+      EB(1, X, y + h / 2, Z, w, h, w, MAT.STONEBRICK);
+      const pt = EB(2, X, y + h - 0.2, Z, w, 0.5, w, MAT.SAND); pt.noLod = 1;
+      y += h;
+    }
+    const top = y;                                              // g + 19
+    // the shrine on top, open to the south
+    EB(1, X, top + 2, Z, 8, 4, 8, MAT.STONEBRICK);
+    EB(0, X, top + 1.9, Z, 6, 3.2, 6, 0, 1);
+    EB(0, X, top + 1.5, Z + 3.5, 2.2, 2.6, 2, 0, 1);
+    // the processional ramp up the south face, ground to the shrine
+    const rise = top - g, run = 26, L = Math.hypot(rise, run) + 2;
+    const ramp = CORE.makeEdit(1, 1, +X.toFixed(2), +(g + rise / 2).toFixed(2), +(Z + 8 + run / 2).toFixed(2), 6, MAT.STONEBRICK, 0);
+    ramp.sy = 1.6; ramp.sz = +L.toFixed(2); ramp.rx = +Math.atan2(rise, run).toFixed(4);   // +rx tilts local +z (south) downward
+    applyEdit(ramp);
+    // ---- under it: the corridors (interior detail drops out of the LOD) ----
+    EB(0, X, g + 1.5, Z + 12, 2.4, 2.6, 16.4, 0, 1);            // entrance passage, south face to the hall
+    EB(0, X, g + 1.8, Z, 8, 3.2, 8, 0, 1);                      // the hall
+    EB(0, X + 9, g + 1.5, Z, 10.4, 2.6, 2.4, 0, 1);             // east corridor
+    EB(0, X - 9, g + 1.5, Z, 10.4, 2.6, 2.4, 0, 1);             // west corridor
+    EB(0, X + 15.5, g + 1.6, Z, 4, 2.8, 4, 0, 1);               // east room
+    EB(0, X - 15.5, g + 1.6, Z, 4, 2.8, 4, 0, 1);               // west room
+    // the east corridor's falling floor: a half-metre slab over a nine-metre pit
+    EB(0, X + 11.5, g - 4.5, Z, 3, 8.4, 3, 0, 1);               // the pit (floor at g-8.7)
+    const slab = EB(1, X + 11.5, g - 0.1, Z, 3, 0.6, 3, MAT.STONEBRICK, 1);
+    rec.slab = game.edits.indexOf(slab);
+    // the west corridor's spike pit: open, four metres deep, obsidian spikes
+    EB(0, X - 11.5, g - 1.8, Z, 3, 4.2, 3, 0, 1);
+    for (const [sx, sz] of [[-0.9, -0.9], [0, -0.9], [0.9, -0.9], [-0.9, 0], [0, 0], [0.9, 0], [-0.9, 0.9], [0, 0.9], [0.9, 0.9]])
+      EB(1, X - 11.5 + sx, g - 3.4, Z + sz, 0.28, 1.3, 0.28, MAT.OBSIDIAN, 1);
+    // the tomb beyond the hall, sealed: four metres of stone and a ruby glyph
+    EB(0, X, g + 1.6, Z - 11, 6, 3, 6, 0, 1);
+    const glyph = EB(2, X, g + 1.6, Z - 4.1, 2, 2, 0.5, MAT.RUBY); glyph.noLod = 1;
+    // torches at the door, the tomb strongbox, bait in the side rooms
+    game.torches.push([X - 1.6, g + 1.6, Z + 20.4], [X + 1.6, g + 1.6, Z + 20.4]);
+    torchSys.rebuild();
+    const rng = CORE.mulberry32(f.seed);
+    const tc = pnodeSys.add('chest', X, g + 0.2 + 0.95, Z - 12.5, 0, { sc: 1.0 });
+    tc.inv = new Array(chestSlots(1.0)).fill(null);
+    tc.inv[0] = { kind: 'idol' };
+    tc.inv[1] = { kind: 'diamond', count: 6 + ((rng() * 3) | 0) };
+    tc.inv[2] = { kind: 'coin', count: 250 + ((rng() * 120) | 0) };
+    tc.inv[3] = { kind: 'rubyingot', count: 10 };
+    tc.inv[4] = CORE.makeFirearm(5 + ((rng() * 3) | 0));
+    tc.inv[5] = { kind: 'cells', count: 60 };
+    tc.inv[6] = { kind: 'mcharge', count: 4 };
+    tc.zkey = rec.key;
+    for (const sx of [-15.5, 15.5]){
+      const bc = pnodeSys.add('chest', X + sx, g + 0.2 + 0.7, Z + 1.4, Math.PI, { sc: 0.7 });
+      bc.inv = new Array(chestSlots(0.7)).fill(null);
+      bc.inv[0] = { kind: 'coin', count: 20 + ((rng() * 20) | 0) };
+      bc.inv[1] = { kind: 'rounds', count: 24 };
+    }
+    rec.stamped = true;
+  },
+  ensure(){
+    game.zigs = game.zigs || {};
+    for (const f of this.candidatesNear(game.pos.x, game.pos.z, 520)){
+      const key = 'z' + f.key;
+      let rec = game.zigs[key];
+      if (!rec){
+        rec = { key, x: f.x, z: f.z, seed: f.seed, stamped: false, sealBroken: false, bossDead: false, looted: false, dropped: false, flooded: false };
+        game.zigs[key] = rec;
+      }
+      if (!rec.stamped){
+        this.stamp(f, rec);
+        toast('a ZIGGURAT rises on the plain');
+        markSave();
+      }
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 0.25) return;
+    const step = this.accT; this.accT = 0;
+    this.ensT = (this.ensT || 0) + step;
+    if (this.ensT >= 1){ this.ensT = 0; this.ensure(); }
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    for (const key in (game.zigs || {})){
+      const rec = game.zigs[key];
+      if (!rec.stamped) continue;
+      const g = rec.gy, X = rec.x, Z = rec.z;
+      if (Math.abs(px - X) > 30 || Math.abs(pz - Z) > 30 || py < g - 12 || py > g + 26) continue;
+      // the falling floor: stand on the slab and it goes
+      if (!rec.dropped && Math.abs(px - (X + 11.5)) < 1.5 && Math.abs(pz - Z) < 1.5 && py > g - 0.5 && py < g + 1.2){
+        const e = game.edits[rec.slab];
+        if (e && e.op === 1 && e.shape === 1 && Math.abs(e.x - (X + 11.5)) < 0.1){
+          const cut = CORE.makeEdit(0, 1, e.x, e.y, e.z, 3.2, 0, 0); cut.sy = 0.9; cut.sz = 3.2; cut.noLod = 1;
+          applyEdit(cut);
+        }
+        rec.dropped = true;
+        toast('the floor gives way');
+        AudioSys.sfx('break');
+        markSave();
+      }
+      // the spikes: standing in the pit's bottom bites every half second
+      if (Math.abs(px - (X - 11.5)) < 1.5 && Math.abs(pz - Z) < 1.5 && py < g - 2.0 && py > g - 4.5){
+        rec.spikeT = (rec.spikeT || 0) + step;
+        if (rec.spikeT > 0.5){ rec.spikeT = 0; damagePlayer(12, 0, 0); toast('SPIKES'); }
+      }
+      // the hall floods the first time you stand in it
+      if (!rec.flooded && Math.abs(px - X) < 4 && Math.abs(pz - Z) < 4 && py > g - 0.5 && py < g + 3.2){
+        rec.flooded = true;
+        const gy = Math.round(g + 2.8);
+        for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]){
+          const gx = Math.round(X + dx), gz = Math.round(Z + dz);
+          const ck = waterSys.keyOf(gx, gy, gz);
+          const a = waterSys.cells.get(ck) || waterSys.materialize(ck);
+          const q = waterSys.idx(gx & 7, gy & 7, gz & 7);
+          if (a[q] !== 255){ a[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+        }
+        toast('the hall groans — water pours from the ceiling');
+        AudioSys.sfx('break');
+        markSave();
+      }
+      // the seal: air where the wall was means someone dug through
+      if (!rec.sealBroken){
+        const le = nearEdits([X - 2, g, Z - 8, X + 2, g + 3, Z - 4]);
+        let open = false;
+        for (const [dx, dy, dz] of [[0, 1.2, -5], [0, 1.2, -6.5], [0, 2.2, -5.5], [1, 1.5, -6], [-1, 1.5, -6]])
+          if (sdfWorld(X + dx, g + dy, Z + dz, le) > 0.3){ open = true; break; }
+        if (open){
+          rec.sealBroken = true;
+          if (!rec.bossDead && !bossSys.anyBoss()){
+            const e = bossSys.spawn('guardian', X, g + 0.3, Z - 1);
+            e.zigKey = key; e.home = { x: X, z: Z, g }; e.state = 'walk'; e.stateT = 0;
+            toast('the seal breaks — THE TOMB GUARDIAN wakes');
+            AudioSys.sfx('boom');
+          }
+          markSave();
+        }
+      }
+      const tc = game.pnodes.find(n => n.t === 'chest' && n.zkey === key);
+      if (tc && !rec.looted && tc.inv && !tc.inv.some(x => x && x.kind === 'idol')){ rec.looted = true; markSave(); }
+    }
+  },
+  // THE TOMB GUARDIAN: a golem that walks straight at you through its own
+  // corridors, slams up close, and pounds the floor under your feet from
+  // a distance. It stays under its pyramid.
+  guardian(e, dt){
+    const def = ENT_DEF.guardian;
+    if (!e.home){ e.home = { x: e.x, z: e.z, g: game.gen.height(e.x, e.z) }; }
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.poundT = Math.max(0, (e.poundT == null ? 5 : e.poundT) - dt);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    const hd = Math.hypot(px - e.home.x, pz - e.home.z);
+    let tx = px, tz = pz;
+    const home = hd > 34 || Math.abs(py - e.home.g) > 14;
+    if (home){ tx = e.home.x; tz = e.home.z; e.hp = Math.min(def.hp, e.hp + 4 * dt); }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    const sp = e.atkT > 1.2 ? 0 : def.speed;
+    let nx = e.x + dx / L * sp * dt, nz = e.z + dz / L * sp * dt;
+    // ground follow inside the corridors: find the floor under the step
+    const le = nearEdits([nx - 2, e.y - 3, nz - 2, nx + 2, e.y + 4, nz + 2]);
+    let gy = null;
+    for (let yy = e.y + 1.2; yy > e.y - 3; yy -= 0.25){
+      if (sdfWorld(nx, yy, nz, le) < 0.05){ gy = yy + 0.1; break; }
+    }
+    // a wall at chest height stops it
+    const blocked = sdfWorld(nx, (gy != null ? gy : e.y) + 1.4, nz, le) < def.r * 0.8;
+    if (!blocked && L > 0.5){ e.x = nx; e.z = nz; }
+    if (gy != null) e.y += (gy - e.y) * Math.min(1, 10 * dt);
+    else e.y -= 6 * dt;
+    if (!home && pd < 2.9 && Math.abs(py - e.y) < 3 && e.atkT <= 0){
+      e.atkT = 1.9;
+      damagePlayer(20, (px - e.x) * 3.5, (pz - e.z) * 3.5);
+      AudioSys.sfx('boom');
+      Particles.burst(px, py + 0.6, pz, 0.5, [0xc9a86a, 0x6e5730], 12, 3);
+    } else if (!home && pd >= 2.9 && pd < 14 && e.poundT <= 0){
+      // the pound: the floor under your feet breaks
+      e.poundT = 7;
+      explode(px, py - 0.4, pz, 1.1, 14);
+    }
+    if (!e.mesh){ e.mesh = entMesh('guardian', e); game.scene.add(e.mesh); }
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (L > 0.5 && sp > 0) e.mesh.rotation.y = Math.atan2(-dx, -dz);
+    const ud = e.mesh.userData;
+    ud.phase = (ud.phase || 0) + dt * (sp > 0 ? 3.2 : 0);
+    for (let li = 0; li < (ud.legs || []).length; li++) ud.legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * (sp > 0 ? 0.5 : 0);
+    if (e.atkT > 1.2 && ud.legs) for (let li = 0; li < 2; li++) ud.legs[li].rotation.x = -1.6 + (1.9 - e.atkT) * 3;   // the arms come down
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.06 : 1);
+  },
+};
 function bossSysArchitect(){
   bossSys.architect = function(e, dt){
     const def = ENT_DEF.architect;
@@ -11161,7 +12335,7 @@ const railSys = {
 // the terrain (embankments over dips, a cut through rises). Segments stamp
 // as you come within reach, like the cities themselves, and the record of
 // what's stamped lives in game.roads. Signs at both ends and every 480m.
-const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 4;
+const ROAD_SEG = 24, ROAD_W = 8, ROAD_LINK_MAX = 3400, ROAD_SHOULDER = 1.0, ROAD_TUNNEL_H = 7.0, ROAD_CUT_W = 14, ROAD_VER = 5;
 const roadSys = {
   accT: 0, scanT: 99, near: [],
   linksNear(x, z, r){
@@ -11243,8 +12417,11 @@ const roadSys = {
     // half-metre trench across every graded road ("the mountain is still
     // there"). Each box is shifted so its working face lands where the
     // untilted face would have: faceY is that face's height off the centre.
-    const EB = (op, y, sy, sx, sz, mat, faceY) => {
-      const shift = (faceY || 0) * Math.sin(grade);
+    const EB = (op, y, sy, sx, sz, mat, faceY, along) => {
+      // along: the box centre's offset from the segment midpoint down the
+      // road (its y follows the grade)
+      const shift = (faceY || 0) * Math.sin(grade) + (along || 0);
+      if (along) y += along * (y1 - y0) / (L.len / L.segs);
       const e = CORE.makeEdit(op, 1, +(mx + L.ux * shift).toFixed(2), +y.toFixed(2), +(mz + L.uz * shift).toFixed(2), sx, mat || 0, L.yaw);
       e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2);
       if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);   // +rx tilts local +z downward
@@ -11255,7 +12432,22 @@ const roadSys = {
     // a roof; through a hill an open trench; on flat ground it just clears
     // the shoulders. The slab then refills its own lane, so the road stands
     // a metre proud of whatever it cut — the ground never rises into it.
-    if (riseNear) EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0, -ROAD_TUNNEL_H / 2);   // its floor is the working face
+    if (riseNear){
+      EB(0, top - ROAD_SHOULDER + ROAD_TUNNEL_H / 2, ROAD_TUNNEL_H, ROAD_CUT_W, segLen, 0, -ROAD_TUNNEL_H / 2);   // its floor is the working face
+      // A chain of subtracts is a lower bound on distance, not a distance:
+      // where two neighbouring cuts overlap, each says "solid at my end
+      // face" and the air over the tarmac reads as a wall 0.3 m thick at
+      // every boundary — the invisible wall that stopped cars in tunnels.
+      // So a second cut, THREE segments long with its floor flush on the
+      // tarmac (MINE_EPS above it, so it shaves nothing off the neighbours'
+      // slabs), owns the air the vehicles drive in: its end faces are a
+      // whole segment away from anything on this segment, so the field
+      // here is the true distance to the corridor's roof and walls.
+      const seg0 = L.len / L.segs;
+      const a0 = Math.max(0, i - 1) * seg0, a1 = Math.min(L.segs, i + 2) * seg0;
+      const airH = ROAD_TUNNEL_H - ROAD_SHOULDER;
+      EB(0, top + CORE.MINE_EPS + airH / 2, airH, ROAD_CUT_W, a1 - a0, 0, -airH / 2, (a0 + a1) / 2 - (i + 0.5) * seg0);
+    }
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT, (top - bottom) / 2);                              // its top is
     // at either end: a painted strip along the slab's edge from where the
     // road arrives to the nearest avenue, so the highway joins the grid
@@ -11739,7 +12931,7 @@ const citySys = {
 
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
-  const counts = { grazer: 0, lurker: 0, sheep: 0 };
+  const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
   for (const e of game.entities) counts[e.type]++;
   const a = Math.random() * Math.PI * 2;
   const d = 22 + Math.random() * 20;
@@ -11747,6 +12939,25 @@ function trySpawnEntities(){
   const h = game.gen.height(x, z);
   if (game.gen.wetAt && game.gen.wetAt(x, z, h)) return;   // nothing spawns in the sea
   const night = game.dayF < 0.25;
+  // the night shift: stalkers (in pairs), husks and wisps come out on the
+  // surface after dark. Their odds scale with how far the spot is from
+  // your lights — 12 m of a torch spawns nothing, 50 m out is open season
+  if (night && game.pos.y > game.gen.height(game.pos.x, game.pos.z) - 3){
+    const ld = nearestLightDist(x, h, z);
+    const f = Math.max(0, Math.min(1, (ld - 12) / 38));
+    if (f > 0 && Math.random() < f * 0.7){
+      const roll = Math.random();
+      if (roll < 0.42 && counts.stalker + 1 < ENT_DEF.stalker.cap){
+        spawnEntity('stalker', x, h + 0.4, z);
+        const a2 = Math.random() * Math.PI * 2;
+        const e2 = spawnEntity('stalker', x + Math.cos(a2) * 2.5, h + 0.4, z + Math.sin(a2) * 2.5);
+        e2.pairOf = 1;
+        return;
+      }
+      if (roll < 0.72 && counts.husk < ENT_DEF.husk.cap){ spawnEntity('husk', x, h + 0.5, z); return; }
+      if (counts.wisp < ENT_DEF.wisp.cap){ spawnEntity('wisp', x, h + 1.8, z); return; }
+    }
+  }
   // lurkers spawn in the dark (survival only): night surface, or an
   // underground air pocket
   if (counts.lurker < ENT_DEF.lurker.cap){
@@ -11851,8 +13062,17 @@ function updateEntities(dt, now){
       game.entities.splice(i, 1);
       continue;
     }
-    // night hunters can't survive the sun: surface lurkers ignite at dawn
-    if (e.type === 'lurker' && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
+    // the night shift at dawn: wisps gutter out, stalkers slink off
+    if (game.dayF > 0.45 && (e.type === 'wisp' || e.type === 'stalker')){
+      e.dawnT = (e.dawnT || 0) + dt;
+      if (e.type === 'wisp' && e.dawnT > 1.5){
+        Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
+        killEntity(e, false); continue;
+      }
+      if (e.type === 'stalker' && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+    }
+    // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
+    if ((e.type === 'lurker' || e.type === 'husk') && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
       e.burnT = (e.burnT || 0) + dt;
       if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 1.2, e.z, 0.3, [0xff8830, 0xffb347, 0x442211], 2, 1.4);
       if (e.burnT > 0.4){ e.burnT = 0; e.hp -= 5; e.flash = 0.1; }
@@ -11861,6 +13081,7 @@ function updateEntities(dt, now){
     // steering
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
+    if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
     if (e.type === 'lurker' && (pd < 15 || e.raider)){
       if (e.raider) sp *= 1.15;
       sx = game.pos.x - e.x; sz = game.pos.z - e.z;
@@ -11868,6 +13089,69 @@ function updateEntities(dt, now){
       if (d3 < 1.6 && e.atkT <= 0){
         e.atkT = 1;
         damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5);
+      }
+    } else if (e.type === 'stalker'){
+      // fast and low: it circles in rather than charging, backs off from
+      // torchlight, and at dawn it runs
+      const ld = nearestLightDist(e.x, e.y, e.z);
+      e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
+      if (game.dayF > 0.45){ sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.2; }
+      else if (ld < 9){
+        // find the light and run from it
+        let lx = e.x, lz = e.z, bd = 1e9;
+        for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
+        for (const b of game.beacons){ const d = Math.hypot(b[0]-e.x, b[2]-e.z) * 0.6; if (d < bd){ bd = d; lx = b[0]; lz = b[2]; } }
+        sx = e.x - lx; sz = e.z - lz; sp *= 1.1;
+      } else if (pd < 24){
+        const dx = game.pos.x - e.x, dz = game.pos.z - e.z;
+        const px2 = -dz * e.orbit, pz2 = dx * e.orbit;             // sideways
+        const close = Math.max(0, Math.min(1, (pd - 2.5) / 6));   // spiral in
+        sx = dx + px2 * close * 0.9; sz = dz + pz2 * close * 0.9;
+        const d3 = Math.hypot(dx, e.y - game.pos.y, dz);
+        if (d3 < 1.5 && e.atkT <= 0){
+          e.atkT = 0.55;
+          damagePlayer(5, (game.pos.x - e.x) * 1.5, (game.pos.z - e.z) * 1.5);
+          if (Math.random() < 0.3) e.orbit = -e.orbit;
+        }
+      } else {
+        if (e.tt <= 0){ e.tt = 2 + Math.random() * 3; e.tx = e.x + (Math.random() - 0.5) * 20; e.tz = e.z + (Math.random() - 0.5) * 20; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
+    } else if (e.type === 'husk'){
+      // it saw you. it is coming. nothing about that changes.
+      if (pd < 36){
+        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+        const d3 = Math.hypot(sx, e.y - game.pos.y, sz);
+        if (d3 < 2.3 && e.atkT <= 0){
+          e.atkT = 1.7;
+          damagePlayer(18, (game.pos.x - e.x) * 4, (game.pos.z - e.z) * 4);
+          AudioSys.sfx('hit');
+        }
+        if (e.atkT > 1.3) sp *= 0.2;                              // the swing plants its feet
+      } else {
+        if (e.tt <= 0){ e.tt = 5 + Math.random() * 5; e.tx = e.x + (Math.random() - 0.5) * 14; e.tz = e.z + (Math.random() - 0.5) * 14; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
+    } else if (e.type === 'wisp'){
+      // a light that drifts toward you and pops: TNT with a grudge
+      e.fuse = e.fuse || 0;
+      if (pd < 30){
+        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
+        const d3 = Math.hypot(sx, e.y - (game.pos.y + 0.9), sz);
+        if (d3 < 6) sp *= 1.6;                                      // the last rush
+        if (d3 < 2.2){
+          e.fuse += dt * 4;
+          if (e.fuse > 1){
+            explode(e.x, e.y, e.z, 1.5, 26);
+            killEntity(e, false); continue;
+          }
+        } else e.fuse = Math.max(0, e.fuse - dt * 2);
+      } else {
+        if (e.tt <= 0){ e.tt = 3 + Math.random() * 4; e.tx = e.x + (Math.random() - 0.5) * 16; e.tz = e.z + (Math.random() - 0.5) * 16; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
@@ -11933,6 +13217,30 @@ function updateEntities(dt, now){
     const wx = sx / sl * sp, wz = sz / sl * sp;
     e.vx += (wx - e.vx) * Math.min(1, 8 * dt);
     e.vz += (wz - e.vz) * Math.min(1, 8 * dt);
+    if (def.fly){
+      // a floating thing: no gravity, it holds a height over the ground (or
+      // over you), bobs, and slides around solid rock rather than through it
+      const gh = game.gen.height(e.x, e.z);
+      const want = (pd < 30 ? Math.max(gh + 1.4, game.pos.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
+      e.vy += ((want - e.y) * 2.2 - e.vy) * Math.min(1, 4 * dt);
+      const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
+      const le2 = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
+      if (sdfWorld(nx, ny, nz, le2) > def.r){ e.x = nx; e.y = ny; e.z = nz; }
+      else { e.vx *= -0.3; e.vz *= -0.3; e.vy = Math.max(e.vy, 1.5); }
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+      e.mesh.position.set(e.x, e.y, e.z);
+      const ud = e.mesh.userData;
+      ud.phase += dt * (3 + (e.fuse || 0) * 12);
+      if (ud.flecks) for (let fi = 0; fi < ud.flecks.length; fi++){
+        const a = ud.phase * 1.7 + fi * 2.1;
+        ud.flecks[fi].position.set(Math.cos(a) * 0.36, Math.sin(a * 1.3) * 0.2, Math.sin(a) * 0.36);
+      }
+      if (ud.core){ const pulse = 1 + Math.sin(ud.phase * 4) * 0.12 + (e.fuse || 0) * 0.5; ud.core.scale.setScalar(pulse); }
+      if (ud.halo) ud.halo.material.opacity = 0.55 + Math.sin(ud.phase * 4) * 0.2 + (e.fuse || 0) * 0.3;
+      e.mesh.scale.setScalar(e.flash > 0 ? 1.15 : 1);
+      if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, [0x9fe8ff, 0xd8f6ff], 1, 0.4);
+      continue;
+    }
     e.vy -= 22 * dt;
     const ox = e.x;
     const oz = e.z;
@@ -12155,17 +13463,25 @@ function updateProjectiles(dt){
     let done = false;
     for (let k = 0; k < steps && !done; k++){
       const h = dt / steps;
-      p.vy -= 3.5 * h;
+      if (!p.beam) p.vy -= 3.5 * h;
       p.x += p.vx * h; p.y += p.vy * h; p.z += p.vz * h;
       const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
       if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
-      if (!done) for (const en of game.entities){
+      if (!done && !p.beam) for (const en of game.entities){
         if (en === p.src) continue;          // never detonate on the thrower
         const def = ENT_DEF[en.type];
         if (Math.hypot(en.x - p.x, en.y + def.h * 0.5 - p.y, en.z - p.z) < def.r + 0.5){ done = true; break; }
       }
     }
     p.t -= dt;
+    if (p.beam){
+      // thrown light: it burns what it touches and carves nothing
+      Particles.burst(p.x, p.y, p.z, 0.1, [0xfff0a0, 0xffffff], 2, 0.4);
+      const pd = Math.hypot(game.pos.x - p.x, game.pos.y + 0.9 - p.y, game.pos.z - p.z);
+      if (pd < 1.7){ damagePlayer(p.dmg, (game.pos.x - p.x) * 2, (game.pos.z - p.z) * 2); done = true; }
+      if (done || p.t <= 0){ Particles.burst(p.x, p.y, p.z, 0.5, [0xfff0a0, 0xffffff], 10, 2); ps.splice(i, 1); }
+      continue;
+    }
     Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
     if (done || p.t <= 0){
       explode(p.x, p.y, p.z, p.r, p.dmg);
@@ -12364,6 +13680,22 @@ function bindInput(){
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'decrafter'){ openDecrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'chest' && pn.locked && pn.lockKind === 'tkey'){
+          if (CORE.countItem(game.slots, 'tkey') >= 1){
+            CORE.consumeItem(game.slots, 'tkey', 1);
+            pn.locked = false;
+            const sr = game.spires && game.spires[pn.skey];
+            if (sr) sr.looted = true;
+            toast('the treasury opens');
+            AudioSys.sfx('craft');
+            refreshHotbar(); markSave();
+            openMachine(pn);
+          } else {
+            toast('sealed — THE ARCHANGEL at the top holds the key');
+            AudioSys.sfx('deny');
+          }
+          return;
+        }
         if (pn.t === 'chest' && pn.locked){
           if (CORE.countItem(game.slots, 'vkey') >= 1){
             CORE.consumeItem(game.slots, 'vkey', 1);
@@ -12895,19 +14227,39 @@ function driveCar(dt){
   const R = V.r;
   const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
   const le = nearEdits(box);
-  let grounded = false, wall = false, gn = null;
+  let grounded = false, wall = false, gn = null, hitSpd = 0;
+  const maxStep = V.step != null ? V.step : 0.6;
   for (let it = 0; it < 3; it++){
     const cy = e.y + R;
-    const dd = sdfWorld(e.x, cy, e.z, le);
-    if (dd < R){
-      const g2 = gradWorld(e.x, cy, e.z, le);
-      const push = R - dd / g2[3];
+    const c = sphereContact(e.x, cy, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    if (g2[1] > 0.5){
       e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
-      if (g2[1] > 0.5){ grounded = true; gn = g2; e.vy = Math.max(e.vy, 0); }
-      else { wall = true; e.speed *= Math.max(0.35, 1 - push * 2.5); }      // clipped a wall: a graze barely slows you
+      grounded = true; gn = g2; e.vy = Math.max(e.vy, 0);
+      continue;
     }
+    // a wall: with wheels on (or just off) the ground, try to climb it —
+    // a kerb, a slab lip, a low rock — before it counts as a hit. The one
+    // sphere sees only the nearest surface, so beside a wall it sinks a
+    // little into the ground it stands on: stand it back up first so the
+    // climb is measured from the road, not from the hole it dug.
+    if ((e.groundT || 0) < 0.3 && Math.abs(e.speed) > 0.5){
+      const bc = sphereContact(e.x, e.y + 0.05, e.z, 0.05, le);
+      if (bc && bc.g[1] > 0.5){ e.y += bc.push / bc.g[1]; grounded = true; e.vy = Math.max(e.vy, 0); }
+      if (vehicleStepUp(e, R, fx * Math.sign(e.speed), fz * Math.sign(e.speed), le, maxStep)){
+        grounded = true; e.vy = Math.max(e.vy, 0);
+        continue;
+      }
+    }
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    wall = true;
+    if (push > 0.15) hitSpd = Math.max(hitSpd, Math.abs(e.speed));   // a real hit, judged at the speed you arrived
+    e.speed *= Math.max(0.35, 1 - push * 2.5);      // clipped a wall: a graze barely slows you
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; e.vy = 0; grounded = true; }
+  e.groundT = grounded ? 0 : (e.groundT || 0) + dt;
+  if (e.stepVis) e.stepVis = e.stepVis > 0.01 ? e.stepVis * Math.exp(-14 * dt) : 0;
   if (!V.water && inWater(e.x, e.y + 0.4, e.z)) e.speed *= Math.pow(0.25, dt);   // cars hate water
   if (afloat && Math.abs(e.speed) > 1.5 && Math.random() < dt * 14)
     Particles.burst(e.x - fx * 1.6, e.y + 0.1, e.z - fz * 1.6, 0.4, [0xdfeeff, 0xffffff], 2, 0.8);   // the wake
@@ -12981,9 +14333,9 @@ function driveCar(dt){
       }
       e.lean = 0;
     }
-    if (wall && Math.abs(e.speed) > 9 && !airborne){
+    if (wall && hitSpd > 9 && !airborne){
       // a wall at speed throws you off
-      const dmg = Math.round(6 + Math.abs(e.speed) * 0.9);
+      const dmg = Math.round(6 + hitSpd * 0.9);
       e.hp = Math.max(1, (e.hp || 1) - 20);
       e.speed = 0;
       exitCar();
@@ -12996,17 +14348,18 @@ function driveCar(dt){
   }
   // the motor hums with speed
   AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / V.top));
-  // the driver rides along
-  game.pos.set(e.x, e.y + V.ride, e.z);
+  // the driver rides along (a kerb climb eases up over a few frames)
+  const vy = e.y - (e.stepVis || 0);
+  game.pos.set(e.x, vy + V.ride, e.z);
   game.vel.set(0, 0, 0);
   game.grounded = true;
   if (e.mesh){
-    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.position.set(e.x, vy, e.z);
     if (V.air) e.mesh.rotation.set(e.tPitch || 0, e.heading + (e.tYaw || 0), (e.tRoll || 0) + (e.lean || 0));
     else e.mesh.rotation.y = e.heading;
   }
   // the camera is IN the vehicle: the seat, or a chase cam on F5
-  vehicleCamera(e.x, e.y, e.z, e.heading, dt, V.seat);
+  vehicleCamera(e.x, vy, e.z, e.heading, dt, V.seat);
   game.carHudT = (game.carHudT || 0) + dt;
   if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
   game.carHud2T = (game.carHud2T || 0) + dt;
@@ -13118,14 +14471,12 @@ function drivePlane(e, V, dt){
   let grounded = false, wall = false;
   for (let it = 0; it < 3; it++){
     const cy = e.y + R;
-    const dd = sdfWorld(e.x, cy, e.z, le);
-    if (dd < R){
-      const g2 = gradWorld(e.x, cy, e.z, le);
-      const push = R - dd / g2[3];
-      e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
-      if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
-      else wall = true;
-    }
+    const c = sphereContact(e.x, cy, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
+    else wall = true;
   }
   if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; grounded = true; }
   const wt = waterTopAt(e.x, e.z, e.y);
@@ -13196,9 +14547,8 @@ function driveHover(e, V, dt){
   }
   const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
   const le = nearEdits([e.x - 3, e.y - 10, e.z - 3, e.x + 3, e.y + 4, e.z + 3]);
-  // a wall ahead at cushion height stops it
-  const ahead = sdfWorld(e.x + fx * 1.3, e.y + 0.7, e.z + fz * 1.3, le);
-  if (ahead < 0.5) e.speed *= Math.pow(0.02, dt);
+  // a (real) wall ahead at cushion height stops it
+  if (sphereContact(e.x + fx * 1.3, e.y + 0.7, e.z + fz * 1.3, 0.5, le)) e.speed *= Math.pow(0.02, dt);
   e.x += fx * e.speed * dt; e.z += fz * e.speed * dt;
   // the cushion: find the ground under it (march down), and the water
   let gy = null;
@@ -13261,6 +14611,8 @@ function updatePlayer(dt){
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
   game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
+  game.onIce = false;
+  if (seasonSys.winter) seasonSys.ice();
   // camera-relative on the horizontal plane (yaw only — never world axes)
   const sin = Math.sin(game.yaw), cos = Math.cos(game.yaw);
   let mx = (-sin * fwd + cos * str);
@@ -13311,6 +14663,17 @@ function updatePlayer(dt){
       if (Math.random() < 0.5)
         Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.15, [0xffb347, 0xff8830], 1, 1.2);
     } else game.jetOn = false;
+    // worn WINGS: hold space while falling to spread them — the fall slows
+    // to a drift and you ride forward wherever you look. No fuel, no limit,
+    // and a landing that gentle never hurts.
+    const wg = game.armor && game.armor.back;
+    if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
+      game.vel.y += (-2.4 - game.vel.y) * Math.min(1, 7 * dt);
+      const gfx = -Math.sin(game.yaw), gfz = -Math.cos(game.yaw);
+      game.vel.x += (gfx * 9.5 - game.vel.x) * Math.min(1, 2.2 * dt);
+      game.vel.z += (gfz * 9.5 - game.vel.z) * Math.min(1, 2.2 * dt);
+      game.gliding = true;
+    } else game.gliding = false;
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
     if (game.vel.y < -40) game.vel.y = -40;
   }
@@ -14765,6 +16128,7 @@ function doMine(tool, p, shape, eff){
   if (poppedStoves){ addStackItem('stove', poppedStoves); parts.push('+' + poppedStoves + ' stove'); }
   const poppedBulbs = bulbSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedBulbs){ addStackItem('bulb', poppedBulbs); parts.push('+' + poppedBulbs + ' bulb'); }
+  collapseSys.note(p, eff);
   // trees whose ground was carved away fall and yield their wood
   for (const [k, v] of [...treeSys.visible]){
     const t = v.t;
@@ -15014,7 +16378,7 @@ function tryAction(dt, now){
       bob.add(top, bot);
       bob.position.set(hit[0], hit[1], hit[2]);
       game.scene.add(bob);
-      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: 3 + Math.random() * 7, bit: false, bitT: 0, mesh: bob,
+      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
                        px: game.pos.x, pz: game.pos.z };
       toast('cast — watch the bobber, click when it bites');
       AudioSys.sfx('toggle');
@@ -15588,7 +16952,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -15712,6 +17076,46 @@ function itemIconURL(it){
   } else if (it.kind === 'kelp'){
     c.fillStyle = '#2f7a4d'; c.fillRect(4, 1, 2, 14); c.fillRect(9, 3, 2, 12);
     c.fillStyle = '#3f9a5d'; c.fillRect(6, 4, 2, 3); c.fillRect(2, 7, 2, 3); c.fillRect(11, 6, 2, 3); c.fillRect(7, 10, 2, 3);
+  } else if (it.kind === 'idol'){
+    // a squat gold figure with a ruby eye
+    c.fillStyle = '#d9b85a'; c.fillRect(5, 2, 6, 5); c.fillRect(4, 7, 8, 6); c.fillRect(3, 13, 10, 2);
+    c.fillStyle = '#f4e2a0'; c.fillRect(6, 3, 1, 1); c.fillRect(5, 8, 1, 4);
+    c.fillStyle = '#a5233c'; c.fillRect(8, 4, 2, 2);
+    c.fillStyle = '#8a6a1a'; c.fillRect(4, 12, 8, 1);
+  } else if (it.kind === 'feather'){
+    // a white quill, gold at the tip
+    c.fillStyle = '#f4f2f8'; c.fillRect(7, 2, 3, 9); c.fillRect(5, 4, 7, 5); c.fillRect(6, 3, 5, 7);
+    c.fillStyle = '#d8d4e2'; c.fillRect(8, 3, 1, 10);
+    c.fillStyle = '#d9b85a'; c.fillRect(7, 2, 3, 1);
+    c.fillStyle = '#9a9aa8'; c.fillRect(8, 12, 1, 3);
+  } else if (it.kind === 'tkey'){
+    // a gold key with a winged bow
+    c.fillStyle = '#d9b85a'; c.fillRect(6, 3, 4, 4); c.fillRect(7, 7, 2, 7); c.fillRect(9, 11, 2, 1); c.fillRect(9, 13, 2, 1);
+    c.fillStyle = '#f4e2a0'; c.fillRect(7, 4, 1, 1);
+    c.fillStyle = '#f4f2f8'; c.fillRect(3, 4, 3, 2); c.fillRect(10, 4, 3, 2);
+  } else if (it.kind === 'wings'){
+    // two white wings, gold-tipped
+    c.fillStyle = '#f4f2f8';
+    c.fillRect(1, 5, 6, 3); c.fillRect(2, 8, 4, 2); c.fillRect(3, 10, 2, 2); c.fillRect(2, 3, 4, 2);
+    c.fillRect(9, 5, 6, 3); c.fillRect(10, 8, 4, 2); c.fillRect(11, 10, 2, 2); c.fillRect(10, 3, 4, 2);
+    c.fillStyle = '#d9b85a'; c.fillRect(1, 5, 1, 3); c.fillRect(14, 5, 1, 3); c.fillRect(7, 6, 2, 3);
+    c.fillStyle = '#c8c4d4'; c.fillRect(3, 8, 1, 2); c.fillRect(12, 8, 1, 2);
+  } else if (it.kind === 'fang'){
+    // a curved tooth, root up
+    c.fillStyle = '#e8e2d0'; c.fillRect(6, 2, 5, 3); c.fillRect(7, 5, 4, 3); c.fillRect(8, 8, 3, 3); c.fillRect(9, 11, 2, 3);
+    c.fillStyle = '#b8b0a0'; c.fillRect(6, 2, 1, 3); c.fillRect(7, 5, 1, 3); c.fillRect(8, 8, 1, 3);
+    c.fillStyle = '#7a2f2f'; c.fillRect(6, 1, 5, 1);
+  } else if (it.kind === 'huskmeat'){
+    // a dark, dry slab
+    c.fillStyle = '#6a4a3a'; c.fillRect(3, 4, 10, 8);
+    c.fillStyle = '#4a3028'; c.fillRect(3, 4, 10, 2); c.fillRect(5, 9, 3, 1); c.fillRect(9, 7, 2, 1);
+    c.fillStyle = '#8a6a5a'; c.fillRect(4, 7, 2, 1); c.fillRect(8, 10, 3, 1);
+  } else if (it.kind === 'wispcore'){
+    // a caged light
+    c.fillStyle = '#2a3a55'; c.fillRect(4, 3, 8, 10);
+    c.fillStyle = '#6fd8ff'; c.fillRect(6, 5, 4, 6);
+    c.fillStyle = '#ffffff'; c.fillRect(7, 6, 2, 3);
+    c.fillStyle = '#1a2436'; c.fillRect(5, 5, 1, 6); c.fillRect(10, 5, 1, 6); c.fillRect(6, 4, 4, 1); c.fillRect(6, 11, 4, 1);
   } else if (it.kind === 'lscale'){
     c.fillStyle = '#1f5f7a'; c.fillRect(4, 2, 8, 12); c.fillRect(3, 4, 10, 8);
     c.fillStyle = '#2f8aa8'; c.fillRect(5, 3, 6, 9);
@@ -16137,6 +17541,13 @@ function itemLabel(it){
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
   if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
+  if (it.kind === 'fang') return 'stalker fang';
+  if (it.kind === 'feather') return 'angel feather';
+  if (it.kind === 'tkey') return 'treasury key';
+  if (it.kind === 'wings') return 'WINGS';
+  if (it.kind === 'idol') return 'SUN IDOL';
+  if (it.kind === 'huskmeat') return 'husk meat';
+  if (it.kind === 'wispcore') return 'wisp core';
   if (it.kind === 'motorboat') return (it.wrecked ? 'wrecked ' : '') + 'motorboat';
   if (it.kind === 'repair') return 'repair bench';
   if (it.kind === 'rail') return 'rails';
@@ -16297,6 +17708,8 @@ function buildMissionsUI(){
     const t1 = document.createElement('div');
     t1.className = 't1';
     t1.textContent = o.fort ? 'raid fort'
+                   : o.spire ? 'sky spire'
+                   : o.zig ? 'ziggurat'
                    : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
@@ -16356,7 +17769,7 @@ function sortInventory(){
 const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
 const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
@@ -16856,7 +18269,7 @@ function uiMove(from, to){
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm'){ toast('that slot wants a helmet'); return 'none'; }
   if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
-  if (to === 'aback' && A.kind !== 'jetpack'){ toast('that slot wants a jetpack'); return 'none'; }
+  if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings'){ toast('that slot wants a jetpack or wings'); return 'none'; }
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)){ toast('the stand holds armor'); return 'none'; }
   if (B && CORE.stackableWith(A, B)){ B.count += A.count; set(from, null); return 'merged'; }
@@ -16954,9 +18367,9 @@ function quickMove(key, n){
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
-  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack')){
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm')){
     // shift-click armor in your inventory = wear it (swaps what you had on)
-    const slot = it.kind === 'helm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const slot = it.kind === 'helm' || it.kind === 'divehelm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
     const prev = game.armor[slot];
     game.armor[slot] = it;
     game.slots[key] = prev || null;
@@ -17020,7 +18433,7 @@ function slotRefuses(to, A){
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm') return 'that slot wants a helmet';
   if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
-  if (to === 'aback' && A.kind !== 'jetpack') return 'that slot wants a jetpack';
+  if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings') return 'that slot wants a jetpack or wings';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)) return 'the stand holds armor';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'charger' && A.kind !== 'battery') return 'the charger holds batteries';
@@ -17254,6 +18667,20 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'divehelm'){
     html = '<div class="t1">diving helmet</div><div class="t2">wear it in the helmet slot (E, shift-click) — ninety seconds of air under water</div>';
+  } else if (it.kind === 'idol'){
+    html = '<div class="t1">SUN IDOL</div><div class="t2">from a ziggurat\'s tomb — while it rides in your pack, everything you kill pays double coin</div>';
+  } else if (it.kind === 'feather'){
+    html = '<div class="t1">angel feather</div><div class="t2">from the garrison of a Sky Spire — 24 of them, aether and diamond make WINGS at a table</div>';
+  } else if (it.kind === 'tkey'){
+    html = '<div class="t1">treasury key</div><div class="t2">opens the sealed chest under a Sky Spire</div>';
+  } else if (it.kind === 'wings'){
+    html = '<div class="t1">WINGS</div><div class="t2">wear them on your back (E, shift-click) — hold SPACE while falling to glide from any height</div>';
+  } else if (it.kind === 'fang'){
+    html = '<div class="t1">stalker fang</div><div class="t2">three of them and a coal make 32 hard rounds</div>';
+  } else if (it.kind === 'huskmeat'){
+    html = '<div class="t1">husk meat</div><div class="t2">dry and bitter raw (10 hp) — the stove makes it a proper meal</div>';
+  } else if (it.kind === 'wispcore'){
+    html = '<div class="t1">wisp core</div><div class="t2">a charge that still wants to go off: TNT, rockets or mining charges at a crafting table</div>';
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
   } else if (it.kind === 'cannon'){
@@ -17553,8 +18980,8 @@ function tryEat(){
   // banking more than you can use would just throw the meal away
   const roomLeft = () => Math.max(0, 100 - game.hp - game.heal);
   if (roomLeft() < 1){ toast(game.heal > 0 ? 'already mending' : 'already at full health'); return; }
-  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat' || it.kind === 'fish' || it.kind === 'cookedfish')){
-    const gain = it.kind === 'meat' ? HEAL_RAW : it.kind === 'fish' ? 15 : it.kind === 'cookedfish' ? 45 : HEAL_COOKED;
+  if (it && (it.kind === 'meat' || it.kind === 'cookedmeat' || it.kind === 'fish' || it.kind === 'cookedfish' || it.kind === 'huskmeat')){
+    const gain = it.kind === 'meat' ? HEAL_RAW : it.kind === 'fish' ? 15 : it.kind === 'cookedfish' ? 45 : it.kind === 'huskmeat' ? 10 : HEAL_COOKED;
     it.count -= 1;
     if (it.count === 0) game.slots[game.hotSel] = null;
     game.heal = Math.min(game.heal + gain, 100 - game.hp);
@@ -17792,6 +19219,8 @@ function drawMap(){
     c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
   };
   for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
+  for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
+  for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
   for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
@@ -18054,11 +19483,14 @@ function saveNow(){
     armor: game.armor,
     villages: game.villages,
     forts: game.forts || {},
+    spires: game.spires || {},
+    zigs: game.zigs || {},
     wrecks: game.wrecks || {},
     cities: game.cities || {},
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
-    hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
+    hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay, day: game.day || 0,
+    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t) },
     torches: game.torches,
     beacons: game.beacons,
     beds: game.beds,
@@ -18108,6 +19540,8 @@ function startWorld(id){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.forts = data.forts || {};
+  game.spires = data.spires || {};
+  game.zigs = data.zigs || {};
   game.wrecks = data.wrecks || {};
   endFishing();
   game.cities = data.cities || {};
@@ -18134,6 +19568,9 @@ function startWorld(id){
   game.hp = data.hp == null ? 100 : data.hp;
   game.heal = data.heal || 0;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
+  game.day = data.day || 0;
+  if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
+  weatherSys.fires = []; weatherSys.thunder = [];
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -18330,7 +19767,7 @@ const farTerrain = {
         uAtlas: tu.uAtlas, uNMat: tu.uNMat,
         uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
         uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uLampSky: tu.uLampSky,
-        uTime: tu.uTime, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
+        uTime: tu.uTime, uSeason: tu.uSeason, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
         uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
         uMask: { value: this.maskTex },
         uMaskOrigin: this.uMaskOrigin,
@@ -18350,7 +19787,7 @@ const farTerrain = {
         uniform sampler2D uAtlas;
         uniform float uNMat;
         uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
-        uniform float uFogFar; uniform float uLampSky; uniform float uTime;
+        uniform float uFogFar; uniform float uLampSky; uniform float uTime; uniform vec3 uSeason;
         uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
         uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
         varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
@@ -18412,6 +19849,7 @@ const farTerrain = {
           col = col * min(lit, vec3(1.05));
           col *= 0.95 + 0.10 * vnoise(vW * 0.33);
           if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
+          if (m == 6.0) col *= uSeason;
           if (m == 16.0) col = max(col, tex * 0.55);  // crystal
           float dist = gl_FragCoord.z / gl_FragCoord.w;
           float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
@@ -19344,6 +20782,10 @@ function frame(now){
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
+  spireSys.tick(dt);
+  zigSys.tick(dt);
+  weatherSys.tick(dt);
+  collapseSys.tick(dt);
   citySys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -19467,7 +20909,7 @@ function frame(now){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
     }
-    $('navpos').textContent = posTxt;
+    $('navpos').textContent = posTxt + '  ·  ' + seasonSys.name + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '');
   }
 
   // autosave: 2.5s after last change
@@ -19551,6 +20993,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
