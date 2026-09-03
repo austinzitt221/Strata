@@ -2,6 +2,157 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 19 — THE LIVING WORLD (2026-09-03)
+
+Things that hunt, and places that hide them: three night enemies for
+Earth, a spire in the sky with its own winged garrison and boss, a
+trapped pyramid on the ground with a sealed tomb, and then weather,
+seasons and structural collapse. Verified headlessly (CORE 297, smoke,
+the full Build 11-19 suites) and in screenshots; committed in four
+phases.
+
+### A. The night shift
+- **Three new night enemies for Earth.** After dark, on the surface, the
+  night shift comes out: the **stalker** (fast and low, a grey-blue hound
+  with pale eyes that spawns in pairs, spirals in rather than charging,
+  bites quick for 5, and backs away from any torch within 9 m — at dawn
+  it runs and is gone), the **husk** (a dried giant, slow, 95 hp, that
+  walks straight at you, plants its feet and hits for 18 with a shove;
+  it burns at dawn like a lurker) and the **wisp** (a caged light with a
+  halo that floats over the ground, drifts toward you, rushes the last
+  six metres and detonates: a real 1.5 m crater and 26 damage — TNT with
+  a grudge; at dawn it gutters out).
+- **A lit base stays a base.** Spawn odds run on the distance from the
+  nearest LIGHT — torches, beacons (which count for farther) and powered
+  bulbs — through `nearestLightDist`: within 12 m of a light nothing of
+  the night shift spawns, 50 m out it is open season, and the odds ramp
+  between. Dense torch rings tested headlessly spawn nothing but the old
+  underground lurkers.
+- **Drops feed the arsenal and the stove.** Stalker fangs (three and a
+  coal make 32 hard rounds), husk meat (10 hp raw, cooks on the stove
+  into a proper meal) and iron ore, and the wisp core — a charge that
+  still wants to go off: 3 TNT, 4 rockets or 3 mining charges at a table.
+
+### B. The Sky Spire
+- **A white tower on one island in three.** Larger sky islands carry a
+  Sky Spire, generated in CORE as real terrain (marble, a new material
+  with grey veins and a gold fleck): a plinth on the meadow with the
+  treasury inside it and one door on the south side, a tapering column,
+  an open gallery ring halfway up on six pillars, the railed roost at
+  the top and a pinnacle above. It meshes, collides, mines and shows in
+  the LOD like any rock, and it is visible from the plane for a
+  kilometre.
+- **Angels.** A garrison of six (in tiers: white, then the captains with
+  gold-tipped wings) circles the spire while you are near, respawning
+  like a fort's. They swoop from their circuit, slash for 9-15 and climb
+  away. They never leave their island: their flight is clamped to the
+  rim plus a little air, and if you leave they go back to circling.
+- **THE ARCHANGEL.** Thin the garrison by eight and set foot on the
+  island and it descends from the roost: twice an angel's size, four
+  wings, a halo. It circles above the roost, throws fans of light (three,
+  five when hurt — beams that burn what they touch and carve nothing),
+  dives to slash for 22-28, and heals if you run off the island. It
+  never crosses the rim either. The gallery rings shade the meadow, so a
+  flyer that needs to cross their height inside their radius routes out
+  past the rim first.
+- **Loot a tier above the forts.** The first kill gives WINGS, the
+  treasury key, 12 aether ingots and 200 coins; every kill after gives
+  the key, 16 aether ingots, 6 diamonds and the coins. The treasury
+  chest (36 slots, sealed to the key) holds 24-40 aether ingots, 8-12
+  diamonds, 400-600 coins, a top-tier firearm, 120 cells, 12 rockets, 8
+  mining charges and 20 aether ore; two small chests on the gallery hold
+  ingots, coins and feathers. Angels drop feathers, and 24 feathers, 6
+  aether ingots and 2 diamonds make wings at a table the long way.
+- **WINGS.** Worn on the back (the jetpack's slot). Hold SPACE while
+  falling and the fall slows to 2.4 m/s and you ride forward at 9.5 m/s
+  wherever you look — a glide from any height, no fuel, and a landing
+  that gentle never hurts. Shown on the body in third person.
+- **Two flyer bugs found on the way.** A flyer that refused any step
+  losing clearance froze at exactly its own radius from a surface (every
+  tangential step "lost" a millimetre); flyers now take the step and
+  resolve penetration along the gradient like every other mover. And
+  the cave field's mouth term flares open with height above an
+  entrance, so any sky island above a cave mouth came out hollow through
+  the middle: sky geometry is now unioned after the cave carve.
+
+### C. The Ziggurat
+- **A stepped pyramid on the plains, mesa or dunes**, one candidate per
+  1.4 km cell and half of them real, clear of villages and forts: four
+  tiers of stone brick capped in sand, a shrine on top open to the
+  south, and a processional ramp up the south face from the ground to
+  the shrine (a tilted slab, so it reads as one long stair). Stamped as
+  edits from 500 m out, so its silhouette is there from the plane; the
+  interior detail drops out of the coarse LOD.
+- **Under it, real CSG traps.** From the door in the south face a
+  passage runs to a hall in the middle, and corridors run east and west
+  to two small rooms with bait chests. In the east corridor a
+  half-metre slab of floor sits over a nine-metre pit: stand on it and
+  it is subtracted from under you. In the west corridor an open pit four
+  metres deep with obsidian spikes at the bottom bites for 12 every half
+  second you stand in it. The first time you stand in the hall, four
+  water sources open in its ceiling and the hall floods to the roof (the
+  water cells make this real: it pours, spreads and stays).
+- **The sealed tomb.** North of the hall, behind four metres of stone
+  and a ruby glyph on the wall, a room with a strongbox: the SUN IDOL
+  (while it rides in your pack everything you kill pays double coin),
+  diamonds, ruby ingots, a mid-tier firearm, cells, charges and coin.
+  There is no door; you dig. The moment the wall reads as air, the seal
+  is broken and THE TOMB GUARDIAN wakes in the hall.
+- **THE TOMB GUARDIAN** is a sandstone golem with a ruby eye slit that
+  walks straight at you through its own corridors, follows the floor,
+  stops at walls, slams for 20 up close, and from a distance pounds the
+  floor under your feet (a real 1 m crater, 14 damage). It stays under
+  its pyramid and mends if you leave. Drops 150 coins, 4 diamonds and 8
+  ruby ingots; the marker over the pyramid reads ZIGGURAT, then THE
+  GUARDIAN, then TOMB, and retires once the idol is taken.
+
+### D. Weather, seasons, collapse
+- **Weather.** One episode at a time, rolled when the last one ends:
+  clear, rain, storm, snow (rain becomes snow in winter, on a glacier
+  or above 30 m) and fog on mornings. Rain and snow are a cloud of
+  points around the camera that fall and wrap (hidden under a roof);
+  the sky greys, the light flattens, the clouds thicken and darken, and
+  the fog closes in (rain to half the range, a storm to a third, fog to
+  a sixth). **Rain fills your carve-holes**: every half second a spot
+  near you is tested, and where the natural ground has been cut away it
+  marches down to the floor and starts a water source in the first
+  open cell above it, so a quarry becomes a pond that pours and spreads
+  through the water cells and stays. **Snow paints**: patches of snow
+  are painted on open grass, sand and rock while it falls (paint edits,
+  no geometry, up to 80 a snowfall). **Storms strike**: every 5-14 s a
+  bolt lands within 60 m — a flash across the sky, thunder that arrives
+  by distance — and half the time it picks a tree, which burns with
+  embers for a breath and falls; wood or planks at the strike burn
+  through; a strike within 3.5 m hurts for 30. The season, the weather
+  and the day persist in the save; the compass box shows them.
+- **Seasons.** A day counter drives a slow world clock: eight days a
+  season. A new `uSeason` tint multiplies grass in the terrain and LOD
+  shaders, and the canopies (near and far) follow: spring greens, summer
+  yellows, autumn turns the meadows and the trees rust and gold, winter
+  greys them. Summer doubles the meat from grazers and sheep and fish
+  bite 40% sooner. **Winter freezes the lakes walkable**: in winter the
+  surface of any still water holds you up — you stand on it, no swim.
+- **Structural collapse.** After a mine, once nothing over the cut
+  reads solid (so a field or a quarry floor costs nothing), a 1 m grid
+  around and above the cut is flood-filled from its boundary — that is
+  "the world" — and any solid that no longer touches it is a component
+  that falls: one subtract per y-layer of its bounding rectangle, a
+  shower of debris in its own colour, the material dropped on the
+  ground as a stack (40% of its cells), and damage to anything standing
+  under it (up to 60). Bedrock never falls; crumbs under three cells
+  are ignored; checks are merged and run at most twice a second (about
+  25 ms on a 17 m box). Undercut a hill and the overhang comes down on
+  you — the most CSG-native thing in the game, and a real danger
+  underground.
+
+- **Known.** Angels vanish rather than follow when you leave their
+  island (the 70 m entity leash) and re-man the spire when you return.
+  Rain puddles are water sources and stay until you fill them; snow
+  paints persist through summer. Collapse samples at 1 m, so a mass
+  held up by something thinner than a metre can read as unsupported.
+  The Archangel and the Guardian obey the one-boss rule: a live boss
+  elsewhere delays them.
+
 ## Build 18.2 — the wall that wasn't there (2026-09-03)
 
 - **Invisible walls on mountain roads, the real cause.** A chain of

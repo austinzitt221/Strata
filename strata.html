@@ -3370,6 +3370,7 @@ uniform sampler2D uShadowMap;
 uniform float uShadowOn;
 uniform float uShadowTexel;
 uniform float uTime;
+uniform vec3 uSeason;
 uniform float uUnderwater;
 varying vec4 vShadowCoord;
 varying vec3 vPos;
@@ -3480,6 +3481,7 @@ void main(){
   if (m == 8.0) col = max(col, tex.rgb * 0.75 * (0.35 + 0.65 * dark));  // glowshroom glows
   if (m == 15.0) col = max(col, tex.rgb * 1.2);                          // lava is its own light
   if (m == 16.0) col = max(col, tex.rgb * 0.8 * (0.4 + 0.6 * dark));    // crystal shimmers
+  if (m == 6.0) col *= uSeason;                                          // the meadows turn with the season
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   // fog range scales with skylight: the surface sees kilometres, caves fade
   // to black within ~80m so depth still feels enclosed. Underwater overrides
@@ -4456,6 +4458,7 @@ function buildScene(){
       uShadowOn: { value: 0 },
       uShadowTexel: { value: 1 / 4096 },
       uTime: { value: 0 },
+      uSeason: { value: new THREE.Vector3(1, 1, 1) },
       uUnderwater: { value: 0 },
     },
     side: THREE.DoubleSide,
@@ -6211,11 +6214,20 @@ const SUN_BASE = new THREE.Color(0.42, 0.40, 0.36);
 const AMB_DAY = new THREE.Color(0.62, 0.63, 0.68);
 const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
 function updateDayNight(dt){
-  if (game.ui === 'none' && !game.photo) game.timeOfDay = (game.timeOfDay + dt / DAY_CYCLE) % 1;
+  if (game.ui === 'none' && !game.photo){
+    const t2 = game.timeOfDay + dt / DAY_CYCLE;
+    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); }
+    game.timeOfDay = t2 % 1;
+  }
   const phase = game.timeOfDay * Math.PI * 2;
   const sunH = Math.sin(phase);
-  const dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
+  let dayF = Math.min(1, Math.max(0, sunH * 1.8 + 0.08));
   game.dayF = dayF;
+  // weather dims the day (the spawn rules and burns read the true dayF above)
+  const W = weatherSys.cur;
+  const wdark = W.dark == null ? 1 : W.dark;
+  dayF *= wdark;
+  const tint = seasonSys.tint;
   // unlit vegetation (decor + trees are MeshBasic) tracks the sky, or it
   // glows through the night
   {
@@ -6224,22 +6236,349 @@ function updateDayNight(dt){
       for (const k in decorSys.meshes) decorSys.meshes[k].material.color.setScalar(L);
     if (treeSys.mats){
       treeSys.mats.bark.color.setScalar(L);
-      treeSys.mats.leaf.color.setScalar(L);
-      treeSys.mats.leaf2.color.setScalar(L);
+      treeSys.mats.leaf.color.setRGB(L * tint[0], L * tint[1], L * tint[2]);
+      treeSys.mats.leaf2.color.setRGB(L * tint[0], L * tint[1], L * tint[2]);
     }
   }
   const u = game.terrainMat.uniforms;
   u.uSunDir.value.set(Math.cos(phase) * 0.5, Math.max(sunH, 0.12), 0.35).normalize();
   u.uSunCol.value.copy(SUN_BASE).multiplyScalar(dayF);
   u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
-  u.uLampSky.value = 0.85 * dayF;            // headlamp works on the surface at night
+  u.uLampSky.value = 0.85 * game.dayF;       // headlamp works on the surface at night
   game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
+  if (wdark < 1){
+    // overcast: the sky goes grey and the light flattens
+    const grey = 0.3 + 0.7 * wdark;
+    game.skyNow.lerp(new THREE.Color(0.55 * grey, 0.58 * grey, 0.64 * grey), 1 - wdark);
+    u.uAmbCol.value.lerp(new THREE.Color(0.5, 0.52, 0.56), (1 - wdark) * 0.6 * game.dayF);
+  }
+  if (weatherSys.flashT > 0){ game.skyNow.addScalar(0.6); u.uAmbCol.value.addScalar(0.9); u.uSunCol.value.addScalar(0.5); }
   if (!game.underwater) u.uFogCol.value.copy(game.skyNow);
+  u.uFogFar.value = FOG_BASE * (W.fog == null ? 1 : W.fog);
+  u.uSeason.value.set(tint[0], tint[1], tint[2]);
   if (treeSys.mats){
     const b = 0.3 + 0.7 * dayF;                    // trees darken with the sky
-    for (const k in treeSys.mats) treeSys.mats[k].color.setScalar(b);
+    treeSys.mats.bark.color.setScalar(b);
+    treeSys.mats.leaf.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
+    treeSys.mats.leaf2.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
   }
+  if (farTreeSys && farTreeSys.canopy) farTreeSys.canopy.material.color.setRGB(b2(dayF) * tint[0], b2(dayF) * tint[1], b2(dayF) * tint[2]);
 }
+function b2(dayF){ return 0.3 + 0.7 * dayF; }
+const FOG_BASE = 3200;
+
+// ---------- seasons ----------
+// A slow world clock: eight days a season. Spring greens, summer yellows
+// the grass and doubles the meat, autumn turns the meadows and the
+// canopies, winter greys them, freezes the lakes walkable and turns rain
+// to snow.
+const SEASON_DAYS = 8;
+const SEASON_NAME = ['spring', 'summer', 'autumn', 'winter'];
+const SEASON_TINT = [[0.94, 1.06, 0.9], [1.04, 1.0, 0.82], [1.16, 0.84, 0.5], [0.8, 0.86, 0.92]];
+const seasonSys = {
+  get idx(){ return Math.floor((game.day || 0) / SEASON_DAYS) % 4; },
+  get name(){ return SEASON_NAME[this.idx]; },
+  get tint(){ return SEASON_TINT[this.idx]; },
+  get winter(){ return this.idx === 3; },
+  get summer(){ return this.idx === 1; },
+  onNewDay(){
+    if ((game.day || 0) % SEASON_DAYS === 0) toast(this.name === 'winter' ? 'winter — the lakes freeze' : this.name === 'summer' ? 'summer — the herds fatten' : this.name + ' comes');
+    markSave();
+  },
+  // frozen lakes: in winter the surface of any still water holds you
+  ice(){
+    if (!this.winter || game.fly || game.driving) return false;
+    const wt = waterTopAt(game.pos.x, game.pos.z, game.pos.y);
+    if (wt == null || game.pos.y < wt - 0.9 || game.pos.y > wt + 0.6) return false;
+    game.pos.y = Math.max(game.pos.y, wt + 0.02);
+    if (game.vel.y < 0) game.vel.y = 0;
+    game.grounded = true; game.swim = false; game.onIce = true;
+    return true;
+  },
+};
+
+// ---------- weather ----------
+// Rain that fills your carve-holes into real puddles, storms with
+// lightning that fires the trees, snow that paints the ground, fog
+// mornings. One episode at a time, rolled when the last one ends.
+const WEATHER = {
+  clear: { dark: 1, fog: 1 },
+  rain:  { dark: 0.72, fog: 0.55, rain: 1 },
+  storm: { dark: 0.5, fog: 0.3, rain: 1.6, lightning: 1 },
+  snow:  { dark: 0.8, fog: 0.45, snow: 1 },
+  fog:   { dark: 0.86, fog: 0.1 },
+};
+const weatherSys = {
+  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [],
+  set(kind, dur){
+    this.kind = kind; this.cur = WEATHER[kind] || WEATHER.clear; this.t = dur; this.painted = 0;
+    this.boltT = 4 + Math.random() * 6;
+  },
+  roll(){
+    const r = Math.random(), snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
+    const morning = game.timeOfDay > 0.02 && game.timeOfDay < 0.12;
+    if (r < 0.5) this.set('clear', 240 + Math.random() * 600);
+    else if (r < 0.72) this.set(snowy ? 'snow' : 'rain', 120 + Math.random() * 240);
+    else if (r < 0.8) this.set(snowy ? 'snow' : 'storm', 90 + Math.random() * 120);
+    else if (r < 0.92 && morning) this.set('fog', 120 + Math.random() * 180);
+    else this.set('clear', 180 + Math.random() * 400);
+    if (this.kind !== 'clear') toast(this.kind === 'storm' ? 'a storm rolls in' : this.kind === 'fog' ? 'fog on the ground' : this.kind === 'snow' ? 'it begins to snow' : 'rain');
+  },
+  // the drops: a cloud of points around the camera that fall and wrap
+  ensurePts(){
+    if (this.pts) return;
+    const N = 1400, pos = new Float32Array(N * 3);
+    for (let i = 0; i < N; i++){ pos[i * 3] = (Math.random() - 0.5) * 40; pos[i * 3 + 1] = Math.random() * 24 - 4; pos[i * 3 + 2] = (Math.random() - 0.5) * 40; }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    this.pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xbfd6ee, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0.55, depthWrite: false }));
+    this.pts.frustumCulled = false; this.pts.renderOrder = 3;
+    game.scene.add(this.pts);
+    this.pts.visible = false;
+  },
+  tick(dt){
+    if (!game.running) return;
+    this.t -= dt;
+    if (this.t <= 0) this.roll();
+    this.flashT = Math.max(0, this.flashT - dt);
+    const W = this.cur;
+    const wet = W.rain || W.snow;
+    if (this.pts || wet) this.ensurePts();
+    if (this.pts){
+      this.pts.visible = !!wet && !game.underwater;
+      if (wet){
+        const a = this.pts.geometry.attributes.position.array, cam = game.camera.position;
+        this.pts.position.set(cam.x, cam.y, cam.z);
+        const fall = W.snow ? 1.6 : 14 * (W.rain || 1);
+        const drift = W.snow ? 0.6 : 0.2;
+        for (let i = 0; i < a.length; i += 3){
+          a[i + 1] -= fall * dt; a[i] += drift * dt * Math.sin(i + a[i + 1]);
+          if (a[i + 1] < -4){ a[i + 1] += 24; a[i] = (Math.random() - 0.5) * 40; a[i + 2] = (Math.random() - 0.5) * 40; }
+        }
+        this.pts.geometry.attributes.position.needsUpdate = true;
+        this.pts.material.color.setHex(W.snow ? 0xffffff : 0xbfd6ee);
+        this.pts.material.size = W.snow ? 3.2 : 2.2;
+        this.pts.material.opacity = W.snow ? 0.85 : 0.5;
+        // no rain under a roof: hide the cloud when the sky is shut
+        const skyOpen = game.gen.height(cam.x, cam.z) < cam.y + 1;
+        this.pts.visible = skyOpen;
+      }
+    }
+    if (W.rain){
+      // rain fills the holes you dug: a source at the floor of any carve
+      // open to the sky (the natural ground must be well above the floor)
+      this.dripT += dt * W.rain;
+      if (this.dripT > 0.5){
+        this.dripT = 0;
+        const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * 24;
+        const x = Math.floor(game.pos.x + Math.cos(a) * d) + 0.5, z = Math.floor(game.pos.z + Math.sin(a) * d) + 0.5;
+        const hg = game.gen.height(x, z);
+        if (hg > game.gen.seaLevel + 0.5){
+          const le = nearEdits([x - 1, hg - 14, z - 1, x + 1, hg + 2, z + 1]);
+          if (CORE.evalSDF(x, hg - 0.6, z, le, game.gen) > 0){
+            // march down cell centres to the floor; the puddle starts in the
+            // first fully-open cell above it
+            let fy = null;
+            for (let yy = Math.round(hg) - 1; yy > hg - 13; yy--){
+              if (CORE.evalSDF(x, yy, z, le, game.gen) <= 0){ fy = yy + 1; break; }
+            }
+            if (fy != null && hg - fy > 1.2){
+              const gx = Math.floor(x), gz = Math.floor(z), ck = waterSys.keyOf(gx, fy, gz);
+              const arr = waterSys.cells.get(ck) || waterSys.materialize(ck);
+              const q = waterSys.idx(gx & 7, fy & 7, gz & 7);
+              if (arr[q] === 0){ arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+            }
+          }
+        }
+      }
+    }
+    if (W.snow){
+      // snow settles: paint the open ground white, a patch at a time
+      this.snowT += dt;
+      if (this.snowT > 0.7 && this.painted < 80){
+        this.snowT = 0;
+        const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 20;
+        const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+        const hg = game.gen.height(x, z);
+        const le = nearEdits([x - 3, hg - 3, z - 3, x + 3, hg + 3, z + 3]);
+        const m = CORE.materialAt(x, hg - 0.3, z, le, game.gen);
+        const fresh = !le.some(e => e.op === 2 && e.mat === CORE.MAT.SNOW && Math.hypot(e.x - x, e.z - z) < 2.6);
+        if (fresh && (m === CORE.MAT.GRASS || m === CORE.MAT.SAND || m === CORE.MAT.ROCK) && CORE.evalSDF(x, hg + 0.6, z, le, game.gen) > 0){
+          const pe = CORE.makeEdit(2, 1, +x.toFixed(1), +(hg - 0.1).toFixed(1), +z.toFixed(1), 3.2, CORE.MAT.SNOW, Math.random() * 3);
+          pe.sy = 0.7; pe.noLod = 1;
+          applyEdit(pe); this.painted++;
+        }
+      }
+    }
+    if (W.lightning){
+      this.boltT -= dt;
+      if (this.boltT <= 0){
+        this.boltT = 5 + Math.random() * 9;
+        this.strike();
+      }
+    }
+    // thunder arrives after the flash
+    for (let i = this.thunder.length - 1; i >= 0; i--){ this.thunder[i] -= dt; if (this.thunder[i] <= 0){ AudioSys.sfx('boom'); this.thunder.splice(i, 1); } }
+    // burning trees fall after a breath of embers
+    for (let i = this.fires.length - 1; i >= 0; i--){
+      const f = this.fires[i]; f.t -= dt;
+      if (Math.random() < dt * 14) Embers.burst(f.x, f.y + 3 + Math.random() * 3, f.z, 1.2, [0xffb347, 0xffdd66, 0xff8830], 3, 2.5);
+      if (f.t <= 0){ treeSys.fell(f.k, false); this.fires.splice(i, 1); }
+    }
+  },
+  strike(){
+    // a bolt lands within 60 m; a tree nearby catches, wood at the strike burns away
+    let x = game.pos.x + (Math.random() - 0.5) * 120, z = game.pos.z + (Math.random() - 0.5) * 120, tk = null;
+    if (Math.random() < 0.45 && treeSys.visible && treeSys.visible.size){
+      const list = [...treeSys.visible];
+      const [k, v] = list[(Math.random() * list.length) | 0];
+      x = v.t.x; z = v.t.z; tk = k;
+    }
+    const y = game.gen.height(x, z);
+    this.flashT = 0.14;
+    this.thunder.push(0.3 + Math.hypot(x - game.pos.x, z - game.pos.z) / 340 * 2.5);
+    Particles.burst(x, y + 1, z, 1.2, [0xffffff, 0xd8e8ff, 0xfff0a0], 30, 6);
+    Embers.burst(x, y + 0.5, z, 0.8, [0xffb347, 0xffdd66], 12, 3);
+    if (tk && !this.fires.some(f => f.k === tk)) this.fires.push({ k: tk, x, y, z, t: 2.6 });
+    const le = nearEdits([x - 2, y - 2, z - 2, x + 2, y + 2, z + 2]);
+    const m = CORE.materialAt(x, y - 0.3, z, le, game.gen);
+    if (m === CORE.MAT.WOOD || m === CORE.MAT.PLANKS){
+      applyEdit(CORE.makeEdit(0, 0, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), 2.6, 0, 0));   // the planks burn through
+    }
+    const pd = Math.hypot(x - game.pos.x, z - game.pos.z);
+    if (pd < 3.5) damagePlayer(30, (game.pos.x - x) * 3, (game.pos.z - z) * 3);
+  },
+};
+
+// ---------- structural collapse ----------
+// Mine out what holds something up and the disconnected mass falls: after
+// a mine, a 1 m grid around the cut is flood-filled from its boundary;
+// solid that no longer touches the world is subtracted, showers debris
+// and drops its material. The most CSG-native thing in the game, and a
+// real danger under a ceiling.
+const collapseSys = {
+  accT: 0, pending: null,
+  note(p, eff){
+    // merge mines into one region, checked at most twice a second
+    const r = Math.min(9, eff * 0.5 + 6);
+    if (!this.pending) this.pending = { x: p.x, y: p.y, z: p.z, r };
+    else {
+      const q = this.pending;
+      q.x = (q.x + p.x) / 2; q.z = (q.z + p.z) / 2; q.y = Math.min(q.y, p.y); q.r = Math.min(12, Math.max(q.r, r + Math.hypot(p.x - q.x, p.z - q.z) * 0.5));
+    }
+  },
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 0.5 || !this.pending) return;
+    this.accT = 0;
+    const q = this.pending; this.pending = null;
+    this.check(q.x, q.y, q.z, q.r);
+  },
+  check(cx, cy, cz, r){
+    const R = Math.ceil(r), H = 19, DN = 3;
+    const x0 = Math.floor(cx) - R, z0 = Math.floor(cz) - R, y0 = Math.floor(cy) - DN;
+    // nothing over the cut (a quarry floor, a field): nothing can fall
+    const le0 = nearEdits([cx - 4, cy - 1, cz - 4, cx + 4, cy + 6, cz + 4]);
+    let over = false;
+    for (const [dx, dz] of [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5], [1.8, 1.8], [-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8]])
+      for (const dy of [1.5, 3, 5]) if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) <= 0.12){ over = true; break; }
+    if (!over) return;
+    const W = 2 * R + 1, D = 2 * R + 1;
+    const box = [x0 - 1, y0 - 1, z0 - 1, x0 + W + 1, y0 + H + 1, z0 + D + 1];
+    const le = nearEdits(box);
+    const gen = game.gen;
+    const N = W * H * D;
+    const solid = new Uint8Array(N);
+    const idx = (i, j, k) => (j * D + k) * W + i;
+    let any = 0;
+    for (let j = 0; j < H; j++) for (let k = 0; k < D; k++) for (let i = 0; i < W; i++){
+      const d = CORE.evalSDF(x0 + i + 0.5, y0 + j + 0.5, z0 + k + 0.5, le, gen);
+      if (d <= 0.12){ solid[idx(i, j, k)] = 1; any++; }
+    }
+    if (!any) return;
+    // flood from every solid cell on the box's faces: that is "the world"
+    const seen = new Uint8Array(N), stack = [];
+    for (let j = 0; j < H; j++) for (let k = 0; k < D; k++) for (let i = 0; i < W; i++){
+      if (i === 0 || k === 0 || j === 0 || i === W - 1 || k === D - 1 || j === H - 1){
+        const q = idx(i, j, k);
+        if (solid[q] && !seen[q]){ seen[q] = 1; stack.push(q); }
+      }
+    }
+    while (stack.length){
+      const q = stack.pop();
+      const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+      const nb = [[i - 1, j, k], [i + 1, j, k], [i, j - 1, k], [i, j + 1, k], [i, j, k - 1], [i, j, k + 1]];
+      for (const [a, b, c] of nb){
+        if (a < 0 || b < 0 || c < 0 || a >= W || b >= H || c >= D) continue;
+        const q2 = idx(a, b, c);
+        if (solid[q2] && !seen[q2]){ seen[q2] = 1; stack.push(q2); }
+      }
+    }
+    // what is left is floating: group it into components and drop each
+    const comp = new Int32Array(N).fill(-1);
+    let nc = 0;
+    const comps = [];
+    for (let q0 = 0; q0 < N; q0++){
+      if (!solid[q0] || seen[q0] || comp[q0] >= 0) continue;
+      const cells = [];
+      comp[q0] = nc; stack.push(q0);
+      while (stack.length){
+        const q = stack.pop(); cells.push(q);
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        for (const [a, b, c] of [[i - 1, j, k], [i + 1, j, k], [i, j - 1, k], [i, j + 1, k], [i, j, k - 1], [i, j, k + 1]]){
+          if (a < 0 || b < 0 || c < 0 || a >= W || b >= H || c >= D) continue;
+          const q2 = idx(a, b, c);
+          if (solid[q2] && !seen[q2] && comp[q2] < 0){ comp[q2] = nc; stack.push(q2); }
+        }
+      }
+      comps.push(cells); nc++;
+    }
+    for (const cells of comps){
+      if (cells.length < 3) continue;                       // crumbs
+      // per-layer boxes: one subtract per y-layer's bounding rectangle
+      const layers = new Map();
+      let sx = 0, sy = 0, sz = 0, minY = 1e9;
+      for (const q of cells){
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        let L = layers.get(j);
+        if (!L){ L = [i, k, i, k]; layers.set(j, L); }
+        if (i < L[0]) L[0] = i; if (k < L[1]) L[1] = k; if (i > L[2]) L[2] = i; if (k > L[3]) L[3] = k;
+        sx += x0 + i + 0.5; sy += y0 + j + 0.5; sz += z0 + k + 0.5; minY = Math.min(minY, y0 + j);
+      }
+      const n = cells.length, mx = sx / n, my = sy / n, mz = sz / n;
+      // what it was made of
+      const mats = {};
+      for (let t = 0; t < Math.min(12, n); t++){
+        const q = cells[(t * 7919) % n];
+        const i = q % W, k = ((q / W) | 0) % D, j = (q / (W * D)) | 0;
+        const m = CORE.materialAt(x0 + i + 0.5, y0 + j + 0.5, z0 + k + 0.5, le, gen);
+        mats[m] = (mats[m] || 0) + 1;
+      }
+      let best = CORE.MAT.ROCK, bn = 0;
+      for (const m in mats) if (mats[m] > bn){ bn = mats[m]; best = +m; }
+      if (best === CORE.MAT.BEDROCK) continue;
+      for (const [j, L] of layers){
+        const e = CORE.makeEdit(0, 1, +(x0 + (L[0] + L[2] + 1) / 2).toFixed(2), +(y0 + j + 0.5).toFixed(2), +(z0 + (L[1] + L[3] + 1) / 2).toFixed(2), L[2] - L[0] + 1.04, 0, 0);
+        e.sy = 1.04; e.sz = L[3] - L[1] + 1.04;
+        applyEdit(e);
+      }
+      // the fall: debris, a noise, the material on the ground, hurt under it
+      Particles.burst(mx, my, mz, Math.min(6, 1 + Math.cbrt(n)), [MAT_COLOR[best] || 0x7d7d84, 0x51484f], Math.min(80, 10 + n), 4);
+      AudioSys.sfx('boom');
+      const yieldN = Math.max(1, Math.round(n * 0.4));
+      const oreKind = CORE.ORE_ITEM[best];
+      dropItem(oreKind ? { kind: oreKind, count: yieldN } : { kind: 'mat', mat: best, count: yieldN }, { x: mx, y: minY + 0.3, z: mz });
+      const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+      const hx = Math.abs(px - mx), hz = Math.abs(pz - mz);
+      if (hx < (layers.size ? R : 2) + 1 && hz < R + 1 && py < minY + 0.5 && py > minY - 9) damagePlayer(Math.min(60, Math.round(6 + n * 1.2)), (px - mx) * 2, (pz - mz) * 2);
+      for (const en of [...game.entities]){
+        if (Math.abs(en.x - mx) < R && Math.abs(en.z - mz) < R && en.y < minY + 0.5 && en.y > minY - 9) hurtEntity(en, Math.min(80, 8 + n * 1.5), 0, 0);
+      }
+      toast('the ' + (CORE.MAT_NAME[best] || 'rock') + ' above gives way');
+    }
+  },
+};
+
 
 // ---------- beacons: craftable home anchor ----------
 // the LAST placed beacon is "home": the compass points to it and survival
@@ -6374,9 +6713,10 @@ const skySys = {
     this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
     // clouds: slow drift, wrapped into a band around the player; fade and
     // darken at night
-    const b = 0.35 + 0.65 * game.dayF;
+    const wd = weatherSys.cur.dark == null ? 1 : weatherSys.cur.dark;
+    const b = (0.35 + 0.65 * game.dayF) * (0.45 + 0.55 * wd);
     this.cloudMat.color.setScalar(b);
-    this.cloudMat.opacity = 0.25 + 0.57 * game.dayF;
+    this.cloudMat.opacity = Math.min(0.95, (0.25 + 0.57 * game.dayF) + (1 - wd) * 0.8);
     for (const c of this.clouds){
       c.position.x += dt * 1.3;
       if (c.position.x - cam.x > 340) c.position.x -= 680;
@@ -9717,7 +10057,7 @@ function killEntity(e, byPlayer){
     return;
   }
   if (byPlayer){
-    if (e.type === 'grazer'){ addStackItem('meat', 2); toast('+2 meat'); }
+    if (e.type === 'grazer'){ const n = seasonSys.summer ? 4 : 2; addStackItem('meat', n); toast('+' + n + ' meat' + (n > 2 ? ' (summer)' : '')); }
     else if (e.type === 'stalker'){
       const n = 1 + ((Math.random() * 2) | 0);
       addStackItem('fang', n); addStackItem('coin', 2);
@@ -9761,9 +10101,9 @@ function killEntity(e, byPlayer){
       markSave();
     }
     else if (e.type === 'sheep'){
-      const n = 2 + ((Math.random() * 2) | 0);
-      addStackItem('wool', n); addStackItem('meat', 1);
-      toast('+' + n + ' wool  ·  +1 meat');
+      const n = 2 + ((Math.random() * 2) | 0), mt = seasonSys.summer ? 2 : 1;
+      addStackItem('wool', n); addStackItem('meat', mt);
+      toast('+' + n + ' wool  ·  +' + mt + ' meat');
     }
     else if (e.bossType === 'warden'){
       const rec = game.forts && game.forts[e.fortKey];
@@ -14271,6 +14611,8 @@ function updatePlayer(dt){
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
   game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
+  game.onIce = false;
+  if (seasonSys.winter) seasonSys.ice();
   // camera-relative on the horizontal plane (yaw only — never world axes)
   const sin = Math.sin(game.yaw), cos = Math.cos(game.yaw);
   let mx = (-sin * fwd + cos * str);
@@ -15786,6 +16128,7 @@ function doMine(tool, p, shape, eff){
   if (poppedStoves){ addStackItem('stove', poppedStoves); parts.push('+' + poppedStoves + ' stove'); }
   const poppedBulbs = bulbSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedBulbs){ addStackItem('bulb', poppedBulbs); parts.push('+' + poppedBulbs + ' bulb'); }
+  collapseSys.note(p, eff);
   // trees whose ground was carved away fall and yield their wood
   for (const [k, v] of [...treeSys.visible]){
     const t = v.t;
@@ -16035,7 +16378,7 @@ function tryAction(dt, now){
       bob.add(top, bot);
       bob.position.set(hit[0], hit[1], hit[2]);
       game.scene.add(bob);
-      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: 3 + Math.random() * 7, bit: false, bitT: 0, mesh: bob,
+      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
                        px: game.pos.x, pz: game.pos.z };
       toast('cast — watch the bobber, click when it bites');
       AudioSys.sfx('toggle');
@@ -19146,7 +19489,8 @@ function saveNow(){
     cities: game.cities || {},
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
-    hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay,
+    hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay, day: game.day || 0,
+    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t) },
     torches: game.torches,
     beacons: game.beacons,
     beds: game.beds,
@@ -19224,6 +19568,9 @@ function startWorld(id){
   game.hp = data.hp == null ? 100 : data.hp;
   game.heal = data.heal || 0;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
+  game.day = data.day || 0;
+  if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
+  weatherSys.fires = []; weatherSys.thunder = [];
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -19420,7 +19767,7 @@ const farTerrain = {
         uAtlas: tu.uAtlas, uNMat: tu.uNMat,
         uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
         uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uLampSky: tu.uLampSky,
-        uTime: tu.uTime, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
+        uTime: tu.uTime, uSeason: tu.uSeason, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
         uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
         uMask: { value: this.maskTex },
         uMaskOrigin: this.uMaskOrigin,
@@ -19440,7 +19787,7 @@ const farTerrain = {
         uniform sampler2D uAtlas;
         uniform float uNMat;
         uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
-        uniform float uFogFar; uniform float uLampSky; uniform float uTime;
+        uniform float uFogFar; uniform float uLampSky; uniform float uTime; uniform vec3 uSeason;
         uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
         uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
         varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
@@ -19502,6 +19849,7 @@ const farTerrain = {
           col = col * min(lit, vec3(1.05));
           col *= 0.95 + 0.10 * vnoise(vW * 0.33);
           if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
+          if (m == 6.0) col *= uSeason;
           if (m == 16.0) col = max(col, tex * 0.55);  // crystal
           float dist = gl_FragCoord.z / gl_FragCoord.w;
           float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
@@ -20436,6 +20784,8 @@ function frame(now){
   raidBaseSys.tick(dt);
   spireSys.tick(dt);
   zigSys.tick(dt);
+  weatherSys.tick(dt);
+  collapseSys.tick(dt);
   citySys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -20559,7 +20909,7 @@ function frame(now){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
     }
-    $('navpos').textContent = posTxt;
+    $('navpos').textContent = posTxt + '  ·  ' + seasonSys.name + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '');
   }
 
   // autosave: 2.5s after last change
@@ -20643,7 +20993,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
