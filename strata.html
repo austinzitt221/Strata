@@ -2510,7 +2510,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -2794,6 +2794,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'hover', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'cannon', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'aetheringot', n: 2 }, { mat: MAT.PLANKS, n: 4 }] });
+  // the wall turret: wire it to your grid and it shoots what comes at you
+  RECIPES.push({ kind: 'turret', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'cells', n: 16 }] });
   RECIPES.push({ kind: 'windsock', yields: 1, costs: [{ item: 'stick', n: 3 }, { item: 'wool', n: 2 }] });
   RECIPES.push({ kind: 'hangar', yields: 1, station: true, costs: [{ mat: MAT.STONEBRICK, n: 60 }, { item: 'ironingot', n: 6 }] });
   RECIPES.push({ kind: 'airstrip', yields: 1, station: true, costs: [{ mat: MAT.BASALT, n: 40 }, { mat: MAT.ROCK, n: 40 }] });
@@ -5711,7 +5713,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7370,6 +7372,21 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, gear, face);
       g.userData.orb = gear;
+    } else if (t === 'turret'){
+      // a squat mount with twin barrels on a pivot; the muzzles glow when it fires
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), M.dark); base.position.y = 0.2;
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.5, 8), M.steel); neck.position.y = 0.65;
+      const pivot = new THREE.Group(); pivot.position.y = 0.95;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.36, 0.7), M.steel); pivot.add(head);
+      for (const sx of [-0.14, 0.14]){
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.1, 8), M.dark);
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(sx, 0.04, -0.7); pivot.add(barrel);
+      }
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.06), new THREE.MeshBasicMaterial({ color: 0xff5544 }));
+      eye.position.set(0, 0.14, -0.36); pivot.add(eye);
+      pivot.rotation.order = 'YXZ';
+      g.add(base, neck, pivot);
+      g.userData.pivot = pivot; g.userData.eye = eye;
     } else if (t === 'cannon'){
       // the launch cannon: a squat mount, a fat barrel that follows your aim
       const base = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 1.3), M.steel); base.position.y = 0.25;
@@ -7643,7 +7660,7 @@ const pnodeSys = {
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
     }
     if (k === 'r'){
@@ -7739,6 +7756,16 @@ const pnodeSys = {
         const w = performance.now() * 0.0004;
         ud.sock.rotation.y = Math.sin(w) * 1.2 + Math.sin(w * 2.7) * 0.4;
         ud.sock.rotation.z = -0.15 - Math.abs(Math.sin(w * 1.3)) * 0.35;
+      }
+      if (n.t === 'turret' && ud.pivot){
+        if (n.aim){
+          const wy = Math.atan2(-(n.aim.x - n.x), -(n.aim.z - n.z)) - (n.yaw || 0);
+          const wp = Math.atan2(n.aim.y - (n.y + 0.95), Math.hypot(n.aim.x - n.x, n.aim.z - n.z));
+          let dy = wy - ud.pivot.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+          ud.pivot.rotation.y += dy * Math.min(1, 10 * dt);
+          ud.pivot.rotation.x += (-wp - ud.pivot.rotation.x) * Math.min(1, 10 * dt);
+        } else ud.pivot.rotation.y += dt * 0.4;   // idle sweep
+        if (ud.eye) ud.eye.material.color.setHex(n.aim ? 0xff2222 : (powerSys.turretMap && powerSys.turretMap.get(n.id) > 0 ? 0xff5544 : 0x442222));
       }
       if (n.t === 'cannon' && ud.pivot){
         // the barrel follows whoever stands near it
@@ -7994,7 +8021,7 @@ const powerSys = {
       for (const id of parent.keys()){
         const r = find(id);
         let c = comps.get(r);
-        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [], pads: [] }; comps.set(r, c); }
+        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [], pads: [], turrets: [] }; comps.set(r, c); }
         const tp = pnodeSys.terminal(id);
         if (tp) c.terms.push(tp);
         if (id[0] === 'n'){
@@ -8009,6 +8036,7 @@ const powerSys = {
           else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
           else if (n.t === 'wtable'){ c.d += 8; (c.wtabs = c.wtabs || []).push(n); }
           else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
+          else if (n.t === 'turret'){ c.d += n.aim ? 30 : 4; c.turrets.push(n); }
           else if (n.t === 'charger'){ if (this.chargerWants(n)) c.d += 40; (c.chargers = c.chargers || []).push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
@@ -8055,6 +8083,7 @@ const powerSys = {
     }
     this.bulbMap.clear(); this.stoveMap.clear(); this.meterMap.clear();
     this.elevMap = this.elevMap || new Map(); this.elevMap.clear();
+    this.turretMap = this.turretMap || new Map(); this.turretMap.clear();
     this.crafterMap = this.crafterMap || new Map(); this.crafterMap.clear();
     this.crafterBusy = this.crafterBusy || new Set(); this.crafterBusy.clear();
     this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
@@ -8078,6 +8107,8 @@ const powerSys = {
         this.padMap = this.padMap || new Map();
         this.padMap.set(n.id, c.w > 0 ? ratio : 0);
       }
+      this.turretMap = this.turretMap || new Map();
+      for (const n of c.turrets) this.turretMap.set(n.id, c.w > 0 ? ratio : 0);
       for (const n of c.crafters){
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
@@ -8163,6 +8194,46 @@ const powerSys = {
   chargerWants(n){
     return !!(n.inv && n.inv.some(b => b && b.kind === 'battery' && (b.charge || 0) < CORE.batteryCap(b)));
   },
+  // the wall turret: with watts on its wire it picks the nearest hostile
+  // it can see within 24 m and shoots it three times a second. Its kills
+  // pay nothing — it isn't you.
+  turretTick(n, dt){
+    const ratio = this.turretMap ? (this.turretMap.get(n.id) || 0) : 0;
+    n.reload = Math.max(0, (n.reload || 0) - dt);
+    if (ratio <= 0){ n.aim = null; return; }
+    n.scanT = (n.scanT || 0) - dt;
+    if (n.scanT <= 0){
+      n.scanT = 0.25;
+      let best = null, bd = 24;
+      const mx = n.x, my = n.y + 0.95, mz = n.z;
+      for (const e of game.entities){
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel';
+        if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
+        const def = ENT_DEF[e.type]; if (!def) continue;
+        const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
+        if (d >= bd) continue;
+        // line of sight through the field
+        const dx = (e.x - mx) / d, dy = (e.y + def.h * 0.6 - my) / d, dz = (e.z - mz) / d;
+        const le = nearEdits([Math.min(mx, e.x) - 1, Math.min(my, e.y) - 1, Math.min(mz, e.z) - 1, Math.max(mx, e.x) + 1, Math.max(my, e.y) + 2, Math.max(mz, e.z) + 1]);
+        let clear = true;
+        for (let t = 0.8; t < d - def.r; t += 0.5){ if (CORE.evalSDF(mx + dx * t, my + dy * t, mz + dz * t, le, game.gen) < 0.05){ clear = false; break; } }
+        if (!clear) continue;
+        bd = d; best = e;
+      }
+      n.target = best || null;
+    }
+    const e = n.target;
+    if (!e || game.entities.indexOf(e) < 0 || e.hp <= 0){ n.target = null; n.aim = null; return; }
+    const def = ENT_DEF[e.type];
+    n.aim = { x: e.x, y: e.y + def.h * 0.6, z: e.z };
+    if (n.reload > 0) return;
+    n.reload = 0.33 / Math.max(0.25, ratio);
+    const mx = n.x, my = n.y + 0.95, mz = n.z;
+    beamFX.add(mx, my, mz, e.x, e.y + def.h * 0.6, e.z, 0xff7a5c);
+    hurtEntity(e, Math.round(9 * Math.max(0.5, ratio)), (e.x - mx) * 0.4, (e.z - mz) * 0.4, true);
+    Particles.burst(e.x, e.y + def.h * 0.5, e.z, 0.25, [0xff5544], 5, 1.6);
+    if (Math.hypot(mx - game.pos.x, mz - game.pos.z) < 40 && Math.random() < 0.5) AudioSys.sfx('shot');
+  },
   chargerTick(n, dt){
     if (!this.chargerWants(n)) return;
     const ratio = this.chargerMap ? (this.chargerMap.get(n.id) || 0) : 0;
@@ -8195,6 +8266,7 @@ const powerSys = {
       else if (n.t === 'crafter') this.crafterTick(n, dt);
       else if (n.t === 'pad') this.padTick(n, dt);
       else if (n.t === 'charger') this.chargerTick(n, dt);
+      else if (n.t === 'turret') this.turretTick(n, dt);
     }
     game.onElev = onElev;
     this.tubeT = (this.tubeT || 0) + dt;
@@ -9246,6 +9318,8 @@ function rebuildSolidProps(){
     }
     else if (n.t === 'astand')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.85, z: n.z, hx: 0.3, hy: 0.85, hz: 0.3 });
+    else if (n.t === 'turret')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.45, z: n.z, hx: 0.5, hy: 0.45, hz: 0.5 });
     else if (n.t === 'pad')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.06, z: n.z, hx: 0.5, hy: 0.07, hz: 0.5 });
     else if (n.t === 'ped')
@@ -9320,6 +9394,7 @@ const ENT_DEF = {
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
+  guard:    { hp: 90, speed: 3.6, r: 0.42, h: 1.8, cap: 0 },   // the city's own: they fight the sieges
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
@@ -9345,6 +9420,7 @@ const VROLE = {
   food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
   mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
+  guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
 const dropTexCache = new Map();
 function entMesh(type, ent){
@@ -9864,7 +9940,7 @@ function entMesh(type, ent){
     }
     return g;
   }
-  if (type === 'villager'){
+  if (type === 'villager' || type === 'guard'){
     const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, 0.1, 0.31, 0));
@@ -10113,6 +10189,7 @@ function spawnEntity(type, x, y, z){
 function killEntity(e, byPlayer){
   if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
   if (e.type === 'lurker' && byPlayer) boardSys.lurkerKilled(e.x, e.z);
+  if (e.siege && byPlayer){ const sr = game.cities && game.cities[e.siege]; if (sr && sr.siege) sr.siege.kills = (sr.siege.kills || 0) + 1; }
   if (game.carried === e) game.carried = null;
   const i = game.entities.indexOf(e);
   if (i >= 0) game.entities.splice(i, 1);
@@ -10263,7 +10340,7 @@ function killEntity(e, byPlayer){
   }
   markSave();
 }
-function hurtEntity(e, dmg, kx, kz){
+function hurtEntity(e, dmg, kx, kz, quiet){
   if (e.type === 'villager'){
     // you can't kill the neighbors — but they take offense
     e.flash = 0.15; e.fleeT = 5;
@@ -10275,7 +10352,7 @@ function hurtEntity(e, dmg, kx, kz){
     e.hp -= dmg;
     e.flash = 0.15;
     AudioSys.sfx('hit');
-    if (e.hp <= 0) killEntity(e, true);
+    if (e.hp <= 0) killEntity(e, !quiet);
     return;
   }
   e.hp -= dmg;
@@ -10283,7 +10360,7 @@ function hurtEntity(e, dmg, kx, kz){
   e.fleeT = 6;
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
-  if (e.hp <= 0) killEntity(e, true);
+  if (e.hp <= 0) killEntity(e, !quiet);
 }
 // how far the nearest LIGHT is — torches, beacons (which count for
 // farther: a beacon reads as a torch 0.6x as far away) and powered bulbs.
@@ -10616,6 +10693,11 @@ const objectiveSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
       out.push({ id: 'fort' + key, x: rec.x, z: rec.z, fort: true,
                  label: rec.bossDead ? 'VAULT' : 'RAID FORT', rec: { name: 'raid fort' } });
+    }
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.siege) continue;
+      out.push({ id: 'siege' + key, x: rec.x, z: rec.z, y: (rec.gy || 0) + 22, siege: true, label: 'SIEGE · ' + rec.name, rec: { name: rec.name } });
     }
     for (const key in (game.zigs || {})){
       const rec = game.zigs[key];
@@ -11769,6 +11851,160 @@ const spireSys = {
     this.wingbeat(e, dt, e.state === 'dive' ? 14 : 7);
     e.mesh.scale.setScalar(2.1 * (e.flash > 0 ? 1.08 : 1));
     if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
+  },
+};
+// ---------- city sieges ----------
+// Some deep nights a city near you is attacked: raiders come out of the
+// dark, walk for the towers and break real holes in their walls; the
+// city's guard runs out to meet them. Kill your share and the city pays in
+// coin and standing; the holes are rebuilt over the following days.
+const siegeSys = {
+  accT: 0,
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    const step = this.accT; this.accT = 0;
+    const deep = game.dayF < 0.22, day = game.day || 0;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      const span = (rec.n || 3) * 20;
+      if (rec.siege){
+        const S = rec.siege;
+        if (pd > span + 260){ this.end(rec, 'far'); continue; }
+        // the wave: raiders drip in from the dark at the city's edge
+        if (S.pending > 0){
+          S.spawnT = (S.spawnT || 0) - step;
+          if (S.spawnT <= 0){
+            S.spawnT = 1.2;
+            const a = Math.random() * Math.PI * 2, d = span + 30 + Math.random() * 20;
+            const x = rec.x + Math.cos(a) * d, z = rec.z + Math.sin(a) * d;
+            const h = game.gen.height(x, z);
+            if (!(game.gen.wetAt && game.gen.wetAt(x, z, h))){
+              const e = spawnEntity('lurker', x, Math.max(h, rec.gy) + 0.6, z);
+              e.siege = key; e.noburn = false; e.hp = 60; e.ckey = key;
+              if (e.mesh) e.mesh.scale.setScalar(1.15);
+              S.pending--;
+            }
+          }
+        }
+        // the guard: six on the plaza while the siege lasts
+        const guards = game.entities.filter(e => e.type === 'guard' && e.ckey === key).length;
+        if (guards < 6 && S.guardT-- <= 0){
+          S.guardT = 2;
+          const a = Math.random() * Math.PI * 2;
+          const e = spawnEntity('guard', rec.x + Math.cos(a) * 6, rec.gy + 0.6, rec.z + Math.sin(a) * 6);
+          e.role = 'guard'; e.ckey = key; e.noburn = true; e.home = { x: rec.x, z: rec.z };
+        }
+        const alive = game.entities.filter(e => e.siege === key).length;
+        if (S.pending <= 0 && alive === 0) this.end(rec, 'won');
+        else if (game.dayF > 0.45) this.end(rec, 'dawn');
+        continue;
+      }
+      // between sieges: the city rebuilds, a hole every twenty seconds
+      if (rec.damage && rec.damage.length){
+        rec.repairT = (rec.repairT || 0) + step;
+        if (rec.repairT > 20){
+          rec.repairT = 0;
+          const dmg = rec.damage.shift();
+          const idx = game.edits.findIndex(e => e.op === 0 && e.shape === 0 && Math.abs(e.x - dmg.x) < 0.05 && Math.abs(e.y - dmg.y) < 0.05 && Math.abs(e.z - dmg.z) < 0.05 && e.size === dmg.size);
+          if (idx >= 0){ const e = game.edits.splice(idx, 1)[0]; game.terrain.invalidate(e); wrenchSys.validate && wrenchSys.validate(); }
+          if (!rec.damage.length && pd < span + 200) toast(rec.name + ' has rebuilt its walls');
+          markSave();
+        }
+      }
+      // a new siege: deep night, you near, once a night, one city in three
+      if (deep && pd < span + 160 && rec.siegeDay !== day && !bossSys.anyBoss()){
+        rec.siegeDay = day;
+        if (Math.random() < 0.35) this.start(rec);
+        markSave();
+      }
+    }
+  },
+  start(rec){
+    const N = 6 + (rec.n || 3) * 2;
+    rec.siege = { n: N, pending: N, kills: 0, spawnT: 0.5, guardT: 0, holes: 0 };
+    rec.damage = rec.damage || [];
+    toast('SIEGE — raiders at the walls of ' + rec.name + ' (' + N + ' inbound) — the guard is out');
+    AudioSys.sfx('boom');
+    markSave();
+  },
+  end(rec, why){
+    const S = rec.siege; if (!S) return;
+    for (const e of [...game.entities]) if (e.siege === rec.key || (e.type === 'guard' && e.ckey === rec.key)) killEntity(e, false);
+    rec.siege = null;
+    if (why === 'far'){ markSave(); return; }
+    const share = S.kills / Math.max(1, S.n);
+    if (share >= 0.4){
+      const coins = 20 * S.kills + 40;
+      addStackItem('coin', coins);
+      citySys.cred(rec, 8 + Math.round(share * 8));
+      toast(rec.name + ' holds — you took ' + S.kills + ' of ' + S.n + ' · +' + coins + ' coins · +' + (8 + Math.round(share * 8)) + ' standing');
+      AudioSys.sfx('craft');
+    } else if (S.kills > 0){
+      addStackItem('coin', 10 * S.kills);
+      toast(rec.name + ' holds — you took ' + S.kills + ' of ' + S.n + ' · +' + 10 * S.kills + ' coins');
+    } else toast(why === 'dawn' ? 'dawn breaks the siege of ' + rec.name : 'the siege of ' + rec.name + ' is over');
+    refreshHotbar(); markSave();
+  },
+  // the nearest tower wall point to a raider
+  wallPoint(rec, x, z){
+    let best = null, bd = 1e9;
+    for (const t of rec.towers || []){
+      if (t.kind !== 'tower') continue;
+      const tx = rec.x + t.bx * 36, tz = rec.z + t.bz * 36, h = t.w / 2;
+      const cx = Math.max(tx - h, Math.min(tx + h, x)), cz = Math.max(tz - h, Math.min(tz + h, z));
+      // a point on the face, not inside
+      let px = cx, pz = cz;
+      if (Math.abs(x - tx) < h && Math.abs(z - tz) < h){ if (Math.abs(x - tx) > Math.abs(z - tz)) px = tx + Math.sign(x - tx) * h; else pz = tz + Math.sign(z - tz) * h; }
+      const d = Math.hypot(px - x, pz - z);
+      if (d < bd){ bd = d; best = [px, pz, d]; }
+    }
+    return best;
+  },
+  raiderTarget(e, dt, pd){
+    const rec = game.cities && game.cities[e.siege];
+    if (!rec || !rec.siege) return [0, 0];
+    if (pd < 10) return [game.pos.x - e.x, game.pos.z - e.z];
+    const w = this.wallPoint(rec, e.x, e.z);
+    if (!w) return [rec.x - e.x, rec.z - e.z];
+    if (w[2] < 3.2){
+      // at the wall: hammer it, and a hole opens
+      e.breachT = (e.breachT || 0) + dt;
+      if (Math.random() < dt * 3) Particles.burst(w[0], e.y + 1.2, w[1], 0.3, [0x8f8f96, 0x51484f], 3, 1.5);
+      if (e.breachT > 2.5){
+        e.breachT = 0;
+        const S = rec.siege;
+        if (S.holes < 24){
+          S.holes++;
+          const hole = CORE.makeEdit(0, 0, +w[0].toFixed(2), +(e.y + 1.2).toFixed(2), +w[1].toFixed(2), 2.6, 0, 0);
+          applyEdit(hole);
+          rec.damage.push({ x: hole.x, y: hole.y, z: hole.z, size: hole.size });
+          Particles.burst(w[0], e.y + 1.2, w[1], 1.0, [0x8f8f96, 0x51484f, 0xffb347], 20, 3);
+          if (Math.hypot(w[0] - game.pos.x, w[1] - game.pos.z) < 60) AudioSys.sfx('boom');
+          markSave();
+        }
+      }
+      return [0, 0];
+    }
+    return [w[0] - e.x, w[1] - e.z];
+  },
+  guardTarget(e, dt){
+    let best = null, bd = 34;
+    for (const o of game.entities){
+      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk')) continue;
+      const d = Math.hypot(o.x - e.x, o.z - e.z);
+      if (d < bd){ bd = d; best = o; }
+    }
+    if (best){
+      if (bd < 1.7 && e.atkT <= 0){ e.atkT = 1.0; hurtEntity(best, 12, (best.x - e.x) * 2, (best.z - e.z) * 2, true); }
+      return [best.x - e.x, best.z - e.z];
+    }
+    const H = e.home || e;
+    if (e.tt <= 0){ e.tt = 3 + Math.random() * 3; e.tx = H.x + (Math.random() - 0.5) * 12; e.tz = H.z + (Math.random() - 0.5) * 12; }
+    const sx = e.tx - e.x, sz = e.tz - e.z;
+    return Math.hypot(sx, sz) < 0.6 ? [0, 0] : [sx, sz];
   },
 };
 // ---------- lit windows ----------
@@ -13352,7 +13588,16 @@ function updateEntities(dt, now){
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
     if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
-    if (e.type === 'lurker' && (pd < 15 || e.raider)){
+    if (e.type === 'guard'){
+      const tg = siegeSys.guardTarget(e, dt);
+      sx = tg[0]; sz = tg[1];
+    } else if (e.type === 'lurker' && e.siege){
+      // a siege raider: the walls first, you if you get close
+      const tg = siegeSys.raiderTarget(e, dt, pd);
+      sx = tg[0]; sz = tg[1]; sp *= 1.1;
+      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5); }
+    } else if (e.type === 'lurker' && (pd < 15 || e.raider)){
       if (e.raider) sp *= 1.15;
       sx = game.pos.x - e.x; sz = game.pos.z - e.z;
       const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
@@ -15101,7 +15346,7 @@ function activeTool(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -15299,7 +15544,7 @@ const wrenchProps = {
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
-                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4],
+                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -17235,7 +17480,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -17412,6 +17657,10 @@ function itemIconURL(it){
     c.fillStyle = '#3a3f52'; c.fillRect(4, 6, 8, 4); c.fillRect(3, 7, 10, 2);
     c.fillStyle = '#b9a3ff'; c.fillRect(2, 11, 4, 2); c.fillRect(10, 11, 4, 2); c.fillRect(4, 7, 8, 1);
     c.fillStyle = '#1c1c22'; c.fillRect(6, 5, 4, 1);
+  } else if (it.kind === 'turret'){
+    c.fillStyle = '#6a7080'; c.fillRect(3, 11, 10, 3); c.fillRect(6, 8, 4, 3);
+    c.fillStyle = '#9aa0ab'; c.fillRect(7, 3, 2, 6); c.fillRect(10, 4, 2, 5);
+    c.fillStyle = '#ff5544'; c.fillRect(7, 2, 2, 1); c.fillRect(10, 3, 2, 1);
   } else if (it.kind === 'cannon'){
     c.fillStyle = '#9aa0ab'; c.fillRect(2, 11, 8, 3);
     c.fillStyle = '#6a7080'; for (let q = 0; q < 8; q++) c.fillRect(5 + q, 10 - q, 3, 2);
@@ -17886,6 +18135,7 @@ function itemLabel(it){
   if (it.kind === 'plane') return (it.wrecked ? 'wrecked ' : '') + 'cargo plane';
   if (it.kind === 'hover') return (it.wrecked ? 'wrecked ' : '') + 'hoverbike';
   if (it.kind === 'cannon') return 'launch cannon';
+  if (it.kind === 'turret') return 'wall turret';
   if (it.kind === 'windsock') return 'windsock';
   if (it.kind === 'hangar') return 'hangar kit';
   if (it.kind === 'airstrip') return 'airstrip kit';
@@ -17992,12 +18242,14 @@ function buildMissionsUI(){
     t1.textContent = o.fort ? 'raid fort'
                    : o.spire ? 'sky spire'
                    : o.zig ? 'ziggurat'
+                   : o.siege ? o.rec.name + ' — UNDER SIEGE'
                    : o.city ? o.rec.name + ' — the city'
                    : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
     t2.className = 't2';
     t2.textContent = (o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
+                    : o.siege ? 'raiders are breaking the walls — kill your share for coin and standing'
                     : o.city ? 'shops, a mayor with deeds, work — standing ' + ((game.cities[o.id.slice(4)] || {}).rep || 0)
                     : o.hrec ? missionSys.describe(o.rec, o.hrec)
                              : 'reach the marked spot')
@@ -18070,7 +18322,7 @@ const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', '
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
-const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
+const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed'];
@@ -18141,7 +18393,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -18969,6 +19221,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">wisp core</div><div class="t2">a charge that still wants to go off: TNT, rockets or mining charges at a crafting table</div>';
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
+  } else if (it.kind === 'turret'){
+    html = '<div class="t1">wall turret</div><div class="t2">place it and wire it to your grid (4 W idle, 30 W firing) — it shoots anything hostile within 24 m, on its own, all night</div>';
   } else if (it.kind === 'cannon'){
     html = '<div class="t1">launch cannon</div><div class="t2">place it, stand at it, aim where you want to go and right click — you fly. Take the grapple.</div>';
   } else if (it.kind === 'windsock'){
@@ -21134,6 +21388,7 @@ function frame(now){
   collapseSys.tick(dt);
   citySys.tick(dt);
   cityLightSys.tick(dt);
+  siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
@@ -21341,7 +21596,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
