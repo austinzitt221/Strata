@@ -307,6 +307,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="zl" id="scopezoom">4.0x</div>
 </div>
 <div id="itemtip" class="hidden"></div>
+<div id="stationscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:420px;">
+    <h2 id="stationtitle">STATION</h2>
+    <div class="sub" style="margin-bottom:8px;">tickets on the public line · your own rails that reach the platform · E to close</div>
+    <div id="stationlist"></div>
+  </div>
+</div>
 <div id="bossbar" class="hidden">
   <div id="bossname">BOSS</div>
   <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
@@ -7372,6 +7379,18 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, gear, face);
       g.userData.orb = gear;
+    } else if (t === 'station'){
+      // a ticket kiosk: a booth under a little roof, the city's name on the board
+      const booth = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.2), M.wood); booth.position.y = 0.65;
+      const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), M.steel); post1.position.set(-1.1, 1.3, 0.7);
+      const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), M.steel); post2.position.set(1.1, 1.3, 0.7);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 2.2), M.dark); roof.position.set(0, 2.6, 0.2);
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 32;
+      const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
+      board.position.set(0, 2.05, -0.62); board.rotation.y = Math.PI;
+      g.add(booth, post1, post2, roof, board);
+      g.userData.station = { cv, tex };
     } else if (t === 'turret'){
       // a squat mount with twin barrels on a pivot; the muzzles glow when it fires
       const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), M.dark); base.position.y = 0.2;
@@ -7656,7 +7675,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -7756,6 +7775,15 @@ const pnodeSys = {
         const w = performance.now() * 0.0004;
         ud.sock.rotation.y = Math.sin(w) * 1.2 + Math.sin(w * 2.7) * 0.4;
         ud.sock.rotation.z = -0.15 - Math.abs(Math.sin(w * 1.3)) * 0.35;
+      }
+      if (n.t === 'station' && ud.station && !ud.station.drawn){
+        ud.station.drawn = true;
+        const c2 = ud.station.cv.getContext('2d');
+        c2.fillStyle = '#1c2c4a'; c2.fillRect(0, 0, 128, 32);
+        c2.fillStyle = '#ffd27a'; c2.font = 'bold 12px monospace'; c2.textAlign = 'center';
+        c2.fillText('STATION', 64, 12);
+        c2.fillStyle = '#fff'; c2.fillText(((game.cities || {})[n.city] || {}).name || '', 64, 26);
+        ud.station.tex.needsUpdate = true;
       }
       if (n.t === 'turret' && ud.pivot){
         if (n.aim){
@@ -9320,6 +9348,8 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.85, z: n.z, hx: 0.3, hy: 0.85, hz: 0.3 });
     else if (n.t === 'turret')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.45, z: n.z, hx: 0.5, hy: 0.45, hz: 0.5 });
+    else if (n.t === 'station')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.65, z: n.z, hx: 0.8, hy: 0.65, hz: 0.6 });
     else if (n.t === 'pad')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.06, z: n.z, hx: 0.5, hy: 0.07, hz: 0.5 });
     else if (n.t === 'ped')
@@ -11192,6 +11222,7 @@ const tradeSys = {
       row.addEventListener('click', () => this.execute(o));
       list.appendChild(row);
     });
+    if (T.e.role === 'mayor' && crec) blueprintMarket.rows(list, crec);
   },
   execute(o){
     const T = game.activeTrade;
@@ -11851,6 +11882,180 @@ const spireSys = {
     this.wingbeat(e, dt, e.state === 'dive' ? 14 : 7);
     e.mesh.scale.setScalar(2.1 * (e.flash > 0 ? 1.08 : 1));
     if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
+  },
+};
+// ---------- the blueprint marketplace ----------
+// The mayor sells the city's famous plans — a watchtower, a bridge, a
+// villa, a lighthouse — as blueprints you stamp anywhere (N), and buys
+// yours once each, priced by their size.
+const blueprintMarket = {
+  FAMOUS: [
+    { name: 'WATCHTOWER', price: 320, crep: 10 },
+    { name: 'STONE BRIDGE', price: 260, crep: 10 },
+    { name: 'VILLA', price: 520, crep: 25 },
+    { name: 'LIGHTHOUSE', price: 640, crep: 25 },
+  ],
+  build(name){
+    const MAT = CORE.MAT, items = [];
+    const B = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, x, y, z, sx, mat || 0, 0); e.sy = sy; e.sz = sz; items.push(e); };
+    let w = 6, h = 8, d = 6;
+    if (name === 'WATCHTOWER'){
+      w = 6; h = 13; d = 6;
+      B(1, 0, 5, 0, 5, 10, 5, MAT.STONEBRICK); B(0, 0, 5.2, 0, 3.4, 9.8, 3.4); B(0, 0, 1.4, 2.5, 1.4, 2.6, 1.4);
+      B(1, 0, 10.4, 0, 6.4, 0.8, 6.4, MAT.STONEBRICK); B(1, 0, 11.3, 0, 6.4, 1.0, 6.4, MAT.STONEBRICK); B(0, 0, 11.3, 0, 5.2, 1.2, 5.2);
+      B(0, 0, 10.7, 0, 1.6, 1.4, 1.6);
+      for (let i = 0; i < 9; i++) B(1, -1.2 + (i % 3) * 1.2, 1 + i * 1.05, -1.2 + Math.floor(i / 3) * 0.2, 1.1, 0.25, 1.1, MAT.PLANKS);
+    } else if (name === 'STONE BRIDGE'){
+      w = 5; h = 3; d = 24;
+      B(1, 0, 0.6, 0, 4.4, 1.2, 24, MAT.STONEBRICK);
+      B(1, -2.0, 1.6, 0, 0.4, 0.9, 24, MAT.STONEBRICK); B(1, 2.0, 1.6, 0, 0.4, 0.9, 24, MAT.STONEBRICK);
+      B(1, 0, -1.2, -9, 3.6, 3, 3.6, MAT.STONEBRICK); B(1, 0, -1.2, 9, 3.6, 3, 3.6, MAT.STONEBRICK);
+    } else if (name === 'VILLA'){
+      w = 12; h = 5; d = 10;
+      B(1, 0, 2.2, 0, 12, 4.4, 10, MAT.STONEBRICK); B(0, 0, 2.1, 0, 10.6, 3.6, 8.6);
+      B(0, 0, 1.4, 5, 1.6, 2.6, 1.2);
+      for (const wx of [-3.5, 3.5]){ B(0, wx, 2.6, 5, 1.6, 1.2, 1.2); B(0, wx, 2.6, -5, 1.6, 1.2, 1.2); }
+      B(0, 6, 2.6, 0, 1.2, 1.2, 2.2); B(0, -6, 2.6, 0, 1.2, 1.2, 2.2);
+      B(1, 0, 4.9, 0, 12.8, 1.0, 10.8, MAT.PLANKS); B(1, 0, 5.6, 0, 8, 0.6, 6, MAT.PLANKS);
+      B(1, 0, 0.3, 7.5, 6, 0.6, 5, MAT.PLANKS);
+    } else if (name === 'LIGHTHOUSE'){
+      w = 8; h = 22; d = 8;
+      const C = (op, y, r, hh, mat) => { const e = CORE.makeEdit(op, 2, 0, y, 0, r * 2, mat || 0, 0); e.sy = hh; items.push(e); };
+      C(1, 9, 3.0, 18, MAT.STONEBRICK); C(0, 9.2, 2.0, 17.6); B(0, 0, 1.4, 2.6, 1.4, 2.6, 1.6);
+      C(1, 18.5, 3.6, 1, MAT.STONEBRICK); C(1, 20, 2.4, 2, MAT.CRYSTAL); C(1, 21.4, 3.0, 0.8, MAT.STONEBRICK);
+      for (let y = 4; y < 16; y += 4) B(1, 0, y, 2.5, 1.2, 0.3, 1.2, MAT.SNOW);
+      for (let i = 0; i < 16; i++) B(1, Math.cos(i * 0.9) * 1.3, 0.6 + i * 1.05, Math.sin(i * 0.9) * 1.3, 1.0, 0.25, 1.0, MAT.PLANKS);
+    }
+    return { name, w, h, d, rows: CORE.serializeEdits(items), props: [] };
+  },
+  rows(list, crec){
+    const have = loadBlueprints();
+    const coins = CORE.countItem(game.slots, 'coin');
+    const head = document.createElement('div'); head.className = 'invlabel'; head.textContent = 'BLUEPRINTS — the city\'s famous plans, and yours';
+    list.appendChild(head);
+    for (const F of this.FAMOUS){
+      const owned = have.some(b => b.name === F.name);
+      const locked = (crec.rep || 0) < F.crep;
+      const row = document.createElement('div'); row.className = 'craftrow';
+      if (locked || owned) row.style.opacity = 0.45;
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = 'buy blueprint: ' + F.name + (owned ? ' (yours)' : '');
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto';
+      cost.textContent = locked ? 'needs standing ' + F.crep : F.price + 'c'; cost.style.color = locked ? '#8a8494' : coins >= F.price ? '#8bff9e' : '#ff7a5c';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => {
+        if (owned){ toast('you already hold that plan — N to stamp it'); return; }
+        if (locked){ toast('the city does not know you well enough'); AudioSys.sfx('deny'); return; }
+        if (CORE.countItem(game.slots, 'coin') < F.price){ toast('not enough coins'); AudioSys.sfx('deny'); return; }
+        CORE.consumeItem(game.slots, 'coin', F.price);
+        const l2 = loadBlueprints(); l2.push(this.build(F.name)); saveBlueprintsList(l2);
+        citySys.cred(crec, 1);
+        toast('bought the ' + F.name + ' blueprint — N to stamp it anywhere');
+        AudioSys.sfx('craft'); refreshHotbar(); tradeSys.refresh();
+      });
+      list.appendChild(row);
+    }
+    crec.boughtBps = crec.boughtBps || [];
+    for (const bp of have){
+      if (this.FAMOUS.some(F => F.name === bp.name)) continue;
+      const sold = crec.boughtBps.includes(bp.name);
+      const price = Math.min(600, 40 + 2 * (bp.rows ? bp.rows.length : 0));
+      const row = document.createElement('div'); row.className = 'craftrow';
+      if (sold) row.style.opacity = 0.45;
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = 'sell blueprint: ' + bp.name + (sold ? ' (sold here)' : '');
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = '+' + price + 'c'; cost.style.color = sold ? '#8a8494' : '#8bff9e';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => {
+        if (sold){ toast('this city already bought that plan'); return; }
+        crec.boughtBps.push(bp.name);
+        addStackItem('coin', price);
+        citySys.cred(crec, 2);
+        toast('sold the ' + bp.name + ' plan to ' + crec.name + ' — +' + price + ' coins');
+        AudioSys.sfx('craft'); refreshHotbar(); markSave(); tradeSys.refresh();
+      });
+      list.appendChild(row);
+    }
+  },
+};
+// ---------- stations: the public line ----------
+// Every city has a station on its south edge. Buy a ticket and a tram
+// takes you down the highway to any city a road connects — the road IS
+// the line. Your own rails that end at the platform show up too, so the
+// network you build junctions into the public one.
+const stationSys = {
+  linksOf(rec){
+    const out = [];
+    for (const L of roadSys.linksNear(rec.x, rec.z, 60)){
+      const mine = L.a.key === rec.key.slice(1) ? 'a' : L.b.key === rec.key.slice(1) ? 'b' : null;
+      if (!mine) continue;
+      const other = mine === 'a' ? L.b : L.a;
+      out.push({ L, other, fromA: mine === 'a', name: citySys.nameFor(other.seed), fare: Math.max(20, Math.ceil(L.len * 0.09)) });
+    }
+    return out;
+  },
+  open(pn){
+    const rec = (game.cities || {})[pn.city];
+    if (!rec) return;
+    game.activeStation = pn;
+    game.ui = 'station';
+    $('stationtitle').textContent = (rec.name || 'CITY') + ' STATION';
+    const list = $('stationlist'); list.innerHTML = '';
+    const coins = CORE.countItem(game.slots, 'coin');
+    const links = this.linksOf(rec);
+    if (!links.length){
+      const row = document.createElement('div'); row.className = 'sub'; row.textContent = 'no road leaves this city — no public line'; list.appendChild(row);
+    }
+    for (const lk of links){
+      const row = document.createElement('div'); row.className = 'craftrow';
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = '→ ' + lk.name + ' · ' + (lk.L.len / 1000).toFixed(1) + ' km';
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = lk.fare + 'c'; cost.style.color = coins >= lk.fare ? '#8bff9e' : '#ff7a5c';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => this.ride(rec, lk));
+      list.appendChild(row);
+    }
+    // your own rails at the platform
+    for (const L of game.rails || []){
+      for (const end of [0, 1]){
+        const pt = L.pts[end === 0 ? 0 : L.pts.length - 1];
+        if (Math.hypot(pt[0] - pn.x, pt[2] - pn.z) > 12 || Math.abs(pt[1] - pn.y) > 4) continue;
+        const far = L.pts[end === 0 ? L.pts.length - 1 : 0];
+        const row = document.createElement('div'); row.className = 'craftrow'; row.style.borderLeft = '3px solid #7fe8e8';
+        const nm = document.createElement('div'); nm.className = 'cname';
+        nm.textContent = 'your line → ' + Math.round(far[0]) + ', ' + Math.round(far[2]) + ' · ' + (railSys.powered(L) ? 'live' : 'DEAD — wire its meter');
+        const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = 'free'; cost.style.color = '#8bff9e';
+        row.appendChild(nm); row.appendChild(cost);
+        row.addEventListener('click', () => {
+          if (!railSys.powered(L)){ toast('dead line — wire a power source to the rail meter'); AudioSys.sfx('deny'); return; }
+          closeOverlay(); game.ui = 'none'; requestLock(); railSys.board(L, end);
+        });
+        list.appendChild(row);
+      }
+    }
+    show('stationscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  ride(rec, lk){
+    if (CORE.countItem(game.slots, 'coin') < lk.fare){ toast('not enough coins for the fare'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', lk.fare);
+    const L = lk.L, from = rec.station || citySys.stationPos(lk.fromA ? L.a : L.b, rec);
+    const orec = (game.cities || {})['c' + lk.other.key];
+    const to = orec && orec.station ? orec.station : citySys.stationPos(lk.other, orec);
+    // the line: platform -> the road's near end -> along its profile -> the far end -> the far platform
+    const pts = [[from.x, from.y, from.z]];
+    const road = [];
+    for (let i = 0; i <= L.segs; i++){
+      const t = i / L.segs;
+      road.push([L.sx + (L.ex - L.sx) * t, L.prof[i] + 0.4, L.sz + (L.ez - L.sz) * t]);
+    }
+    if (!lk.fromA) road.reverse();
+    // a lift up to the road's level at the edge of the slab, then the run
+    pts.push([road[0][0], from.y, road[0][2]]);
+    for (const q of road) pts.push(q);
+    pts.push([road[road.length - 1][0], to.y, road[road.length - 1][2]]);
+    pts.push([to.x, to.y, to.z]);
+    const line = { id: null, pub: true, pts, dest: lk.name };
+    closeOverlay(); game.ui = 'none'; requestLock();
+    railSys.board(line, 0);
+    toast('ticket to ' + lk.name + ' · ' + lk.fare + 'c — the tram rolls');
+    refreshHotbar(); markSave();
   },
 };
 // ---------- city sieges ----------
@@ -12605,6 +12810,7 @@ const railSys = {
     return (L && L.id != null && powerSys.railWatts) ? (powerSys.railWatts.get(L.id) || 0) : 0;
   },
   speedFor(L){
+    if (L && L.pub) return 42;                       // the public line: the city's own power
     const w = this.wattsFor(L);
     return w > 0 ? Math.min(60, 4 + 0.22 * w) : 0;
   },
@@ -12664,6 +12870,16 @@ const railSys = {
       new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
     rim.position.y = 0.75;
     cart.add(base, rim);
+    if (L.pub){
+      // the public tram: a blue car with a roof
+      base.material.color.setHex(0x2f4f7a);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 2.6), new THREE.MeshBasicMaterial({ color: 0x1c2c4a }));
+      roof.position.y = 2.3; cart.add(roof);
+      for (const [sx, sz] of [[-0.75, -1.15], [0.75, -1.15], [-0.75, 1.15], [0.75, 1.15]]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
+        post.position.set(sx, 1.5, sz); cart.add(post);
+      }
+    }
     game.scene.add(cart);
     game.riding = { L, dir: end === 0 ? 1 : -1, mesh: cart };
     game.vel.set(0, 0, 0);
@@ -12697,7 +12913,7 @@ const railSys = {
     if (R.d <= 0 || R.d >= total){
       const p = R.d <= 0 ? pts[0] : pts[pts.length - 1];
       game.pos.set(p[0], p[1] + 1.0, p[2]);
-      this.dismount('end of the line');
+      this.dismount(R.L.pub ? 'arrived — ' + R.L.dest : 'end of the line');
       return;
     }
     let i = 0;
@@ -13113,6 +13329,25 @@ const citySys = {
     else if (after !== before) toast('you are ' + (after === 'known' ? 'known in ' : after === 'citizen' ? 'a citizen of ' : 'a patron of ') + rec.name + ' (standing ' + rec.rep + ')');
     markSave();
   },
+  stationPos(c, rec){
+    const n = rec && rec.n ? rec.n : this.plan(c).n, span = n * 36 + 8;
+    const g = rec && rec.gy != null ? rec.gy : this.slabLevel(c);
+    return { x: c.x, y: g + 0.6, z: c.z + span / 2 - 5 };
+  },
+  stampStation(c, rec, g, span){
+    const MAT = CORE.MAT;
+    const sp = { x: c.x, y: g + 0.6, z: c.z + span / 2 - 5 };
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    EB(1, sp.x, g + 0.3, sp.z, 18, 0.6, 6, MAT.STONEBRICK);                      // the platform
+    const pk = CORE.makeEdit(2, 1, +sp.x.toFixed(1), +(g + 0.5).toFixed(1), +sp.z.toFixed(1), 18, MAT.BASALT, 0);
+    pk.sy = 0.3; pk.sz = 6; pk.noLod = 1; applyEdit(pk);
+    const st = pnodeSys.addQuiet('station', sp.x, sp.y, sp.z, Math.PI, { city: rec.key });
+    game.torches.push([sp.x - 7, g + 1.0, sp.z], [sp.x + 7, g + 1.0, sp.z]);
+    rec.station = { x: sp.x, y: sp.y, z: sp.z, id: st.id };
+  },
   harborAt(c){
     if (!game.gen.wetAt) return false;
     for (let a = 0; a < 6.28; a += 0.52){
@@ -13288,6 +13523,8 @@ const citySys = {
     EB(1, c.x, g + 11 + n * 2 + 1.0, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
     for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
       EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS, 1);
+    // ---- the station: a platform on the south edge, a kiosk with tickets ----
+    this.stampStation(c, rec, g, span);
     // ---- district signs at the plaza's corners ----
     if (n > 3){
       const seen = new Set();
@@ -13354,6 +13591,10 @@ const citySys = {
         rec.stamped = true;
         this.stamp(c, rec);
         markSave();
+      } else if (!rec.station && rec.gy != null){
+        // a city from before the trains: it gets its station now
+        this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8);
+        torchSys.rebuild(); pnodeSys.rebuild(); markSave();
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
@@ -14244,6 +14485,7 @@ function bindInput(){
           toast('wire it to power, stand on the platform — space rises, C descends');
           return;
         }
+        if (pn.t === 'station'){ stationSys.open(pn); return; }
         if (pn.t === 'pad'){
           const jp = game.armor && game.armor.back;
           const cars = powerSys.padCars(pn);
@@ -14419,9 +14661,9 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft'){
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station')) closeOverlay();
       else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -15544,7 +15786,7 @@ const wrenchProps = {
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
-                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5],
+                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5], station: [1.3, 1.5, 1.35, 1.2],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -19840,7 +20082,7 @@ function openMap(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -21596,7 +21838,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

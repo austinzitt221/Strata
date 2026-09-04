@@ -399,7 +399,7 @@ islands, a unique ruin for the ground, and then the weather.
   top becomes falling debris and drops. The most CSG-native mechanic on
   the list, and a genuine danger underground.
 
-## Build 20 — METROPOLIS (cities become places)
+## Build 20 — METROPOLIS (cities become places) (DONE)
 - **Districts & city reputation** — industrial, old town, harbor; city-wide
   rep gates the best shops and the best property.
 - **Interior furnishing pass** — offices and apartments inside towers,

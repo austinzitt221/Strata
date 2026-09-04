@@ -2,6 +2,94 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 20 — METROPOLIS (2026-09-04)
+
+Cities become places: districts with their own look and their own
+standing, towers you can actually go inside, nights where the windows
+light, sieges that scar the walls, turrets that eat your watts, a public
+tram line between every connected city, and a marketplace that buys your
+blueprints. Verified headlessly (CORE 297, smoke, the full Build 11-20
+suites) and in screenshots; committed in four phases.
+
+### A. Districts & city reputation
+- **Three districts per city.** `citySys.plan` now hands every block a
+  district: the **old town** (west: low stone, tight lots, the market),
+  the **industrial quarter** (east: tall dark towers, working lots with a
+  smokestack — a real cylinder edit 18 m tall — and a boiler house) and
+  the **harbor** (the side of the city nearest water, when there is any
+  within reach: dock warehouses and crate stacks on the quay). District
+  signs stand at the block corners; villagers take roles by district
+  (dockers and stokers, not just shopkeepers).
+- **City standing.** Every city keeps a reputation of its own (`rec.rep`)
+  beside the per-house goodwill: stranger → known (10) → citizen (25) →
+  patron (50). It goes up with missions done for its people, siege kills
+  and trades; it goes down when you strike a citizen (−4) or dig up the
+  city outside your own tower (−2 every three seconds). Trade screens
+  show both numbers.
+- **Standing gates the best shops.** New city-only offers carry `crep`:
+  the broker's aether ingots (25) and diamonds (50), the armorer's
+  rockets (25) and the tier-7 firearm (50), the toolsmith's obsidian
+  drill (50), the mayor's DEED (25), and the dealership's hoverbike (25)
+  and cargo plane (50). Locked rows read "needs standing N" and refuse
+  the click.
+
+### B. Towers you can live in
+- **Furnished floors.** Floors 1-3 and the top of every tower are
+  furnished: offices (table, coin chest) and apartments (bed, stove),
+  placed through `pnodeSys.addQuiet` so a city stamp costs one rebuild,
+  not one per prop.
+- **Civic elevators.** Towers of seven floors or more carry an elevator
+  shaft that runs on the city's power, not yours (`n.civic` → ratio 1).
+  Step on, ride to the roof.
+- **Lit windows.** After dark (`dayF < 0.32`) an instanced pane mesh
+  lights the windows of every tower in view, seeded per pane so about
+  half stay dark and the pattern is the same every night. Capped at 6000
+  panes.
+
+### C. Sieges and turrets
+- **Sieges.** In deep night, one city in three you are near gets sieged
+  once a night: 6 + 2 × block-count raiders spawn at the walls, breach
+  them with real subtract edits (kept in `rec.damage`) and move in. The
+  city's **guard** (a new villager-bodied entity with a blade) comes out
+  to meet them. Kill 40 % or more and the city holds: 20 coins per kill
+  + 40, and 8-16 standing. Dawn breaks any siege. The city repairs its
+  walls itself, one hole every 20 s, by splicing the breach out of the
+  edit list.
+- **Wall turrets.** Craft 10 iron + 2 ruby ingots + 16 cells. A wired
+  turret idles at 4 W and pulls 30 W while it has a target; it scans 24 m
+  every quarter second with a real line-of-sight march through the
+  field, fires a beam every 0.33 s (slower on a brown-out) for 9 damage
+  scaled by its power ratio, and only ever shoots hostiles — raiders,
+  sieges, bosses, the night shift, angels. Guards and villagers are
+  safe from it. Turret kills are quiet: no loot toast spam.
+
+### D. The tram and the blueprint market
+- **City stations.** Every city stamps a station on its south edge: an
+  18 × 6 m platform, a kiosk with a painted board, torches. Old saves get
+  one the next time the city loads (`ensure`). RMB on the kiosk opens the
+  ticket screen.
+- **Tickets.** One row per road link out of this city (the same links
+  the highways follow), fare 20 coins minimum or 0.09 per metre. Buy one
+  and a blue tram cart takes you — a public line built on the fly along
+  the road profile at 42 m/s, no watts — to the far city's platform,
+  where you step off with "arrived — NAME".
+- **Your own rails join the network.** Any of your rail lines that ends
+  within 12 m of the platform shows in the same screen, with its meter
+  status, so a station is the junction between your lines and theirs.
+- **Blueprint marketplace.** The mayor now sells four famous blueprints
+  built in code (WATCHTOWER 320c, STONE BRIDGE 260c at standing 10;
+  VILLA 520c and LIGHTHOUSE 640c at 25) straight into your blueprint
+  list. And they buy yours: each blueprint you have saved sells once per
+  city for 40 + 2 × its edit count, capped at 600 — your builds are
+  income.
+
+### Known limits
+- Station platforms are stamped at the south edge regardless of what
+  district sits there; a harbor city's platform can share the quay.
+- The tram line is straight between the road's ends after the profile
+  sample, so it rides above (never through) sharp road bends.
+- Turret line of sight is the field only; it will shoot through props.
+
 ## Build 19.1 — playtest notes (2026-09-03)
 
 - **Collapse is for loose ground only.** Only sand and snow fall now;
