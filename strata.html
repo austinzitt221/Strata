@@ -7584,6 +7584,14 @@ const pnodeSys = {
       }
     }
   },
+  // bulk stamping: push without the full rebuild, call rebuild() once after
+  addQuiet(t, x, y, z, yaw, extra){
+    const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
+    if (t === 'lever') n.on = true;
+    if (extra) Object.assign(n, extra);
+    game.pnodes.push(n);
+    return n;
+  },
   add(t, x, y, z, yaw, extra){
     const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
     if (t === 'lever') n.on = true;
@@ -8217,7 +8225,7 @@ const powerSys = {
       game.pos.y > top - 0.5 && game.pos.y < top + 0.6;
     const k = game.keys || {};
     const canMove = game.ui === 'none' && isLocked();
-    const ratio = this.elevMap ? (this.elevMap.get(n.id) || 0) : 0;
+    const ratio = n.civic ? 1 : (this.elevMap ? (this.elevMap.get(n.id) || 0) : 0);   // a city elevator runs on the municipal supply
     const dir = riding && canMove && ratio > 0 ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
     n.riderDir = riding && canMove ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
     if (dir){
@@ -11763,6 +11771,69 @@ const spireSys = {
     if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
   },
 };
+// ---------- lit windows ----------
+// The towers' window bands are holes; at night warm panes appear just
+// inside them — one instanced quad per face per floor, a seeded subset
+// lit each night, none by day. Cheap: a few thousand instances for a
+// whole skyline, no lights at all.
+const cityLightSys = {
+  mesh: null, cap: 6000, builtFor: '', lastDay: -1, checkT: 9,
+  ensure(){
+    if (this.mesh) return;
+    const geo = new THREE.BoxGeometry(1, 1, 0.1);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 });
+    this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
+    this.mesh.frustumCulled = false; this.mesh.count = 0; this.mesh.visible = false;
+    this.mesh.userData.noShadow = true;
+    game.scene.add(this.mesh);
+  },
+  rebuild(){
+    this.ensure();
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    let i = 0;
+    const day = game.day || 0;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped || !rec.towers) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 700) continue;
+      const g = rec.gy != null ? rec.gy : 0, S = 4.0;
+      for (const t of rec.towers){
+        if (t.kind !== 'tower') continue;
+        const tx = rec.x + t.bx * 36, tz = rec.z + t.bz * 36;
+        const wl = t.w - 3.4 - 0.5;
+        for (let f = 0; f < t.floors; f++){
+          const wy = g + f * S + 2.55;
+          for (let face = 0; face < 4; face++){
+            const h = CORE.mulberry32((rec.seed ^ Math.imul(t.bx + 9, 1013)) ^ Math.imul(t.bz + 13, 3331) ^ Math.imul(f + 1, 7919) ^ Math.imul(face + 1, 104729) ^ Math.imul(day + 1, 2654435761))();
+            if (h > 0.55) continue;                                // dark tonight
+            if (i >= this.cap) break;
+            const inset = t.w / 2 - 0.45;
+            const ax = face === 0 ? 1 : face === 1 ? -1 : 0, az = face === 2 ? 1 : face === 3 ? -1 : 0;
+            pos.set(tx + ax * inset, wy, tz + az * inset);
+            q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ax ? Math.PI / 2 : 0);
+            scl.set(wl, 1.1, 1);
+            m.compose(pos, q, scl);
+            this.mesh.setMatrixAt(i++, m);
+          }
+        }
+      }
+    }
+    this.mesh.count = i;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  },
+  tick(dt){
+    if (!game.running) return;
+    this.checkT += dt;
+    const night = game.dayF < 0.32;
+    if (this.mesh) this.mesh.visible = night;
+    if (!night) return;
+    if (this.checkT < 2) return;
+    this.checkT = 0;
+    // the set of nearby stamped cities, and the night, decide the panes
+    const sig = Object.keys(game.cities || {}).filter(k => game.cities[k].stamped && Math.hypot(game.cities[k].x - game.pos.x, game.cities[k].z - game.pos.z) < 700).join('|') + '#' + (game.day || 0);
+    if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
+  },
+};
 // ---------- the Ziggurat ----------
 // A stepped stone pyramid on the plains, mesa or dunes, rarer than a fort:
 // a processional ramp up the south face to a shrine, and under it a hall
@@ -12943,6 +13014,30 @@ const citySys = {
       const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
       EB(0, cxr, g + 0.35 + (H - 1.15) / 2, czr, 1.8, H - 1.15, 1.8, 0, 1);
       (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
+      // the shaft of every tower of seven floors or more carries a working
+      // elevator on the city's supply: stand on it, SPACE up, C down
+      if (t.floors >= 7) pnodeSys.addQuiet('elev', cxr, g + 0.35, czr, 0, { civic: 1 });
+      // ---- the floors are lived in: offices and apartments ----
+      // floors 1, 2, 3 and the top, alternating an office (a desk, a
+      // strongbox with the week's takings) and an apartment (a bed, a stove)
+      const lived = [];
+      for (let f = 1; f < t.floors; f++) if (f <= 3 || f === t.floors - 1) lived.push(f);
+      const frng = CORE.mulberry32((c.seed ^ Math.imul(t.bx + 11, 7919)) ^ Math.imul(t.bz + 7, 104729));
+      for (const f of lived){
+        const fy = g + f * S + 0.25, q = t.w / 4;
+        const office = f % 2 === 1;
+        if (office){
+          tableSys.add(+(tx - q).toFixed(2), +fy.toFixed(2), +tz.toFixed(2), 0);
+          const ch = pnodeSys.addQuiet('chest', tx + q, fy + 0.6, tz - q, Math.PI / 2, { sc: 0.6 });
+          ch.inv = new Array(chestSlots(0.6)).fill(null);
+          ch.inv[0] = { kind: 'coin', count: 3 + ((frng() * 8) | 0) };
+          if (frng() < 0.35) ch.inv[1] = { kind: 'rounds', count: 12 };
+          if (f === t.floors - 1 && frng() < 0.5) ch.inv[2] = { kind: 'diamond', count: 1 };
+        } else {
+          bedSys.add(+(tx + q).toFixed(2), +fy.toFixed(2), +(tz - q).toFixed(2), Math.PI / 2);
+          stoveSys.add(+(tx - q).toFixed(2), +fy.toFixed(2), +(tz + q).toFixed(2), 0);
+        }
+      }
       if (t.shop && shops < n - 1){
         shops++;
         const ch = pnodeSys.add('chest', tx - (t.w / 2 - 2.2) * (fx || 1), g + 0.95, tz - (t.w / 2 - 2.2) * (fz || (fx ? 0 : 1)), 0, { sc: 0.7 });
@@ -13006,6 +13101,7 @@ const citySys = {
       game.torches.push([c.x + tx2, g + 0.4, c.z + tz2]);
     torchSys.rebuild();
     ropeSys.rebuild();
+    pnodeSys.rebuild();
   },
   ensure(){
     if (!game.running || !game.gen) return;
@@ -21037,6 +21133,7 @@ function frame(now){
   weatherSys.tick(dt);
   collapseSys.tick(dt);
   citySys.tick(dt);
+  cityLightSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
@@ -21244,7 +21341,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
