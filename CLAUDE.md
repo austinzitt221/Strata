@@ -97,3 +97,5 @@ Two tool families, five tiers each: **stone, iron, ruby, obsidian, diamond.** Al
   standing example).
 - Keep the spec above inviolate.
 - Log meaningful decisions and known issues in DEVLOG.md as you go.
+- CLAUDES_DEV_JOURNAL.md is Claude's own journal: read it at the start of
+  every session, write to it whenever there is something worth keeping.

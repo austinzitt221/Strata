@@ -2,6 +2,96 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## HORIZON — the renderer rebuilt (2026-09-05)
+
+The far view was never going to be seamless the way it was built, so
+this build replaces it instead of tuning it again. What you see out to
+the render distance is now the real world at full resolution; past that
+is one continuous heightfield that morphs between its detail levels
+instead of stepping. Verified headlessly (CORE 315, the Build 11-20
+suites, a camera walk that measures frame-to-frame change) and in
+screenshots; his screenshots from the playtest did not reach the
+session, so the diagnosis is from the code and the numbers.
+
+### What was wrong
+- **Real geometry ended 56 m from the player** (render distance 6, one
+  chunk of margin). The first LOD boundary sat where the eye lives.
+- **Three far representations stacked on each other**: a heightfield
+  skin with seven levels, each sunk a different amount (6 cm to 1.9 m)
+  so it would hide under the next; two coarse dual-contoured rings on
+  top of it, each re-sampling the field at a coarser voxel so the surface
+  itself moved at every ring edge; polygon offsets and a vertex "sink"
+  per ring to keep them from fighting. On a mountainside a 64 m skin
+  cell poked through everything above it, and every level rebuild moved
+  the poke. That was "pieces of mountain shifting".
+- **Coverage flipped on queued chunks.** The mask that tells the skin
+  and rings where real chunks stand counted a chunk as missing whenever
+  it was dirty or in flight, even though its old mesh was still in the
+  scene. Every edit and every streaming frontier popped the skin in and
+  out underneath -- the flashes while moving that stop when you stand
+  still.
+- **The missing rectangle in the lake** was a chunk holding water cells
+  (rain, a disturbance): it drew no still surface at all, and cell
+  meshes were only built within 64 m. Past that, nothing.
+
+### What it is now
+- **The near ring is the real world.** Same dual contourer, same 0.5 m
+  voxel, same 8 m chunk grid as the terrain around you, merged into 32 m
+  tiles and anchored to the world so nothing re-samples as you move.
+  Where a real chunk meets a ring tile the surfaces are the same surface.
+  RENDER DISTANCE now means this: 152 m by default, 96 to 224 m on the
+  slider, caves, overhangs and your builds included.
+- **The far skin is one geomorphed clipmap** (2 m cells to 288 m, then
+  4, 8, 16, 32 m out to 4.6 km, 288 cells across at every level). Every
+  vertex carries its own height and the height the next coarser level
+  reads at that spot; the vertex shader slides between them with
+  distance, so a level boundary is where two meshes agree exactly and a
+  rebuild that moves the boundary changes nothing visible. Each level's
+  hole is the finer level's extent, cut by a rect uniform. Normals blend
+  the same way, a concavity term darkens creases, and materials come
+  from a per-level texture so shorelines and snow lines are hard edges,
+  not a smear of in-between tiles.
+- **Builds and cities are baked into the skin.** The worker projects
+  every edit top-down in list order: unions lift the column to the
+  shape's top, subtracts that reach the surface drop it to the shape's
+  bottom, paints recolor. A tower at a kilometre is still a tower, a
+  quarry is still a hole.
+- **A feature ring for what a heightfield cannot show**: sky islands,
+  their spires, landmark set-pieces, at 2 m voxels out to 1.4 km,
+  meshing only columns where something rises over (or dives under) the
+  ground and dropping the ground triangles themselves so the skin keeps
+  drawing the land beneath.
+- **Coverage means standing.** A column is covered when every chunk in
+  its surface band has a mesh in the scene or is provably empty; queued
+  and dirty no longer count. A landed chunk or tile re-cuts the mask the
+  same frame. The skin draws only under the seam columns at the edge of
+  coverage, sunk 0.6 m, so a join is backed rather than open.
+- **Water.** Cell meshes are built out to the render distance, and past
+  it a chunk's still lake surface comes back; the still surface is
+  removed the moment its cells are meshed, so nothing doubles. The skin
+  draws water only where no real chunk does.
+- **Skin grids run on their own worker**, so a level rebuild (about
+  0.4 s for 83k samples) never queues behind the chunk backlog; the main
+  thread installs a level in under a millisecond.
+
+### Numbers
+- Camera walk at 40 m altitude, 3 m steps, seed 7: near-band
+  frame-to-frame change median 10.1 -> 6.2, peak 32.7 -> 15.5 (mean
+  absolute RGB difference per pixel). The far band read about 20 in both
+  builds -- dominated by parallax at that step size, so it says nothing
+  either way. The real test is a playtest.
+- Feature ring on seed 7 from spawn: 35 tiles, 37k triangles, 0 ground
+  triangles after the filter.
+
+### Known limits
+- Caves and overhangs past the render distance are gone from the far
+  view; the skin shows the ground over them.
+- The skin's water shoreline is 2 m cells; the real one is 1 m.
+- Shadows are still one 4096 map over the near field; cascades are a
+  candidate for a later pass if the near shadows read soft.
+- Two meshes agreeing along a shared line can still leave the odd
+  sub-pixel crack at a level boundary; if it shows, skirts are the fix.
+
 ## Build 20 — METROPOLIS (2026-09-04)
 
 Cities become places: districts with their own look and their own

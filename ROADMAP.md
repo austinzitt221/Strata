@@ -8,7 +8,7 @@ fit best; Claude's own ideas go there too. Playtest findings get fixed
 when they matter, not by rule.
 
 ## Up next (in order)
-1. **HORIZON** — the renderer rebuild. Real geometry to 150-200 m with
+1. **HORIZON** (DONE) — the renderer rebuild. Real geometry to 150-200 m with
    merged draws, one geomorphed 2 m voxel ring to ~350 m, a heightfield
    clipmap to the horizon, SDF-consistent normals and AO, shadow
    cascades, one water mesh per lake. Nothing added to the far view
@@ -24,6 +24,13 @@ when they matter, not by rule.
    story across the map and pointing at the Underdark.
 5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
    sound) and then the Space Arc as written below.
+
+Small things I want, slotted wherever a session has room:
+- **Hearths** — warm window light in village houses after dark, chimney
+  smoke at dusk. Walking up to a village at night should feel like
+  arriving somewhere.
+- **Shadow cascades** — a sharp near shadow map and a wide far one, if
+  the HORIZON playtest says the near shadows read soft.
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube
