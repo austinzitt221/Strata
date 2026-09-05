@@ -2,6 +2,213 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## HORIZON — the renderer rebuilt (2026-09-05)
+
+The far view was never going to be seamless the way it was built, so
+this build replaces it instead of tuning it again. What you see out to
+the render distance is now the real world at full resolution; past that
+is one continuous heightfield that morphs between its detail levels
+instead of stepping. Verified headlessly (CORE 315, the Build 11-20
+suites, a camera walk that measures frame-to-frame change) and in
+screenshots; his screenshots from the playtest did not reach the
+session, so the diagnosis is from the code and the numbers.
+
+### What was wrong
+- **Real geometry ended 56 m from the player** (render distance 6, one
+  chunk of margin). The first LOD boundary sat where the eye lives.
+- **Three far representations stacked on each other**: a heightfield
+  skin with seven levels, each sunk a different amount (6 cm to 1.9 m)
+  so it would hide under the next; two coarse dual-contoured rings on
+  top of it, each re-sampling the field at a coarser voxel so the surface
+  itself moved at every ring edge; polygon offsets and a vertex "sink"
+  per ring to keep them from fighting. On a mountainside a 64 m skin
+  cell poked through everything above it, and every level rebuild moved
+  the poke. That was "pieces of mountain shifting".
+- **Coverage flipped on queued chunks.** The mask that tells the skin
+  and rings where real chunks stand counted a chunk as missing whenever
+  it was dirty or in flight, even though its old mesh was still in the
+  scene. Every edit and every streaming frontier popped the skin in and
+  out underneath -- the flashes while moving that stop when you stand
+  still.
+- **The missing rectangle in the lake** was a chunk holding water cells
+  (rain, a disturbance): it drew no still surface at all, and cell
+  meshes were only built within 64 m. Past that, nothing.
+
+### What it is now
+- **The near ring is the real world.** Same dual contourer, same 0.5 m
+  voxel, same 8 m chunk grid as the terrain around you, merged into 32 m
+  tiles and anchored to the world so nothing re-samples as you move.
+  Where a real chunk meets a ring tile the surfaces are the same surface.
+  RENDER DISTANCE now means this: 152 m by default, 96 to 224 m on the
+  slider, caves, overhangs and your builds included.
+- **The far skin is one geomorphed clipmap** (2 m cells to 288 m, then
+  4, 8, 16, 32 m out to 4.6 km, 288 cells across at every level). Every
+  vertex carries its own height and the height the next coarser level
+  reads at that spot; the vertex shader slides between them with
+  distance, so a level boundary is where two meshes agree exactly and a
+  rebuild that moves the boundary changes nothing visible. Each level's
+  hole is the finer level's extent, cut by a rect uniform. Normals blend
+  the same way, a concavity term darkens creases, and materials come
+  from a per-level texture so shorelines and snow lines are hard edges,
+  not a smear of in-between tiles.
+- **Builds and cities are baked into the skin.** The worker projects
+  every edit top-down in list order: unions lift the column to the
+  shape's top, subtracts that reach the surface drop it to the shape's
+  bottom, paints recolor. A tower at a kilometre is still a tower, a
+  quarry is still a hole.
+- **A feature ring for what a heightfield cannot show**: sky islands,
+  their spires, landmark set-pieces, at 2 m voxels out to 1.4 km,
+  meshing only columns where something rises over (or dives under) the
+  ground and dropping the ground triangles themselves so the skin keeps
+  drawing the land beneath.
+- **Coverage means standing.** A column is covered when every chunk in
+  its surface band has a mesh in the scene or is provably empty; queued
+  and dirty no longer count. A landed chunk or tile re-cuts the mask the
+  same frame. The skin draws only under the seam columns at the edge of
+  coverage, sunk 0.6 m, so a join is backed rather than open.
+- **Water.** Cell meshes are built out to the render distance, and past
+  it a chunk's still lake surface comes back; the still surface is
+  removed the moment its cells are meshed, so nothing doubles. The skin
+  draws water only where no real chunk does.
+- **Skin grids run on their own worker**, so a level rebuild (about
+  0.4 s for 83k samples) never queues behind the chunk backlog; the main
+  thread installs a level in under a millisecond.
+
+### Numbers
+- Camera walk at 40 m altitude, 3 m steps, seed 7: near-band
+  frame-to-frame change median 10.1 -> 6.2, peak 32.7 -> 15.5 (mean
+  absolute RGB difference per pixel). The far band read about 20 in both
+  builds -- dominated by parallax at that step size, so it says nothing
+  either way. The real test is a playtest.
+- Feature ring on seed 7 from spawn: 35 tiles, 37k triangles, 0 ground
+  triangles after the filter.
+
+### Known limits
+- Caves and overhangs past the render distance are gone from the far
+  view; the skin shows the ground over them.
+- The skin's water shoreline is 2 m cells; the real one is 1 m.
+- Shadows are still one 4096 map over the near field; cascades are a
+  candidate for a later pass if the near shadows read soft.
+- Two meshes agreeing along a shared line can still leave the odd
+  sub-pixel crack at a level boundary; if it shows, skirts are the fix.
+
+## Build 20 — METROPOLIS (2026-09-04)
+
+Cities become places: districts with their own look and their own
+standing, towers you can actually go inside, nights where the windows
+light, sieges that scar the walls, turrets that eat your watts, a public
+tram line between every connected city, and a marketplace that buys your
+blueprints. Verified headlessly (CORE 297, smoke, the full Build 11-20
+suites) and in screenshots; committed in four phases.
+
+### A. Districts & city reputation
+- **Three districts per city.** `citySys.plan` now hands every block a
+  district: the **old town** (west: low stone, tight lots, the market),
+  the **industrial quarter** (east: tall dark towers, working lots with a
+  smokestack — a real cylinder edit 18 m tall — and a boiler house) and
+  the **harbor** (the side of the city nearest water, when there is any
+  within reach: dock warehouses and crate stacks on the quay). District
+  signs stand at the block corners; villagers take roles by district
+  (dockers and stokers, not just shopkeepers).
+- **City standing.** Every city keeps a reputation of its own (`rec.rep`)
+  beside the per-house goodwill: stranger → known (10) → citizen (25) →
+  patron (50). It goes up with missions done for its people, siege kills
+  and trades; it goes down when you strike a citizen (−4) or dig up the
+  city outside your own tower (−2 every three seconds). Trade screens
+  show both numbers.
+- **Standing gates the best shops.** New city-only offers carry `crep`:
+  the broker's aether ingots (25) and diamonds (50), the armorer's
+  rockets (25) and the tier-7 firearm (50), the toolsmith's obsidian
+  drill (50), the mayor's DEED (25), and the dealership's hoverbike (25)
+  and cargo plane (50). Locked rows read "needs standing N" and refuse
+  the click.
+
+### B. Towers you can live in
+- **Furnished floors.** Floors 1-3 and the top of every tower are
+  furnished: offices (table, coin chest) and apartments (bed, stove),
+  placed through `pnodeSys.addQuiet` so a city stamp costs one rebuild,
+  not one per prop.
+- **Civic elevators.** Towers of seven floors or more carry an elevator
+  shaft that runs on the city's power, not yours (`n.civic` → ratio 1).
+  Step on, ride to the roof.
+- **Lit windows.** After dark (`dayF < 0.32`) an instanced pane mesh
+  lights the windows of every tower in view, seeded per pane so about
+  half stay dark and the pattern is the same every night. Capped at 6000
+  panes.
+
+### C. Sieges and turrets
+- **Sieges.** In deep night, one city in three you are near gets sieged
+  once a night: 6 + 2 × block-count raiders spawn at the walls, breach
+  them with real subtract edits (kept in `rec.damage`) and move in. The
+  city's **guard** (a new villager-bodied entity with a blade) comes out
+  to meet them. Kill 40 % or more and the city holds: 20 coins per kill
+  + 40, and 8-16 standing. Dawn breaks any siege. The city repairs its
+  walls itself, one hole every 20 s, by splicing the breach out of the
+  edit list.
+- **Wall turrets.** Craft 10 iron + 2 ruby ingots + 16 cells. A wired
+  turret idles at 4 W and pulls 30 W while it has a target; it scans 24 m
+  every quarter second with a real line-of-sight march through the
+  field, fires a beam every 0.33 s (slower on a brown-out) for 9 damage
+  scaled by its power ratio, and only ever shoots hostiles — raiders,
+  sieges, bosses, the night shift, angels. Guards and villagers are
+  safe from it. Turret kills are quiet: no loot toast spam.
+
+### D. The tram and the blueprint market
+- **City stations.** Every city stamps a station on its south edge: an
+  18 × 6 m platform, a kiosk with a painted board, torches. Old saves get
+  one the next time the city loads (`ensure`). RMB on the kiosk opens the
+  ticket screen.
+- **Tickets.** One row per road link out of this city (the same links
+  the highways follow), fare 20 coins minimum or 0.09 per metre. Buy one
+  and a blue tram cart takes you — a public line built on the fly along
+  the road profile at 42 m/s, no watts — to the far city's platform,
+  where you step off with "arrived — NAME".
+- **Your own rails join the network.** Any of your rail lines that ends
+  within 12 m of the platform shows in the same screen, with its meter
+  status, so a station is the junction between your lines and theirs.
+- **Blueprint marketplace.** The mayor now sells four famous blueprints
+  built in code (WATCHTOWER 320c, STONE BRIDGE 260c at standing 10;
+  VILLA 520c and LIGHTHOUSE 640c at 25) straight into your blueprint
+  list. And they buy yours: each blueprint you have saved sells once per
+  city for 40 + 2 × its edit count, capped at 600 — your builds are
+  income.
+
+### Known limits
+- Station platforms are stamped at the south edge regardless of what
+  district sits there; a harbor city's platform can share the quay.
+- The tram line is straight between the road's ends after the profile
+  sample, so it rides above (never through) sharp road bends.
+- Turret line of sight is the field only; it will shoot through props.
+
+## Build 19.1 — playtest notes (2026-09-03)
+
+- **Collapse is for loose ground only.** Only sand and snow fall now;
+  rock, brick and everything you build holds itself up (collapse on
+  every material made building miserable). The pre-check reads the
+  material over the cut, so nothing is even sampled unless there is
+  sand or snow up there.
+- **Creative dials for the sky.** In creative the inventory (E) carries
+  two sliders: WEATHER (clear · rain · storm · snow · fog) and SEASON
+  (spring · summer · autumn · winter). Drag them and the world changes
+  as you watch — the fastest way to see what they look like.
+- **Tooltips.** Hover any slot in any inventory and the item's full text
+  appears under the cursor: the same name and description the
+  bottom-left panel shows when you hold it. The two share one source
+  (`itemInfoHTML`), so anything either learns the other knows.
+- **Rain that knows when to stop.** A puddle only forms in a SMALL hole:
+  the floor cells around the spot are flooded and if the open carved
+  floor runs past 36 cells (a quarry) there is no puddle. A walled yard
+  or a roofed room on natural ground is never a hole at all — its floor
+  is the lawn, not a cut. And the sun takes the puddles back: in clear
+  daylight the oldest rain puddle near you dries every six seconds
+  (its water cells are cleared, three metres around). Puddles are
+  remembered in the save so they still dry after a reload.
+- **Wings go forward.** The same slow fall (2.4 m/s), but hold W and you
+  drive forward at half again a sprint (12.9 m/s) — a glide from the
+  roost crosses the map. Without W you drift at 3.5. While gliding the
+  wings own the air (the walking branch's air control no longer drags
+  you back to a walking pace).
+
 ## Build 19 — THE LIVING WORLD (2026-09-03)
 
 Things that hunt, and places that hide them: three night enemies for

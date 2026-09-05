@@ -157,6 +157,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #sleepfade{position:fixed;inset:0;background:#000;opacity:0.92;pointer-events:none;z-index:4;transition:opacity 0.8s;}
 #fatal .panel{border-color:#a33;}
 #fatal pre{white-space:pre-wrap; color:#ff9b9b; font-size:12px; margin:10px 0; max-width:60vw;}
+#itemtip{position:fixed; z-index:60; pointer-events:none; max-width:300px; background:rgba(12,10,20,0.94); border:2px solid var(--ui-border); padding:8px 10px; font-size:12px; line-height:1.35; color:#ddd;}
+#itemtip .t1{color:#fff; font-weight:bold; margin-bottom:3px;}
+#itemtip .t2{color:#bbb;}
+#itemtip .on{color:#7fe8e8;}
 </style>
 </head>
 <body>
@@ -302,6 +306,14 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="dot"></div>
   <div class="zl" id="scopezoom">4.0x</div>
 </div>
+<div id="itemtip" class="hidden"></div>
+<div id="stationscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:420px;">
+    <h2 id="stationtitle">STATION</h2>
+    <div class="sub" style="margin-bottom:8px;">tickets on the public line · your own rails that reach the platform · E to close</div>
+    <div id="stationlist"></div>
+  </div>
+</div>
 <div id="bossbar" class="hidden">
   <div id="bossname">BOSS</div>
   <div class="statbar" style="width:100%;"><div id="bossfill" class="statfill hp"></div></div>
@@ -320,6 +332,12 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="invlabel">HOTBAR</div>
     <div class="invgrid" id="invhot"></div>
     <div class="sub" style="margin-top:12px;">with a dispenser slotted, any material you hold becomes buildable &nbsp;·&nbsp; E to close</div>
+    <div id="creativeenv" class="hidden">
+      <div class="invlabel">CREATIVE — WEATHER <span id="envweather" style="color:#fff; margin-left:8px;">clear</span></div>
+      <input type="range" id="envweatherslider" min="0" max="4" value="0" style="width:100%;" onmousedown="event.stopPropagation()">
+      <div class="invlabel">CREATIVE — SEASON <span id="envseason" style="color:#fff; margin-left:8px;">spring</span></div>
+      <input type="range" id="envseasonslider" min="0" max="3" value="0" style="width:100%;" onmousedown="event.stopPropagation()">
+    </div>
   </div>
   <div class="panel hidden" id="vehiclepanel">
     <h2>VEHICLE</h2>
@@ -2499,7 +2517,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -2783,6 +2801,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'hover', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'cannon', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'aetheringot', n: 2 }, { mat: MAT.PLANKS, n: 4 }] });
+  // the wall turret: wire it to your grid and it shoots what comes at you
+  RECIPES.push({ kind: 'turret', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'cells', n: 16 }] });
   RECIPES.push({ kind: 'windsock', yields: 1, costs: [{ item: 'stick', n: 3 }, { item: 'wool', n: 2 }] });
   RECIPES.push({ kind: 'hangar', yields: 1, station: true, costs: [{ mat: MAT.STONEBRICK, n: 60 }, { item: 'ironingot', n: 6 }] });
   RECIPES.push({ kind: 'airstrip', yields: 1, station: true, costs: [{ mat: MAT.BASALT, n: 40 }, { mat: MAT.ROCK, n: 40 }] });
@@ -2921,6 +2941,173 @@ function craft(slots, r, free){
 }
 
 // ---- save round-trip ----
+// ---- HORIZON: the far skin's height grid, with edits baked top-down ----
+// A far column shows one height: the terrain's, raised by what was built
+// on it and lowered by what was dug out of it. Unions lift the column to
+// the shape's top at (x,z); subtracts that reach the surface drop it to
+// the shape's bottom; paints recolor. Applied in list order, like the
+// field itself. Vertical extent of shape e over column (x,z), or null.
+function editProfile(e, x, z){
+  const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
+  if (editHasRot(e)){
+    const b = editAABB(e);
+    if (x < b[0] || x > b[3] || z < b[2] || z > b[5]) return null;
+    return [b[1], b[4]];
+  }
+  const dx = x - e.x, dz = z - e.z;
+  if (e.shape === 1){
+    if (Math.abs(dx) > hx || Math.abs(dz) > hz) return null;
+    return [e.y - hy, e.y + hy];
+  }
+  const q = (dx / hx) * (dx / hx) + (dz / hz) * (dz / hz);
+  if (q >= 1) return null;
+  if (e.shape === 2) return [e.y - hy, e.y + hy];
+  const h = hy * Math.sqrt(1 - q);
+  return [e.y - h, e.y + h];
+}
+function heightGrid(J, gen){
+  const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
+  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1);
+  const sea = J.sea != null ? J.sea : -1e9;
+  const edits = J.edits || [];
+  const CELL = 32;
+  const buckets = edits.length ? new Map() : null;
+  if (buckets){
+    for (let i = 0; i < edits.length; i++){
+      const e = edits[i];
+      if (e.noLod) continue;
+      const b = editAABB(e);
+      for (let cz = Math.floor(b[2] / CELL); cz <= Math.floor(b[5] / CELL); cz++)
+        for (let cx = Math.floor(b[0] / CELL); cx <= Math.floor(b[3] / CELL); cx++){
+          const k = cx + ',' + cz;
+          let L = buckets.get(k);
+          if (!L){ L = []; buckets.set(k, L); }
+          L.push(e);
+        }
+    }
+  }
+  for (let r = 0; r <= n; r++){
+    const z = z0 + r * s;
+    for (let i = 0; i <= n; i++){
+      const x = x0 + i * s, kk = r * N1 + i;
+      let hh = gen.height(x, z);
+      let mm = 0;                                   // 0: read the field below
+      if (buckets){
+        const L = buckets.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
+        if (L) for (let q = 0; q < L.length; q++){
+          const e = L[q];
+          const p = editProfile(e, x, z);
+          if (!p) continue;
+          if (e.op === 1){ if (p[1] > hh){ hh = p[1]; mm = e.mat; } }
+          else if (e.op === 0){ if (p[1] > hh - 0.05 && p[0] < hh){ hh = p[0]; mm = 0; } }
+          else if (e.op === 2){ if (hh >= p[0] - 0.3 && hh <= p[1] + 0.3) mm = e.mat; }
+        }
+      }
+      h[kk] = hh;
+      m[kk] = mm || (gen.mat(x, hh - 0.1, z) || 1);
+      wet[kk] = hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? 1 : 0;
+    }
+  }
+  return { h, m, wet };
+}
+// The whole skin level, worker-side: heights, the height the next-coarser
+// level reads at every vertex (its grid is this one at every other line,
+// so odd vertices take the mean of their even neighbours -- along the
+// row, the column, or the coarse quad's b-c diagonal), normals for both,
+// a concavity AO, per-quad materials (the highest corner's), water flags
+// and depths. The main thread only uploads.
+function skinGrid(J, gen){
+  const G = heightGrid(J, gen);
+  const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
+  const h = G.h, sea = J.sea != null ? J.sea : -1e9;
+  const NV = N1 * N1;
+  const hc = new Float32Array(NV);
+  for (let r = 0; r <= n; r++) for (let i = 0; i <= n; i++){
+    const kk = r * N1 + i, oi = i & 1, or = r & 1;
+    hc[kk] = !oi && !or ? h[kk]
+      : oi && !or ? 0.5 * (h[kk - 1] + h[kk + 1])
+      : !oi && or ? 0.5 * (h[kk - N1] + h[kk + N1])
+      : 0.5 * (h[kk - N1 + 1] + h[kk + N1 - 1]);
+  }
+  const pos = new Float32Array(NV * 3), nrm = new Int8Array(NV * 3), nrc = new Int8Array(NV * 3);
+  const ao = new Uint8Array(NV), dep = new Float32Array(NV);
+  const nrmOf = (H, i, r, out, o3, sp) => {
+    const hl = H[r * N1 + Math.max(0, i - 1)], hr = H[r * N1 + Math.min(n, i + 1)];
+    const hd = H[Math.max(0, r - 1) * N1 + i], hu = H[Math.min(n, r + 1) * N1 + i];
+    const nx = hl - hr, nz = hd - hu, ny = 2 * sp;
+    const L = Math.hypot(nx, ny, nz) || 1;
+    out[o3] = Math.round(nx / L * 127); out[o3 + 1] = Math.round(ny / L * 127); out[o3 + 2] = Math.round(nz / L * 127);
+  };
+  for (let r = 0; r <= n; r++) for (let i = 0; i <= n; i++){
+    const kk = r * N1 + i, o3 = kk * 3;
+    pos[o3] = x0 + i * s; pos[o3 + 1] = h[kk]; pos[o3 + 2] = z0 + r * s;
+    nrmOf(h, i, r, nrm, o3, s);
+    nrmOf(hc, i, r, nrc, o3, s);
+    // concavity darkens: a vertex below the mean of its neighbours sits in a crease
+    const hl = h[r * N1 + Math.max(0, i - 1)], hr = h[r * N1 + Math.min(n, i + 1)];
+    const hd = h[Math.max(0, r - 1) * N1 + i], hu = h[Math.min(n, r + 1) * N1 + i];
+    const cc = (hl + hr + hd + hu) * 0.25 - h[kk];
+    ao[kk] = Math.round(255 * Math.max(0.35, Math.min(1, 1 - cc / (s * 1.6))));
+    dep[kk] = Math.max(0, sea - h[kk]);
+  }
+  const mt = new Uint8Array(n * n);
+  for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
+    const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
+    let qc = a, qh = h[a];
+    if (h[b] > qh){ qh = h[b]; qc = b; }
+    if (h[c] > qh){ qh = h[c]; qc = c; }
+    if (h[d] > qh){ qh = h[d]; qc = d; }
+    mt[r * n + i] = Math.max(0, G.m[qc] - 1);
+  }
+  // index buffers: the whole grid, and the wet quads (the coarser level's
+  // hole is cut per fragment by a rect uniform, never by re-indexing)
+  const idx = new Uint32Array(n * n * 6);
+  const widx = new Uint32Array(n * n * 6);
+  let w = 0, ww = 0;
+  const wet = G.wet;
+  for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
+    const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
+    idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d;
+    if (wet[a] || wet[b] || wet[c] || wet[d]){
+      widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
+    }
+  }
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, idx, widx: widx.slice(0, ww) };
+}
+// Feature-ring chunks (sky islands, landmark spires at range) keep only
+// what rises over the heightfield: triangles whose three corners all lie
+// within tol of the ground are the ground, and the skin already draws it.
+function dropGroundTris(d, gen, tol){
+  if (!d) return d;
+  const P = d.positions, nT = d.mats.length / 3;
+  const keep = new Uint8Array(nT);
+  let kept = 0;
+  for (let t = 0; t < nT; t++){
+    const b = t * 9;
+    let ground = true;
+    for (let v = 0; v < 3 && ground; v++){
+      const x = P[b + v * 3], y = P[b + v * 3 + 1], z = P[b + v * 3 + 2];
+      if (Math.abs(y - gen.height(x, z)) > tol) ground = false;
+    }
+    if (!ground){ keep[t] = 1; kept++; }
+  }
+  if (kept === nT) return d;
+  if (!kept) return null;
+  const out = {
+    positions: new Float32Array(kept * 9), normals: new Float32Array(kept * 9), axes: new Float32Array(kept * 9),
+    mats: new Float32Array(kept * 3), skys: new Float32Array(kept * 3), aos: new Float32Array(kept * 3),
+  };
+  let o = 0;
+  for (let t = 0; t < nT; t++){
+    if (!keep[t]) continue;
+    const b9 = t * 9, b3 = t * 3, w9 = o * 9, w3 = o * 3;
+    for (let j = 0; j < 9; j++){ out.positions[w9 + j] = P[b9 + j]; out.normals[w9 + j] = d.normals[b9 + j]; out.axes[w9 + j] = d.axes[b9 + j]; }
+    for (let j = 0; j < 3; j++){ out.mats[w3 + j] = d.mats[b3 + j]; out.skys[w3 + j] = d.skys[b3 + j]; out.aos[w3 + j] = d.aos[b3 + j]; }
+    o++;
+  }
+  return out;
+}
+
 function serializeEdits(edits){
   const a = new Array(edits.length);
   for (let i = 0; i < edits.length; i++){
@@ -3019,7 +3206,7 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
   SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
@@ -3517,13 +3704,21 @@ const meshPool = {
         'onmessage = (ev) => {\n' +
         '  const m = ev.data;\n' +
         '  if (m.t === "init"){ gen = CORE.makeGen(m.seed); return; }\n' +
+        '  if (m.t === "grid"){\n' +
+        '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
+        '    const g = CORE.skinGrid(m, gen);\n' +
+        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.idx.buffer, g.widx.buffer]);\n' +
+        '    return;\n' +
+        '  }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
-        '  const d = CORE.meshChunk(m.cx, m.cy, m.cz, edits, gen, m.sc || 1);\n' +
+        '  let d = CORE.meshChunk(m.cx, m.cy, m.cz, edits, gen, m.sc || 1);\n' +
+        '  if (m.drop && d) d = CORE.dropGroundTris(d, gen, 2.5);\n' +
         '  if (!d){ postMessage({ id: m.id, d: null }); return; }\n' +
         '  postMessage({ id: m.id, d },\n' +
         '    [d.positions.buffer, d.normals.buffer, d.mats.buffer, d.skys.buffer, d.aos.buffer, d.axes.buffer]);\n' +
         '};\n';
       const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
+      this.url = url;
       const nW = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
       for (let i = 0; i < nW; i++){
         const w = new Worker(url);
@@ -3540,14 +3735,54 @@ const meshPool = {
   },
   teardown(){
     for (const w of this.workers){ try { w.terminate(); } catch (e){} }
+    if (this.gridW){ try { this.gridW.terminate(); } catch (e){} this.gridW = null; }
     this.workers = []; this.idle = []; this.jobs.clear(); this.inflight.clear();
+    this.gridQ = []; this.gridJobs.clear(); this.gridBusy = false;
     this.ok = false;
   },
   setSeed(seed){
     // a new world: everything in flight belongs to the old one
+    this.seed = seed;
     this.jobs.clear(); this.inflight.clear();
     this.idle = this.workers.slice();
     for (const w of this.workers) w.postMessage({ t: 'init', seed });
+    this.gridQ = []; this.gridJobs.clear(); this.gridBusy = false;
+    if (this.gridW) this.gridW.postMessage({ t: 'init', seed });
+  },
+  // HORIZON: the far skin's grids run on a worker of their own, so a level
+  // rebuild never queues behind the chunk backlog and never stalls it
+  gridJobs: new Map(), gridW: null, gridBusy: false, gridQ: [],
+  grid(job, cb){
+    if (!this.ok || !this.url){
+      const J = Object.assign({}, job, { edits: CORE.deserializeEdits(job.edits || []) });
+      cb(CORE.skinGrid(J, game.gen));
+      return;
+    }
+    if (!this.gridW){
+      try {
+        const w = new Worker(this.url);
+        w.postMessage({ t: 'init', seed: this.seed });
+        w.onmessage = (ev) => {
+          const j = this.gridJobs.get(ev.data.id);
+          this.gridJobs.delete(ev.data.id);
+          this.gridBusy = false;
+          if (j) j.cb(ev.data.g);
+          this.pumpGrid();
+        };
+        w.onerror = (err) => { console.warn('grid worker failed', err); try { w.terminate(); } catch (e){} this.gridW = null; this.gridBusy = false; };
+        this.gridW = w;
+      } catch (err){ this.gridW = null; }
+    }
+    this.gridQ.push({ job, cb });
+    this.pumpGrid();
+  },
+  pumpGrid(){
+    if (this.gridBusy || !this.gridW || !this.gridQ.length) return;
+    const { job, cb } = this.gridQ.shift();
+    const id = ++this.seq;
+    this.gridJobs.set(id, { cb });
+    this.gridBusy = true;
+    this.gridW.postMessage(Object.assign({ t: 'grid', id }, job));
   },
   // dispatch dirty chunks onto idle workers. Sources are drained in
   // priority order: full-detail terrain first, then each LOD ring.
@@ -3573,7 +3808,7 @@ const meshPool = {
       const w = this.idle.pop();
       this.jobs.set(id, { src, key, c });
       this.inflight.add(src.id + '|' + key);
-      w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1 });
+      w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1, drop: src.feat ? 1 : 0 });
     }
     this.skip.clear();
   },
@@ -3847,6 +4082,7 @@ class Terrain {
     const ch = this.chunks.get(key);
     if (!ch) return;                             // scrolled out mid-flight
     ch.done = 1;                                 // meshed — even if it came back empty
+    farTerrain.maskFrame = 99;                   // something landed: re-cut the mask now
     this.remeshWater(ch, cx, cy, cz);
     if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); ch.mesh = null; }
     if (!data) return;
@@ -3873,7 +4109,9 @@ class Terrain {
     const seaCy = sea != null ? Math.floor(sea / M) : null;
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     if (!game.waterMat) return;
-    if (waterSys.cells.has(CK(cx, cy, cz))) return;        // disturbed water draws from its cells
+    // disturbed water draws from its cells -- where the cells are actually
+    // meshed. Beyond the cell-mesh radius the still lake is the truth again
+    if (waterSys.cells.has(CK(cx, cy, cz)) && waterSys.inMeshRange(cx, cz)) return;
     const x0 = cx * M, z0 = cz * M;
     const pos = [], uv = [], dep = [];
     const quad = (xa, za, xb, zb, wy, d) => {
@@ -4234,13 +4472,18 @@ const waterSys = {
     this.active = next;
   },
   // meshes for the cells near the player; far ones are dropped (the cells stay)
+  meshR(){ return (lodTerrain.nearFar ? lodTerrain.nearFar() : 152) + 16; },
+  inMeshRange(cx, cz){ return Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) <= this.meshR(); },
   maintain(){
     if (!game.waterMat) return;
-    const R = ((game.opts.rd || 4) + 2) * 8;
+    const R = this.meshR();
     for (const [key, m] of this.meshes){
       const [cx, cy, cz] = key.split(',').map(Number);
       if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R || !this.cells.has(key)){
         game.scene.remove(m); m.geometry.dispose(); this.meshes.delete(key);
+        // out of cell range the chunk's still lake surface comes back
+        const ch = game.terrain && game.terrain.chunks.get(key);
+        if (ch && ch.done && !ch.water) game.terrain.remeshWater(ch, cx, cy, cz);
       }
     }
     for (const key of this.cells.keys()){
@@ -4256,6 +4499,9 @@ const waterSys = {
     const a = this.cells.get(key);
     if (!a) return;
     const [cx, cy, cz] = key.split(',').map(Number);
+    // the cells are the water here: the still surface must not double it
+    const chS = game.terrain && game.terrain.chunks.get(key);
+    if (chS && chS.water){ game.scene.remove(chS.water); chS.water.geometry.dispose(); chS.water = null; }
     const pos = [], uv = [], dep = [];
     const quadH = (xa, za, xb, zb, y, d) => {
       pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
@@ -5700,7 +5946,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -6309,7 +6555,7 @@ const WEATHER = {
   fog:   { dark: 0.86, fog: 0.1 },
 };
 const weatherSys = {
-  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [],
+  cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [], puddles: [],
   set(kind, dur){
     this.kind = kind; this.cur = WEATHER[kind] || WEATHER.clear; this.t = dur; this.painted = 0;
     this.boltT = 4 + Math.random() * 6;
@@ -6382,13 +6628,37 @@ const weatherSys = {
             for (let yy = Math.round(hg) - 1; yy > hg - 13; yy--){
               if (CORE.evalSDF(x, yy, z, le, game.gen) <= 0){ fy = yy + 1; break; }
             }
-            if (fy != null && hg - fy > 1.2){
+            if (fy != null && hg - fy > 1.2 && this.smallHole(x, fy, z)){
               const gx = Math.floor(x), gz = Math.floor(z), ck = waterSys.keyOf(gx, fy, gz);
               const arr = waterSys.cells.get(ck) || waterSys.materialize(ck);
               const q = waterSys.idx(gx & 7, fy & 7, gz & 7);
-              if (arr[q] === 0){ arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+              if (arr[q] === 0){
+                arr[q] = 8; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck);
+                this.puddles.push([gx, fy, gz]);
+                if (this.puddles.length > 200) this.puddles.shift();
+              }
             }
           }
+        }
+      }
+    }
+    // the sun takes the puddles back: in clear daylight the oldest rain
+    // puddle near you dries every few seconds
+    if (!W.rain && !W.snow && game.dayF > 0.5 && this.puddles.length){
+      this.dryT = (this.dryT || 0) + dt;
+      if (this.dryT > 6){
+        this.dryT = 0;
+        const i = this.puddles.findIndex(pd => Math.hypot(pd[0] - game.pos.x, pd[2] - game.pos.z) < 90);
+        if (i >= 0){
+          const [gx, gy, gz] = this.puddles.splice(i, 1)[0];
+          for (let dy = -1; dy <= 1; dy++) for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++){
+            const ck = waterSys.keyOf(gx + dx, gy + dy, gz + dz);
+            const arr = waterSys.cells.get(ck);
+            if (!arr) continue;
+            const q = waterSys.idx((gx + dx) & 7, (gy + dy) & 7, (gz + dz) & 7);
+            if (waterSys.isW(arr[q])){ arr[q] = 0; waterSys.active.add(ck); waterSys.dirtyMesh.add(ck); }
+          }
+          markSave();
         }
       }
     }
@@ -6425,6 +6695,31 @@ const weatherSys = {
       if (Math.random() < dt * 14) Embers.burst(f.x, f.y + 3 + Math.random() * 3, f.z, 1.2, [0xffb347, 0xffdd66, 0xff8830], 3, 2.5);
       if (f.t <= 0){ treeSys.fell(f.k, false); this.fires.splice(i, 1); }
     }
+  },
+  // a puddle only forms in a SMALL hole: flood the open floor cells around
+  // the spot (air with the natural ground well above — carved ground, not a
+  // walled yard on a lawn) and give up past 36 of them, so potholes fill
+  // and quarries, courtyards and roofs stay dry
+  smallHole(x, fy, z){
+    const gx0 = Math.floor(x), gz0 = Math.floor(z);
+    const seen = new Set([gx0 + ',' + gz0]), stack = [[gx0, gz0]];
+    const le = nearEdits([x - 9, fy - 2, z - 9, x + 9, fy + 3, z + 9]);
+    let n = 0;
+    while (stack.length){
+      const [gx, gz] = stack.pop();
+      if (++n > 36) return false;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+        const ax = gx + dx, az = gz + dz, k = ax + ',' + az;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const cx = ax + 0.5, cz = az + 0.5;
+        if (CORE.evalSDF(cx, fy, cz, le, game.gen) <= 0) continue;                      // a wall of the hole
+        if (CORE.evalSDF(cx, fy - 1, cz, le, game.gen) > 0) continue;                    // no floor: a shaft, its own hole
+        if (game.gen.height(cx, cz) - fy < 1.2) continue;                                 // natural ground level: not a hole
+        stack.push([ax, az]);
+      }
+    }
+    return true;
   },
   strike(){
     // a bolt lands within 60 m; a tree nearby catches, wood at the strike burns away
@@ -6477,11 +6772,16 @@ const collapseSys = {
   check(cx, cy, cz, r){
     const R = Math.ceil(r), H = 19, DN = 3;
     const x0 = Math.floor(cx) - R, z0 = Math.floor(cz) - R, y0 = Math.floor(cy) - DN;
-    // nothing over the cut (a quarry floor, a field): nothing can fall
+    // nothing loose over the cut (a quarry floor, a field, a rock roof):
+    // nothing can fall
     const le0 = nearEdits([cx - 4, cy - 1, cz - 4, cx + 4, cy + 6, cz + 4]);
     let over = false;
     for (const [dx, dz] of [[0, 0], [2.5, 0], [-2.5, 0], [0, 2.5], [0, -2.5], [1.8, 1.8], [-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8]])
-      for (const dy of [1.5, 3, 5]) if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) <= 0.12){ over = true; break; }
+      for (const dy of [1.5, 3, 5]){
+        if (CORE.evalSDF(cx + dx, cy + dy, cz + dz, le0, game.gen) > 0.12) continue;
+        const m = CORE.materialAt(cx + dx, cy + dy, cz + dz, le0, game.gen);
+        if (m === CORE.MAT.SAND || m === CORE.MAT.SNOW){ over = true; break; }
+      }
     if (!over) return;
     const W = 2 * R + 1, D = 2 * R + 1;
     const box = [x0 - 1, y0 - 1, z0 - 1, x0 + W + 1, y0 + H + 1, z0 + D + 1];
@@ -6556,7 +6856,10 @@ const collapseSys = {
       }
       let best = CORE.MAT.ROCK, bn = 0;
       for (const m in mats) if (mats[m] > bn){ bn = mats[m]; best = +m; }
-      if (best === CORE.MAT.BEDROCK) continue;
+      // only loose ground falls — sand and snow. Rock, brick and everything
+      // you build holds itself up (playtest: collapse on every material
+      // made building miserable)
+      if (best !== CORE.MAT.SAND && best !== CORE.MAT.SNOW) continue;
       for (const [j, L] of layers){
         const e = CORE.makeEdit(0, 1, +(x0 + (L[0] + L[2] + 1) / 2).toFixed(2), +(y0 + j + 0.5).toFixed(2), +(z0 + (L[1] + L[3] + 1) / 2).toFixed(2), L[2] - L[0] + 1.04, 0, 0);
         e.sy = 1.04; e.sz = L[3] - L[1] + 1.04;
@@ -7302,6 +7605,33 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, gear, face);
       g.userData.orb = gear;
+    } else if (t === 'station'){
+      // a ticket kiosk: a booth under a little roof, the city's name on the board
+      const booth = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.2), M.wood); booth.position.y = 0.65;
+      const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), M.steel); post1.position.set(-1.1, 1.3, 0.7);
+      const post2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.6, 0.12), M.steel); post2.position.set(1.1, 1.3, 0.7);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 2.2), M.dark); roof.position.set(0, 2.6, 0.2);
+      const cv = document.createElement('canvas'); cv.width = 128; cv.height = 32;
+      const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
+      board.position.set(0, 2.05, -0.62); board.rotation.y = Math.PI;
+      g.add(booth, post1, post2, roof, board);
+      g.userData.station = { cv, tex };
+    } else if (t === 'turret'){
+      // a squat mount with twin barrels on a pivot; the muzzles glow when it fires
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), M.dark); base.position.y = 0.2;
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.5, 8), M.steel); neck.position.y = 0.65;
+      const pivot = new THREE.Group(); pivot.position.y = 0.95;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.36, 0.7), M.steel); pivot.add(head);
+      for (const sx of [-0.14, 0.14]){
+        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.1, 8), M.dark);
+        barrel.rotation.x = Math.PI / 2; barrel.position.set(sx, 0.04, -0.7); pivot.add(barrel);
+      }
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.06), new THREE.MeshBasicMaterial({ color: 0xff5544 }));
+      eye.position.set(0, 0.14, -0.36); pivot.add(eye);
+      pivot.rotation.order = 'YXZ';
+      g.add(base, neck, pivot);
+      g.userData.pivot = pivot; g.userData.eye = eye;
     } else if (t === 'cannon'){
       // the launch cannon: a squat mount, a fat barrel that follows your aim
       const base = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 1.3), M.steel); base.position.y = 0.25;
@@ -7516,6 +7846,14 @@ const pnodeSys = {
       }
     }
   },
+  // bulk stamping: push without the full rebuild, call rebuild() once after
+  addQuiet(t, x, y, z, yaw, extra){
+    const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
+    if (t === 'lever') n.on = true;
+    if (extra) Object.assign(n, extra);
+    game.pnodes.push(n);
+    return n;
+  },
   add(t, x, y, z, yaw, extra){
     const n = { id: game.pSeq++, t, x: +x.toFixed(2), y: +y.toFixed(2), z: +z.toFixed(2), yaw };
     if (t === 'lever') n.on = true;
@@ -7563,11 +7901,11 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
     }
     if (k === 'r'){
@@ -7663,6 +8001,25 @@ const pnodeSys = {
         const w = performance.now() * 0.0004;
         ud.sock.rotation.y = Math.sin(w) * 1.2 + Math.sin(w * 2.7) * 0.4;
         ud.sock.rotation.z = -0.15 - Math.abs(Math.sin(w * 1.3)) * 0.35;
+      }
+      if (n.t === 'station' && ud.station && !ud.station.drawn){
+        ud.station.drawn = true;
+        const c2 = ud.station.cv.getContext('2d');
+        c2.fillStyle = '#1c2c4a'; c2.fillRect(0, 0, 128, 32);
+        c2.fillStyle = '#ffd27a'; c2.font = 'bold 12px monospace'; c2.textAlign = 'center';
+        c2.fillText('STATION', 64, 12);
+        c2.fillStyle = '#fff'; c2.fillText(((game.cities || {})[n.city] || {}).name || '', 64, 26);
+        ud.station.tex.needsUpdate = true;
+      }
+      if (n.t === 'turret' && ud.pivot){
+        if (n.aim){
+          const wy = Math.atan2(-(n.aim.x - n.x), -(n.aim.z - n.z)) - (n.yaw || 0);
+          const wp = Math.atan2(n.aim.y - (n.y + 0.95), Math.hypot(n.aim.x - n.x, n.aim.z - n.z));
+          let dy = wy - ud.pivot.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+          ud.pivot.rotation.y += dy * Math.min(1, 10 * dt);
+          ud.pivot.rotation.x += (-wp - ud.pivot.rotation.x) * Math.min(1, 10 * dt);
+        } else ud.pivot.rotation.y += dt * 0.4;   // idle sweep
+        if (ud.eye) ud.eye.material.color.setHex(n.aim ? 0xff2222 : (powerSys.turretMap && powerSys.turretMap.get(n.id) > 0 ? 0xff5544 : 0x442222));
       }
       if (n.t === 'cannon' && ud.pivot){
         // the barrel follows whoever stands near it
@@ -7918,7 +8275,7 @@ const powerSys = {
       for (const id of parent.keys()){
         const r = find(id);
         let c = comps.get(r);
-        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [], pads: [] }; comps.set(r, c); }
+        if (!c){ c = { w: 0, d: 0, srcs: [], bulbs: [], stoves: [], elevs: [], crafters: [], teslas: [], meters: [], terms: [], pads: [], turrets: [] }; comps.set(r, c); }
         const tp = pnodeSys.terminal(id);
         if (tp) c.terms.push(tp);
         if (id[0] === 'n'){
@@ -7933,6 +8290,7 @@ const powerSys = {
           else if (n.t === 'crafter'){ if (this.crafterWants(n)) c.d += 30; c.crafters.push(n); }
           else if (n.t === 'wtable'){ c.d += 8; (c.wtabs = c.wtabs || []).push(n); }
           else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
+          else if (n.t === 'turret'){ c.d += n.aim ? 30 : 4; c.turrets.push(n); }
           else if (n.t === 'charger'){ if (this.chargerWants(n)) c.d += 40; (c.chargers = c.chargers || []).push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
@@ -7979,6 +8337,7 @@ const powerSys = {
     }
     this.bulbMap.clear(); this.stoveMap.clear(); this.meterMap.clear();
     this.elevMap = this.elevMap || new Map(); this.elevMap.clear();
+    this.turretMap = this.turretMap || new Map(); this.turretMap.clear();
     this.crafterMap = this.crafterMap || new Map(); this.crafterMap.clear();
     this.crafterBusy = this.crafterBusy || new Set(); this.crafterBusy.clear();
     this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
@@ -8002,6 +8361,8 @@ const powerSys = {
         this.padMap = this.padMap || new Map();
         this.padMap.set(n.id, c.w > 0 ? ratio : 0);
       }
+      this.turretMap = this.turretMap || new Map();
+      for (const n of c.turrets) this.turretMap.set(n.id, c.w > 0 ? ratio : 0);
       for (const n of c.crafters){
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
@@ -8087,6 +8448,46 @@ const powerSys = {
   chargerWants(n){
     return !!(n.inv && n.inv.some(b => b && b.kind === 'battery' && (b.charge || 0) < CORE.batteryCap(b)));
   },
+  // the wall turret: with watts on its wire it picks the nearest hostile
+  // it can see within 24 m and shoots it three times a second. Its kills
+  // pay nothing — it isn't you.
+  turretTick(n, dt){
+    const ratio = this.turretMap ? (this.turretMap.get(n.id) || 0) : 0;
+    n.reload = Math.max(0, (n.reload || 0) - dt);
+    if (ratio <= 0){ n.aim = null; return; }
+    n.scanT = (n.scanT || 0) - dt;
+    if (n.scanT <= 0){
+      n.scanT = 0.25;
+      let best = null, bd = 24;
+      const mx = n.x, my = n.y + 0.95, mz = n.z;
+      for (const e of game.entities){
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel';
+        if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
+        const def = ENT_DEF[e.type]; if (!def) continue;
+        const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
+        if (d >= bd) continue;
+        // line of sight through the field
+        const dx = (e.x - mx) / d, dy = (e.y + def.h * 0.6 - my) / d, dz = (e.z - mz) / d;
+        const le = nearEdits([Math.min(mx, e.x) - 1, Math.min(my, e.y) - 1, Math.min(mz, e.z) - 1, Math.max(mx, e.x) + 1, Math.max(my, e.y) + 2, Math.max(mz, e.z) + 1]);
+        let clear = true;
+        for (let t = 0.8; t < d - def.r; t += 0.5){ if (CORE.evalSDF(mx + dx * t, my + dy * t, mz + dz * t, le, game.gen) < 0.05){ clear = false; break; } }
+        if (!clear) continue;
+        bd = d; best = e;
+      }
+      n.target = best || null;
+    }
+    const e = n.target;
+    if (!e || game.entities.indexOf(e) < 0 || e.hp <= 0){ n.target = null; n.aim = null; return; }
+    const def = ENT_DEF[e.type];
+    n.aim = { x: e.x, y: e.y + def.h * 0.6, z: e.z };
+    if (n.reload > 0) return;
+    n.reload = 0.33 / Math.max(0.25, ratio);
+    const mx = n.x, my = n.y + 0.95, mz = n.z;
+    beamFX.add(mx, my, mz, e.x, e.y + def.h * 0.6, e.z, 0xff7a5c);
+    hurtEntity(e, Math.round(9 * Math.max(0.5, ratio)), (e.x - mx) * 0.4, (e.z - mz) * 0.4, true);
+    Particles.burst(e.x, e.y + def.h * 0.5, e.z, 0.25, [0xff5544], 5, 1.6);
+    if (Math.hypot(mx - game.pos.x, mz - game.pos.z) < 40 && Math.random() < 0.5) AudioSys.sfx('shot');
+  },
   chargerTick(n, dt){
     if (!this.chargerWants(n)) return;
     const ratio = this.chargerMap ? (this.chargerMap.get(n.id) || 0) : 0;
@@ -8119,6 +8520,7 @@ const powerSys = {
       else if (n.t === 'crafter') this.crafterTick(n, dt);
       else if (n.t === 'pad') this.padTick(n, dt);
       else if (n.t === 'charger') this.chargerTick(n, dt);
+      else if (n.t === 'turret') this.turretTick(n, dt);
     }
     game.onElev = onElev;
     this.tubeT = (this.tubeT || 0) + dt;
@@ -8149,7 +8551,7 @@ const powerSys = {
       game.pos.y > top - 0.5 && game.pos.y < top + 0.6;
     const k = game.keys || {};
     const canMove = game.ui === 'none' && isLocked();
-    const ratio = this.elevMap ? (this.elevMap.get(n.id) || 0) : 0;
+    const ratio = n.civic ? 1 : (this.elevMap ? (this.elevMap.get(n.id) || 0) : 0);   // a city elevator runs on the municipal supply
     const dir = riding && canMove && ratio > 0 ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
     n.riderDir = riding && canMove ? (k['Space'] ? 1 : k['KeyC'] ? -1 : 0) : 0;
     if (dir){
@@ -9170,6 +9572,10 @@ function rebuildSolidProps(){
     }
     else if (n.t === 'astand')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.85, z: n.z, hx: 0.3, hy: 0.85, hz: 0.3 });
+    else if (n.t === 'turret')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.45, z: n.z, hx: 0.5, hy: 0.45, hz: 0.5 });
+    else if (n.t === 'station')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.65, z: n.z, hx: 0.8, hy: 0.65, hz: 0.6 });
     else if (n.t === 'pad')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.06, z: n.z, hx: 0.5, hy: 0.07, hz: 0.5 });
     else if (n.t === 'ped')
@@ -9244,6 +9650,7 @@ const ENT_DEF = {
   sheep:  { hp: 14, speed: 1.4, r: 0.42, h: 0.75, cap: 4 },
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
+  guard:    { hp: 90, speed: 3.6, r: 0.42, h: 1.8, cap: 0 },   // the city's own: they fight the sieges
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
@@ -9269,6 +9676,7 @@ const VROLE = {
   food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
   mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
+  guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
 const dropTexCache = new Map();
 function entMesh(type, ent){
@@ -9788,7 +10196,7 @@ function entMesh(type, ent){
     }
     return g;
   }
-  if (type === 'villager'){
+  if (type === 'villager' || type === 'guard'){
     const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, 0.1, 0.31, 0));
@@ -10037,6 +10445,7 @@ function spawnEntity(type, x, y, z){
 function killEntity(e, byPlayer){
   if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
   if (e.type === 'lurker' && byPlayer) boardSys.lurkerKilled(e.x, e.z);
+  if (e.siege && byPlayer){ const sr = game.cities && game.cities[e.siege]; if (sr && sr.siege) sr.siege.kills = (sr.siege.kills || 0) + 1; }
   if (game.carried === e) game.carried = null;
   const i = game.entities.indexOf(e);
   if (i >= 0) game.entities.splice(i, 1);
@@ -10187,7 +10596,7 @@ function killEntity(e, byPlayer){
   }
   markSave();
 }
-function hurtEntity(e, dmg, kx, kz){
+function hurtEntity(e, dmg, kx, kz, quiet){
   if (e.type === 'villager'){
     // you can't kill the neighbors — but they take offense
     e.flash = 0.15; e.fleeT = 5;
@@ -10199,7 +10608,7 @@ function hurtEntity(e, dmg, kx, kz){
     e.hp -= dmg;
     e.flash = 0.15;
     AudioSys.sfx('hit');
-    if (e.hp <= 0) killEntity(e, true);
+    if (e.hp <= 0) killEntity(e, !quiet);
     return;
   }
   e.hp -= dmg;
@@ -10207,7 +10616,7 @@ function hurtEntity(e, dmg, kx, kz){
   e.fleeT = 6;
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
-  if (e.hp <= 0) killEntity(e, true);
+  if (e.hp <= 0) killEntity(e, !quiet);
 }
 // how far the nearest LIGHT is — torches, beacons (which count for
 // farther: a beacon reads as a torch 0.6x as far away) and powered bulbs.
@@ -10458,6 +10867,7 @@ const villageSys = {
     if (hrec){
       hrec.rep = (hrec.rep || 0) - 4;
       toast(hrec.vname + ' will remember that (' + hrec.rep + ' goodwill)');
+      if (e.ckey) citySys.cred(game.cities[e.ckey], -4, 'you struck ' + hrec.vname);
       markSave();
     }
   },
@@ -10523,7 +10933,7 @@ const objectiveSys = {
         if (!rec.stamped) continue;
         const d = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
         if (d >= 70 && d < bd){ bd = d; best = { id: 'city' + key, x: rec.x, z: rec.z,
-          y: (rec.gy != null ? rec.gy : 0) + 22, label: rec.name || 'CITY', rec: { name: rec.name || 'city' } }; }
+          y: (rec.gy != null ? rec.gy : 0) + 22, label: rec.name || 'CITY', city: true, rec: { name: rec.name || 'city' } }; }
       }
       if (!best) for (const c of citySys.known){
         const d = Math.hypot(c.x - game.pos.x, c.z - game.pos.z);
@@ -10539,6 +10949,11 @@ const objectiveSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
       out.push({ id: 'fort' + key, x: rec.x, z: rec.z, fort: true,
                  label: rec.bossDead ? 'VAULT' : 'RAID FORT', rec: { name: 'raid fort' } });
+    }
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.siege) continue;
+      out.push({ id: 'siege' + key, x: rec.x, z: rec.z, y: (rec.gy || 0) + 22, siege: true, label: 'SIEGE · ' + rec.name, rec: { name: rec.name } });
     }
     for (const key in (game.zigs || {})){
       const rec = game.zigs[key];
@@ -10797,6 +11212,7 @@ const missionSys = {
   reward(hrec, coins, repGain){
     addStackItem('coin', coins);
     hrec.rep = Math.min(40, (hrec.rep || 0) + repGain);
+    citySys.cred(citySys.cityOfHouse(hrec), repGain);
     hrec.mdone = (hrec.mdone || 0) + 1;
     hrec.mission = null;
     toast('+' + coins + ' coins · +' + repGain + ' goodwill with ' + hrec.vname);
@@ -10848,6 +11264,8 @@ const tradeSys = {
       { buy: { k: 'ironingot', n: 3 }, price: 32, rep: 10 },
       { buy: { k: 'rubyingot', n: 2 }, price: 44, rep: 25 },
       { buy: { k: 'diamond', n: 1 }, price: 65, rep: 25 },
+      { buy: { k: 'aetheringot', n: 2 }, price: 260, rep: 10, crep: 25 },
+      { buy: { k: 'diamond', n: 5 }, price: 280, rep: 10, crep: 50 },
     ];
     if (role === 'arms') return [
       { buy: { make: 'sword', tier: 1 }, price: 30, rep: 0 },
@@ -10860,6 +11278,8 @@ const tradeSys = {
       { buy: { make: 'gun' }, price: 280, rep: 25 },
       { buy: { k: 'tnt', n: 2 }, price: 20, rep: 10 },
       { sell: { k: 'meat', n: 4 }, price: 8, rep: 0 },
+      { buy: { k: 'rockets', n: 6 }, price: 120, rep: 10, crep: 25 },
+      { buy: { make: 'fw', g: 7 }, price: 1100, rep: 10, crep: 50 },
     ];
     if (role === 'tool') return [
       { buy: { make: 'wrench' }, price: 25, rep: 0 },
@@ -10870,6 +11290,7 @@ const tradeSys = {
       { buy: { make: 'drill', tier: 3 }, price: 340, rep: 25 },
       { buy: { k: 'rail', n: 16 }, price: 30, rep: 0 },
       { sell: { k: 'stick', n: 12 }, price: 6, rep: 0 },
+      { buy: { make: 'drill', tier: 4 }, price: 900, rep: 10, crep: 50 },
     ];
     if (role === 'food') return [   // grocer: the city eats — and its fish market pays for the catch
       { sell: { k: 'fish', n: 1 }, price: 7, rep: 0 },
@@ -10885,7 +11306,7 @@ const tradeSys = {
       { sell: { k: 'bulb', n: 6 }, price: 18, rep: 0 },
       { sell: { k: 'diamond', n: 1 }, price: 40, rep: 10 },
       { buy: { k: 'mcharge', n: 4 }, price: 30, rep: 25 },
-      { buy: { make: 'deed' }, price: 900, rep: 10 },
+      { buy: { make: 'deed' }, price: 900, rep: 10, crep: 25 },
     ];
     return [   // spark: the mad-scientist electrician
       { buy: { k: 'wire', n: 8 }, price: 12, rep: 0 },
@@ -10899,6 +11320,8 @@ const tradeSys = {
       { buy: { make: 'sportscar' }, price: 2400, rep: 15 },
       { buy: { make: 'tdrone' }, price: 950, rep: 25 },
       { sell: { k: 'wire', n: 6 }, price: 7, rep: 0 },
+      { buy: { make: 'hover' }, price: 1700, rep: 10, crep: 25 },
+      { buy: { make: 'plane' }, price: 3200, rep: 10, crep: 50 },
     ];
   },
   offerItem(o){
@@ -10914,6 +11337,8 @@ const tradeSys = {
     if (s.make === 'car') return { kind: 'car', charge: 100 };
     if (s.make === 'sportscar') return { kind: 'sportscar', charge: 100 };
     if (s.make === 'tdrone') return { kind: 'tdrone', charge: 100 };
+    if (s.make === 'hover') return { kind: 'hover', charge: 100 };
+    if (s.make === 'plane') return { kind: 'plane', charge: 100 };
     if (s.make === 'deed') return { kind: 'deed', count: 1 };
     if (s.make === 'tmap') return { kind: 'tmap' };
     return { kind: s.k, count: s.n };
@@ -10937,7 +11362,9 @@ const tradeSys = {
     if (!T || game.ui !== 'trade') return;
     const hrec = T.hrec;
     $('tradetitle').textContent = (hrec.vname + ' the ' + VROLE[T.e.role].name).toUpperCase();
+    const crec = T.e.ckey ? game.cities[T.e.ckey] : null;
     $('tradesub').innerHTML = 'goodwill <b>' + (hrec.rep || 0) + '</b> · ' + this.TIER(hrec.rep || 0) +
+      (crec ? ' · standing in ' + crec.name + ': <b>' + (crec.rep || 0) + '</b> · ' + citySys.TIER(crec.rep || 0) : '') +
       ' · coins: <b>' + CORE.countItem(game.slots, 'coin') + '</b>';
     document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
     const list = $('tradelist');
@@ -10988,8 +11415,9 @@ const tradeSys = {
       list.appendChild(mrow);
     }
     const coins = CORE.countItem(game.slots, 'coin');
-    this.offers(T.e.role).forEach((o, idx) => {
-      const locked = (hrec.rep || 0) < o.rep;
+    this.offers(T.e.role).filter(o => !o.crep || crec).forEach((o, idx) => {
+      const cityLocked = !!(o.crep && (!crec || (crec.rep || 0) < o.crep));
+      const locked = (hrec.rep || 0) < o.rep || cityLocked;
       const item = this.offerItem(o);
       const row = document.createElement('div');
       row.className = 'craftrow';
@@ -11005,7 +11433,7 @@ const tradeSys = {
       const cost = document.createElement('div');
       cost.style.marginLeft = 'auto';
       if (locked){
-        cost.innerHTML = 'needs goodwill ' + o.rep;
+        cost.innerHTML = cityLocked ? 'needs standing ' + o.crep : 'needs goodwill ' + o.rep;
         cost.style.color = '#8a8494';
       } else if (o.buy){
         const can = coins >= o.price;
@@ -11020,12 +11448,17 @@ const tradeSys = {
       row.addEventListener('click', () => this.execute(o));
       list.appendChild(row);
     });
+    if (T.e.role === 'mayor' && crec) blueprintMarket.rows(list, crec);
   },
   execute(o){
     const T = game.activeTrade;
     if (!T) return;
     const hrec = T.hrec;
     if ((hrec.rep || 0) < o.rep){ toast('not enough goodwill — trade more first'); AudioSys.sfx('deny'); return; }
+    if (o.crep){
+      const crec = T.e.ckey ? game.cities[T.e.ckey] : null;
+      if (!crec || (crec.rep || 0) < o.crep){ toast('the city does not know you well enough — standing ' + o.crep + ' needed'); AudioSys.sfx('deny'); return; }
+    }
     if (o.buy){
       if (CORE.countItem(game.slots, 'coin') < o.price){
         toast('not enough coins'); AudioSys.sfx('deny'); game.orbFlash = performance.now();
@@ -11064,6 +11497,7 @@ const tradeSys = {
       toast('sold — +' + o.price + ' coins');
     }
     hrec.rep = Math.min(40, (hrec.rep || 0) + 1);
+    if (T.e.ckey) citySys.cred(game.cities[T.e.ckey], 1);
     AudioSys.sfx('craft');
     refreshHotbar(); refreshToolHUD();
     this.refresh();
@@ -11676,6 +12110,397 @@ const spireSys = {
     if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 2, e.z, 0.8, [0xfff0a0, 0xf4f2f8], 1, 0.6);
   },
 };
+// ---------- the blueprint marketplace ----------
+// The mayor sells the city's famous plans — a watchtower, a bridge, a
+// villa, a lighthouse — as blueprints you stamp anywhere (N), and buys
+// yours once each, priced by their size.
+const blueprintMarket = {
+  FAMOUS: [
+    { name: 'WATCHTOWER', price: 320, crep: 10 },
+    { name: 'STONE BRIDGE', price: 260, crep: 10 },
+    { name: 'VILLA', price: 520, crep: 25 },
+    { name: 'LIGHTHOUSE', price: 640, crep: 25 },
+  ],
+  build(name){
+    const MAT = CORE.MAT, items = [];
+    const B = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, x, y, z, sx, mat || 0, 0); e.sy = sy; e.sz = sz; items.push(e); };
+    let w = 6, h = 8, d = 6;
+    if (name === 'WATCHTOWER'){
+      w = 6; h = 13; d = 6;
+      B(1, 0, 5, 0, 5, 10, 5, MAT.STONEBRICK); B(0, 0, 5.2, 0, 3.4, 9.8, 3.4); B(0, 0, 1.4, 2.5, 1.4, 2.6, 1.4);
+      B(1, 0, 10.4, 0, 6.4, 0.8, 6.4, MAT.STONEBRICK); B(1, 0, 11.3, 0, 6.4, 1.0, 6.4, MAT.STONEBRICK); B(0, 0, 11.3, 0, 5.2, 1.2, 5.2);
+      B(0, 0, 10.7, 0, 1.6, 1.4, 1.6);
+      for (let i = 0; i < 9; i++) B(1, -1.2 + (i % 3) * 1.2, 1 + i * 1.05, -1.2 + Math.floor(i / 3) * 0.2, 1.1, 0.25, 1.1, MAT.PLANKS);
+    } else if (name === 'STONE BRIDGE'){
+      w = 5; h = 3; d = 24;
+      B(1, 0, 0.6, 0, 4.4, 1.2, 24, MAT.STONEBRICK);
+      B(1, -2.0, 1.6, 0, 0.4, 0.9, 24, MAT.STONEBRICK); B(1, 2.0, 1.6, 0, 0.4, 0.9, 24, MAT.STONEBRICK);
+      B(1, 0, -1.2, -9, 3.6, 3, 3.6, MAT.STONEBRICK); B(1, 0, -1.2, 9, 3.6, 3, 3.6, MAT.STONEBRICK);
+    } else if (name === 'VILLA'){
+      w = 12; h = 5; d = 10;
+      B(1, 0, 2.2, 0, 12, 4.4, 10, MAT.STONEBRICK); B(0, 0, 2.1, 0, 10.6, 3.6, 8.6);
+      B(0, 0, 1.4, 5, 1.6, 2.6, 1.2);
+      for (const wx of [-3.5, 3.5]){ B(0, wx, 2.6, 5, 1.6, 1.2, 1.2); B(0, wx, 2.6, -5, 1.6, 1.2, 1.2); }
+      B(0, 6, 2.6, 0, 1.2, 1.2, 2.2); B(0, -6, 2.6, 0, 1.2, 1.2, 2.2);
+      B(1, 0, 4.9, 0, 12.8, 1.0, 10.8, MAT.PLANKS); B(1, 0, 5.6, 0, 8, 0.6, 6, MAT.PLANKS);
+      B(1, 0, 0.3, 7.5, 6, 0.6, 5, MAT.PLANKS);
+    } else if (name === 'LIGHTHOUSE'){
+      w = 8; h = 22; d = 8;
+      const C = (op, y, r, hh, mat) => { const e = CORE.makeEdit(op, 2, 0, y, 0, r * 2, mat || 0, 0); e.sy = hh; items.push(e); };
+      C(1, 9, 3.0, 18, MAT.STONEBRICK); C(0, 9.2, 2.0, 17.6); B(0, 0, 1.4, 2.6, 1.4, 2.6, 1.6);
+      C(1, 18.5, 3.6, 1, MAT.STONEBRICK); C(1, 20, 2.4, 2, MAT.CRYSTAL); C(1, 21.4, 3.0, 0.8, MAT.STONEBRICK);
+      for (let y = 4; y < 16; y += 4) B(1, 0, y, 2.5, 1.2, 0.3, 1.2, MAT.SNOW);
+      for (let i = 0; i < 16; i++) B(1, Math.cos(i * 0.9) * 1.3, 0.6 + i * 1.05, Math.sin(i * 0.9) * 1.3, 1.0, 0.25, 1.0, MAT.PLANKS);
+    }
+    return { name, w, h, d, rows: CORE.serializeEdits(items), props: [] };
+  },
+  rows(list, crec){
+    const have = loadBlueprints();
+    const coins = CORE.countItem(game.slots, 'coin');
+    const head = document.createElement('div'); head.className = 'invlabel'; head.textContent = 'BLUEPRINTS — the city\'s famous plans, and yours';
+    list.appendChild(head);
+    for (const F of this.FAMOUS){
+      const owned = have.some(b => b.name === F.name);
+      const locked = (crec.rep || 0) < F.crep;
+      const row = document.createElement('div'); row.className = 'craftrow';
+      if (locked || owned) row.style.opacity = 0.45;
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = 'buy blueprint: ' + F.name + (owned ? ' (yours)' : '');
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto';
+      cost.textContent = locked ? 'needs standing ' + F.crep : F.price + 'c'; cost.style.color = locked ? '#8a8494' : coins >= F.price ? '#8bff9e' : '#ff7a5c';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => {
+        if (owned){ toast('you already hold that plan — N to stamp it'); return; }
+        if (locked){ toast('the city does not know you well enough'); AudioSys.sfx('deny'); return; }
+        if (CORE.countItem(game.slots, 'coin') < F.price){ toast('not enough coins'); AudioSys.sfx('deny'); return; }
+        CORE.consumeItem(game.slots, 'coin', F.price);
+        const l2 = loadBlueprints(); l2.push(this.build(F.name)); saveBlueprintsList(l2);
+        citySys.cred(crec, 1);
+        toast('bought the ' + F.name + ' blueprint — N to stamp it anywhere');
+        AudioSys.sfx('craft'); refreshHotbar(); tradeSys.refresh();
+      });
+      list.appendChild(row);
+    }
+    crec.boughtBps = crec.boughtBps || [];
+    for (const bp of have){
+      if (this.FAMOUS.some(F => F.name === bp.name)) continue;
+      const sold = crec.boughtBps.includes(bp.name);
+      const price = Math.min(600, 40 + 2 * (bp.rows ? bp.rows.length : 0));
+      const row = document.createElement('div'); row.className = 'craftrow';
+      if (sold) row.style.opacity = 0.45;
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = 'sell blueprint: ' + bp.name + (sold ? ' (sold here)' : '');
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = '+' + price + 'c'; cost.style.color = sold ? '#8a8494' : '#8bff9e';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => {
+        if (sold){ toast('this city already bought that plan'); return; }
+        crec.boughtBps.push(bp.name);
+        addStackItem('coin', price);
+        citySys.cred(crec, 2);
+        toast('sold the ' + bp.name + ' plan to ' + crec.name + ' — +' + price + ' coins');
+        AudioSys.sfx('craft'); refreshHotbar(); markSave(); tradeSys.refresh();
+      });
+      list.appendChild(row);
+    }
+  },
+};
+// ---------- stations: the public line ----------
+// Every city has a station on its south edge. Buy a ticket and a tram
+// takes you down the highway to any city a road connects — the road IS
+// the line. Your own rails that end at the platform show up too, so the
+// network you build junctions into the public one.
+const stationSys = {
+  linksOf(rec){
+    const out = [];
+    for (const L of roadSys.linksNear(rec.x, rec.z, 60)){
+      const mine = L.a.key === rec.key.slice(1) ? 'a' : L.b.key === rec.key.slice(1) ? 'b' : null;
+      if (!mine) continue;
+      const other = mine === 'a' ? L.b : L.a;
+      out.push({ L, other, fromA: mine === 'a', name: citySys.nameFor(other.seed), fare: Math.max(20, Math.ceil(L.len * 0.09)) });
+    }
+    return out;
+  },
+  open(pn){
+    const rec = (game.cities || {})[pn.city];
+    if (!rec) return;
+    game.activeStation = pn;
+    game.ui = 'station';
+    $('stationtitle').textContent = (rec.name || 'CITY') + ' STATION';
+    const list = $('stationlist'); list.innerHTML = '';
+    const coins = CORE.countItem(game.slots, 'coin');
+    const links = this.linksOf(rec);
+    if (!links.length){
+      const row = document.createElement('div'); row.className = 'sub'; row.textContent = 'no road leaves this city — no public line'; list.appendChild(row);
+    }
+    for (const lk of links){
+      const row = document.createElement('div'); row.className = 'craftrow';
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = '→ ' + lk.name + ' · ' + (lk.L.len / 1000).toFixed(1) + ' km';
+      const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = lk.fare + 'c'; cost.style.color = coins >= lk.fare ? '#8bff9e' : '#ff7a5c';
+      row.appendChild(nm); row.appendChild(cost);
+      row.addEventListener('click', () => this.ride(rec, lk));
+      list.appendChild(row);
+    }
+    // your own rails at the platform
+    for (const L of game.rails || []){
+      for (const end of [0, 1]){
+        const pt = L.pts[end === 0 ? 0 : L.pts.length - 1];
+        if (Math.hypot(pt[0] - pn.x, pt[2] - pn.z) > 12 || Math.abs(pt[1] - pn.y) > 4) continue;
+        const far = L.pts[end === 0 ? L.pts.length - 1 : 0];
+        const row = document.createElement('div'); row.className = 'craftrow'; row.style.borderLeft = '3px solid #7fe8e8';
+        const nm = document.createElement('div'); nm.className = 'cname';
+        nm.textContent = 'your line → ' + Math.round(far[0]) + ', ' + Math.round(far[2]) + ' · ' + (railSys.powered(L) ? 'live' : 'DEAD — wire its meter');
+        const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = 'free'; cost.style.color = '#8bff9e';
+        row.appendChild(nm); row.appendChild(cost);
+        row.addEventListener('click', () => {
+          if (!railSys.powered(L)){ toast('dead line — wire a power source to the rail meter'); AudioSys.sfx('deny'); return; }
+          closeOverlay(); game.ui = 'none'; requestLock(); railSys.board(L, end);
+        });
+        list.appendChild(row);
+      }
+    }
+    show('stationscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  ride(rec, lk){
+    if (CORE.countItem(game.slots, 'coin') < lk.fare){ toast('not enough coins for the fare'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', lk.fare);
+    const L = lk.L, from = rec.station || citySys.stationPos(lk.fromA ? L.a : L.b, rec);
+    const orec = (game.cities || {})['c' + lk.other.key];
+    const to = orec && orec.station ? orec.station : citySys.stationPos(lk.other, orec);
+    // the line: platform -> the road's near end -> along its profile -> the far end -> the far platform
+    const pts = [[from.x, from.y, from.z]];
+    const road = [];
+    for (let i = 0; i <= L.segs; i++){
+      const t = i / L.segs;
+      road.push([L.sx + (L.ex - L.sx) * t, L.prof[i] + 0.4, L.sz + (L.ez - L.sz) * t]);
+    }
+    if (!lk.fromA) road.reverse();
+    // a lift up to the road's level at the edge of the slab, then the run
+    pts.push([road[0][0], from.y, road[0][2]]);
+    for (const q of road) pts.push(q);
+    pts.push([road[road.length - 1][0], to.y, road[road.length - 1][2]]);
+    pts.push([to.x, to.y, to.z]);
+    const line = { id: null, pub: true, pts, dest: lk.name };
+    closeOverlay(); game.ui = 'none'; requestLock();
+    railSys.board(line, 0);
+    toast('ticket to ' + lk.name + ' · ' + lk.fare + 'c — the tram rolls');
+    refreshHotbar(); markSave();
+  },
+};
+// ---------- city sieges ----------
+// Some deep nights a city near you is attacked: raiders come out of the
+// dark, walk for the towers and break real holes in their walls; the
+// city's guard runs out to meet them. Kill your share and the city pays in
+// coin and standing; the holes are rebuilt over the following days.
+const siegeSys = {
+  accT: 0,
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    const step = this.accT; this.accT = 0;
+    const deep = game.dayF < 0.22, day = game.day || 0;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      const span = (rec.n || 3) * 20;
+      if (rec.siege){
+        const S = rec.siege;
+        if (pd > span + 260){ this.end(rec, 'far'); continue; }
+        // the wave: raiders drip in from the dark at the city's edge
+        if (S.pending > 0){
+          S.spawnT = (S.spawnT || 0) - step;
+          if (S.spawnT <= 0){
+            S.spawnT = 1.2;
+            const a = Math.random() * Math.PI * 2, d = span + 30 + Math.random() * 20;
+            const x = rec.x + Math.cos(a) * d, z = rec.z + Math.sin(a) * d;
+            const h = game.gen.height(x, z);
+            if (!(game.gen.wetAt && game.gen.wetAt(x, z, h))){
+              const e = spawnEntity('lurker', x, Math.max(h, rec.gy) + 0.6, z);
+              e.siege = key; e.noburn = false; e.hp = 60; e.ckey = key;
+              if (e.mesh) e.mesh.scale.setScalar(1.15);
+              S.pending--;
+            }
+          }
+        }
+        // the guard: six on the plaza while the siege lasts
+        const guards = game.entities.filter(e => e.type === 'guard' && e.ckey === key).length;
+        if (guards < 6 && S.guardT-- <= 0){
+          S.guardT = 2;
+          const a = Math.random() * Math.PI * 2;
+          const e = spawnEntity('guard', rec.x + Math.cos(a) * 6, rec.gy + 0.6, rec.z + Math.sin(a) * 6);
+          e.role = 'guard'; e.ckey = key; e.noburn = true; e.home = { x: rec.x, z: rec.z };
+        }
+        const alive = game.entities.filter(e => e.siege === key).length;
+        if (S.pending <= 0 && alive === 0) this.end(rec, 'won');
+        else if (game.dayF > 0.45) this.end(rec, 'dawn');
+        continue;
+      }
+      // between sieges: the city rebuilds, a hole every twenty seconds
+      if (rec.damage && rec.damage.length){
+        rec.repairT = (rec.repairT || 0) + step;
+        if (rec.repairT > 20){
+          rec.repairT = 0;
+          const dmg = rec.damage.shift();
+          const idx = game.edits.findIndex(e => e.op === 0 && e.shape === 0 && Math.abs(e.x - dmg.x) < 0.05 && Math.abs(e.y - dmg.y) < 0.05 && Math.abs(e.z - dmg.z) < 0.05 && e.size === dmg.size);
+          if (idx >= 0){ const e = game.edits.splice(idx, 1)[0]; game.terrain.invalidate(e); wrenchSys.validate && wrenchSys.validate(); }
+          if (!rec.damage.length && pd < span + 200) toast(rec.name + ' has rebuilt its walls');
+          markSave();
+        }
+      }
+      // a new siege: deep night, you near, once a night, one city in three
+      if (deep && pd < span + 160 && rec.siegeDay !== day && !bossSys.anyBoss()){
+        rec.siegeDay = day;
+        if (Math.random() < 0.35) this.start(rec);
+        markSave();
+      }
+    }
+  },
+  start(rec){
+    const N = 6 + (rec.n || 3) * 2;
+    rec.siege = { n: N, pending: N, kills: 0, spawnT: 0.5, guardT: 0, holes: 0 };
+    rec.damage = rec.damage || [];
+    toast('SIEGE — raiders at the walls of ' + rec.name + ' (' + N + ' inbound) — the guard is out');
+    AudioSys.sfx('boom');
+    markSave();
+  },
+  end(rec, why){
+    const S = rec.siege; if (!S) return;
+    for (const e of [...game.entities]) if (e.siege === rec.key || (e.type === 'guard' && e.ckey === rec.key)) killEntity(e, false);
+    rec.siege = null;
+    if (why === 'far'){ markSave(); return; }
+    const share = S.kills / Math.max(1, S.n);
+    if (share >= 0.4){
+      const coins = 20 * S.kills + 40;
+      addStackItem('coin', coins);
+      citySys.cred(rec, 8 + Math.round(share * 8));
+      toast(rec.name + ' holds — you took ' + S.kills + ' of ' + S.n + ' · +' + coins + ' coins · +' + (8 + Math.round(share * 8)) + ' standing');
+      AudioSys.sfx('craft');
+    } else if (S.kills > 0){
+      addStackItem('coin', 10 * S.kills);
+      toast(rec.name + ' holds — you took ' + S.kills + ' of ' + S.n + ' · +' + 10 * S.kills + ' coins');
+    } else toast(why === 'dawn' ? 'dawn breaks the siege of ' + rec.name : 'the siege of ' + rec.name + ' is over');
+    refreshHotbar(); markSave();
+  },
+  // the nearest tower wall point to a raider
+  wallPoint(rec, x, z){
+    let best = null, bd = 1e9;
+    for (const t of rec.towers || []){
+      if (t.kind !== 'tower') continue;
+      const tx = rec.x + t.bx * 36, tz = rec.z + t.bz * 36, h = t.w / 2;
+      const cx = Math.max(tx - h, Math.min(tx + h, x)), cz = Math.max(tz - h, Math.min(tz + h, z));
+      // a point on the face, not inside
+      let px = cx, pz = cz;
+      if (Math.abs(x - tx) < h && Math.abs(z - tz) < h){ if (Math.abs(x - tx) > Math.abs(z - tz)) px = tx + Math.sign(x - tx) * h; else pz = tz + Math.sign(z - tz) * h; }
+      const d = Math.hypot(px - x, pz - z);
+      if (d < bd){ bd = d; best = [px, pz, d]; }
+    }
+    return best;
+  },
+  raiderTarget(e, dt, pd){
+    const rec = game.cities && game.cities[e.siege];
+    if (!rec || !rec.siege) return [0, 0];
+    if (pd < 10) return [game.pos.x - e.x, game.pos.z - e.z];
+    const w = this.wallPoint(rec, e.x, e.z);
+    if (!w) return [rec.x - e.x, rec.z - e.z];
+    if (w[2] < 3.2){
+      // at the wall: hammer it, and a hole opens
+      e.breachT = (e.breachT || 0) + dt;
+      if (Math.random() < dt * 3) Particles.burst(w[0], e.y + 1.2, w[1], 0.3, [0x8f8f96, 0x51484f], 3, 1.5);
+      if (e.breachT > 2.5){
+        e.breachT = 0;
+        const S = rec.siege;
+        if (S.holes < 24){
+          S.holes++;
+          const hole = CORE.makeEdit(0, 0, +w[0].toFixed(2), +(e.y + 1.2).toFixed(2), +w[1].toFixed(2), 2.6, 0, 0);
+          applyEdit(hole);
+          rec.damage.push({ x: hole.x, y: hole.y, z: hole.z, size: hole.size });
+          Particles.burst(w[0], e.y + 1.2, w[1], 1.0, [0x8f8f96, 0x51484f, 0xffb347], 20, 3);
+          if (Math.hypot(w[0] - game.pos.x, w[1] - game.pos.z) < 60) AudioSys.sfx('boom');
+          markSave();
+        }
+      }
+      return [0, 0];
+    }
+    return [w[0] - e.x, w[1] - e.z];
+  },
+  guardTarget(e, dt){
+    let best = null, bd = 34;
+    for (const o of game.entities){
+      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk')) continue;
+      const d = Math.hypot(o.x - e.x, o.z - e.z);
+      if (d < bd){ bd = d; best = o; }
+    }
+    if (best){
+      if (bd < 1.7 && e.atkT <= 0){ e.atkT = 1.0; hurtEntity(best, 12, (best.x - e.x) * 2, (best.z - e.z) * 2, true); }
+      return [best.x - e.x, best.z - e.z];
+    }
+    const H = e.home || e;
+    if (e.tt <= 0){ e.tt = 3 + Math.random() * 3; e.tx = H.x + (Math.random() - 0.5) * 12; e.tz = H.z + (Math.random() - 0.5) * 12; }
+    const sx = e.tx - e.x, sz = e.tz - e.z;
+    return Math.hypot(sx, sz) < 0.6 ? [0, 0] : [sx, sz];
+  },
+};
+// ---------- lit windows ----------
+// The towers' window bands are holes; at night warm panes appear just
+// inside them — one instanced quad per face per floor, a seeded subset
+// lit each night, none by day. Cheap: a few thousand instances for a
+// whole skyline, no lights at all.
+const cityLightSys = {
+  mesh: null, cap: 6000, builtFor: '', lastDay: -1, checkT: 9,
+  ensure(){
+    if (this.mesh) return;
+    const geo = new THREE.BoxGeometry(1, 1, 0.1);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 });
+    this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
+    this.mesh.frustumCulled = false; this.mesh.count = 0; this.mesh.visible = false;
+    this.mesh.userData.noShadow = true;
+    game.scene.add(this.mesh);
+  },
+  rebuild(){
+    this.ensure();
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    let i = 0;
+    const day = game.day || 0;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped || !rec.towers) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 700) continue;
+      const g = rec.gy != null ? rec.gy : 0, S = 4.0;
+      for (const t of rec.towers){
+        if (t.kind !== 'tower') continue;
+        const tx = rec.x + t.bx * 36, tz = rec.z + t.bz * 36;
+        const wl = t.w - 3.4 - 0.5;
+        for (let f = 0; f < t.floors; f++){
+          const wy = g + f * S + 2.55;
+          for (let face = 0; face < 4; face++){
+            const h = CORE.mulberry32((rec.seed ^ Math.imul(t.bx + 9, 1013)) ^ Math.imul(t.bz + 13, 3331) ^ Math.imul(f + 1, 7919) ^ Math.imul(face + 1, 104729) ^ Math.imul(day + 1, 2654435761))();
+            if (h > 0.55) continue;                                // dark tonight
+            if (i >= this.cap) break;
+            const inset = t.w / 2 - 0.45;
+            const ax = face === 0 ? 1 : face === 1 ? -1 : 0, az = face === 2 ? 1 : face === 3 ? -1 : 0;
+            pos.set(tx + ax * inset, wy, tz + az * inset);
+            q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ax ? Math.PI / 2 : 0);
+            scl.set(wl, 1.1, 1);
+            m.compose(pos, q, scl);
+            this.mesh.setMatrixAt(i++, m);
+          }
+        }
+      }
+    }
+    this.mesh.count = i;
+    this.mesh.instanceMatrix.needsUpdate = true;
+  },
+  tick(dt){
+    if (!game.running) return;
+    this.checkT += dt;
+    const night = game.dayF < 0.32;
+    if (this.mesh) this.mesh.visible = night;
+    if (!night) return;
+    if (this.checkT < 2) return;
+    this.checkT = 0;
+    // the set of nearby stamped cities, and the night, decide the panes
+    const sig = Object.keys(game.cities || {}).filter(k => game.cities[k].stamped && Math.hypot(game.cities[k].x - game.pos.x, game.cities[k].z - game.pos.z) < 700).join('|') + '#' + (game.day || 0);
+    if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
+  },
+};
 // ---------- the Ziggurat ----------
 // A stepped stone pyramid on the plains, mesa or dunes, rarer than a fort:
 // a processional ramp up the south face to a shrine, and under it a hall
@@ -12211,6 +13036,7 @@ const railSys = {
     return (L && L.id != null && powerSys.railWatts) ? (powerSys.railWatts.get(L.id) || 0) : 0;
   },
   speedFor(L){
+    if (L && L.pub) return 42;                       // the public line: the city's own power
     const w = this.wattsFor(L);
     return w > 0 ? Math.min(60, 4 + 0.22 * w) : 0;
   },
@@ -12270,6 +13096,16 @@ const railSys = {
       new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
     rim.position.y = 0.75;
     cart.add(base, rim);
+    if (L.pub){
+      // the public tram: a blue car with a roof
+      base.material.color.setHex(0x2f4f7a);
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.1, 2.6), new THREE.MeshBasicMaterial({ color: 0x1c2c4a }));
+      roof.position.y = 2.3; cart.add(roof);
+      for (const [sx, sz] of [[-0.75, -1.15], [0.75, -1.15], [-0.75, 1.15], [0.75, 1.15]]){
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.08), new THREE.MeshBasicMaterial({ color: 0x8a8f9a }));
+        post.position.set(sx, 1.5, sz); cart.add(post);
+      }
+    }
     game.scene.add(cart);
     game.riding = { L, dir: end === 0 ? 1 : -1, mesh: cart };
     game.vel.set(0, 0, 0);
@@ -12303,7 +13139,7 @@ const railSys = {
     if (R.d <= 0 || R.d >= total){
       const p = R.d <= 0 ? pts[0] : pts[pts.length - 1];
       game.pos.set(p[0], p[1] + 1.0, p[2]);
-      this.dismount('end of the line');
+      this.dismount(R.L.pub ? 'arrived — ' + R.L.dest : 'end of the line');
       return;
     }
     let i = 0;
@@ -12681,24 +13517,98 @@ const citySys = {
   // deterministic block plan: the city rolls its SIZE first (leaning hard
   // toward the very large), then every block rolls what it is — most are
   // towers, the rest are parks, markets and open lots so the grid breathes
+  // Districts: a city of five or seven blocks a side is quartered — the OLD
+  // TOWN (west, low stone, markets and parks), the INDUSTRIAL district
+  // (east, tall dark towers, working lots with smokestacks), and to the
+  // south the HARBOR if there is water within 260 m (low warehouses, dock
+  // yards) or else the RESIDENTIAL quarter (mid towers, parks). A three-
+  // block town is all old town.
+  DISTRICT: {
+    old:         { name: 'OLD TOWN',    w: [10, 13],     floors: [3, 6],  mats: ['STONEBRICK', 'ROCK'],       kinds: [0.55, 0.75, 1.0, 1.0] },   // tower | park | market | lot
+    industrial:  { name: 'INDUSTRIAL',  w: [13, 16, 18], floors: [6, 14], mats: ['BASALT', 'ROCK', 'BASALT'], kinds: [0.68, 0.72, 0.76, 1.0] },
+    harbor:      { name: 'HARBOR',      w: [16, 18],     floors: [2, 4],  mats: ['PLANKS', 'STONEBRICK'],     kinds: [0.6, 0.65, 0.8, 1.0] },
+    residential: { name: 'RESIDENTIAL', w: [10, 13],     floors: [4, 8],  mats: ['STONEBRICK', 'STONEBRICK', 'ROCK'], kinds: [0.6, 0.9, 1.0, 1.0] },
+  },
+  // ---- city standing: one number for the whole city ----
+  // Trades and missions with its people raise it, harming them or tearing
+  // up the streets lowers it; the best of every shop and the deed itself
+  // are gated on it.
+  TIER(r){ return r >= 50 ? 'patron' : r >= 25 ? 'citizen' : r >= 10 ? 'known' : 'stranger'; },
+  cityOf(x, z){
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (!rec.stamped) continue;
+      if (Math.abs(rec.x - x) < (rec.n || 3) * 18 + 8 && Math.abs(rec.z - z) < (rec.n || 3) * 18 + 8) return rec;
+    }
+    return null;
+  },
+  cityOfHouse(hrec){
+    for (const key in (game.cities || {})){ const rec = game.cities[key]; if (rec.houses && rec.houses.includes(hrec)) return rec; }
+    return null;
+  },
+  cred(rec, n, why){
+    if (!rec) return;
+    const before = this.TIER(rec.rep || 0);
+    rec.rep = Math.max(-40, Math.min(100, (rec.rep || 0) + n));
+    const after = this.TIER(rec.rep);
+    if (n < 0) toast(rec.name + ' will remember that' + (why ? ' — ' + why : '') + ' (standing ' + rec.rep + ')');
+    else if (after !== before) toast('you are ' + (after === 'known' ? 'known in ' : after === 'citizen' ? 'a citizen of ' : 'a patron of ') + rec.name + ' (standing ' + rec.rep + ')');
+    markSave();
+  },
+  stationPos(c, rec){
+    const n = rec && rec.n ? rec.n : this.plan(c).n, span = n * 36 + 8;
+    const g = rec && rec.gy != null ? rec.gy : this.slabLevel(c);
+    return { x: c.x, y: g + 0.6, z: c.z + span / 2 - 5 };
+  },
+  stampStation(c, rec, g, span){
+    const MAT = CORE.MAT;
+    const sp = { x: c.x, y: g + 0.6, z: c.z + span / 2 - 5 };
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    EB(1, sp.x, g + 0.3, sp.z, 18, 0.6, 6, MAT.STONEBRICK);                      // the platform
+    const pk = CORE.makeEdit(2, 1, +sp.x.toFixed(1), +(g + 0.5).toFixed(1), +sp.z.toFixed(1), 18, MAT.BASALT, 0);
+    pk.sy = 0.3; pk.sz = 6; pk.noLod = 1; applyEdit(pk);
+    const st = pnodeSys.addQuiet('station', sp.x, sp.y, sp.z, Math.PI, { city: rec.key });
+    game.torches.push([sp.x - 7, g + 1.0, sp.z], [sp.x + 7, g + 1.0, sp.z]);
+    rec.station = { x: sp.x, y: sp.y, z: sp.z, id: st.id };
+  },
+  harborAt(c){
+    if (!game.gen.wetAt) return false;
+    for (let a = 0; a < 6.28; a += 0.52){
+      const x = c.x + Math.cos(a) * 260, z = c.z + Math.sin(a) * 260;
+      if (game.gen.wetAt(x, z)) return true;
+    }
+    return false;
+  },
+  districtOf(bx, bz, n, harbor){
+    if (n <= 3) return 'old';
+    if (bz > 0) return harbor ? 'harbor' : 'residential';
+    if (bx < 0) return 'old';
+    if (bx > 0) return 'industrial';
+    return bz < 0 ? 'industrial' : 'old';
+  },
   plan(c){
     const rng = CORE.mulberry32(c.seed ^ 0x7157);
     const roll = rng();
     const n = roll < 0.15 ? 3 : roll < 0.45 ? 5 : 7;     // blocks per side
     const half = (n - 1) / 2;
-    const mats = [CORE.MAT.STONEBRICK, CORE.MAT.ROCK, CORE.MAT.BASALT, CORE.MAT.STONEBRICK];
+    const harbor = n > 3 && this.harborAt(c);
     const out = [];
     for (let bz = -half; bz <= half; bz++) for (let bx = -half; bx <= half; bx++){
       if (bx === 0 && bz === 0) continue;                // central plaza
+      const district = this.districtOf(bx, bz, n, harbor);
+      const D = this.DISTRICT[district];
       const kr = rng();
-      const w = [10, 13, 16, 18][(rng() * 4) | 0];
-      const floors = 4 + ((rng() * 11) | 0);             // 4..14 stories
-      const mat = mats[(rng() * mats.length) | 0];
+      const w = D.w[(rng() * D.w.length) | 0];
+      const floors = D.floors[0] + ((rng() * (D.floors[1] - D.floors[0] + 1)) | 0);
+      const mat = CORE.MAT[D.mats[(rng() * D.mats.length) | 0]];
       const shop = rng() < 0.4;
-      const kind = kr < 0.62 ? 'tower' : kr < 0.78 ? 'park' : kr < 0.9 ? 'market' : 'lot';
-      out.push({ bx, bz, w, floors, mat, shop, kind });
+      const kind = kr < D.kinds[0] ? 'tower' : kr < D.kinds[1] ? 'park' : kr < D.kinds[2] ? 'market' : 'lot';
+      out.push({ bx, bz, w, floors, mat, shop, kind, district });
     }
-    return { n, blocks: out };
+    return { n, blocks: out, harbor };
   },
   stamp(c, rec){
     const MAT = CORE.MAT;
@@ -12753,6 +13663,20 @@ const citySys = {
         lt.sy = 1.6; lt.sz = 24;
         applyEdit(lt);
         game.torches.push([tx - 10, g + 0.4, tz - 10], [tx + 10, g + 0.4, tz + 10]);
+        if (t.district === 'industrial'){
+          // a smokestack and a boiler house
+          const st = CORE.makeEdit(1, 2, +(tx + 6).toFixed(1), +(g + 9).toFixed(1), +(tz - 6).toFixed(1), 3.2, MAT.BASALT, 0);
+          st.sy = 18; applyEdit(st);
+          EB(1, tx - 5, g + 2.2, tz + 4, 10, 4.4, 8, MAT.ROCK);
+          EB(0, tx - 5, g + 2.0, tz + 4, 8.4, 3.6, 6.4, 0, 1);
+          EB(0, tx - 5, g + 1.5, tz + 8, 2.4, 2.8, 1.6, 0, 1);
+        } else if (t.district === 'harbor'){
+          // a dock yard: stacked crates and a crane post
+          for (const [cx, cz, h] of [[-7, -7, 1.4], [-5.6, -7, 1.4], [-7, -5.6, 1.4], [-6.3, -6.3, 2.8], [6, -8, 1.4], [8, 6, 1.4], [8, 7.5, 2.8]])
+            EB(1, tx + cx, g + h / 2, tz + cz, 1.4, 1.4, 1.4, MAT.PLANKS, 1);
+          EB(1, tx + 8, g + 5, tz - 8, 0.6, 10, 0.6, MAT.BASALT, 1);
+          EB(1, tx + 5, g + 9.7, tz - 8, 7, 0.5, 0.6, MAT.BASALT, 1);
+        }
         continue;
       }
       if (t.kind === 'market'){
@@ -12787,6 +13711,30 @@ const citySys = {
       const cxr = tx + (t.w / 2 - 2.0), czr = tz + (t.w / 2 - 2.0);
       EB(0, cxr, g + 0.35 + (H - 1.15) / 2, czr, 1.8, H - 1.15, 1.8, 0, 1);
       (game.ropes = game.ropes || []).push([+cxr.toFixed(2), +(g + H - 1.3).toFixed(2), +czr.toFixed(2), +(H - 2.0).toFixed(1)]);
+      // the shaft of every tower of seven floors or more carries a working
+      // elevator on the city's supply: stand on it, SPACE up, C down
+      if (t.floors >= 7) pnodeSys.addQuiet('elev', cxr, g + 0.35, czr, 0, { civic: 1 });
+      // ---- the floors are lived in: offices and apartments ----
+      // floors 1, 2, 3 and the top, alternating an office (a desk, a
+      // strongbox with the week's takings) and an apartment (a bed, a stove)
+      const lived = [];
+      for (let f = 1; f < t.floors; f++) if (f <= 3 || f === t.floors - 1) lived.push(f);
+      const frng = CORE.mulberry32((c.seed ^ Math.imul(t.bx + 11, 7919)) ^ Math.imul(t.bz + 7, 104729));
+      for (const f of lived){
+        const fy = g + f * S + 0.25, q = t.w / 4;
+        const office = f % 2 === 1;
+        if (office){
+          tableSys.add(+(tx - q).toFixed(2), +fy.toFixed(2), +tz.toFixed(2), 0);
+          const ch = pnodeSys.addQuiet('chest', tx + q, fy + 0.6, tz - q, Math.PI / 2, { sc: 0.6 });
+          ch.inv = new Array(chestSlots(0.6)).fill(null);
+          ch.inv[0] = { kind: 'coin', count: 3 + ((frng() * 8) | 0) };
+          if (frng() < 0.35) ch.inv[1] = { kind: 'rounds', count: 12 };
+          if (f === t.floors - 1 && frng() < 0.5) ch.inv[2] = { kind: 'diamond', count: 1 };
+        } else {
+          bedSys.add(+(tx + q).toFixed(2), +fy.toFixed(2), +(tz - q).toFixed(2), Math.PI / 2);
+          stoveSys.add(+(tx - q).toFixed(2), +fy.toFixed(2), +(tz + q).toFixed(2), 0);
+        }
+      }
       if (t.shop && shops < n - 1){
         shops++;
         const ch = pnodeSys.add('chest', tx - (t.w / 2 - 2.2) * (fx || 1), g + 0.95, tz - (t.w / 2 - 2.2) * (fz || (fx ? 0 : 1)), 0, { sc: 0.7 });
@@ -12801,16 +13749,36 @@ const citySys = {
     EB(1, c.x, g + 11 + n * 2 + 1.0, c.z, 1.7, 2.4, 1.7, MAT.CRYSTAL);
     for (const [bx2, bz2] of [[-7, 0], [7, 0], [0, -7], [0, 7]])
       EB(1, c.x + bx2, g + 0.6, c.z + bz2, bx2 ? 1.0 : 3.0, 0.6, bx2 ? 3.0 : 1.0, MAT.PLANKS, 1);
-    // ---- the people: five shopfronts + the mayor at the plaza ----
-    const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
-    const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
-    const idxs = [];
-    T.forEach((t2, i) => { if (t2.kind === 'tower') idxs.push(i); });
-    for (let i = idxs.length - 1; i > 0; i--){
-      const j = (rng2() * (i + 1)) | 0;
-      const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp;
+    // ---- the station: a platform on the south edge, a kiosk with tickets ----
+    this.stampStation(c, rec, g, span);
+    // ---- district signs at the plaza's corners ----
+    if (n > 3){
+      const seen = new Set();
+      for (const t2 of T){
+        if (seen.has(t2.district)) continue;
+        seen.add(t2.district);
+        const sx = Math.sign(t2.bx) || (t2.district === 'old' ? -1 : 1), sz = t2.bz > 0 ? 1 : -1;
+        pnodeSys.add('sign', c.x + sx * 15.5, g, c.z + sz * 15.5, Math.atan2(-sx, -sz), { text: this.DISTRICT[t2.district].name });
+      }
     }
-    while (idxs.length < 5) idxs.push(idxs[idxs.length % Math.max(1, idxs.length)] || 0);
+    // ---- the people: five shopfronts + the mayor at the plaza ----
+    // the broker and the grocer keep the old town, the armourer and the
+    // toolsmith work the industrial district, the electrician the harbor
+    const roles = ['broker', 'arms', 'tool', 'spark', 'food'];
+    const roleDist = { broker: 'old', food: 'old', arms: 'industrial', tool: 'industrial', spark: PLAN.harbor ? 'harbor' : 'residential' };
+    const rng2 = CORE.mulberry32(c.seed ^ 0x9e37);
+    const pools = {};
+    T.forEach((t2, i) => { if (t2.kind === 'tower') (pools[t2.district] = pools[t2.district] || []).push(i); });
+    const all = [].concat(...Object.values(pools));
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--){ const j = (rng2() * (i + 1)) | 0; const tmp = a[i]; a[i] = a[j]; a[j] = tmp; } return a; };
+    for (const k in pools) shuffle(pools[k]);
+    shuffle(all);
+    const used = new Set(), idxs = [];
+    for (const r of roles){
+      const pool = (pools[roleDist[r]] || []).filter(i => !used.has(i));
+      const pick = pool.length ? pool[0] : (all.find(i => !used.has(i)) != null ? all.find(i => !used.has(i)) : (all[0] || 0));
+      used.add(pick); idxs.push(pick);
+    }
     rec.houses = [];
     for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
@@ -12832,6 +13800,7 @@ const citySys = {
       game.torches.push([c.x + tx2, g + 0.4, c.z + tz2]);
     torchSys.rebuild();
     ropeSys.rebuild();
+    pnodeSys.rebuild();
   },
   ensure(){
     if (!game.running || !game.gen) return;
@@ -12841,13 +13810,17 @@ const citySys = {
       const key = 'c' + c.key;
       let rec = (game.cities = game.cities || {})[key];
       if (!rec){
-        rec = { key, x: c.x, z: c.z, seed: c.seed, name: this.nameFor(c.seed), stamped: false };
+        rec = { key, x: c.x, z: c.z, seed: c.seed, name: this.nameFor(c.seed), stamped: false, rep: 0 };
         game.cities[key] = rec;
       }
       if (!rec.stamped){
         rec.stamped = true;
         this.stamp(c, rec);
         markSave();
+      } else if (!rec.station && rec.gy != null){
+        // a city from before the trains: it gets its station now
+        this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8);
+        torchSys.rebuild(); pnodeSys.rebuild(); markSave();
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
@@ -13082,7 +14055,16 @@ function updateEntities(dt, now){
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
     if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
-    if (e.type === 'lurker' && (pd < 15 || e.raider)){
+    if (e.type === 'guard'){
+      const tg = siegeSys.guardTarget(e, dt);
+      sx = tg[0]; sz = tg[1];
+    } else if (e.type === 'lurker' && e.siege){
+      // a siege raider: the walls first, you if you get close
+      const tg = siegeSys.raiderTarget(e, dt, pd);
+      sx = tg[0]; sz = tg[1]; sp *= 1.1;
+      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5); }
+    } else if (e.type === 'lurker' && (pd < 15 || e.raider)){
       if (e.raider) sp *= 1.15;
       sx = game.pos.x - e.x; sz = game.pos.z - e.z;
       const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
@@ -13729,6 +14711,7 @@ function bindInput(){
           toast('wire it to power, stand on the platform — space rises, C descends');
           return;
         }
+        if (pn.t === 'station'){ stationSys.open(pn); return; }
         if (pn.t === 'pad'){
           const jp = game.armor && game.armor.back;
           const cars = powerSys.padCars(pn);
@@ -13904,9 +14887,9 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft'){
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station')) closeOverlay();
       else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -14650,7 +15633,7 @@ function updatePlayer(dt){
   } else {
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1);
     // snappy ground control, mild air control
-    const a = game.grounded ? 22 : 6;
+    const a = game.grounded ? 22 : game.gliding ? 0.4 : 6;
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
     game.vel.y -= PLAYER.gravity * dt;
@@ -14668,10 +15651,13 @@ function updatePlayer(dt){
     // and a landing that gentle never hurts.
     const wg = game.armor && game.armor.back;
     if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
+      // the same slow fall; hold W to drive forward at half again a sprint
+      // and cross the map on one glide
       game.vel.y += (-2.4 - game.vel.y) * Math.min(1, 7 * dt);
       const gfx = -Math.sin(game.yaw), gfz = -Math.cos(game.yaw);
-      game.vel.x += (gfx * 9.5 - game.vel.x) * Math.min(1, 2.2 * dt);
-      game.vel.z += (gfz * 9.5 - game.vel.z) * Math.min(1, 2.2 * dt);
+      const gsp = fwd > 0 ? PLAYER.walk * PLAYER.sprintMul * 1.5 : 3.5;
+      game.vel.x += (gfx * gsp - game.vel.x) * Math.min(1, 5 * dt);
+      game.vel.z += (gfz * gsp - game.vel.z) * Math.min(1, 5 * dt);
       game.gliding = true;
     } else game.gliding = false;
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump; game.grounded = false; }
@@ -14828,7 +15814,7 @@ function activeTool(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -15026,7 +16012,7 @@ const wrenchProps = {
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
-                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4],
+                  cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5], station: [1.3, 1.5, 1.35, 1.2],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -16129,6 +17115,16 @@ function doMine(tool, p, shape, eff){
   const poppedBulbs = bulbSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedBulbs){ addStackItem('bulb', poppedBulbs); parts.push('+' + poppedBulbs + ' bulb'); }
   collapseSys.note(p, eff);
+  // tearing up a city costs standing (your own tower is yours to dig)
+  if (game.mode === 'survival'){
+    const crec = citySys.cityOf(p.x, p.z);
+    if (crec && p.y > (crec.gy != null ? crec.gy : -1e9) - 6){
+      const own = crec.owned != null && crec.towers && crec.towers[crec.owned] &&
+        Math.abs(p.x - (crec.x + crec.towers[crec.owned].bx * 36)) < crec.towers[crec.owned].w / 2 + 3 &&
+        Math.abs(p.z - (crec.z + crec.towers[crec.owned].bz * 36)) < crec.towers[crec.owned].w / 2 + 3;
+      if (!own && performance.now() - (crec.vandalT || 0) > 3000){ crec.vandalT = performance.now(); citySys.cred(crec, -2, 'you dug up the city'); }
+    }
+  }
   // trees whose ground was carved away fall and yield their wood
   for (const [k, v] of [...treeSys.visible]){
     const t = v.t;
@@ -16952,7 +17948,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -17129,6 +18125,10 @@ function itemIconURL(it){
     c.fillStyle = '#3a3f52'; c.fillRect(4, 6, 8, 4); c.fillRect(3, 7, 10, 2);
     c.fillStyle = '#b9a3ff'; c.fillRect(2, 11, 4, 2); c.fillRect(10, 11, 4, 2); c.fillRect(4, 7, 8, 1);
     c.fillStyle = '#1c1c22'; c.fillRect(6, 5, 4, 1);
+  } else if (it.kind === 'turret'){
+    c.fillStyle = '#6a7080'; c.fillRect(3, 11, 10, 3); c.fillRect(6, 8, 4, 3);
+    c.fillStyle = '#9aa0ab'; c.fillRect(7, 3, 2, 6); c.fillRect(10, 4, 2, 5);
+    c.fillStyle = '#ff5544'; c.fillRect(7, 2, 2, 1); c.fillRect(10, 3, 2, 1);
   } else if (it.kind === 'cannon'){
     c.fillStyle = '#9aa0ab'; c.fillRect(2, 11, 8, 3);
     c.fillStyle = '#6a7080'; for (let q = 0; q < 8; q++) c.fillRect(5 + q, 10 - q, 3, 2);
@@ -17603,6 +18603,7 @@ function itemLabel(it){
   if (it.kind === 'plane') return (it.wrecked ? 'wrecked ' : '') + 'cargo plane';
   if (it.kind === 'hover') return (it.wrecked ? 'wrecked ' : '') + 'hoverbike';
   if (it.kind === 'cannon') return 'launch cannon';
+  if (it.kind === 'turret') return 'wall turret';
   if (it.kind === 'windsock') return 'windsock';
   if (it.kind === 'hangar') return 'hangar kit';
   if (it.kind === 'airstrip') return 'airstrip kit';
@@ -17680,7 +18681,6 @@ function paintSlot(el){
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
   cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
   paintChargeBar(el, it);
-  el.title = itemLabel(it);
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
 function buildHotbar(){
@@ -17710,11 +18710,15 @@ function buildMissionsUI(){
     t1.textContent = o.fort ? 'raid fort'
                    : o.spire ? 'sky spire'
                    : o.zig ? 'ziggurat'
+                   : o.siege ? o.rec.name + ' — UNDER SIEGE'
+                   : o.city ? o.rec.name + ' — the city'
                    : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
     t2.className = 't2';
     t2.textContent = (o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
+                    : o.siege ? 'raiders are breaking the walls — kill your share for coin and standing'
+                    : o.city ? 'shops, a mayor with deeds, work — standing ' + ((game.cities[o.id.slice(4)] || {}).rep || 0)
                     : o.hrec ? missionSys.describe(o.rec, o.hrec)
                              : 'reach the marked spot')
                    + ' · ' + o.label + ' ' + d + 'm';
@@ -17737,6 +18741,22 @@ function buildInvUI(){
   for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
   buildMissionsUI();
   $('btnInvSort').onclick = sortInventory;
+  // creative: dial the weather and the season from here (and see them)
+  const env = $('creativeenv');
+  env.classList.toggle('hidden', game.mode !== 'creative');
+  if (game.mode === 'creative'){
+    const ws = $('envweatherslider'), ss = $('envseasonslider');
+    const WK = ['clear', 'rain', 'storm', 'snow', 'fog'];
+    ws.value = Math.max(0, WK.indexOf(weatherSys.kind));
+    ss.value = seasonSys.idx;
+    $('envweather').textContent = weatherSys.kind; $('envseason').textContent = seasonSys.name;
+    if (!game._envWired){
+      game._envWired = true;
+      for (const el of [ws, ss]){ el.addEventListener('keydown', ev => ev.stopPropagation()); el.addEventListener('keyup', ev => ev.stopPropagation()); }
+      ws.addEventListener('input', () => { weatherSys.set(WK[+ws.value], 900); $('envweather').textContent = weatherSys.kind; });
+      ss.addEventListener('input', () => { game.day = (+ss.value) * SEASON_DAYS; updateDayNight(0); $('envseason').textContent = seasonSys.name; markSave(); });
+    }
+  }
   $('vehiclepanel').classList.toggle('hidden', !game.driving || !!(VEH[game.driving.type] && VEH[game.driving.type].paddle));
   const vh = $('invveh'); vh.innerHTML = '';
   if (game.driving) vh.appendChild(slotEl('vbat'));
@@ -17770,7 +18790,7 @@ const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', '
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
-const CAT_POWER    = ['bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
+const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed'];
@@ -17841,7 +18861,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -18593,24 +19613,10 @@ function toast(msg){
   clearTimeout(toastT);
   toastT = setTimeout(() => { t.style.opacity = 0; }, 1600);
 }
-function refreshToolHUD(){
-  const it = selectedItem();
-  const tool = activeTool();
-  const el = $('toolinfo');
+// what an item is and does — the bottom-left panel's text, also the
+// tooltip under the cursor in every inventory
+function itemInfoHTML(it, tool){
   let html = '';
-  if (game.driving){
-    const e = game.driving;
-    const V = VEH[e.type] || VEH.car;
-    el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
-      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
-      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
-      (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
-      '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
-                                   : V.fly ? 'W/S throttle · A/D bank · SPACE nose up · C nose down · land slow and level'
-                                   : 'W/S throttle · A/D steer') + '</div>' +
-      '<div class="t2">right click to step out</div>';
-    return;
-  }
   if (!it){
     html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
       (game.carried
@@ -18683,6 +19689,8 @@ function refreshToolHUD(){
     html = '<div class="t1">wisp core</div><div class="t2">a charge that still wants to go off: TNT, rockets or mining charges at a crafting table</div>';
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
+  } else if (it.kind === 'turret'){
+    html = '<div class="t1">wall turret</div><div class="t2">place it and wire it to your grid (4 W idle, 30 W firing) — it shoots anything hostile within 24 m, on its own, all night</div>';
   } else if (it.kind === 'cannon'){
     html = '<div class="t1">launch cannon</div><div class="t2">place it, stand at it, aim where you want to go and right click — you fly. Take the grapple.</div>';
   } else if (it.kind === 'windsock'){
@@ -18850,6 +19858,27 @@ function refreshToolHUD(){
     html = '<div class="t1">' + itemLabel(it) + '</div>' +
            '<div class="t2">goes in the dispenser slot (E)</div>';
   }
+  return html;
+}
+function refreshToolHUD(){
+  const it = selectedItem();
+  const tool = activeTool();
+  const el = $('toolinfo');
+  let html = '';
+  if (game.driving){
+    const e = game.driving;
+    const V = VEH[e.type] || VEH.car;
+    el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
+      '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
+      (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
+      (e.onRoad ? ' · HIGHWAY cruise' : '') + (e.trickMsg ? ' · ' + e.trickMsg : '') + '</div>' +
+      '<div class="t2">' + (V.air ? 'W/S · A/D · SPACE hop · in the air: W/S flip, A/D spin, both whip'
+                                   : V.fly ? 'W/S throttle · A/D bank · SPACE nose up · C nose down · land slow and level'
+                                   : 'W/S throttle · A/D steer') + '</div>' +
+      '<div class="t2">right click to step out</div>';
+    return;
+  }
+  html = itemInfoHTML(it, tool);
   if (game.fly) html += '<div class="t2 on">flying</div>';
   el.innerHTML = html;
 }
@@ -19006,6 +20035,44 @@ function tryEat(){
 // ---------- overlays / menus ----------
 function show(id){ $(id).classList.remove('hidden'); }
 function hide(id){ $(id).classList.add('hidden'); }
+// hover any slot in any screen: the item's full text under the cursor
+function wireItemTips(){
+  const tip = $('itemtip');
+  let cur = null;
+  const place = ev => {
+    const x = Math.min(window.innerWidth - 316, ev.clientX + 16), y = Math.min(window.innerHeight - tip.offsetHeight - 12, ev.clientY + 14);
+    tip.style.left = x + 'px'; tip.style.top = y + 'px';
+  };
+  document.addEventListener('mouseover', ev => {
+    const el = ev.target.closest && ev.target.closest('.slot');
+    if (!el || game.ui === 'none'){ if (cur){ cur = null; tip.classList.add('hidden'); } return; }
+    let it = null;
+    try { it = el.dataset.slot != null ? slotItem(slotKeyOf(el)) : null; } catch (e){ it = null; }
+    if (!it && el.__item) it = el.__item;
+    if (!it){ cur = null; tip.classList.add('hidden'); return; }
+    cur = el;
+    const html = itemInfoHTML(it, activeToolOf(it));
+    tip.innerHTML = html || ('<div class="t1">' + itemLabel(it) + '</div>');
+    tip.classList.remove('hidden');
+    place(ev);
+  });
+  document.addEventListener('mousemove', ev => { if (cur) place(ev); });
+  document.addEventListener('mouseout', ev => {
+    const el = ev.target.closest && ev.target.closest('.slot');
+    if (el && el === cur && !(ev.relatedTarget && el.contains(ev.relatedTarget))){ cur = null; tip.classList.add('hidden'); }
+  });
+}
+// the tool-shaped view of any item (what activeTool() makes of the held one)
+function activeToolOf(it){
+  if (!it) return null;
+  if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
+  if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
+  if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
+  if (it.kind === 'tnt' || it.kind === 'mcharge') return { kind: 'boom', btype: it.kind, tier: 0, item: it };
+  if (it.kind === 'sigil') return { kind: 'sigil', tier: 0, item: it };
+  return { kind: it.kind, tier: it.tier || 0, item: it };
+}
 function openInventory(){
   game.ui = 'inv'; buildInvUI(); show('invscreen'); document.exitPointerLock();
 }
@@ -19221,6 +20288,7 @@ function drawMap(){
   for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
   for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
   for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
+  for (const k in (game.cities || {})) if (game.cities[k].stamped) mark(game.cities[k].x, game.cities[k].z, '#ffb44d', 9);
   for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
@@ -19240,7 +20308,7 @@ function openMap(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -19361,7 +20429,7 @@ function openOptions(from){
 function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
-  $('optRdV').textContent = ($('optRd').value * CORE.CHUNK_M) + 'm';
+  $('optRdV').textContent = lodTerrain.nearFarFor(+$('optRd').value) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
   $('optMusV').textContent = $('optMus').value + '%';
   $('optRscV').textContent = $('optRsc').value + '%';
@@ -19490,7 +20558,7 @@ function saveNow(){
     bossKills: game.bossKills || {},
     hotSel: game.hotSel, snapOn: game.snapOn, gridIdx: game.gridIdx,
     hp: game.hp, heal: game.heal, timeOfDay: game.timeOfDay, day: game.day || 0,
-    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t) },
+    weather: { kind: weatherSys.kind, t: Math.round(weatherSys.t), puddles: weatherSys.puddles.slice(-200) },
     torches: game.torches,
     beacons: game.beacons,
     beds: game.beds,
@@ -19570,7 +20638,7 @@ function startWorld(id){
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.day = data.day || 0;
   if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
-  weatherSys.fires = []; weatherSys.thunder = [];
+  weatherSys.fires = []; weatherSys.thunder = []; weatherSys.puddles = (data.weather && data.weather.puddles) || [];
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -19695,25 +20763,168 @@ let lastChunk = null;
 // exactly — including chunks still streaming in. Each coarser ring is sunk
 // slightly deeper and underlaps the finer one, so ring seams are tiny
 // backed steps instead of cracks.
+// ---------- HORIZON: the far skin, a geomorphed heightfield clipmap ----------
+// Five nested levels of one heightfield, 2 m cells near to 32 m at the
+// horizon. Every vertex carries its own height AND the height the next
+// coarser level reads at the same spot, and the vertex shader slides from
+// one to the other with distance from the player -- so the line where two
+// levels meet is a place where two meshes agree to the millimetre, and a
+// rebuild that moves that line moves nothing the eye can see. A level's
+// inner hole is exactly the finer level's extent (index buffer, not
+// discard); only the innermost level asks the coverage mask where the real
+// terrain and the near ring already stand, and there it yields -- drawing
+// only, sunk, under the seam columns so a join is backed instead of open.
+// Builds, quarries and stamped cities are baked into the heights in the
+// worker (CORE.skinGrid), so a tower at a kilometre is still a tower.
+const SKIN_VERT = `
+attribute float aHc;
+attribute vec3 aNc;
+attribute float aAO;
+uniform mat4 uShadowMatrix;
+uniform vec2 uPlayer; uniform vec2 uMorph;
+uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
+varying vec3 vW; varying vec3 vN; varying float vAO; varying vec4 vShadowCoord;
+void main(){
+  vec3 p = position;
+  float d = max(abs(p.x - uPlayer.x), abs(p.z - uPlayer.y));
+  float m = smoothstep(uMorph.x, uMorph.y, d);
+  p.y = mix(position.y, aHc, m);
+  vec3 n = normalize(mix(normal, aNc, m));
+  if (uMaskOn > 0.5){
+    vec2 mi = (p.xz - uMaskOrigin) / uMaskSpan;
+    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){
+      float r = texture2D(uMask, mi).r;
+      if ((r > 0.3 && r < 0.45) || (r > 0.7 && r < 0.9)) p.y -= 0.6;
+    }
+  }
+  vW = p; vN = n; vAO = aAO;
+  vShadowCoord = uShadowMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+const SKIN_FRAG = `
+precision highp float;
+uniform sampler2D uAtlas;
+uniform float uNMat;
+uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
+uniform float uFogFar; uniform float uLampSky; uniform float uTime; uniform vec3 uSeason;
+uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
+uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
+uniform sampler2D uMatTex; uniform vec2 uMatOrigin; uniform float uMatSpan;
+uniform vec4 uHole;
+varying vec3 vW; varying vec3 vN; varying float vAO; varying vec4 vShadowCoord;
+float hash3(vec3 p){
+  p = mod(p, 64.0);
+  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
+}
+float vnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash3(i),                  b = hash3(i + vec3(1, 0, 0));
+  float c = hash3(i + vec3(0, 1, 0)),  d = hash3(i + vec3(1, 1, 0));
+  float e = hash3(i + vec3(0, 0, 1)),  g = hash3(i + vec3(1, 0, 1));
+  float h = hash3(i + vec3(0, 1, 1)),  k = hash3(i + vec3(1, 1, 1));
+  return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
+             mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
+}
+float unpackRGBAToDepth(const in vec4 v){
+  const vec4 UnpackFactors = (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0);
+  return dot(v, UnpackFactors);
+}
+void main(){
+  // the finer level's extent is its hole
+  if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
+  if (uMaskOn > 0.5){
+    vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
+    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
+        texture2D(uMask, mi).r > 0.45) discard;
+  }
+  vec3 n = normalize(vN);
+  vec3 an = abs(n);
+  vec2 uv;
+  if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
+  else if (an.x >= an.z)                 uv = vW.zy;
+  else                                   uv = vW.xy;
+  float m = floor(texture2D(uMatTex, (vW.xz - uMatOrigin) / uMatSpan).r * 255.0 + 0.5);
+  float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
+  float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
+  vec3 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
+  vec3 col = tex;
+  float diff = max(dot(n, uSunDir), 0.0);
+  float sunVis = 1.0;
+  if (uShadowOn > 0.5){
+    vec3 sc = vShadowCoord.xyz / vShadowCoord.w;
+    if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0){
+      float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
+      float z = sc.z - max(0.0012, 0.0045 * (1.0 - ndl));
+      float lit = 0.0;
+      for (int dy = -1; dy <= 1; dy++)
+        for (int dx = -1; dx <= 1; dx++)
+          lit += step(z, unpackRGBAToDepth(texture2D(uShadowMap,
+            sc.xy + vec2(float(dx), float(dy)) * uShadowTexel * 1.4)));
+      sunVis = lit / 9.0;
+    }
+  }
+  float dayF = clamp(uLampSky / 0.85 * 1.4, 0.0, 1.0);
+  sunVis = mix(1.0, sunVis, dayF);
+  sunVis *= 1.0 - dayF * 0.28 *
+    smoothstep(0.58, 0.82, vnoise(vec3(vW.x * 0.045 + uTime * 0.055, 3.7, vW.z * 0.045 + uTime * 0.013)));
+  vec3 ambCol = mix(uAmbCol * vec3(0.90, 0.96, 1.10), uAmbCol, sunVis);
+  vec3 lit = ambCol * (0.85 + 0.15 * n.y) + uSunCol * diff * sunVis;
+  col = col * min(lit, vec3(1.05));
+  col *= 0.72 + 0.28 * vAO;
+  col *= 0.95 + 0.10 * vnoise(vW * 0.33);
+  if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
+  if (m == 6.0) col *= uSeason;
+  if (m == 16.0) col = max(col, tex * 0.55);  // crystal
+  float dist = gl_FragCoord.z / gl_FragCoord.w;
+  float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
+  gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
+}`;
+const SKIN_WATER_VERT = `
+attribute float aDep;
+uniform float uSeaY;
+varying vec3 vW; varying float vDep;
+void main(){
+  vec3 p = vec3(position.x, uSeaY, position.z);
+  vW = p; vDep = aDep;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}`;
+const SKIN_WATER_FRAG = `
+precision highp float;
+uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
+uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
+uniform vec4 uHole;
+varying vec3 vW; varying float vDep;
+void main(){
+  if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
+  if (uMaskOn > 0.5){
+    vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
+    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
+        texture2D(uMask, mi).r > 0.75) discard;
+  }
+  vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
+  float deep = smoothstep(0.6, 7.5, vDep);
+  col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
+  float dist = gl_FragCoord.z / gl_FragCoord.w;
+  float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
+  gl_FragColor = vec4(mix(col, uFogCol, fog), mix(0.68, 0.96, deep));
+}`;
 const farTerrain = {
-  scene: null, mat: null, job: null, dirty: true,
-  levels: null,
-  maskN: 384, maskTex: null, maskData: null, maskFrame: 0,
-  // half-extent (m), cell (m), sink below true surface (m)
+  scene: null, mat: null, waterSurfMat: null, dirty: true, levels: null,
+  maskN: 384, maskTex: null, maskData: null, maskFrame: 0, _seq: 0,
+  // half-extent (m) and cell (m); every level is 288 cells across
   L: [
-    { E: 64,   s: 1,  sink: 0.06 },
-    { E: 128,  s: 2,  sink: 0.22 },
-    { E: 256,  s: 4,  sink: 0.40 },
-    { E: 512,  s: 8,  sink: 0.62 },
-    { E: 1024, s: 16, sink: 0.95 },
-    { E: 2048, s: 32, sink: 1.40 },
-    { E: 4096, s: 64, sink: 1.90 },
+    { E: 288,  s: 2 },
+    { E: 576,  s: 4 },
+    { E: 1152, s: 8 },
+    { E: 2304, s: 16 },
+    { E: 4608, s: 32 },
   ],
   init(scene){
     this.scene = scene;
-    this.job = null; this.dirty = true;
+    this.dirty = true;
     this.colCache = new Map();
-    this.levels = this.L.map(() => ({ mesh: null, cx: 1e9, cz: 1e9 }));
+    this.levels = this.L.map(() => ({ mesh: null, water: null, cx: 1e9, cz: 1e9, job: 0, n: 0, s: 1, x0: 0, z0: 0, wet: null, tex: null }));
     this.maskData = new Uint8Array(this.maskN * this.maskN);
     this.maskTex = new THREE.DataTexture(this.maskData, this.maskN, this.maskN,
       THREE.RedFormat, THREE.UnsignedByteType);
@@ -19721,165 +20932,140 @@ const farTerrain = {
     this.maskTex.minFilter = THREE.NearestFilter;
     this.maskTex.needsUpdate = true;
     this.uMaskOrigin = { value: new THREE.Vector2(1e9, 1e9) };
+    this.uPlayer = { value: new THREE.Vector2(0, 0) };
     const tu = game.terrainMat.uniforms;
-    // LOD water surface: the REAL water look by construction — same tiled
-    // texture, same tint, same 62% alpha over the LOD lakebed below, plus
-    // the coverage-mask discard and horizon fog
-    this.waterSurfMat = new THREE.ShaderMaterial({
+    const maskU = () => ({
+      uMask: { value: this.maskTex },
+      uMaskOrigin: this.uMaskOrigin,
+      uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
+    });
+    this.waterSurfMat = this.L.map((Lk, k) => new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: {
+      uniforms: Object.assign({
         uWaterTex: { value: game.waterMat ? game.waterMat.map : null },
         uFogCol: tu.uFogCol, uFogFar: tu.uFogFar,
-        uMask: { value: this.maskTex },
-        uMaskOrigin: this.uMaskOrigin,
-        uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
-      },
-      vertexShader: `
-        attribute float aDep;
-        varying vec3 vW; varying float vDep;
-        void main(){
-          vW = position; vDep = aDep;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }`,
-      fragmentShader: `
-        precision highp float;
-        uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
-        uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
-        varying vec3 vW; varying float vDep;
-        void main(){
-          vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
-          if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
-              texture2D(uMask, mi).r > 0.7) discard;
-          vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
-          // real water goes deep-blue and opaque as the bed drops away --
-          // with WG3's oceans, letting a dark seabed show through at 62%
-          // read as grey mud, and ring-underlap strips double-blended into
-          // dark bands. Deep water hides both by construction.
-          float deep = smoothstep(0.6, 7.5, vDep);
-          col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
-          float dist = gl_FragCoord.z / gl_FragCoord.w;
-          float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
-          gl_FragColor = vec4(mix(col, uFogCol, fog), mix(0.68, 0.96, deep));
-        }`,
-    });
-    this.mat = new THREE.ShaderMaterial({
-      uniforms: {
+        uMaskOn: { value: k === 0 ? 1 : 0 },
+        uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
+        uSeaY: { value: game.gen && game.gen.seaLevel != null ? game.gen.seaLevel - 0.02 : 0 },
+      }, maskU()),
+      vertexShader: SKIN_WATER_VERT,
+      fragmentShader: SKIN_WATER_FRAG,
+    }));
+    this.mat = this.L.map((Lk, k) => new THREE.ShaderMaterial({
+      uniforms: Object.assign({
         uAtlas: tu.uAtlas, uNMat: tu.uNMat,
         uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
         uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uLampSky: tu.uLampSky,
         uTime: tu.uTime, uSeason: tu.uSeason, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
         uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
-        uMask: { value: this.maskTex },
-        uMaskOrigin: this.uMaskOrigin,
-        uMaskSpan: { value: this.maskN * CORE.CHUNK_M },
-      },
-      vertexShader: `
-        attribute float aMat;
-        uniform mat4 uShadowMatrix;
-        varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
-        void main(){
-          vW = position; vN = normal; vMat = aMat;
-          vShadowCoord = uShadowMatrix * vec4(position, 1.0);
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }`,
-      fragmentShader: `
-        precision highp float;
-        uniform sampler2D uAtlas;
-        uniform float uNMat;
-        uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
-        uniform float uFogFar; uniform float uLampSky; uniform float uTime; uniform vec3 uSeason;
-        uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
-        uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;
-        varying vec3 vW; varying vec3 vN; varying float vMat; varying vec4 vShadowCoord;
-        float hash3(vec3 p){
-          p = mod(p, 64.0);
-          return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-        }
-        float vnoise(vec3 p){
-          vec3 i = floor(p), f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          float a = hash3(i),                  b = hash3(i + vec3(1, 0, 0));
-          float c = hash3(i + vec3(0, 1, 0)),  d = hash3(i + vec3(1, 1, 0));
-          float e = hash3(i + vec3(0, 0, 1)),  g = hash3(i + vec3(1, 0, 1));
-          float h = hash3(i + vec3(0, 1, 1)),  k = hash3(i + vec3(1, 1, 1));
-          return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
-                     mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
-        }
-        float unpackRGBAToDepth(const in vec4 v){
-          const vec4 UnpackFactors = (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0);
-          return dot(v, UnpackFactors);
-        }
-        void main(){
-          // coverage mask: where real chunks are meshed, the LOD skin yields
-          vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
-          if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
-              texture2D(uMask, mi).r > 0.45) discard;
-          vec3 n = normalize(vN);
-          vec3 an = abs(n);
-          vec2 uv;
-          if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
-          else if (an.x >= an.z)                 uv = vW.zy;
-          else                                   uv = vW.xy;
-          float m = floor(vMat + 0.5);
-          float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
-          float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
-          vec3 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
-          vec3 col = tex;
-          float diff = max(dot(n, uSunDir), 0.0);
-          float sunVis = 1.0;
-          if (uShadowOn > 0.5){
-            vec3 sc = vShadowCoord.xyz / vShadowCoord.w;
-            if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0){
-              float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
-              float z = sc.z - max(0.0012, 0.0045 * (1.0 - ndl));
-              float lit = 0.0;
-              for (int dy = -1; dy <= 1; dy++)
-                for (int dx = -1; dx <= 1; dx++)
-                  lit += step(z, unpackRGBAToDepth(texture2D(uShadowMap,
-                    sc.xy + vec2(float(dx), float(dy)) * uShadowTexel * 1.4)));
-              sunVis = lit / 9.0;
-            }
-          }
-          float dayF = clamp(uLampSky / 0.85 * 1.4, 0.0, 1.0);
-          sunVis = mix(1.0, sunVis, dayF);
-          sunVis *= 1.0 - dayF * 0.28 *
-            smoothstep(0.58, 0.82, vnoise(vec3(vW.x * 0.045 + uTime * 0.055, 3.7, vW.z * 0.045 + uTime * 0.013)));
-          vec3 ambCol = mix(uAmbCol * vec3(0.90, 0.96, 1.10), uAmbCol, sunVis);
-          vec3 lit = ambCol * (0.85 + 0.15 * n.y) + uSunCol * diff * sunVis;
-          col = col * min(lit, vec3(1.05));
-          col *= 0.95 + 0.10 * vnoise(vW * 0.33);
-          if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
-          if (m == 6.0) col *= uSeason;
-          if (m == 16.0) col = max(col, tex * 0.55);  // crystal
-          float dist = gl_FragCoord.z / gl_FragCoord.w;
-          float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
-          gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
-        }`,
-    });
+        uMaskOn: { value: k === 0 ? 1 : 0 },
+        uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
+        uPlayer: this.uPlayer,
+        uMorph: { value: new THREE.Vector2(Lk.E * 0.55, Lk.E * 0.82) },
+        uMatTex: { value: null }, uMatOrigin: { value: new THREE.Vector2(0, 0) }, uMatSpan: { value: 1 },
+      }, maskU()),
+      vertexShader: SKIN_VERT,
+      fragmentShader: SKIN_FRAG,
+    }));
   },
   needRebuild(k){
     const lv = this.levels[k];
+    if (lv.job) return false;
     if (!lv.mesh) return true;
-    return Math.hypot(game.pos.x - lv.cx, game.pos.z - lv.cz) > this.L[k].E / 8;
+    return Math.max(Math.abs(game.pos.x - lv.cx), Math.abs(game.pos.z - lv.cz)) > this.L[k].E / 8;
   },
   update(){
     if (!game.gen || !this.mat) return;
+    this.uPlayer.value.set(game.pos.x, game.pos.z);
     if (this.dirty){
       this.dirty = false;
       for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
     }
     if (++this.maskFrame >= 4){ this.maskFrame = 0; this.updateMask(); }
-    if (!this.job){
-      for (let k = 0; k < this.L.length; k++){
+    let inflight = 0;
+    for (const lv of this.levels) if (lv.job) inflight++;
+    if (inflight < 2)
+      for (let k = 0; k < this.L.length; k++)
         if (this.needRebuild(k)){ this.startJob(k); break; }
+  },
+  startJob(k){
+    const Lk = this.L[k], lv = this.levels[k], s = Lk.s, snap = s * 2;
+    const cx = Math.round(game.pos.x / snap) * snap, cz = Math.round(game.pos.z / snap) * snap;
+    const n = Math.round(2 * Lk.E / s);
+    const x0 = cx - Lk.E, z0 = cz - Lk.E;
+    const box = [x0 - 1, -1e9, z0 - 1, x0 + 2 * Lk.E + 1, 1e9, z0 + 2 * Lk.E + 1];
+    const rows = CORE.serializeEdits(CORE.cullEdits(game.edits, box, 0));
+    const gen = game.gen, token = ++this._seq, levels = this.levels;
+    lv.job = token;
+    meshPool.grid({ k, x0, z0, s, n, sea: gen.seaLevel, edits: rows }, (g) => {
+      if (this.levels !== levels || lv.job !== token || game.gen !== gen) return;   // stale world
+      lv.job = 0;
+      this.build(k, cx, cz, x0, z0, n, g);
+    });
+  },
+  // level k's hole is the finer level's current extent
+  setHole(k){
+    if (k >= this.L.length) return;
+    const fine = this.levels[k - 1];
+    const v = fine && fine.mesh
+      ? [fine.cx - this.L[k - 1].E, fine.cz - this.L[k - 1].E, fine.cx + this.L[k - 1].E, fine.cz + this.L[k - 1].E]
+      : [1, 1, 0, 0];
+    this.mat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
+    this.waterSurfMat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
+  },
+  build(k, cx, cz, x0, z0, n, g){
+    const Lk = this.L[k], lv = this.levels[k];
+    lv.n = n; lv.s = Lk.s; lv.x0 = x0; lv.z0 = z0; lv.wet = g.wet;
+    lv.cx = cx; lv.cz = cz;
+    const posAttr = new THREE.BufferAttribute(g.pos, 3);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', posAttr);
+    geo.setAttribute('aHc', new THREE.BufferAttribute(g.hc, 1));
+    geo.setAttribute('normal', new THREE.BufferAttribute(g.nrm, 3, true));
+    geo.setAttribute('aNc', new THREE.BufferAttribute(g.nrc, 3, true));
+    geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1, true));
+    geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), Lk.E * 1.5 + 600);
+    const tex = new THREE.DataTexture(g.mt, n, n, THREE.RedFormat, THREE.UnsignedByteType);
+    tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+    tex.needsUpdate = true;
+    const mu = this.mat[k].uniforms;
+    if (lv.tex) lv.tex.dispose();
+    lv.tex = tex;
+    mu.uMatTex.value = tex;
+    mu.uMatOrigin.value.set(x0, z0);
+    mu.uMatSpan.value = 2 * Lk.E;
+    if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
+    if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
+    lv.mesh = new THREE.Mesh(geo, this.mat[k]);
+    lv.mesh.frustumCulled = false;
+    lv.mesh.castShadow = false;
+    lv.mesh.userData.noShadow = true;
+    this.scene.add(lv.mesh);
+    const sea = game.gen.seaLevel;
+    if (sea != null){
+      const widx = g.widx;
+      if (widx.length){
+        const wg = new THREE.BufferGeometry();
+        wg.setAttribute('position', posAttr);
+        wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
+        wg.setIndex(new THREE.BufferAttribute(widx, 1));
+        wg.boundingSphere = geo.boundingSphere;
+        this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
+        lv.water = new THREE.Mesh(wg, this.waterSurfMat[k]);
+        lv.water.frustumCulled = false;
+        lv.water.renderOrder = 3;
+        lv.water.userData.noShadow = true;
+        this.scene.add(lv.water);
       }
     }
-    if (this.job) this.stepJob();
+    // this level's hole is the finer level's extent; the coarser level's
+    // hole follows this level's new extent
+    this.setHole(k);
+    this.setHole(k + 1);
   },
-  // the LOD skin is a SURFACE — a column is covered once the chunks that
-  // hold its surface band are meshed (deep caves and sky chunks mesh last
-  // and don't matter to the skin). The surface band per column is static,
-  // so it's cached.
+  // the skin is a SURFACE: a column is covered once the chunks that hold
+  // its surface band are STANDING (a mesh in the scene, or provably empty)
   colRange(cx, cz){
     const key = cx + ',' + cz;
     let r = this.colCache.get(key);
@@ -19898,6 +21084,11 @@ const farTerrain = {
     }
     return r;
   },
+  // mask values: 0 open (skin draws) · 100 ring seam (ring draws, skin draws
+  // sunk) · 128 ring covered (ring draws) · 200 terrain seam (terrain draws,
+  // skin draws sunk) · 255 terrain covered. A column counts as covered by
+  // what is STANDING in it, never by what is queued or dirty: the old mesh
+  // stays in the scene until its replacement lands, so nothing flips.
   updateMask(){
     const T = game.terrain;
     if (!T) return;
@@ -19912,14 +21103,8 @@ const farTerrain = {
         const range = this.colRange(cx, cz);
         let ok = true;
         for (let cy = range[0]; cy <= range[1] && ok; cy++){
-          const key = cx + ',' + cy + ',' + cz;
-          const ch = T.chunks.get(key);
-          // "covered" means the real chunk is actually STANDING there.
-          // Merely existing in the map is not enough: a chunk deferred by
-          // the visibility band, or still in flight, has no geometry — and
-          // claiming it made both the LOD and the horizon skin yield to
-          // empty space. That was the hole between LOD and real terrain.
-          if (!ch || T.dirty.has(key) || ch.banded || !(ch.done || ch.empty)) ok = false;
+          const ch = T.chunks.get(cx + ',' + cy + ',' + cz);
+          if (!ch || ch.banded || !(ch.mesh || ch.empty || ch.done)) ok = false;
         }
         if (ok){
           const ix = cx - ox, iz = cz - oz;
@@ -19927,35 +21112,12 @@ const farTerrain = {
         }
       }
     }
-    // erode the real-coverage region by one column: a covered column that
-    // touches an uncovered one is a SEAM column (200), and the LOD keeps
-    // drawing under it so the join is backed instead of showing sky
-    {
-      const src = this._maskCopy && this._maskCopy.length === data.length
-        ? this._maskCopy : (this._maskCopy = new Uint8Array(data.length));
-      src.set(data);
-      const R2 = T.radius + 2;
-      const pcx2 = pcx - ox, pcz2 = pcz - oz;
-      for (let dz = -R2; dz <= R2; dz++){
-        const iz = pcz2 + dz;
-        if (iz < 1 || iz >= n - 1) continue;
-        for (let dx = -R2; dx <= R2; dx++){
-          const ix = pcx2 + dx;
-          if (ix < 1 || ix >= n - 1) continue;
-          if (src[iz * n + ix] !== 255) continue;
-          let edge = false;
-          for (let b = -2; b <= 2 && !edge; b++)
-            for (let a = -2; a <= 2; a++)
-              if (src[(iz + b) * n + ix + a] !== 255){ edge = true; break; }
-          if (edge) data[iz * n + ix] = 200;
-        }
-      }
-    }
-    // truthful-LOD coverage: columns whose coarse chunks are all meshed
-    // and merged mark 128 — the skin yields there, the water skin stays
+    let ringR = 0;
     if (lodTerrain.rings){
       for (const ring of lodTerrain.rings){
+        if (ring.feat) continue;                  // it draws only what rises over the skin
         const span = ring.m / CORE.CHUNK_M;
+        if (ring.far > ringR) ringR = ring.far;
         for (const [ck, pend] of ring.cols){
           if (pend.size) continue;
           const ci = ck.indexOf(',');
@@ -19976,133 +21138,32 @@ const farTerrain = {
         }
       }
     }
+    // seams: a covered column within two of an open one keeps the skin
+    // drawing under it (sunk), so the join is backed instead of showing sky
+    {
+      const src = this._maskCopy && this._maskCopy.length === data.length
+        ? this._maskCopy : (this._maskCopy = new Uint8Array(data.length));
+      src.set(data);
+      const R2 = Math.min(n / 2 - 2, Math.max(R, Math.ceil(ringR / CORE.CHUNK_M)) + 3);
+      const pcx2 = pcx - ox, pcz2 = pcz - oz;
+      for (let dz = -R2; dz <= R2; dz++){
+        const iz = pcz2 + dz;
+        if (iz < 1 || iz >= n - 1) continue;
+        for (let dx = -R2; dx <= R2; dx++){
+          const ix = pcx2 + dx;
+          if (ix < 1 || ix >= n - 1) continue;
+          const v = src[iz * n + ix];
+          if (v !== 255 && v !== 128) continue;
+          let edge = false;
+          for (let b = -2; b <= 2 && !edge; b++)
+            for (let a = -2; a <= 2; a++)
+              if (src[(iz + b) * n + ix + a] === 0){ edge = true; break; }
+          if (edge) data[iz * n + ix] = v === 255 ? 200 : 100;
+        }
+      }
+    }
     this.maskTex.needsUpdate = true;
     this.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
-  },
-  startJob(k){
-    const Lk = this.L[k];
-    const snap = Lk.s * 2;
-    const cx = Math.round(game.pos.x / snap) * snap;
-    const cz = Math.round(game.pos.z / snap) * snap;
-    const n = Math.round(2 * Lk.E / Lk.s);
-    // inner hole (cells, half-size): the finer ring covers it, minus a
-    // 2-cell underlap so seams are backed from below
-    const hole = k === 0 ? 0 : Math.max(0, Math.round((this.L[k - 1].E - 2 * Lk.s) / Lk.s));
-    this.job = { k, cx, cz, n, hole, row: 0,
-                 h: new Float32Array((n + 1) * (n + 1)),
-                 m: new Float32Array((n + 1) * (n + 1)),
-                 wet: new Uint8Array((n + 1) * (n + 1)) };
-  },
-  stepJob(){
-    const j = this.job, Lk = this.L[j.k], s = Lk.s, n = j.n;
-    const x0 = j.cx - Lk.E, z0 = j.cz - Lk.E;
-    const gen = game.gen, sea = gen.seaLevel != null ? gen.seaLevel : -1e9;
-    let budget = 4200;
-    while (budget > 0 && j.row <= n){
-      const r = j.row, z = z0 + r * s;
-      for (let i = 0; i <= n; i++){
-        const kk = r * (n + 1) + i;
-        const x = x0 + i * s;
-        const h = gen.height(x, z);
-        // lakebeds render as land (the real seabed does too); a translucent
-        // water surface mesh goes on top, so the composite matches reality
-        j.wet[kk] = h < sea && (!gen.wetAt || gen.wetAt(x, z, h)) ? 1 : 0;
-        j.h[kk] = h - Lk.sink;
-        j.m[kk] = (gen.mat(x, h - 0.1, z) || 1) - 1;   // sample shallow, like the mesher
-      }
-      budget -= n + 1;
-      j.row++;
-    }
-    if (j.row <= n) return;
-    // assemble UNINDEXED, one material per quad — sharing vertices would
-    // interpolate material ids across boundaries and fringe every shoreline
-    // and snow edge with bogus in-between tiles
-    const N1 = n + 1, half = n / 2;
-    const vnrm = new Float32Array(N1 * N1 * 3);
-    for (let r = 0; r <= n; r++){
-      for (let i = 0; i <= n; i++){
-        const kk = r * N1 + i;
-        const hl = j.h[r * N1 + Math.max(0, i - 1)], hr = j.h[r * N1 + Math.min(n, i + 1)];
-        const hd = j.h[Math.max(0, r - 1) * N1 + i], hu = j.h[Math.min(n, r + 1) * N1 + i];
-        const nx = hl - hr, nz = hd - hu, ny = 2 * s;
-        const L2 = Math.hypot(nx, ny, nz) || 1;
-        vnrm[kk * 3] = nx / L2; vnrm[kk * 3 + 1] = ny / L2; vnrm[kk * 3 + 2] = nz / L2;
-      }
-    }
-    const quads = [];
-    for (let r = 0; r < n; r++){
-      for (let i = 0; i < n; i++){
-        if (j.hole > 0 &&
-            i >= half - j.hole && i < half + j.hole &&
-            r >= half - j.hole && r < half + j.hole) continue;
-        quads.push(r * N1 + i);
-      }
-    }
-    const pos = new Float32Array(quads.length * 18);
-    const nrm = new Float32Array(quads.length * 18);
-    const mats = new Float32Array(quads.length * 6);
-    const wpos = [], wdep = [];
-    const wY = sea > -1e8 ? sea - 0.015 - j.k * 0.012 : 0;
-    let w = 0;
-    for (const a of quads){
-      const b = a + 1, c = a + N1, d = c + 1;
-      // quad material: the corner holding the highest ground wins — mixed
-      // shoreline quads read as the beach sloping into the water
-      let qc = a, qh = j.h[a];
-      if (j.h[b] > qh){ qh = j.h[b]; qc = b; }
-      if (j.h[c] > qh){ qh = j.h[c]; qc = c; }
-      if (j.h[d] > qh){ qh = j.h[d]; qc = d; }
-      const qm = j.m[qc];
-      // the terrain hole is shrunk 2 cells for a backed seam, but WATER must
-      // not double-cover there -- two translucent layers blend into visible
-      // dark bands across an ocean. The finer ring owns the water inside its
-      // full extent.
-      const wa = a % N1, wr = (a / N1) | 0;
-      const wHole = j.k === 0 ? 0 : Math.round(this.L[j.k - 1].E / s);
-      const inFiner = wHole > 0 &&
-        wa >= half - wHole && wa < half + wHole &&
-        wr >= half - wHole && wr < half + wHole;
-      if (!inFiner && (j.wet[a] || j.wet[b] || j.wet[c] || j.wet[d])){
-        const xa = x0 + (a % N1) * s, za = z0 + ((a / N1) | 0) * s;
-        const xb = xa + s, zb = za + s;
-        wpos.push(xa, wY, za, xa, wY, zb, xb, wY, zb,
-                  xa, wY, za, xb, wY, zb, xb, wY, za);
-        // per-corner water depth (bed heights carry the ring sink; add it back)
-        const dA = sea - (j.h[a] + Lk.sink), dB = sea - (j.h[b] + Lk.sink);
-        const dC = sea - (j.h[c] + Lk.sink), dD = sea - (j.h[d] + Lk.sink);
-        wdep.push(dA, dC, dD, dA, dD, dB);
-      }
-      for (const kk of [a, c, b, b, c, d]){
-        const vi = kk % N1, vr = (kk / N1) | 0;
-        pos[w * 3] = x0 + vi * s; pos[w * 3 + 1] = j.h[kk]; pos[w * 3 + 2] = z0 + vr * s;
-        nrm[w * 3] = vnrm[kk * 3]; nrm[w * 3 + 1] = vnrm[kk * 3 + 1]; nrm[w * 3 + 2] = vnrm[kk * 3 + 2];
-        mats[w] = qm;
-        w++;
-      }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
-    g.setAttribute('aMat', new THREE.BufferAttribute(mats, 1));
-    const lv = this.levels[j.k];
-    if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
-    if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
-    lv.mesh = new THREE.Mesh(g, this.mat);
-    lv.mesh.frustumCulled = false;
-    lv.mesh.castShadow = true;
-    this.scene.add(lv.mesh);
-    if (wpos.length){
-      const wg = new THREE.BufferGeometry();
-      wg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(wpos), 3));
-      wg.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(wdep), 1));
-      lv.water = new THREE.Mesh(wg, this.waterSurfMat);
-      lv.water.frustumCulled = false;
-      lv.water.renderOrder = 3;
-      lv.water.userData.noShadow = true;
-      this.scene.add(lv.water);
-    }
-    lv.cx = j.cx; lv.cz = j.cz;
-    this.job = null;
   },
 };
 
@@ -20116,19 +21177,28 @@ const farTerrain = {
 // topology; the switch to full detail changes crispness only. Chunks are
 // world-anchored (moving only streams the frontier) and merge into
 // 128m/256m supertiles so the whole horizon costs a few dozen draw calls.
+// HORIZON: the near ring is the SAME dual contourer at the SAME voxel size
+// as the real terrain, on the same 8 m chunk grid, merged into 32 m tiles
+// and anchored to the world -- so where a real chunk meets a ring tile the
+// two surfaces are the same surface, and what you see out to the render
+// distance is the real world, caves, overhangs and all. The feature ring
+// carries only what a heightfield cannot: sky islands and landmarks that
+// tower over (or dive under) their ground, at 2 m voxels, to 1.4 km.
 const lodTerrain = {
   R: [
-    { id: 'L0', sc: 2, far: 176 },
-    { id: 'L1', sc: 4, far: 448 },
-    { id: 'L2', sc: 8, far: 1152 },
+    { id: 'L0', sc: 1, far: 152 },
+    { id: 'F',  sc: 4, far: 1400, feat: 1 },
   ],
+  // how far the real world reaches (m): the RENDER DISTANCE option
+  nearFarFor(rd){ return Math.min(224, Math.max(96, (rd || 6) * 24 + 8)); },
+  nearFar(){ return this.nearFarFor(game.opts ? game.opts.rd : 6); },
   rings: null, editCols: new Map(), lastKey: '', mat: null,
   init(scene){
     this.scene = scene;
     this.lastKey = '';
     this.rings = this.R.map(r => {
       const ring = {
-        id: r.id, sc: r.sc, m: CORE.CHUNK_M * r.sc, far: r.far,
+        id: r.id, sc: r.sc, m: CORE.CHUNK_M * r.sc, far: r.far, feat: r.feat || 0,
         tile: CORE.CHUNK_M * r.sc * 4,
         chunks: new Map(),           // key -> {data|null}
         cols: new Map(),             // 'cx,cz' -> Set(chunk keys not yet meshed)
@@ -20157,27 +21227,30 @@ const lodTerrain = {
     for (const k in tu) u[k] = tu[k];            // share live uniform objects
     const lodFrag = TERRAIN_FRAG
       .replace('varying vec4 vShadowCoord;',
-        'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;\nvarying vec4 vShadowCoord;')
+        'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskCut;\nvarying vec4 vShadowCoord;')
       .replace('void main(){',
         'void main(){\n' +
         '  vec2 mi2 = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
         '  if (mi2.x > 0.0 && mi2.x < 1.0 && mi2.y > 0.0 && mi2.y < 1.0 &&\n' +
-        '      texture2D(uMask, mi2).r > 0.9) discard;\n');
+        '      texture2D(uMask, mi2).r >= uMaskCut) discard;\n');
     const lodVert = TERRAIN_VERT
       .replace('uniform mat4 uShadowMatrix;', 'uniform mat4 uShadowMatrix;\nuniform float uSink;')
       .replace('gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
                'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.x, position.y - uSink, position.z, 1.0);');
     this.rings.forEach((ring, ri) => {
       const ru = Object.assign({}, u);
-      ru.uSink = { value: CORE.VOX * ring.sc * 0.18 };
+      ru.uSink = { value: 0 };
+      // the near ring yields to the terrain's own columns and their seam;
+      // the feature ring yields to everything the near field covers
+      ru.uMaskCut = { value: ring.feat ? 0.35 : 0.75 };
       ring.mat = new THREE.ShaderMaterial({
         vertexShader: lodVert,
         fragmentShader: lodFrag,
         uniforms: ru,
         side: THREE.DoubleSide,
-        polygonOffset: true,
-        polygonOffsetFactor: 1 + ri,
-        polygonOffsetUnits: 2 + ri * 4,
+        polygonOffset: !!ring.feat,
+        polygonOffsetFactor: ring.feat ? 2 : 0,
+        polygonOffsetUnits: ring.feat ? 6 : 0,
       });
     });
     this.mat = this.rings[0].mat;
@@ -20209,14 +21282,17 @@ const lodTerrain = {
   },
   update(px, py, pz){
     if (!this.rings || !game.running) return;
-    const key = Math.floor(px / 32) + ',' + Math.floor(pz / 32);
+    this.rings[0].far = this.nearFar();
+    const key = Math.floor(px / 32) + ',' + Math.floor(pz / 32) + ':' + this.rings[0].far;
     if (key === this.lastKey) return;
     this.lastKey = key;
     const gen = game.gen;
     for (let ri = 0; ri < this.rings.length; ri++){
       const ring = this.rings[ri], m = ring.m;
       ring.center = [px / m, py / m, pz / m];
-      const near = ri === 0 ? 0 : this.rings[ri - 1].far - 96;
+      // the near ring starts two columns inside the terrain's own radius (the
+      // overlap is the seam); the feature ring starts where the near ring ends
+      const near = ri === 0 ? Math.max(0, (game.terrain.radius - 2) * CORE.CHUNK_M) : this.rings[0].far - 40;
       // drop the frontier behind you
       for (const [k, ch] of ring.chunks){
         const p1 = k.indexOf(','), p2 = k.indexOf(',', p1 + 1);
@@ -20280,7 +21356,27 @@ const lodTerrain = {
         const wx0 = cx * m, wz0 = cz * m;
         const hr = gen.heightRange(wx0, wz0, wx0 + m, wz0 + m);
         let lo = hr[0] - 12, hi = hr[1] + 6;
+        if (ring.feat){
+          // only columns where something rises over (or dives under) the
+          // heightfield: a sky island, a landmark spire, a ruin. Plain
+          // ground is the skin's job. The verdict is static, so it is kept.
+          const FC = ring.featCache || (ring.featCache = new Map());
+          let isF = FC.get(ck);
+          if (isF === undefined){
+            let hmax = -1e9, hmin = 1e9;
+            for (let a = 0; a <= 2; a++) for (let b = 0; b <= 2; b++){
+              const hh = gen.height(wx0 + a * m / 2, wz0 + b * m / 2);
+              if (hh > hmax) hmax = hh;
+              if (hh < hmin) hmin = hh;
+            }
+            isF = !(hr[1] - 4 < hmax + 8 && hr[0] + 4 > hmin - 8);
+            if (FC.size > 60000) FC.clear();
+            FC.set(ck, isF);
+          }
+          if (!isF){ ring.cols.delete(ck); continue; }
+        }
         // distant builds and stamped cities stretch the band
+        if (!ring.feat)
         for (let ez = Math.floor((wz0 - 4) / 32); ez <= Math.floor((wz0 + m + 4) / 32); ez++)
           for (let ex = Math.floor((wx0 - 4) / 32); ex <= Math.floor((wx0 + m + 4) / 32); ex++){
             const er = this.editCols.get(ex + ',' + ez);
@@ -20306,6 +21402,7 @@ const lodTerrain = {
     this.noteEdit(e);
     const box = CORE.editAABB(e);
     for (const ring of this.rings){
+      if (ring.feat) continue;                    // the skin bakes edits
       const m = ring.m, pad = ring.sc;
       const x0 = Math.floor((box[0] - pad) / m), x1 = Math.floor((box[3] + pad) / m);
       const y0 = Math.floor((box[1] - pad) / m), y1 = Math.floor((box[4] + pad) / m);
@@ -20380,6 +21477,7 @@ const lodTerrain = {
         if (t.builtAt && now - t.builtAt < 150) continue;
         t.stale = false; t.builtAt = now; t.shed = false;
         this.buildTile(ring, t);
+        farTerrain.maskFrame = 99;                // a tile landed: re-cut the mask now
         did++;
       }
     }
@@ -20467,7 +21565,8 @@ const lodTerrain = {
     for (const ring of this.rings){
       for (const [k, c] of ring.dirty){
         ring.dirty.delete(k);
-        const d = CORE.meshChunk(c[0], c[1], c[2], game.edits, game.gen, ring.sc);
+        let d = CORE.meshChunk(c[0], c[1], c[2], game.edits, game.gen, ring.sc);
+        if (ring.feat && d) d = CORE.dropGroundTris(d, game.gen, 2.5);
         ring.applyResult(k, c[0], c[1], c[2], d);
         if (performance.now() - t0 > budgetMs) return;
       }
@@ -20682,7 +21781,7 @@ function updateSunShadow(dt){
   castMarkT -= dt;
   if (castMarkT <= 0){ castMarkT = 1.0; markCasters(game.scene); }
   const sd = u.uSunDir.value;                       // unit vector toward the sun
-  const sr = Math.min(220, Math.max(70, (game.opts.rd + 3) * CORE.CHUNK_M));
+  const sr = Math.min(220, Math.max(70, lodTerrain.nearFar() + 24));
   const cam = L.shadow.camera;
   if (cam.right !== sr){
     cam.left = -sr; cam.right = sr; cam.top = sr; cam.bottom = -sr;
@@ -20787,6 +21886,8 @@ function frame(now){
   weatherSys.tick(dt);
   collapseSys.tick(dt);
   citySys.tick(dt);
+  cityLightSys.tick(dt);
+  siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
@@ -20931,11 +22032,13 @@ function frame(now){
           lodQ += r.dirty.size + (r.colQueue ? r.colQueue.length : 0);
           for (const t of r.tiles.values()) if (t.mesh){ lodTiles++; lodTris += t.mesh.geometry.getAttribute('position').count / 3; }
         }
+      let skinL = 0, skinJ = 0;
+      if (farTerrain.levels) for (const lv of farTerrain.levels){ if (lv.mesh) skinL++; if (lv.job) skinJ++; }
       $('fpsbox').textContent =
         game.fps + ' fps\n' +
         'chunk queue ' + game.terrain.dirty.size + '  workers ' +
           (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '\n' +
-        'lod queue ' + lodQ + '  tiles ' + lodTiles + '\n' +
+        'ring queue ' + lodQ + '  tiles ' + lodTiles + '  skin ' + skinL + '/' + farTerrain.L.length + (skinJ ? ' (building)' : '') + '\n' +
         'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls;
     } else {
       $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
@@ -20982,6 +22085,7 @@ function bindMenus(){
 
 initRenderer();
 bindInput();
+wireItemTips();
 bindInvDnD();
 bindMenus();
 requestAnimationFrame(frame);
@@ -20993,7 +22097,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

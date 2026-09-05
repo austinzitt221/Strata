@@ -1,5 +1,37 @@
 # ROADMAP — STRATA
 
+## How this roadmap works
+Two developers, one schedule, and Claude keeps the order. Build numbers
+are the order things were planned, not the order they ship: the queue
+below is the real order. Austin's ideas go onto the queue wherever they
+fit best; Claude's own ideas go there too. Playtest findings get fixed
+when they matter, not by rule.
+
+## Up next (in order)
+1. **HORIZON** (DONE) — the renderer rebuild. Real geometry to 150-200 m with
+   merged draws, one geomorphed 2 m voxel ring to ~350 m, a heightfield
+   clipmap to the horizon, SDF-consistent normals and AO, shadow
+   cascades, one water mesh per lake. Nothing added to the far view
+   is worth it until the far view stops moving.
+2. **SCULPT** — the identity build. Smooth-blend brush, spline tunnels
+   and roads you draw, revolve/lathe shapes, mirror mode. The Terraformer
+   from Build 21 moves here, early, because carving is what this game is.
+3. **RIVERS** — water that starts in the mountains and reaches the sea,
+   cutting valleys the heightfield knows about; fords, waterfalls,
+   riverside villages and cities on the banks.
+4. **THE EXPEDITION** — environmental storytelling: the camps, journals
+   and bones of an earlier expedition scattered by worldgen, telling one
+   story across the map and pointing at the Underdark.
+5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
+   sound) and then the Space Arc as written below.
+
+Small things I want, slotted wherever a session has room:
+- **Hearths** — warm window light in village houses after dark, chimney
+  smoke at dusk. Walking up to a village at night should feel like
+  arriving somewhere.
+- **Shadow cascades** — a sharp near shadow map and a wide far one, if
+  the HORIZON playtest says the near shadows read soft.
+
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube
 brushes, grid snap, fly, 40-slot inventory, main menu, world list with seeds,
@@ -399,7 +431,7 @@ islands, a unique ruin for the ground, and then the weather.
   top becomes falling debris and drops. The most CSG-native mechanic on
   the list, and a genuine danger underground.
 
-## Build 20 — METROPOLIS (cities become places)
+## Build 20 — METROPOLIS (cities become places) (DONE)
 - **Districts & city reputation** — industrial, old town, harbor; city-wide
   rep gates the best shops and the best property.
 - **Interior furnishing pass** — offices and apartments inside towers,
