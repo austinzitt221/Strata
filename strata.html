@@ -537,6 +537,9 @@ const STEPS = [0.375, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
 function tierMin(t){ return t >= 4 ? 0 : 4 - t; }
 function tierMax(t){ return t >= 4 ? STEPS.length - 1 : 8 + t; }
 const SIZE_MIN = STEPS[0], SIZE_MAX = STEPS[STEPS.length - 1];
+// the thinnest thing the sampled field can always show: a voxel and a half
+// contains a sample plane on every axis, even turned 45 degrees
+const MIN_THICK = 0.75;
 // seconds to break/build one shape (like Minecraft block mine time);
 // diamond (tier 4) is instant: the whole shape goes in one click
 const TIER_TIME = [0.85, 0.62, 0.42, 0.25, 0];
@@ -3205,7 +3208,7 @@ function hashSeed(str){
 return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
-  SIZE_MIN, SIZE_MAX, TIER_TIME, GRID_SIZES,
+  SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
@@ -16648,9 +16651,19 @@ const wrenchSys = {
       const before = Object.assign({}, e);
       const key = ['sx', 'sy', 'sz'][this.drag.axis];
       const cur = e[key] || e.size;
-      const next = Math.max(0.25, cur + amt);
+      // the world is sampled every half metre: anything thinner than a
+      // voxel and a half can fall between the samples and mesh to nothing
+      // while the field still says solid -- an invisible wall. So the
+      // wrench refuses to go there.
+      const next = Math.max(CORE.MIN_THICK, cur + amt);
       const real = next - cur;
-      if (real === 0) return;
+      if (real === 0){
+        if (amt < 0 && performance.now() - this.lastResizeToast > 800){
+          this.lastResizeToast = performance.now();
+          toast('no thinner than ' + CORE.MIN_THICK + 'm — the world cannot show less');
+        }
+        return;
+      }
       e[key] = next;
       e.x += d[0] * real / 2; e.y += d[1] * real / 2; e.z += d[2] * real / 2;
       game.terrain.invalidate(before);
@@ -16665,15 +16678,16 @@ const wrenchSys = {
     const e = this.edit();
     if (!e || e.op !== 1){ toast('select a placed build to hollow (H)'); return; }
     const [hx, hy, hz] = CORE.editHalf(e);
-    const t = Math.max(0.3, Math.min(0.5, Math.min(hx, hy, hz) * 0.25));
-    if (Math.min(hx, hy, hz) - t < 0.15){ toast('too small to hollow'); return; }
-    const inner = CORE.makeEdit(0, e.shape, e.x, e.y, e.z, Math.max(0.3, e.size - t * 2), 0, e.rot || 0);
+    // walls at least a voxel and a half thick, or they would not mesh
+    const t = Math.max(CORE.MIN_THICK, Math.min(1.0, Math.min(hx, hy, hz) * 0.25));
+    if (Math.min(hx, hy, hz) - t < 0.4){ toast('too small to hollow — walls need ' + CORE.MIN_THICK + 'm'); return; }
+    const inner = CORE.makeEdit(0, e.shape, e.x, e.y, e.z, Math.max(0.5, e.size - t * 2), 0, e.rot || 0);
     if (e.rx) inner.rx = e.rx;
     if (e.rz) inner.rz = e.rz;
     if (e.sx || e.sy || e.sz){
-      inner.sx = Math.max(0.3, (e.sx || e.size) - t * 2);
-      inner.sy = Math.max(0.3, (e.sy || e.size) - t * 2);
-      inner.sz = Math.max(0.3, (e.sz || e.size) - t * 2);
+      inner.sx = Math.max(0.5, (e.sx || e.size) - t * 2);
+      inner.sy = Math.max(0.5, (e.sy || e.size) - t * 2);
+      inner.sz = Math.max(0.5, (e.sz || e.size) - t * 2);
     }
     applyEdit(inner);
     toast('hollowed — ' + t.toFixed(2) + 'm walls');

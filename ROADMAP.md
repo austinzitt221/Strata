@@ -25,6 +25,26 @@ when they matter, not by rule.
 5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
    sound) and then the Space Arc as written below.
 
+6. **THE GARRISON** (Austin's, with my additions) — military bases: big,
+   walled, the hardest thing on Earth to take and the most rewarding.
+   Soldiers everywhere with rifles and SMGs, a couple per base with
+   rocket launchers; tanks that patrol and blow chunks out of walls,
+   crewed till they die (no stealing them); a helicopter gunship on the
+   alarm. Peaceful until you enter, hit a gate guard, or fly over it in
+   anything — then the siren and the whole base. Small chests
+   everywhere (ammo, pistols, coins, ore); one vault chest on the
+   commander with top guns, a pile of gold and exactly one part: tank,
+   helicopter or jet. Collect enough parts to build one. Tank is a tank.
+   Helicopter hovers with a door gun. Jet is the fast plane with a
+   cannon and missiles, and it can roll and loop.
+   My additions: the base has a *radar dish* you can sabotage first
+   (cut the wire, or plant a charge) so the alarm never sounds and the
+   helicopter never comes — a stealth route for the drill-and-wrench
+   player, and it uses the power grid we already have. Bases sit on
+   the highway network, so the tanks use the roads. A taken base
+   becomes yours: the garrison respawns as *your* guard, and it is the
+   only place that sells jet fuel.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** — warm window light in village houses after dark, chimney
   smoke at dusk. Walking up to a village at night should feel like

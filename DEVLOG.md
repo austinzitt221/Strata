@@ -2,6 +2,24 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## HORIZON notes — thin things (2026-09-05)
+
+- **Invisible walls at small sizes, found by Austin with the wrench.**
+  The field is sampled every half metre. A slab thinner than a voxel can
+  sit between two sample planes: no sample lands inside it, the mesher
+  sees nothing and draws nothing, but the field still says solid and
+  collision still stops you. The wrench used to allow 0.25 m; it now
+  stops at `MIN_THICK` (0.75 m, a voxel and a half, which holds a sample
+  plane on every axis even at 45 degrees) and says why. Hollowing uses
+  walls of 0.75 to 1.0 m for the same reason and refuses builds too small
+  for that. The CORE suite now proves both: a 0.75 m slab meshes at every
+  offset, a 0.2 m slab vanishes at some.
+- Playtest screenshots arrived. They show the Build 20 renderer: sky
+  through cracks between the stacked far layers, the 2 m ring's sawtooth
+  edge over the skin, the stair-stepped real-to-LOD edge at 56 m. Those
+  layers no longer exist in HORIZON; the playtest of HORIZON itself is
+  still to come.
+
 ## HORIZON — the renderer rebuilt (2026-09-05)
 
 The far view was never going to be seamless the way it was built, so
