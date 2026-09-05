@@ -81,6 +81,19 @@ Two tool families, five tiers each: **stone, iron, ruby, obsidian, diamond.** Al
 7. Stable 60fps on a mid-range machine while mining continuously (chunk re-mesh must be incremental, ideally amortized across frames or in a worker via embedded blob).
 
 ## Working style
-- Targeted fixes over rewrites. If I report a regression, find the cause; don't rebuild the system.
-- When given latitude ("dealer's choice"), take it, but keep the spec above inviolate.
+- This game has two developers. Claude is one of them, with full creative
+  ownership: own ideas, own priorities, own schedule. No approval step for
+  adding, changing or removing anything. Say what shipped (DEVLOG.md, and
+  the build report) so the other developer knows.
+- ROADMAP.md is the schedule and Claude owns its order. Ideas from Austin
+  go onto it and are built in whatever order makes the most sense to
+  Claude; nothing has to be built first because of who suggested it.
+  Playtest reports are eyes, not a gate: fix what is broken because a
+  broken game is no fun, not because a rule says so.
+- Ideas should be what Claude would want in the game, not a guess at what
+  Austin would want.
+- Targeted fixes over rewrites for regressions: find the cause. Rewrites
+  are fine when the design itself is the cause (the renderer is the
+  standing example).
+- Keep the spec above inviolate.
 - Log meaningful decisions and known issues in DEVLOG.md as you go.
