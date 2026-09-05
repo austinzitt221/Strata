@@ -2,6 +2,69 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## HORIZON.1 — the line, looked at properly (2026-09-05)
+
+Austin's screenshots were of HORIZON, not of Build 20; I read them wrong
+the first time and said so. Each artifact in them has a cause in the
+new code, and each is fixed here. Verified headlessly (CORE 317, the
+smoke, pool, plane and spire suites, screenshots at the ring edge).
+
+- **Sky through cracks down cliffs and across ground.** The near ring
+  inherited the coarse rings' filter that drops triangles judged
+  "lightless underground". Skylight is judged by depth below the
+  column's heightfield, so a cliff face reads as buried and its
+  triangles were thrown away in a wiggling line down the face. The near
+  ring now keeps every triangle; the feature ring keeps all but the
+  truly black.
+- **Caves covered, shown, covered again; lights flickering at the
+  line.** A ring column counted as uncovered whenever its tile was
+  waiting for a rebuild or had a chunk queued, though the old tile mesh
+  still stood, so the skin popped in over it at full height and fought
+  it. A ring column now counts by what is STANDING, the same rule the
+  terrain got in HORIZON: every chunk meshed, and every chunk with
+  geometry held by a tile mesh in the scene.
+- **Sawtooth rock over sunk sand.** The feature ring's "does something
+  rise over the ground" test compared 25 samples against 9, so any steep
+  column passed, and beyond that it meshed every landmark set-piece and
+  ruin at 2 m voxels with its ground dropped and the skin sunk beneath.
+  Within a kilometre of spawn 209 columns passed; 13 were sky islands.
+  The feature ring now carries only what floats (sky islands and their
+  spires, the island's own vertical span). Everything that stands on the
+  ground is baked into the skin's heights instead: where heightRange
+  says something rises over the plain ground, the worker marches down
+  from that top through the real field and takes the first solid as
+  the column's height, so a landmark spire at 400 m is a heightfield
+  spire lit like everything else.
+- **The stair-stepped line with a tone change.** The skin had its own
+  lighting. It is now lit by the terrain's own fragment shader -- same
+  tiles, sun, shadow, cloud shade, fog and grain -- with only the
+  material source differing (a per-level texture). The 0.6 m seam sink
+  that left a ledge along the whole ring edge is now two bands: the
+  outer seam column ducks 0.12 m, the inner 0.45 m, so the join is
+  backed without a step at the boundary. The feature ring never draws
+  inside the render distance minus 24 m, so no 2 m voxels appear where
+  the real world is about to.
+- **The dashed line of sky along the edge of the real world.** Found by
+  reproducing it headlessly at the village on seed 31 and reading the
+  mesher: an edge belongs to the chunk whose sample it starts at, so a
+  quad that straddles a chunk border belongs to the higher chunk alone.
+  When that chunk was a ring tile and the lower one real terrain, the
+  ring's per-pixel yield cut the straddling quad at the column plane and
+  the terrain never drew that half -- a slit up to half a voxel wide on
+  two sides of the real region, in a polyline along the chunk grid. The
+  ring now decides its yield per vertex and drops a triangle only when
+  all three corners stand in covered columns; a straddling quad is drawn
+  whole. Same view, same spot: the line is gone.
+- **Tile thrash at the frontier.** A ring tile shed its source data
+  5 s after going quiet; any chunk arriving after that forced every shed
+  member back through the pool before the tile could rebuild. Tiles
+  now shed only once every column in them is scanned and complete.
+- **A note on my own testing.** The headless browser reports 20 fps
+  because the frame clock is clamped to 50 ms; it actually renders at
+  about one frame a second under software GL. Every "seconds to settle"
+  number in these logs is really a frame count. Real-machine timing is
+  Austin's to report.
+
 ## HORIZON notes — thin things (2026-09-05)
 
 - **Invisible walls at small sizes, found by Austin with the wrench.**

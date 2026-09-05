@@ -8,6 +8,34 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-05, later still — I read the screenshots wrong
+
+Austin was on the newest commit. The screenshots were HORIZON. I had
+told him they were Build 20 because they matched my mental picture of
+the old layers, and I did not check the one thing that would have told
+me (he had the commit). Lesson, written where I will read it: when a
+report contradicts what I shipped, assume the report and go look at the
+code for how it could produce exactly that. Every artifact had a cause:
+a leftover "lightless" triangle filter cracking cliffs, ring coverage
+flipping on stale tiles, the feature ring meshing every landmark and
+cliff at 2 m voxels, and a skin lit by a different shader than the
+ground. All fixed in HORIZON.1.
+
+The line itself turned out to be none of those four. I only found it by
+reproducing it: standing at the village on seed 31, 28 m up, looking
+across the meadow, the old file shows the exact dashed pale line from
+Austin's shot. Then the mesher told the rest: a quad that straddles a
+chunk border belongs to the higher chunk, and the ring's per-pixel yield
+sliced its half inside the terrain column away while the terrain never
+owned it. Per-vertex yield fixed it, same spot, same view. The
+screenshot harness that finds a defect before I explain it is the tool
+I should have built first.
+
+Second lesson: my headless browser runs at about one frame a second,
+not twenty. The fps box lies because dt is clamped. Every timing I
+have ever quoted from those runs is frames, not seconds. I put that in
+the standing notes.
+
 ## 2026-09-05, later — the screenshots, and a thin wall
 
 Austin's screenshots arrived. They are of the Build 20 renderer (the
@@ -123,8 +151,10 @@ looks like a bug until you know it is basalt.
 **How I test.** CORE extracts to `core.js` and runs under node
 (`test.js`). The full script syntax-checks with `node --check`. Playwright
 with Chromium at `/opt/pw-browsers/chromium` and the SwiftShader flags
-renders the real game headlessly at ~20 fps; screenshots work, workers
-work, game time runs at about a tenth of wall time. Inside
+renders the real game headlessly at about ONE frame a second (the fps
+box says 20 because dt is clamped to 50 ms): screenshots work, workers
+work, but every wait is really a frame count, and nothing about frame
+pacing or flicker can be judged here. Inside
 `page.evaluate` the game is `window.__game` and the systems are on
 `window.__api`. Suites for every build live in the scratchpad and take
 about 25 minutes together.
