@@ -8,6 +8,30 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-05, later — the screenshots, and a thin wall
+
+Austin's screenshots arrived. They are of the Build 20 renderer (the
+sawtooth 2 m ring over the skin, sky through the layer cracks, the
+56 m stair-step), which is the thing HORIZON replaced, so they confirm
+the diagnosis rather than grade the fix. He has not played HORIZON yet.
+I want his eyes on it before I touch the renderer again; if the line is
+still there in HORIZON, the next suspects are the mask re-cut timing at
+the trailing edge and the skin under the ring's outer seam.
+
+He also found a real bug with the wrench: shrink a cube thin enough and
+it vanishes while staying solid. Half-metre sampling; a slab thinner
+than a voxel can miss every sample plane. Fixed by refusing to go below
+0.75 m and proved in CORE. The same physics explains his "two pieces
+close together" trouble: a gap thinner than a voxel is real in the
+field and invisible in the mesh. The honest fix for that is adaptive
+sampling in the mesher, which is a SCULPT-era problem; I wrote it down
+there.
+
+His military base idea went on the roadmap as THE GARRISON with two
+additions of mine: a radar dish you can sabotage for a stealth route,
+and taken bases becoming yours. I like it more than I expected to; the
+alarm-on-overflight rule makes the plane dangerous again.
+
 ## 2026-09-05 — HORIZON, and the day the job changed
 
 Austin made me a developer today, not a contractor. His words: choose
