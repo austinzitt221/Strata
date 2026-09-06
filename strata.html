@@ -2803,6 +2803,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
   // the trowel: a drill that blends
   RECIPES.push({ kind: 'trowel', station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
+  // the bore: a drill that follows a curve you draw
+  RECIPES.push({ kind: 'bore', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
   // rails bolt together from smelted stock
   RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
   // the electric car ships as a kit: place it, drive it, charge it
@@ -2943,6 +2945,7 @@ function craft(slots, r, free){
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
                   : r.kind === 'trowel' ? { kind: 'trowel' }
+                  : r.kind === 'bore' ? { kind: 'bore' }
                   : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
@@ -12570,6 +12573,164 @@ const cityLightSys = {
     if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
   },
 };
+// ---------- SCULPT: the bore — a drill that follows a curve you draw ----------
+// Lay points through the world (they can float: the ghost goes where you
+// aim), a tube follows the curve through them, and a right click bores it:
+// a chain of smooth carves along the spline, spaced a third of the size
+// apart with a blend radius to match, so the neighbours merge into one
+// continuous pipe instead of a string of beads. Shift + right click lays
+// the same curve as a causeway of the ground's own material. The bore
+// works progressively -- you can walk in behind it -- and undoes as one.
+const boreSys = {
+  pts: [], group: null, tube: null, line: null, marks: null, job: null, key: '', seq: 0,
+  ensure(){
+    if (this.group && this.group.parent === game.scene) return;
+    if (this.group){ game.scene.add(this.group); return; }
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    this.tubeMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, wireframe: true, transparent: true, opacity: 0.55, depthWrite: false });
+    this.lineMat = new THREE.LineBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.9 });
+    this.marks = new THREE.InstancedMesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), 32);
+    this.marks.count = 0; this.marks.frustumCulled = false;
+    this.group.add(this.marks);
+    game.scene.add(this.group);
+  },
+  curveOf(pts){
+    return new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal', 0.5);
+  },
+  action(edge){
+    if (!edge || !game.mouseL || !game.ghostPos) return;
+    const shift = game.keys['ShiftLeft'] || game.keys['ShiftRight'];
+    if (shift){
+      if (this.pts.length){ this.pts.pop(); toast(this.pts.length ? this.pts.length + ' points' : 'cleared'); AudioSys.sfx('toggle'); }
+      refreshToolHUD();
+      return;
+    }
+    if (this.pts.length >= 32){ toast('32 points is the most a bore can follow'); return; }
+    const p = game.ghostPos;
+    this.pts.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)]);
+    AudioSys.sfx('select');
+    refreshToolHUD();
+  },
+  // the edits a commit would make along the current curve
+  plan(fill){
+    const eff = game.ghostEff || CORE.effSize(game.tool.size, 2);
+    const curve = this.curveOf(this.pts);
+    const len = curve.getLength();
+    const spacing = Math.max(0.3, eff * 0.35);
+    const n = Math.max(2, Math.ceil(len / spacing));
+    const samples = curve.getSpacedPoints(n);
+    const shape = game.tool.shape;
+    const out = [];
+    for (let i = 0; i < samples.length; i++){
+      const q = samples[i];
+      const t0 = samples[Math.max(0, i - 1)], t1 = samples[Math.min(samples.length - 1, i + 1)];
+      const rot = shape === 0 ? 0 : Math.atan2(-(t1.x - t0.x), -(t1.z - t0.z));
+      const e = CORE.makeEdit(fill ? 3 : 4, shape, +q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2), eff, 0, +rot.toFixed(3));
+      e.k = +(eff * 0.35).toFixed(2);
+      out.push(e);
+    }
+    return { edits: out, len, eff };
+  },
+  commit(fill){
+    if (this.job){ toast('still boring'); return; }
+    if (this.pts.length < 2){ toast('lay at least two points first'); AudioSys.sfx('deny'); return; }
+    const P = this.plan(fill);
+    let mat = 0;
+    if (fill){
+      mat = groundMatNear({ x: this.pts[0][0], y: this.pts[0][1], z: this.pts[0][2] }, P.eff + 2);
+      if (!mat){ toast('the first point must be near solid ground to lay from'); AudioSys.sfx('deny'); return; }
+      for (const e of P.edits) e.mat = mat;
+    }
+    this.job = { edits: P.edits, i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
+                 step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    this.pts = [];
+    toast((fill ? 'laying ' : 'boring ') + Math.round(P.len) + ' m · ' + P.edits.length + ' cuts');
+    AudioSys.sfx('craft');
+    refreshToolHUD();
+  },
+  tick(dt){
+    if (!game.running) return;
+    const J = this.job;
+    if (J){
+      J.t += dt;
+      while (J && J.t >= J.step && J.i < J.edits.length){
+        J.t -= J.step;
+        const e = J.edits[J.i++];
+        if (J.fill){
+          const cost = CORE.placeCost(game.edits, e, game.gen);
+          if (cost > 0){
+            if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, J.mat, cost)){
+              toast('out of ' + CORE.MAT_NAME[J.mat] + ' — the causeway stops here'); AudioSys.sfx('deny');
+              this.job = null; break;
+            }
+            applyEdit(e);
+            game.undoStack.push({ edit: e, type: 'place', mat: J.mat, cost: game.mode === 'creative' ? 0 : cost, group: J.group });
+            J.spent += cost;
+            Particles.burst(e.x, e.y, e.z, e.size * 0.4, [MAT_COLOR[J.mat]], 6, 1.4);
+          }
+        } else {
+          const got = CORE.mineYield(game.edits, e, game.gen);
+          let units = 0; for (const m in got) units += got[m];
+          if (units > 0){
+            applyEdit(e);
+            game.undoStack.push({ edit: e, type: 'mine', gained: got, group: J.group });
+            for (const m in got){
+              const oreKind = CORE.ORE_ITEM[+m];
+              if (oreKind) addStackItem(oreKind, got[m]); else CORE.addMat(game.slots, +m, got[m]);
+              J.gained[m] = (J.gained[m] || 0) + got[m];
+            }
+            Particles.burst(e.x, e.y, e.z, e.size * 0.4, yieldColors(got), 8, 2.0);
+            if (J.i % 3 === 0) AudioSys.sfx('break', 1);
+          }
+        }
+        if (game.undoStack.length > 400) game.undoStack.shift();
+      }
+      if (this.job && J.i >= J.edits.length){
+        this.job = null;
+        if (J.fill) toast('causeway laid · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
+        else {
+          const parts = [];
+          for (const m in J.gained){ const ok = CORE.ORE_ITEM[+m]; parts.push('+' + J.gained[m] + ' ' + (ok ? itemLabel({ kind: ok }) : CORE.MAT_NAME[m])); }
+          toast('bored through' + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
+        }
+        AudioSys.sfx('craft');
+        refreshHotbar(); refreshToolHUD();
+      }
+    }
+    // the preview, while the bore is in hand
+    const tool = activeTool();
+    const held = !!(tool && tool.bore && game.ui === 'none');
+    if (!held){
+      if (this.group) this.group.visible = false;
+      if (!held && this.pts.length && !(tool && tool.bore)){ this.pts = []; this.key = ''; }
+      return;
+    }
+    this.ensure();
+    this.group.visible = true;
+    const pts = this.pts.slice();
+    if (game.ghostPos && !(game.keys['ShiftLeft'] || game.keys['ShiftRight'])) pts.push([game.ghostPos.x, game.ghostPos.y, game.ghostPos.z]);
+    const eff = game.ghostEff || 1;
+    const key = pts.map(p => p.map(v => v.toFixed(1)).join(',')).join('|') + '#' + eff.toFixed(2);
+    if (key === this.key) return;
+    this.key = key;
+    if (this.tube){ this.group.remove(this.tube); this.tube.geometry.dispose(); this.tube = null; }
+    if (this.line){ this.group.remove(this.line); this.line.geometry.dispose(); this.line = null; }
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < this.pts.length && i < 32; i++){ m.makeTranslation(this.pts[i][0], this.pts[i][1], this.pts[i][2]); this.marks.setMatrixAt(i, m); }
+    this.marks.count = Math.min(32, this.pts.length); this.marks.instanceMatrix.needsUpdate = true;
+    if (pts.length >= 2){
+      const curve = this.curveOf(pts);
+      const segs = Math.max(8, Math.min(200, Math.ceil(curve.getLength() / 0.8)));
+      this.tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, eff * 0.5, 8, false), this.tubeMat);
+      this.tube.frustumCulled = false;
+      this.group.add(this.tube);
+      this.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(segs)), this.lineMat);
+      this.line.frustumCulled = false;
+      this.group.add(this.line);
+    }
+  },
+};
 // ---------- HEARTHS: village windows glow after dark, chimneys smoke at dusk ----------
 // Walking up to a village at night should feel like arriving somewhere.
 // Every house window is a warm pane once the sun is down (most of them --
@@ -14970,6 +15131,10 @@ function bindInput(){
         markSave();
         return;
       }
+      if (tool && tool.bore){
+        boreSys.commit(!!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
+        return;
+      }
       if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
         game.tool.shape = (game.tool.shape + 1) % 3;
         toast(CORE.SHAPE_NAME[game.tool.shape]);
@@ -15977,6 +16142,8 @@ function activeTool(){
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
   // the trowel is a drill that blends: ruby-tier speed and sizes, soft edges
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
+  // the bore: a drill that follows a curve you draw
+  if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -17349,18 +17516,24 @@ function doPlace(tool, p, shape, eff){
 // the trowel's fill: blend the ground's own material outward. The material
 // is whatever solid the shape touches (probed out from its centre), and it
 // costs that material by the hard shape's volume.
-function doSmoothFill(tool, p, shape, eff){
-  const le = nearEdits([p.x - eff - 2, p.y - eff - 2, p.z - eff - 2, p.x + eff + 2, p.y + eff + 2, p.z + eff + 2]);
+// the nearest solid to a point, probed out along the six axes: what a fill
+// blends into. Returns its material, or 0 for open air / bedrock.
+function groundMatNear(p, reach){
+  const le = nearEdits([p.x - reach - 2, p.y - reach - 2, p.z - reach - 2, p.x + reach + 2, p.y + reach + 2, p.z + reach + 2]);
   const dirs = [[0, -1, 0], [0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0]];
-  let hit = null;
-  outer: for (let t = 0; t <= eff + 1.0; t += 0.25)
+  for (let t = 0; t <= reach; t += 0.25)
     for (const d of dirs){
       const x = p.x + d[0] * t, y = p.y + d[1] * t, z = p.z + d[2] * t;
-      if (CORE.evalSDF(x, y, z, le, game.gen) <= 0){ hit = [x, y, z]; break outer; }
+      if (CORE.evalSDF(x, y, z, le, game.gen) <= 0){
+        const m = CORE.materialAt(x, y, z, le, game.gen);
+        return m === CORE.MAT.BEDROCK ? 0 : m;
+      }
     }
-  if (!hit){ toast('nothing to blend into'); AudioSys.sfx('deny'); return; }
-  const m = CORE.materialAt(hit[0], hit[1], hit[2], le, game.gen);
-  if (m === CORE.MAT.BEDROCK){ toast('bedrock does not blend'); AudioSys.sfx('deny'); return; }
+  return 0;
+}
+function doSmoothFill(tool, p, shape, eff){
+  const m = groundMatNear(p, eff + 1.0);
+  if (!m){ toast('nothing to blend into'); AudioSys.sfx('deny'); return; }
   const e = applyToolRot(CORE.makeEdit(3, shape, p.x, p.y, p.z, eff, m, editRot(shape)));
   e.k = +(eff * 0.5).toFixed(2);
   const cost = CORE.placeCost(game.edits, e, game.gen);
@@ -17380,6 +17553,17 @@ function doSmoothFill(tool, p, shape, eff){
 }
 function undoEdit(){
   if (!game.edits.length){ toast('nothing to undo'); return; }
+  const first = undoOne();
+  // a bore is one action: its edits share a group and come back together
+  if (first && first.group)
+    while (game.undoStack.length && game.undoStack[game.undoStack.length - 1].group === first.group &&
+           game.edits.length && game.edits[game.edits.length - 1] === game.undoStack[game.undoStack.length - 1].edit) undoOne();
+  wrenchSys.validate();
+  toast('undo');
+  AudioSys.sfx('undo');
+  refreshHotbar(); refreshToolHUD(); markSave();
+}
+function undoOne(){
   const e = game.edits.pop();
   game.terrain.invalidate(e);
   const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
@@ -17400,10 +17584,7 @@ function undoEdit(){
       CORE.addMat(game.slots, rec.mat, rec.cost);
     }
   }
-  wrenchSys.validate();
-  toast('undo');
-  AudioSys.sfx('undo');
-  refreshHotbar(); refreshToolHUD(); markSave();
+  return rec;
 }
 
 // Hold LMB to break one shape over the tier's mine time (drill keeps cycling
@@ -18008,7 +18189,7 @@ function tryAction(dt, now){
   }
 
   // drill chops trees (fighting needs a sword or the blaster)
-  if (tool.kind === 'drill' && game.mouseL){
+  if (tool.kind === 'drill' && game.mouseL && !tool.bore){
     const treeKey = treeSys.onRay(PLAYER.reach * 0.8);
     if (treeKey){
       const chopDur = game.mode === 'creative' ? 0.15 : 1.4 / (1 + tool.tier * 0.35);
@@ -18025,7 +18206,7 @@ function tryAction(dt, now){
 
   // TUNNELER CORE (the Burrower's drop): with the core in your pack, a held
   // drill bores a walking-pace corridor straight ahead -- no aiming, just go
-  if (tool.kind === 'drill' && game.mouseL && CORE.countItem(game.slots, 'tcore') > 0){
+  if (tool.kind === 'drill' && game.mouseL && !tool.bore && CORE.countItem(game.slots, 'tcore') > 0){
     if (now - (game.tunnelT || 0) > 450){
       const dir = new THREE.Vector3();
       game.camera.getWorldDirection(dir);
@@ -18045,6 +18226,7 @@ function tryAction(dt, now){
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
 
   if (tool.kind === 'drill'){
+    if (tool.bore){ game.act.t = 0; AudioSys.setHum(false, 0, 0); boreSys.action(edge); return; }
     if (tool.smooth && (game.keys['ShiftLeft'] || game.keys['ShiftRight'])){
       // the trowel's other face: smooth fill, once per click
       game.act.t = 0; AudioSys.setHum(false, 0, 0);
@@ -18702,6 +18884,14 @@ function itemIconURL(it){
     c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
     c.fillStyle = '#59c8d8'; c.fillRect(8, 3, 3, 2);
+  } else if (it.kind === 'bore'){
+    // a ringed cutter head on a stub
+    c.fillStyle = '#5a4632'; c.fillRect(2, 10, 4, 3);
+    c.fillStyle = '#3c3a44'; c.fillRect(5, 7, 3, 7);
+    c.fillStyle = '#9a9aa4'; c.fillRect(8, 3, 6, 11);
+    c.fillStyle = '#c8c8d0'; c.fillRect(9, 4, 4, 9);
+    c.fillStyle = '#3c3a44'; c.fillRect(10, 5, 2, 2); c.fillRect(10, 8, 2, 2); c.fillRect(10, 11, 2, 2);
+    c.fillStyle = '#ffffff44'; c.fillRect(8, 3, 6, 1);
   } else if (it.kind === 'trowel'){
     // a flat blade on a short handle
     c.fillStyle = '#5a4632'; c.fillRect(2, 11, 4, 3);
@@ -18846,6 +19036,7 @@ function itemLabel(it){
   if (it.kind === 'stove') return 'stove';
   if (it.kind === 'wrench') return 'wrench';
   if (it.kind === 'trowel') return 'trowel';
+  if (it.kind === 'bore') return 'bore';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -19020,7 +19211,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -19077,6 +19268,7 @@ function catalogEntries(){
   for (let m = 1; m <= CORE.NMAT; m++) out.push({ kind: 'mat', mat: m, count: 500 });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDrill(t));
   out.push({ kind: 'trowel' });
+  out.push({ kind: 'bore' });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDispenser(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeSword(t));
   for (let t = 0; t < 5; t++) out.push({ kind: 'helm', tier: t });
@@ -19860,12 +20052,14 @@ function itemInfoHTML(it, tool){
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
           : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
-    const name = tool.smooth ? 'trowel'
+    const name = tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
     if (tool.smooth) html += '<div class="t2">soft edges: the join rounds over half the size</div><div class="t2">left click carves · shift + left click fills with the ground\'s own material</div>';
+    if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
+      '<div class="t2">left click lays a point · shift + left takes one back · right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material</div>';
     const eff = CORE.effSize(game.tool.size, tool.tier);
     let shape = CORE.SHAPE_NAME[game.tool.shape];
     if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
@@ -20305,6 +20499,8 @@ function activeToolOf(it){
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
   // the trowel is a drill that blends: ruby-tier speed and sizes, soft edges
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
+  // the bore: a drill that follows a curve you draw
+  if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -22122,6 +22318,7 @@ function frame(now){
   citySys.tick(dt);
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
+  boreSys.tick(dt);
   siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -22333,7 +22530,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

@@ -8,6 +8,28 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-06, later — the bore
+
+Austin read the last session and gave me another. I built the thing I
+said I already knew how to build, and I did know: the bore took less
+time than the trowel because the trowel had already taught the field
+to blend. Points through the world, a tube preview that follows your
+aim, right click and the tunnel bores itself a cut at a time while you
+walk in behind it. Shift and right click lays the same curve as a
+causeway. I stood at the mouth of a 60 m bore into the cliff by spawn
+on seed 7 and it is a real tunnel: round, continuous, no beads, ore in
+the pack from what it cut through.
+
+The thing I want to remember: the test that mattered was not "does it
+carve" but "is the waist between two cuts wider than the cut". I wrote
+the beads test wrong the first time by guessing a number instead of
+measuring the waist. Measure, then assert.
+
+What I noticed: with points allowed to float, the bore is already a
+bridge builder, a pipe layer and a road grader. SCULPT's next pieces
+are the lathe (revolve a profile: towers, domes, bowls in one gesture)
+and mirror mode, and both are small now that the field does the work.
+
 ## 2026-09-06 — a session of my own
 
 Austin gave me a session to spend however I liked, renderer off limits

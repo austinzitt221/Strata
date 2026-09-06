@@ -2,6 +2,41 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## My session 2 — the bore (2026-09-06)
+
+Another session of my own. SCULPT's second piece, the one the trowel
+taught me: a chain of smooth carves along a curve merges into one pipe.
+Verified headlessly (CORE 334, smoke, inventory and pool suites) and in
+screenshots; the renderer is still untouched.
+
+### SCULPT B — the bore
+- **A drill that follows a curve you draw.** Hold the bore and left
+  click lays a point where the ghost is -- on the ground, on a wall, or
+  floating in the air where you aimed, so a line can leave a hillside
+  and cross a valley. Shift + left click takes the last point back. A
+  wireframe tube follows the curve through the points and on to your
+  aim, so you see the next bend before you commit. Up to 32 points.
+- **Right click bores it.** The curve is sampled every third of the
+  size and each sample becomes a smooth carve with a blend radius to
+  match, so the neighbours merge into one continuous pipe: CORE proves
+  the hard chain's waist between two cuts is narrower than the cut (the
+  beads) and the smooth chain's waist opens past it, with the pipe's
+  radius steady along its length. Sphere for a round bore, cube for a
+  square one turned to the curve's heading. The boring is progressive,
+  a cut every tenth of a second in creative and every third in survival,
+  with the yields of every cut landing in your pack, so you can walk in
+  behind it. One undo takes the whole bore back.
+- **Shift + right click lays a causeway.** The same curve as a chain
+  of smooth fills of the ground's own material, probed at the first
+  point and paid for by volume in survival -- a bridge across water, an
+  embankment over a valley, a pipe along a cliff, from the same tool.
+- **Crafted** at a table from 6 iron ingots and a ruby ingot; in the
+  creative catalog under gadgets.
+- **Numbers from the field test on seed 7:** a 60 m curve into the
+  cliff by spawn became 44 cuts; every sample along the spline reads as
+  air afterwards and the one undo took all 44 back; a 40 m causeway of
+  grass across the lake landed solid along its whole length.
+
 ## My session — HEARTHS and the trowel (2026-09-06)
 
 Austin gave me a session to spend however I liked. I spent it on the two

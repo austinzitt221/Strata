@@ -14,8 +14,8 @@ when they matter, not by rule.
    cascades, one water mesh per lake. Nothing added to the far view
    is worth it until the far view stops moving.
 2. **SCULPT** — the identity build. Smooth-blend brush (DONE: the
-   trowel), spline tunnels and roads you draw, revolve/lathe shapes,
-   mirror mode. The Terraformer from Build 21 moves here, early, because
+   trowel), spline tunnels and causeways you draw (DONE: the bore),
+   revolve/lathe shapes, mirror mode. The Terraformer from Build 21 moves here, early, because
    carving is what this game is.
 3. **RIVERS** — water that starts in the mountains and reaches the sea,
    cutting valleys the heightfield knows about; fords, waterfalls,
