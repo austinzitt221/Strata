@@ -1764,6 +1764,18 @@ function rotToWorld(e, x, y, z){
     const r = x * c - z * s; z = x * s + z * c; x = r; }
   return [x, y, z];
 }
+// the same edit reflected across the plane x = c (axis 0) or z = c (axis 1).
+// A reflection conjugates the rotation: the yaw flips either way, the roll
+// flips across an x plane and the pitch across a z plane; the shapes are
+// symmetric in their own frames, so the reflected point lands in the same
+// shape. Every other field (size, blend, material) carries over.
+function mirrorEdit(e, axis, c){
+  const m = Object.assign({}, e);
+  if (axis === 0) m.x = +(2 * c - e.x).toFixed(3); else m.z = +(2 * c - e.z).toFixed(3);
+  if (e.rot) m.rot = -e.rot;
+  if (axis === 0){ if (e.rz) m.rz = -e.rz; } else { if (e.rx) m.rx = -e.rx; }
+  return m;
+}
 function sdSphere(px, py, pz, e){
   const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
   if (hx === hy && hy === hz && !editHasRot(e)){
@@ -3293,7 +3305,7 @@ return {
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
-  editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
+  editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS, mirrorEdit,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, frameToWorld, worldToFrame, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
@@ -12594,6 +12606,128 @@ const cityLightSys = {
     if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
   },
 };
+// ---------- SCULPT: the mirror — every edit twice, across a plane ----------
+// Tap K and a plane stands through the ghost, running the way you face, so
+// what you build on the left of it appears on the right: a gatehouse with
+// two matching towers, a hall with two aisles, a symmetric face on a cliff.
+// Drill, dispenser, trowel, bore and lathe all repeat across it; undo takes
+// both halves. Shift + K turns the plane a quarter; K again clears it. The
+// plane is part of the tool state, so it is saved with the world.
+const mirrorSys = {
+  sheet: null, ghosts: null,
+  get(){ return game.tool.mirror || null; },
+  on(){ return !!game.tool.mirror; },
+  // the reflection of a point, or null with no mirror
+  ptOf(p){
+    const M = this.get(); if (!M) return null;
+    return M.axis === 0 ? { x: +(2 * M.c - p.x).toFixed(2), y: p.y, z: p.z } : { x: p.x, y: p.y, z: +(2 * M.c - p.z).toFixed(2) };
+  },
+  // a trowel hit reflected: position and normal
+  hitOf(h){
+    const M = this.get(); if (!M || !h) return null;
+    return M.axis === 0 ? { x: 2 * M.c - h.x, y: h.y, z: h.z, nx: -h.nx, ny: h.ny, nz: h.nz }
+                        : { x: h.x, y: h.y, z: 2 * M.c - h.z, nx: h.nx, ny: h.ny, nz: -h.nz };
+  },
+  edit(e){ const M = this.get(); return M ? CORE.mirrorEdit(e, M.axis, M.c) : null; },
+  // a job's edit list with each edit followed by its reflection
+  jobEdits(list){
+    if (!this.on()) return list;
+    const out = [];
+    for (const e of list){ out.push(e); out.push(this.edit(e)); }
+    return out;
+  },
+  stepScale(){ return this.on() ? 0.5 : 1; },
+  group(){ return this.on() ? 'mir' + (++boreSys.seq) : null; },
+  // K: set the plane through the ghost, along the view; K again clears;
+  // shift + K turns it a quarter around the same point
+  toggle(shift){
+    const M = this.get();
+    if (M && shift){
+      M.axis = M.axis ? 0 : 1;
+      M.c = M.axis === 0 ? M.ax : M.az;
+      toast('mirror turned: across ' + (M.axis ? 'z' : 'x') + ' = ' + M.c.toFixed(1));
+    } else if (M){
+      game.tool.mirror = null;
+      toast('mirror off');
+    } else {
+      const p = game.ghostPos || trowelSys.hit || (() => {
+        const d = new THREE.Vector3(); game.camera.getWorldDirection(d);
+        return { x: game.camera.position.x + d.x * 4, y: game.camera.position.y + d.y * 4, z: game.camera.position.z + d.z * 4 };
+      })();
+      // the plane runs the way you face: facing along x, it is a z plane
+      const fx = -Math.sin(game.yaw), fz = -Math.cos(game.yaw);
+      const axis = Math.abs(fx) > Math.abs(fz) ? 1 : 0;
+      game.tool.mirror = { axis, c: +(axis === 0 ? p.x : p.z).toFixed(2), ax: +p.x.toFixed(2), az: +p.z.toFixed(2) };
+      toast('mirror on: across ' + (axis ? 'z' : 'x') + ' = ' + game.tool.mirror.c.toFixed(1) + ' · shift + K turns it, K clears it');
+    }
+    AudioSys.sfx('toggle');
+    refreshToolHUD(); markSave();
+  },
+  hudLine(){
+    const M = this.get();
+    return M ? '<div class="t2">mirror: <span class="on">on · across ' + (M.axis ? 'z' : 'x') + ' = ' + M.c.toFixed(1) + '</span> (K clears · shift + K turns)</div>'
+             : '<div class="t2">mirror: off (K sets one at the ghost)</div>';
+  },
+  ensure(){
+    if (this.sheet && this.sheet.parent === game.scene) return;
+    if (this.sheet){ game.scene.add(this.sheet); return; }
+    const g = new THREE.Group();
+    g.userData.noShadow = true;
+    const W = 60, H = 36;
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
+      new THREE.MeshBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false }));
+    sheet.userData.noShadow = true;
+    g.add(sheet);
+    const pts = [];
+    for (let i = -5; i <= 5; i++){ pts.push(i * W / 10, -H / 2, 0, i * W / 10, H / 2, 0); }
+    for (let j = -3; j <= 3; j++){ pts.push(-W / 2, j * H / 6, 0, W / 2, j * H / 6, 0); }
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+    const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.22, depthWrite: false }));
+    lines.userData.noShadow = true;
+    g.add(lines);
+    g.renderOrder = 3;
+    this.sheet = g;
+    game.scene.add(g);
+  },
+  tick(){
+    const M = game.running ? this.get() : null;
+    if (!M){ if (this.sheet) this.sheet.visible = false; return; }
+    this.ensure();
+    // the sheet slides along the plane to stay beside you
+    const p = game.pos;
+    if (M.axis === 0){ this.sheet.position.set(M.c, p.y + 6, p.z); this.sheet.rotation.set(0, Math.PI / 2, 0); }
+    else { this.sheet.position.set(p.x, p.y + 6, M.c); this.sheet.rotation.set(0, 0, 0); }
+    this.sheet.visible = game.ui === 'none';
+  },
+  // the ghost's twin: the same outline on the far side of the plane
+  syncGhost(shape, p, eff, rot, rx, rz){
+    const M = this.get();
+    if (!M){ this.hideGhost(); return; }
+    if (!this.ghosts){
+      const mat = new THREE.LineBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.55, depthWrite: false });
+      this.ghosts = {};
+      for (const k of [0, 1, 2]){
+        const w = new THREE.LineSegments(game.ghostSet[k].wire.geometry, mat);
+        w.visible = false; w.renderOrder = 6; w.userData.noShadow = true;
+        this.ghosts[k] = w;
+      }
+    }
+    for (const k of [0, 1, 2]){
+      const w = this.ghosts[k];
+      if (w.parent !== game.scene) game.scene.add(w);
+      w.visible = false;
+    }
+    const q = this.ptOf(p);
+    const e = CORE.mirrorEdit({ x: p.x, y: p.y, z: p.z, rot, rx, rz }, M.axis, M.c);
+    const w = this.ghosts[shape];
+    w.visible = true;
+    w.position.set(q.x, q.y, q.z);
+    w.scale.setScalar(eff);
+    applyEditRot(w, e.rot, e.rx, e.rz);
+  },
+  hideGhost(){ if (this.ghosts) for (const k in this.ghosts) this.ghosts[k].visible = false; },
+};
 // ---------- SCULPT: the trowel — a disc on the ground, raise and lower ----------
 // The terrain tool of a map editor, in first person. Look at any surface
 // and a disc sits on it; scroll sets its size. Hold left click and the
@@ -12614,8 +12748,12 @@ const trowelSys = {
     this.disc.add(this.dot);
     this.disc.frustumCulled = false;
     game.scene.add(this.disc);
+    this.mdisc = new THREE.Mesh(this.disc.geometry,
+      new THREE.MeshBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+    this.mdisc.renderOrder = 20; this.mdisc.frustumCulled = false; this.mdisc.visible = false;
+    game.scene.add(this.mdisc);
   },
-  hide(){ if (this.disc) this.disc.visible = false; this.hit = null; },
+  hide(){ if (this.disc) this.disc.visible = false; if (this.mdisc) this.mdisc.visible = false; this.hit = null; },
   aim(usable){
     if (!usable){ this.hide(); return; }
     this.ensure();
@@ -12629,6 +12767,14 @@ const trowelSys = {
     this.disc.position.set(hit[0] + g[0] * 0.04, hit[1] + g[1] * 0.04, hit[2] + g[2] * 0.04);
     this.disc.scale.set(r, r, 1);
     this.disc.lookAt(hit[0] + g[0], hit[1] + g[1], hit[2] + g[2]);
+    const mh = mirrorSys.hitOf(this.hit);
+    if (this.mdisc.parent !== game.scene) game.scene.add(this.mdisc);
+    this.mdisc.visible = !!mh;
+    if (mh){
+      this.mdisc.position.set(mh.x + mh.nx * 0.04, mh.y + mh.ny * 0.04, mh.z + mh.nz * 0.04);
+      this.mdisc.scale.set(r, r, 1);
+      this.mdisc.lookAt(mh.x + mh.nx, mh.y + mh.ny, mh.z + mh.nz);
+    }
   },
   action(dt, now){
     AudioSys.setHum(false, 0, 0);
@@ -12645,13 +12791,14 @@ const trowelSys = {
     if (!edge && now - this.lastT < rate * 1000) return;
     this.lastT = now;
     const shift = game.keys['ShiftLeft'] || game.keys['ShiftRight'];
-    if (raise && shift) this.flatten();
-    else this.stroke(raise ? 1 : -1);
+    const mh = mirrorSys.hitOf(this.hit), grp = mirrorSys.group();
+    if (raise && shift){ this.flatten(null, grp); if (mh) this.flatten(mh, grp); }
+    else { this.stroke(raise ? 1 : -1, null, grp); if (mh) this.stroke(raise ? 1 : -1, mh, grp); }
   },
   // shift + left: a plateau at the disc's height -- carve everything above
   // its plane over the disc, fill everything below, both blended
-  flatten(){
-    const h = this.hit;
+  flatten(hit, grp){
+    const h = hit || this.hit;
     if (Math.abs(h.ny) < 0.6){ toast('flatten works on ground and ceilings'); return; }
     const eff = game.ghostEff, t = Math.max(1, eff * 0.5), k = +Math.max(0.5, eff * 0.08).toFixed(2);   // a soft rim, a flat floor
     const up = h.ny > 0 ? 1 : -1;
@@ -12660,7 +12807,7 @@ const trowelSys = {
     const m = groundMatNear({ x: h.x, y: h.y - up * 0.3, z: h.z }, 1.5);
     const fill = m ? CORE.makeEdit(3, 1, +h.x.toFixed(2), +(h.y - up * t * 0.5).toFixed(2), +h.z.toFixed(2), eff, m, 0) : null;
     if (fill){ fill.sy = t; fill.k = k; }
-    const group = 'flat' + (++boreSys.seq);
+    const group = grp || ('flat' + (++boreSys.seq));
     let did = 0;
     const got = CORE.mineYield(game.edits, carve, game.gen);
     let units = 0; for (const mm in got) units += got[mm];
@@ -12675,7 +12822,7 @@ const trowelSys = {
       if (cost > 0 && (game.mode === 'creative' || CORE.consumeMat(game.slots, m, cost))){
         applyEdit(fill);
         game.undoStack.push({ edit: fill, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost, group });
-        this.ride(t);
+        if (!hit) this.ride(t);
         did++;
       } else if (cost > 0){ toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' to fill under the plateau'); }
     }
@@ -12696,8 +12843,8 @@ const trowelSys = {
       }
     }
   },
-  stroke(dir){
-    const h = this.hit;
+  stroke(dir, hit, group){
+    const h = hit || this.hit;
     const eff = game.ghostEff, r = eff * 0.5;
     const off = r * (game.tool.trowelDepth || 0.55) * -dir;   // raise: centre under the surface; lower: above
     const cx = +(h.x + h.nx * off).toFixed(2), cy = +(h.y + h.ny * off).toFixed(2), cz = +(h.z + h.nz * off).toFixed(2);
@@ -12712,8 +12859,8 @@ const trowelSys = {
         toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' — have ' + CORE.countMat(game.slots, m)); AudioSys.sfx('deny'); return;
       }
       applyEdit(e);
-      game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost });
-      this.ride(r);
+      game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost, group });
+      if (!hit) this.ride(r);
       Particles.burst(h.x, h.y, h.z, r * 0.6, [MAT_COLOR[m]], Math.min(30, 6 + cost / 8), 1.4);
       AudioSys.sfx('place');
     } else {
@@ -12724,7 +12871,7 @@ const trowelSys = {
       for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
       if (units === 0) return;
       applyEdit(e);
-      game.undoStack.push({ edit: e, type: 'mine', gained: got });
+      game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
       for (const m in got){
         const oreKind = CORE.ORE_ITEM[+m];
         if (oreKind) addStackItem(oreKind, got[m]); else CORE.addMat(game.slots, +m, got[m]);
@@ -12785,8 +12932,8 @@ const latheSys = {
       }
     }
     if (!edits.length){ toast('the profile has no height'); return; }
-    boreSys.job = { edits, i: 0, t: 0, fill, mat, group: 'lathe' + (++boreSys.seq), gained: {}, spent: 0,
-                    label: fill ? 'turned' : 'turned hollow', step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    boreSys.job = { edits: mirrorSys.jobEdits(edits), i: 0, t: 0, fill, mat, group: 'lathe' + (++boreSys.seq), gained: {}, spent: 0,
+                    label: fill ? 'turned' : 'turned hollow', step: (game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3)) * mirrorSys.stepScale() };
     boreSys.pts = [];
     toast((fill ? 'turning ' : 'hollowing ') + edits.length + ' rings');
     AudioSys.sfx('craft');
@@ -12862,8 +13009,8 @@ const boreSys = {
       if (!mat){ toast('the first point must be near solid ground to lay from'); AudioSys.sfx('deny'); return; }
       for (const e of P.edits) e.mat = mat;
     }
-    this.job = { edits: P.edits, i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
-                 step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    this.job = { edits: mirrorSys.jobEdits(P.edits), i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
+                 step: (game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3)) * mirrorSys.stepScale() };
     this.pts = [];
     toast((fill ? 'laying ' : 'boring ') + Math.round(P.len) + ' m · ' + P.edits.length + ' cuts');
     AudioSys.sfx('craft');
@@ -15557,6 +15704,7 @@ function bindInput(){
     if (code === 'KeyQ'){ if (!game.photo) openCraft(); }
     if (code === 'KeyN'){ if (!game.photo) openBlueprints(); }
     if (code === 'KeyM'){ if (!game.photo) openMap(); }
+    if (code === 'KeyK'){ const t = activeTool(); if (!game.photo && t && (t.kind === 'drill' || t.kind === 'disp')) mirrorSys.toggle(e.shiftKey); }
     if (code === 'KeyP'){
       if (game.photo){ exitPhoto(); }
       else if (game.mode === 'creative') enterPhoto();
@@ -16484,6 +16632,7 @@ function updateGhost(){
     game.ghostSet[k].wire.visible = false;
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
+  mirrorSys.hideGhost();
   if (game.gridViz) game.gridViz.visible = false;
   // held door: skinny door-shaped ghost with grid + side alignment
   if (tool && tool.kind === 'door' && game.ui === 'none' && isLocked()){
@@ -16566,6 +16715,7 @@ function updateGhost(){
     // charging feedback: the shape visibly "fills in" as the action completes
     gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
   }
+  mirrorSys.syncGhost(game.tool.shape, p, eff, rot, grx, grz);
 
   if (game.snapOn){
     // visualize the actual placement lattice (spacing = shape size when the
@@ -17692,15 +17842,28 @@ function yieldColors(got){
   for (const m in got) cols.push(MAT_COLOR[m]);
   return cols;
 }
-function doMine(tool, p, shape, eff){
-  const e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+// the mirror's twin of a mine or a place: the same call again with the
+// edit reflected, the two sharing an undo group
+function doMineM(tool, p, shape, eff){
+  const gp = mirrorSys.group();
+  doMine(tool, p, shape, eff, gp);
+  if (gp) doMine(tool, p, shape, eff, gp, true);
+}
+function doPlaceM(tool, p, shape, eff){
+  const gp = mirrorSys.group();
+  doPlace(tool, p, shape, eff, gp);
+  if (gp) doPlace(tool, p, shape, eff, gp, true);
+}
+function doMine(tool, p, shape, eff, group, mir){
+  let e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
   if (tool.smooth) e.k = +(eff * 0.5).toFixed(2);
+  if (mir){ e = mirrorSys.edit(e); p = { x: e.x, y: e.y, z: e.z }; }
   const got = CORE.mineYield(game.edits, e, game.gen);
   let units = 0, hw = 0;
   for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
   if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
-  game.undoStack.push({ edit: e, type: 'mine', gained: got });
+  game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
   if (game.undoStack.length > 64) game.undoStack.shift();
   const parts = [];
   for (const m in got){
@@ -17766,9 +17929,10 @@ function doMine(tool, p, shape, eff){
   Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
   refreshHotbar(); refreshToolHUD();
 }
-function doPlace(tool, p, shape, eff){
+function doPlace(tool, p, shape, eff, group, mir){
   const paint = false;   // dispenser paint moved to the wrench
-  const e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
+  let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
+  if (mir){ e = mirrorSys.edit(e); p = { x: e.x, y: e.y, z: e.z }; }
   const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
                      : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
@@ -17780,7 +17944,7 @@ function doPlace(tool, p, shape, eff){
   }
   applyEdit(e);
   game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat,
-                        cost: game.mode === 'creative' ? 0 : cost });
+                        cost: game.mode === 'creative' ? 0 : cost, group });
   if (game.undoStack.length > 64) game.undoStack.shift();
   toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat] + (paint ? ' (painted)' : ''));
   AudioSys.sfx(paint ? 'paint' : 'place');
@@ -18507,7 +18671,7 @@ function tryAction(dt, now){
     const plan = actionPlan(tool, p, shape, eff);
     if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
     if (plan.dur === 0){
-      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(tool, p, shape, eff); }
+      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMineM(tool, p, shape, eff); }
       return;
     }
     game.act.t += dt;
@@ -18515,7 +18679,7 @@ function tryAction(dt, now){
     AudioSys.setHum(true, tool.tier, game.actProgress);
     if (Math.random() < dt * 22)
       Particles.burst(p.x, p.y, p.z, eff * 0.4, [0x9a9aa0], 2, 1.2);
-    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMine(tool, p, shape, eff); }
+    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMineM(tool, p, shape, eff); }
     return;
   }
 
@@ -18524,7 +18688,7 @@ function tryAction(dt, now){
   const plan = actionPlan(tool, p, shape, eff);
   if (plan.dur < 0) return;                                       // nothing to fill/paint
   if (plan.dur === 0){
-    if (edge) doPlace(tool, p, shape, eff);
+    if (edge) doPlaceM(tool, p, shape, eff);
     return;
   }
   if (edge){ game.act.charging = true; game.act.t = 0; }
@@ -18534,7 +18698,7 @@ function tryAction(dt, now){
     game.actProgress = Math.min(1, game.act.t / plan.dur);
     if (game.act.t >= plan.dur){
       game.act.charging = false; game.act.t = 0; game.act.key = null;
-      doPlace(tool, p, shape, eff);
+      doPlaceM(tool, p, shape, eff);
     }
   }
 }
@@ -20357,6 +20521,7 @@ function itemInfoHTML(it, tool){
     } else {
       html += '<div class="t2">snap: off · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     }
+    html += mirrorSys.hudLine();
   } else if (it.kind === 'battery'){
     html = '<div class="t1">' + itemLabel(it) + ' · ' + Math.round(it.charge || 0) + '/' + CORE.batteryCap(it) + '</div>' +
       '<div class="t2">fill it in a battery charger · in your inventory, click it onto a jetpack, drone or car kit to pour charge in · slot it in a car (E while driving)</div>';
@@ -22430,6 +22595,7 @@ function enterPhoto(drone){
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
   placePreview.hide();
+  mirrorSys.hideGhost();
   if (game.gridViz) game.gridViz.visible = false;
   toast(drone
     ? (drone.kind === 'tdrone'
@@ -22634,6 +22800,7 @@ function frame(now){
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
+  mirrorSys.tick(dt);
   siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -22845,7 +23012,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

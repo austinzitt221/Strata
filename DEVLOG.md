@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 23 — MIRROR (2026-09-06)
+
+SCULPT's last piece, small and mine. Verified headlessly (CORE 341 with
+a reflection proof over rotated, stretched cubes and cylinders; a
+build-23 suite that mines, places, strokes and turns across the plane,
+turns and clears it, and saves it) and in a screenshot: a gatehouse of
+two turned towers, a wall and an arch, every edit made once.
+
+### The mirror
+- **Tap K** with a drill, dispenser, trowel, bore or lathe in hand and a
+  plane stands through the ghost, running the way you face, so what you
+  do on one side happens on the other. **Shift + K** turns it a quarter
+  around the same point; **K** again clears it. It is tool state, so it
+  saves with the world.
+- **Every tool repeats across it.** A drill cut and its twin, a
+  dispenser shape and its twin (rotations reflected: the yaw flips, and
+  the roll or the pitch with it, so a tilted slab leans the other way on
+  the far side), a trowel stroke and its twin (the disc shows its twin
+  too), and a bore or lathe job with each cut followed by its
+  reflection, at twice the pace so the job takes the same time. Undo
+  takes both halves; the yields and the costs are both counted.
+- **You can see it.** A faint sheet with a grid slides along the plane
+  to stay beside you, and the ghost has a paler twin on the far side, so
+  you know where the copy lands before you click. The tool panel says
+  which plane and where.
+- CORE gained `mirrorEdit`: the reflection conjugates the rotation, and
+  the test proves the reflected shape's distance field matches the
+  original's at a thousand points.
+
+### Not mirrored, on purpose
+- The wrench's move, resize, delete and paint, and every prop (torches,
+  doors, machines). The mirror is for shaping the world; props are
+  placed by hand.
+
 ## Build 22 — MASS (2026-09-06)
 
 Austin's second playtest of the tools: "very fun", and one ask -- make

@@ -254,6 +254,41 @@ time: compute the yaw from the vector with the formula, don't guess.
 **Next.** Mirror mode is small and I want it; then THE CREW, because a
 mountain you raise with a friend on the disc beside you is the game.
 
+## 2026-09-06 — Build 23, MIRROR
+
+Same session, second build. Mirror mode was the smallest thing on the
+list and the one I wanted most: a gatehouse is two towers and a wall,
+and drawing the second tower by hand is the part of building that is
+not play.
+
+**The reflection was the whole problem, and it was a maths problem.**
+An edit has a yaw, a pitch and a roll, applied as Ry Rx Rz. Reflect
+the world across an x plane and the edit's frame is conjugated by the
+reflection: the yaw flips, the roll flips, the pitch stays. Across a z
+plane the yaw and pitch flip and the roll stays. I worked it out on
+paper, wrote the CORE function in four lines, and then wrote a test
+that reflects a thousand random points through rotated stretched cubes
+and cylinders and checks the distance fields agree. It did, first run.
+That test is the kind I trust: it does not know what the answer is,
+it just checks two things that must be equal.
+
+**Where the plane goes.** I first had the plane facing you, a wall in
+front of you with the copy behind it. Useless. The plane runs along
+your view: stand on the axis of your building, look down it, and the
+left becomes the right. That is what a mirror in a map editor is for.
+
+**Doubling the tools was mostly plumbing.** The drill and dispenser
+paths take a group and a mirrored flag; the trowel's stroke and flatten
+take a hit; the bore and lathe jobs take a doubled edit list at twice
+the pace. The frame loop, the ghost and the HUD each got one line.
+Twenty-nine anchored replacements, one syntax check, no errors. When a
+patch is that mechanical the design was right.
+
+**Next.** THE CREW. It is the biggest thing on the list and the one
+Austin drew most carefully. I want to start with the smallest slice
+that changes how the game feels: one villager who follows you and
+mines what you mine.
+
 ---
 
 ## Standing notes

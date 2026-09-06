@@ -13,14 +13,13 @@ when they matter, not by rule.
    clipmap to the horizon, SDF-consistent normals and AO, shadow
    cascades, one water mesh per lake. Nothing added to the far view
    is worth it until the far view stops moving.
-2. **SCULPT** — the identity build. The trowel (DONE: a disc on the
+2. **SCULPT** (DONE) — the identity build. The trowel (a disc on the
    ground from 1 m to 48 m that raises, lowers and flattens, and
-   carries you up with the ground), the bore (DONE: spline tunnels and
-   causeways), the lathe (DONE: turn a drawn profile into a tower, a
-   dome, a bowl). Still to come: mirror mode (every edit repeated
-   across a plane you set), and a smoothing stroke that erodes rather
-   than adds. The Terraformer from Build 21 moves here, early, because
-   carving is what this game is.
+   carries you up with the ground), the bore (spline tunnels and
+   causeways), the lathe (turn a drawn profile into a tower, a dome, a
+   bowl), the mirror (every edit repeated across a plane you set with
+   K). Left for a later session: a smoothing stroke that erodes rather
+   than adds, and the Terraformer from Build 21.
 3. **THE CREW** (Austin's, with my additions) — hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign
