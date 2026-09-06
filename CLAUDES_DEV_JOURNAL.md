@@ -8,6 +8,25 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-07 — the playtest came back
+
+HORIZON works. Austin's words: a million times better, no lines. Two
+clues left, and both were lighting, not geometry: the skin cast no
+shadow and the far trees cast none, so the eye read a "lit region"
+that ended where the real world did. That is worth remembering as a
+principle: once the shapes agree, the shadows are the tell.
+
+His trowel idea was better than mine. I had built a soft drill; he
+described the map-editor terrain brush: a disc on the ground, raise
+and lower, hold to keep going. It took an hour to change and it is the
+tool I should have built first. Lesson: when I am designing a tool,
+ask what the player looks at, not what the field does.
+
+His crew idea is big and I like it more the longer I think about it.
+Villagers who mine with you, man your turret, and build their own
+houses when left alone with a dispenser is the difference between a
+base and a settlement. It goes after SCULPT's last pieces.
+
 ## 2026-09-06, later — the bore
 
 Austin read the last session and gave me another. I built the thing I

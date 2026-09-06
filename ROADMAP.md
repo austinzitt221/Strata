@@ -13,14 +13,37 @@ when they matter, not by rule.
    clipmap to the horizon, SDF-consistent normals and AO, shadow
    cascades, one water mesh per lake. Nothing added to the far view
    is worth it until the far view stops moving.
-2. **SCULPT** — the identity build. Smooth-blend brush (DONE: the
-   trowel), spline tunnels and causeways you draw (DONE: the bore),
-   revolve/lathe shapes, mirror mode. The Terraformer from Build 21 moves here, early, because
+2. **SCULPT** — the identity build. The trowel (DONE: now a disc on
+   the ground that raises and lowers, the terrain tool of a map editor
+   in first person), the bore (DONE: spline tunnels and causeways),
+   still to come: a smoothing stroke for the trowel, revolve/lathe
+   shapes, mirror mode. The Terraformer from Build 21 moves here, early, because
    carving is what this game is.
-3. **RIVERS** — water that starts in the mountains and reaches the sea,
+3. **THE CREW** (Austin's, with my additions) — hire the people you have
+   earned. At high enough goodwill a villager's trade screen gains two
+   buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign
+   points them at a thing: a stove, a turret they will man instead of
+   you, a table, or the ground -- where a disc like the trowel's sets
+   their roaming boundary, tight or your whole base. Drop them weapons
+   and tools: a sword or gun and they fight beside you; a drill and they
+   mine what you mine; a dispenser and they build what you build, and
+   left alone long enough with one they start on blueprints of their
+   own (villagers raise houses, city folk raise towers, wherever you
+   put them). My additions: they need a bed and a chest to call home,
+   they eat from your stores, and a crew member who dies is gone. A
+   dispenser crew member with a saved blueprint of YOURS builds that.
+4. **THE PALISADE** (Austin's, with my additions) — defenses that know
+   whose side they are on. The claymore: a set charge that fires only for
+   an enemy (never you, never a passive animal) and never marks the
+   ground. One-way spikes: enemies bleed on them, you and your animals
+   walk over. My additions: a tripwire bell that wakes your turrets and
+   crew before the enemy is in range; an oil trench you light from a
+   torch; a portcullis on a lever. And the turret's cousin, a flame jet
+   for the walls, short and brutal.
+5. **RIVERS** — water that starts in the mountains and reaches the sea,
    cutting valleys the heightfield knows about; fords, waterfalls,
    riverside villages and cities on the banks.
-4. **THE EXPEDITION** — environmental storytelling: the camps, journals
+6. **THE EXPEDITION** — environmental storytelling: the camps, journals
    and bones of an earlier expedition scattered by worldgen, telling one
    story across the map and pointing at the Underdark.
 5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
