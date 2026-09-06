@@ -2,6 +2,56 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 21 — SHAPE (2026-09-07)
+
+Austin's first playtest of HORIZON came back: no lines, "a million times
+better", two clues left. This build takes those two, his notes on the
+new tools, and turns the trowel into the thing he described better than
+I had built it. Verified headlessly (CORE 337, smoke, plane, city and
+inventory suites) and in screenshots.
+
+### The tools
+- **The trowel is a terrain tool now.** No shape in front of you: a
+  disc sits on whatever you look at, ground, wall or ceiling, and scroll
+  sets its size. Hold left click and the ground under the disc rises in
+  its own material (a smooth fill centred just under the surface); hold
+  right click and it sinks (a smooth carve centred just above). Held
+  down it keeps going, so a hill is a few seconds of holding the button
+  and a ditch is a swipe. The map-editor terrain brush, in first person,
+  which is what Austin asked for and is better than my carve/fill.
+- **The bore picks its cross-section with right click** while no points
+  are laid, like a drill; once the first point is down, right click is
+  the commit. The tool panel says which it is.
+
+### The last two visual clues
+- **"You can see where the lighting is loaded in."** Two edges, both
+  gone. The far skin cast no shadow at all, so a hill beyond the render
+  distance threw nothing across the near field and the ground under it
+  read flat; the two near skin levels now cast, through a depth material
+  that applies the same morph and the same yield to the real world, so
+  the skin never shadows the ground it is hiding under. And the far
+  trees cast nothing, so tree shadows stopped dead at the near-tree
+  radius (56 m); they cast now.
+- **Cave mouths popping in close by.** The skin is a heightfield and
+  knew nothing of caves, so a shaft or a mouth was a patch of flat
+  ground until the real chunks landed. The skin now probes just under
+  its own surface and, where it finds open air, marches down to the
+  cave floor and shows the pit -- a 14 m hole at the first mouth on
+  seed 7, before any chunk arrives. What lands later is the cave's
+  interior, not the hole. And the near ring takes two worker turns in
+  three when you move faster than 12 m/s, so the frontier keeps up
+  with a car or a plane instead of trailing into view.
+
+### Roadmap
+- Austin's crew idea (hire villagers: follow, assign to a stove, a
+  turret, a table, or a roaming disc on the ground; arm them; they mine
+  and build with you and, left alone with a dispenser, build their own
+  blueprints) is THE CREW, item 3, with my additions. His defenses
+  (claymore that only fires for an enemy and never marks the ground,
+  one-way spikes) are THE PALISADE, item 4, with a tripwire bell, an
+  oil trench and a flame jet of mine. SCULPT still owes a smoothing
+  stroke, the lathe and mirror mode.
+
 ## My session 2 — the bore (2026-09-06)
 
 Another session of my own. SCULPT's second piece, the one the trowel

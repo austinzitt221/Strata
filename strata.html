@@ -3054,6 +3054,18 @@ function heightGrid(J, gen){
       let hh = gen.height(x, z);
       const rise = riseOf(x, z);
       if (rise > hh + 1){ const t = marchTop(x, z, rise + 1, hh); if (t > hh + 0.2) hh = t; }
+      else if (gen.sdf && gen.sdf(x, hh - 0.7, z) > 0.15){
+        // open ground right under the surface: a cave mouth or a shaft. The
+        // skin cannot show the cave, but it can show the hole -- march down
+        // to the first solid so the pit is there before the real chunks are
+        let y = hh - 0.7;
+        for (let it = 0; it < 60 && y > hh - 40; it++){
+          const d = gen.sdf(x, y, z);
+          if (d < 0){ break; }
+          y -= Math.max(0.5, d);
+        }
+        if (y > hh - 40) hh = y;
+      }
       let mm = 0;                                   // 0: read the field below
       if (buckets){
         const L = buckets.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
@@ -3892,11 +3904,14 @@ const meshPool = {
     const t = S[0];
     if (t && t.hot && t.hot.size && !this.skip.has(t.id)) return t;
     let W = this._W;
-    if (!W || W.n !== S.length){
+    // moving fast, the frontier is what you see: the rings take two turns
+    // in three so the real world keeps up with a car or a plane
+    const v = this.vel, fast = !!(v && Math.hypot(v[0], v[2]) > 12);
+    if (!W || W.n !== S.length || W.fast !== fast){
       W = [];
-      for (let i = 1; i < S.length; i++) W.push(0, i);
+      for (let i = 1; i < S.length; i++){ if (fast) W.push(i, i, 0); else W.push(0, i); }
       if (!W.length) W.push(0);
-      W.n = S.length;
+      W.n = S.length; W.fast = fast;
       this._W = W;
     }
     for (let i = 0; i < W.length; i++){
@@ -8818,7 +8833,6 @@ const farTreeSys = {
   group: null, trunks: null, canopy: null, lastCell: null, CAP: 9000, R: 460,
   init(scene){
     this.group = new THREE.Group();
-    this.group.userData.noShadow = true;      // distant: not worth the shadow pass
     scene.add(this.group);
     this.lastCell = null;
     const M = treeSys.ensureMats();
@@ -8828,7 +8842,9 @@ const farTreeSys = {
       m.count = 0;
       m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       m.frustumCulled = false;                // instance bounds != geometry bounds
-      m.userData.noShadow = true;
+      // they cast: the edge where tree shadows stopped was the last place
+      // the eye could tell the near trees from the far ones
+      m.castShadow = true;
       this.group.add(m);
     }
   },
@@ -12573,6 +12589,96 @@ const cityLightSys = {
     if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
   },
 };
+// ---------- SCULPT: the trowel — a disc on the ground, raise and lower ----------
+// The terrain tool of a map editor, in first person. Look at any surface
+// and a disc sits on it; scroll sets its size. Hold left click and the
+// ground under the disc rises in its own material, a smooth fill centred
+// just under the surface; hold right click and it sinks, a smooth carve
+// centred just above. Held down, it keeps going, so a hill is a few
+// seconds of holding the button and a ditch is a swipe.
+const trowelSys = {
+  disc: null, dot: null, hit: null, t: 0, lastT: 0,
+  ensure(){
+    if (this.disc && this.disc.parent === game.scene) return;
+    if (this.disc){ game.scene.add(this.disc); return; }
+    this.disc = new THREE.Mesh(new THREE.RingGeometry(0.86, 1.0, 48),
+      new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+    this.dot = new THREE.Mesh(new THREE.CircleGeometry(0.06, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+    this.disc.renderOrder = 20; this.dot.renderOrder = 21;
+    this.disc.add(this.dot);
+    this.disc.frustumCulled = false;
+    game.scene.add(this.disc);
+  },
+  hide(){ if (this.disc) this.disc.visible = false; this.hit = null; },
+  aim(usable){
+    if (!usable){ this.hide(); return; }
+    this.ensure();
+    const hit = surfaceHit();
+    if (!hit){ this.hide(); return; }
+    const le = nearEdits([hit[0] - 2, hit[1] - 2, hit[2] - 2, hit[0] + 2, hit[1] + 2, hit[2] + 2]);
+    const g = gradWorld(hit[0], hit[1], hit[2], le);
+    this.hit = { x: hit[0], y: hit[1], z: hit[2], nx: g[0], ny: g[1], nz: g[2] };
+    const r = game.ghostEff * 0.5;
+    this.disc.visible = true;
+    this.disc.position.set(hit[0] + g[0] * 0.04, hit[1] + g[1] * 0.04, hit[2] + g[2] * 0.04);
+    this.disc.scale.set(r, r, 1);
+    this.disc.lookAt(hit[0] + g[0], hit[1] + g[1], hit[2] + g[2]);
+  },
+  action(dt, now){
+    AudioSys.setHum(false, 0, 0);
+    game.act.t = 0;
+    const raise = game.mouseL, lower = game.mouseR;
+    if (!raise && !lower){ this.t = 0; return; }
+    if (!this.hit) return;
+    // first press acts at once, then a steady rhythm while held
+    const rate = game.mode === 'creative' ? 0.16 : 0.34;
+    const edge = game.mouseEdge || game.mouseREdge;
+    game.mouseREdge = false;
+    if (!edge && now - this.lastT < rate * 1000) return;
+    this.lastT = now;
+    this.stroke(raise ? 1 : -1);
+  },
+  stroke(dir){
+    const h = this.hit;
+    const eff = game.ghostEff, r = eff * 0.5;
+    const off = r * 0.55 * -dir;                         // raise: centre under the surface; lower: above
+    const cx = +(h.x + h.nx * off).toFixed(2), cy = +(h.y + h.ny * off).toFixed(2), cz = +(h.z + h.nz * off).toFixed(2);
+    if (dir > 0){
+      const m = groundMatNear({ x: h.x - h.nx * 0.2, y: h.y - h.ny * 0.2, z: h.z - h.nz * 0.2 }, 1.2);
+      if (!m){ toast('nothing to raise here'); AudioSys.sfx('deny'); return; }
+      const e = CORE.makeEdit(3, 0, cx, cy, cz, eff, m, 0);
+      e.k = +(eff * 0.5).toFixed(2);
+      const cost = CORE.placeCost(game.edits, e, game.gen);
+      if (cost === 0) return;
+      if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, m, cost)){
+        toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' — have ' + CORE.countMat(game.slots, m)); AudioSys.sfx('deny'); return;
+      }
+      applyEdit(e);
+      game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost });
+      Particles.burst(h.x, h.y, h.z, r * 0.6, [MAT_COLOR[m]], Math.min(30, 6 + cost / 8), 1.4);
+      AudioSys.sfx('place');
+    } else {
+      const e = CORE.makeEdit(4, 0, cx, cy, cz, eff, 0, 0);
+      e.k = +(eff * 0.5).toFixed(2);
+      const got = CORE.mineYield(game.edits, e, game.gen);
+      let units = 0, hw = 0;
+      for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+      if (units === 0) return;
+      applyEdit(e);
+      game.undoStack.push({ edit: e, type: 'mine', gained: got });
+      for (const m in got){
+        const oreKind = CORE.ORE_ITEM[+m];
+        if (oreKind) addStackItem(oreKind, got[m]); else CORE.addMat(game.slots, +m, got[m]);
+      }
+      collapseSys.note({ x: cx, y: cy, z: cz }, eff);
+      Particles.burst(h.x, h.y, h.z, r * 0.6, yieldColors(got), Math.min(30, 6 + units / 8), 1.8);
+      AudioSys.sfx('break', hw / units);
+    }
+    if (game.undoStack.length > 400) game.undoStack.shift();
+    refreshHotbar();
+  },
+};
 // ---------- SCULPT: the bore — a drill that follows a curve you draw ----------
 // Lay points through the world (they can float: the ghost goes where you
 // aim), a tube follows the curve through them, and a right click bores it:
@@ -15132,7 +15238,18 @@ function bindInput(){
         return;
       }
       if (tool && tool.bore){
-        boreSys.commit(!!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
+        if (!boreSys.pts.length){
+          // no points yet: right click picks the cross-section, like a drill
+          game.tool.shape = (game.tool.shape + 1) % 3;
+          toast(CORE.SHAPE_NAME[game.tool.shape] + ' bore');
+          AudioSys.sfx('toggle');
+          refreshToolHUD(); markSave();
+        } else boreSys.commit(!!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
+        return;
+      }
+      if (tool && tool.smooth){
+        // the trowel: right click held lowers the ground under the disc
+        game.mouseR = true; game.mouseREdge = true;
         return;
       }
       if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
@@ -15152,7 +15269,7 @@ function bindInput(){
   });
   document.addEventListener('mouseup', e => {
     if (e.button === 0){ wrenchSys.endDrag(); game.mouseL = false; }
-    if (e.button === 2) unscope();
+    if (e.button === 2){ game.mouseR = false; unscope(); }
   });
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
@@ -16250,6 +16367,13 @@ function updateGhost(){
     game.ghostPos = null;
     return;
   }
+  if (tool && tool.smooth){
+    // the trowel shows no shape: a disc on the surface you look at
+    game.ghostPos = null;
+    game.ghostEff = CORE.effSize(game.tool.size, tool.tier);
+    trowelSys.aim(usable);
+    return;
+  } else trowelSys.hide();
   if (!usable){ game.ghostPos = null; return; }
 
   const eff = CORE.effSize(game.tool.size, tool.tier);
@@ -18221,18 +18345,14 @@ function tryAction(dt, now){
     }
   }
 
+  if (tool.kind === 'drill' && tool.smooth){ trowelSys.action(dt, now); return; }
   const usable = game.ghostPos;
   if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
 
   if (tool.kind === 'drill'){
     if (tool.bore){ game.act.t = 0; AudioSys.setHum(false, 0, 0); boreSys.action(edge); return; }
-    if (tool.smooth && (game.keys['ShiftLeft'] || game.keys['ShiftRight'])){
-      // the trowel's other face: smooth fill, once per click
-      game.act.t = 0; AudioSys.setHum(false, 0, 0);
-      if (edge && game.mouseL) doSmoothFill(tool, p, shape, eff);
-      return;
-    }
+    if (tool.smooth){ trowelSys.action(dt, now); return; }
     if (!game.mouseL){ game.act.t = 0; AudioSys.setHum(false, 0, 0); return; }
     const plan = actionPlan(tool, p, shape, eff);
     if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
@@ -20057,9 +20177,9 @@ function itemInfoHTML(it, tool){
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
-    if (tool.smooth) html += '<div class="t2">soft edges: the join rounds over half the size</div><div class="t2">left click carves · shift + left click fills with the ground\'s own material</div>';
+    if (tool.smooth) html += '<div class="t2">the disc sits on whatever you look at · scroll sets its size</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it</div>';
     if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
-      '<div class="t2">left click lays a point · shift + left takes one back · right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material</div>';
+      '<div class="t2">left click lays a point · shift + left takes one back · ' + (boreSys.pts.length ? 'right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material' : 'right click picks the cross-section') + '</div>';
     const eff = CORE.effSize(game.tool.size, tool.tier);
     let shape = CORE.SHAPE_NAME[game.tool.shape];
     if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
@@ -21260,6 +21380,29 @@ const SKIN_FRAG = TERRAIN_FRAG
     '  }\n')
   .replace('float m = floor(vMat + 0.5);',
     'float m = floor(texture2D(uMatTex, (vPos.xz - uMatOrigin) / uMatSpan).r * 255.0 + 0.5);');
+// the skin's shadow caster: the same morph and the same yield to the real
+// world, so the skin never shadows the ground it is hiding under, and a
+// hill beyond the render distance still throws its shadow across it
+const SKIN_DEPTH_FRAG = `
+precision highp float;
+uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
+uniform vec4 uHole;
+varying vec3 vPos; varying vec3 vNrm; varying float vMat; varying float vSky; varying float vAO; varying vec3 vAxis; varying vec4 vShadowCoord;
+const float PackUpscale = 256. / 255.;
+const vec3 PackFactors = vec3(256. * 256. * 256., 256. * 256., 256.);
+const float ShiftRight8 = 1. / 256.;
+vec4 packDepthToRGBA(const in float v){ vec4 r = vec4(fract(v * PackFactors), v); r.yzw -= r.xyz * ShiftRight8; return r * PackUpscale; }
+void main(){
+  if (vPos.x > uHole.x && vPos.x < uHole.z && vPos.z > uHole.y && vPos.z < uHole.w) discard;
+  if (uMaskOn > 0.5){
+    vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;
+    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){
+      float r = texture2D(uMask, mi).r;
+      if (r > 0.3) discard;                       // any covered or seam column: the real world casts there
+    }
+  }
+  gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
+}`;
 const SKIN_WATER_VERT = `
 attribute float aDep;
 uniform float uSeaY;
@@ -21414,8 +21557,14 @@ const farTerrain = {
     if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
     lv.mesh = new THREE.Mesh(geo, this.mat[k]);
     lv.mesh.frustumCulled = false;
-    lv.mesh.castShadow = false;
-    lv.mesh.userData.noShadow = true;
+    // the two near levels cast (they are what the shadow frustum reaches)
+    lv.mesh.castShadow = k <= 1;
+    lv.mesh.userData.noShadow = k > 1;
+    if (k <= 1){
+      if (!this.depthMat) this.depthMat = [];
+      if (!this.depthMat[k]) this.depthMat[k] = new THREE.ShaderMaterial({ uniforms: this.mat[k].uniforms, vertexShader: SKIN_VERT, fragmentShader: SKIN_DEPTH_FRAG });
+      lv.mesh.customDepthMaterial = this.depthMat[k];
+    }
     this.scene.add(lv.mesh);
     const sea = game.gen.seaLevel;
     if (sea != null){
@@ -22530,7 +22679,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
