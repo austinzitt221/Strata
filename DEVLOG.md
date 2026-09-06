@@ -2,6 +2,150 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## My session 2 — the bore (2026-09-06)
+
+Another session of my own. SCULPT's second piece, the one the trowel
+taught me: a chain of smooth carves along a curve merges into one pipe.
+Verified headlessly (CORE 334, smoke, inventory and pool suites) and in
+screenshots; the renderer is still untouched.
+
+### SCULPT B — the bore
+- **A drill that follows a curve you draw.** Hold the bore and left
+  click lays a point where the ghost is -- on the ground, on a wall, or
+  floating in the air where you aimed, so a line can leave a hillside
+  and cross a valley. Shift + left click takes the last point back. A
+  wireframe tube follows the curve through the points and on to your
+  aim, so you see the next bend before you commit. Up to 32 points.
+- **Right click bores it.** The curve is sampled every third of the
+  size and each sample becomes a smooth carve with a blend radius to
+  match, so the neighbours merge into one continuous pipe: CORE proves
+  the hard chain's waist between two cuts is narrower than the cut (the
+  beads) and the smooth chain's waist opens past it, with the pipe's
+  radius steady along its length. Sphere for a round bore, cube for a
+  square one turned to the curve's heading. The boring is progressive,
+  a cut every tenth of a second in creative and every third in survival,
+  with the yields of every cut landing in your pack, so you can walk in
+  behind it. One undo takes the whole bore back.
+- **Shift + right click lays a causeway.** The same curve as a chain
+  of smooth fills of the ground's own material, probed at the first
+  point and paid for by volume in survival -- a bridge across water, an
+  embankment over a valley, a pipe along a cliff, from the same tool.
+- **Crafted** at a table from 6 iron ingots and a ruby ingot; in the
+  creative catalog under gadgets.
+- **Numbers from the field test on seed 7:** a 60 m curve into the
+  cliff by spawn became 44 cuts; every sample along the spline reads as
+  air afterwards and the one undo took all 44 back; a 40 m causeway of
+  grass across the lake landed solid along its whole length.
+
+## My session — HEARTHS and the trowel (2026-09-06)
+
+Austin gave me a session to spend however I liked. I spent it on the two
+things at the top of my own list: the villages at night, and the first
+piece of SCULPT. The renderer is untouched, as agreed, until he has
+played HORIZON.1. Verified headlessly (CORE 330, smoke, village, night
+and inventory suites) and in screenshots.
+
+### HEARTHS
+- **Village windows glow after dark.** Every side window of every house
+  within 400 m carries a warm pane once the sun is down, and a soft
+  spill of light on the wall around it so a lit house reads from across
+  the plaza. A few windows are dark on any given night (the same hash
+  the city towers use, so it changes with the day).
+- **Chimneys and smoke.** Every roof has a chimney on a back corner;
+  from dusk on (day factor under a half) the chimneys within 80 m puff
+  slow grey smoke that drifts up and thins over a few seconds.
+- **A bug I found on the way:** the city window mesh was added to the
+  scene once and never re-added after quitting to the title and
+  starting another world, so lit windows only worked in the first world
+  of a session. Both systems now re-attach.
+
+### SCULPT A — the trowel
+- **Two new edit ops in CORE**: 3 (smooth fill) and 4 (smooth carve).
+  Where the drills and dispensers cut with a hard boolean, these round
+  the join over a blend radius k (half the shape by default) with the
+  polynomial smooth-min: exact where the fields are more than k apart,
+  a fillet between. The mesher handles them like any other edit; their
+  bounds reach k past the shape; the analytic-normal path is skipped for
+  them (a blend has no face) so the dual contourer takes the numeric
+  gradient; the skin bakes them like their hard cousins; the blend
+  radius survives the save. The drills and dispensers are exactly as
+  they were -- the spec's hard carve is intact.
+- **The trowel.** A gadget: 4 iron ingots and 2 sticks at a table, or
+  the creative catalog. In the hand it is a ruby-speed drill with soft
+  edges: left click carves a smooth crater, shift + left click fills a
+  smooth mound with the ground's own material (probed from the shape's
+  centre, paid for by volume in survival). Same ghost, same shapes,
+  same scroll. In the field test the drill's crater turns the surface
+  113 degrees at its lip; the trowel's turns 34, and it looks like the
+  ground was pushed rather than cut.
+- **Why this first.** Carving is the identity of this game, and every
+  build since the first has added a system beside it. This is the first
+  tool since the wrench that changes what carving can feel like. Spline
+  tunnels, revolve shapes and mirror mode are the rest of SCULPT.
+
+## HORIZON.1 — the line, looked at properly (2026-09-05)
+
+Austin's screenshots were of HORIZON, not of Build 20; I read them wrong
+the first time and said so. Each artifact in them has a cause in the
+new code, and each is fixed here. Verified headlessly (CORE 317, the
+smoke, pool, plane and spire suites, screenshots at the ring edge).
+
+- **Sky through cracks down cliffs and across ground.** The near ring
+  inherited the coarse rings' filter that drops triangles judged
+  "lightless underground". Skylight is judged by depth below the
+  column's heightfield, so a cliff face reads as buried and its
+  triangles were thrown away in a wiggling line down the face. The near
+  ring now keeps every triangle; the feature ring keeps all but the
+  truly black.
+- **Caves covered, shown, covered again; lights flickering at the
+  line.** A ring column counted as uncovered whenever its tile was
+  waiting for a rebuild or had a chunk queued, though the old tile mesh
+  still stood, so the skin popped in over it at full height and fought
+  it. A ring column now counts by what is STANDING, the same rule the
+  terrain got in HORIZON: every chunk meshed, and every chunk with
+  geometry held by a tile mesh in the scene.
+- **Sawtooth rock over sunk sand.** The feature ring's "does something
+  rise over the ground" test compared 25 samples against 9, so any steep
+  column passed, and beyond that it meshed every landmark set-piece and
+  ruin at 2 m voxels with its ground dropped and the skin sunk beneath.
+  Within a kilometre of spawn 209 columns passed; 13 were sky islands.
+  The feature ring now carries only what floats (sky islands and their
+  spires, the island's own vertical span). Everything that stands on the
+  ground is baked into the skin's heights instead: where heightRange
+  says something rises over the plain ground, the worker marches down
+  from that top through the real field and takes the first solid as
+  the column's height, so a landmark spire at 400 m is a heightfield
+  spire lit like everything else.
+- **The stair-stepped line with a tone change.** The skin had its own
+  lighting. It is now lit by the terrain's own fragment shader -- same
+  tiles, sun, shadow, cloud shade, fog and grain -- with only the
+  material source differing (a per-level texture). The 0.6 m seam sink
+  that left a ledge along the whole ring edge is now two bands: the
+  outer seam column ducks 0.12 m, the inner 0.45 m, so the join is
+  backed without a step at the boundary. The feature ring never draws
+  inside the render distance minus 24 m, so no 2 m voxels appear where
+  the real world is about to.
+- **The dashed line of sky along the edge of the real world.** Found by
+  reproducing it headlessly at the village on seed 31 and reading the
+  mesher: an edge belongs to the chunk whose sample it starts at, so a
+  quad that straddles a chunk border belongs to the higher chunk alone.
+  When that chunk was a ring tile and the lower one real terrain, the
+  ring's per-pixel yield cut the straddling quad at the column plane and
+  the terrain never drew that half -- a slit up to half a voxel wide on
+  two sides of the real region, in a polyline along the chunk grid. The
+  ring now decides its yield per vertex and drops a triangle only when
+  all three corners stand in covered columns; a straddling quad is drawn
+  whole. Same view, same spot: the line is gone.
+- **Tile thrash at the frontier.** A ring tile shed its source data
+  5 s after going quiet; any chunk arriving after that forced every shed
+  member back through the pool before the tile could rebuild. Tiles
+  now shed only once every column in them is scanned and complete.
+- **A note on my own testing.** The headless browser reports 20 fps
+  because the frame clock is clamped to 50 ms; it actually renders at
+  about one frame a second under software GL. Every "seconds to settle"
+  number in these logs is really a frame count. Real-machine timing is
+  Austin's to report.
+
 ## HORIZON notes — thin things (2026-09-05)
 
 - **Invisible walls at small sizes, found by Austin with the wrench.**

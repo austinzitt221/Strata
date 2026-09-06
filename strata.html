@@ -1816,7 +1816,9 @@ function makeEdit(op, shape, x, y, z, size, mat, rot){
   return { op, shape, x, y, z, size, mat: mat|0, rot: rot || 0 };
 }
 function editAABB(e){
-  const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
+  // a blend reaches k past its shape
+  const pad = e.op >= 3 ? editK(e) : 0;
+  const hx = (e.sx || e.size) * 0.5 + pad, hy = (e.sy || e.size) * 0.5 + pad, hz = (e.sz || e.size) * 0.5 + pad;
   if (!editHasRot(e))
     return [e.x - hx, e.y - hy, e.z - hz, e.x + hx, e.y + hy, e.z + hz];
   // |R| * h — exact bound for boxes, conservative for the others
@@ -1847,6 +1849,23 @@ function cullEdits(edits, box, pad){
 // un-removable bits. 2cm is invisible at VOX=0.5 but pushes those faces
 // strictly into air.
 const MINE_EPS = 0.02;
+// ---- SCULPT: smooth blends. Ops 3 (smooth fill) and 4 (smooth carve)
+// round their joins over a radius k instead of cutting: the polynomial
+// smooth-min of two fields -- exact where they are more than k apart, a
+// fillet between. The drills and dispensers stay hard; this is the trowel.
+function smin(a, b, k){
+  const h = Math.max(0, Math.min(1, 0.5 + 0.5 * (b - a) / k));
+  return b + (a - b) * h - k * h * (1 - h);
+}
+function editK(e){ return e.k || Math.max(0.3, (e.size || 1) * 0.5); }
+// one edit applied to a field value d, given the shape's distance s
+function applyOp(d, e, s){
+  if (e.op === 1) return Math.min(d, s);
+  if (e.op === 0) return Math.max(d, -(s - MINE_EPS));
+  if (e.op === 3) return smin(d, s, editK(e));
+  if (e.op === 4) return -smin(-d, s - MINE_EPS, editK(e));
+  return d;
+}
 // the world SDF. `edits` must be in creation order (culling preserves order).
 function evalSDF(px, py, pz, edits, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
@@ -1854,7 +1873,7 @@ function evalSDF(px, py, pz, edits, gen){
     const e = edits[i];
     if (e.op === 2) continue;              // paint: material only, no geometry
     const s = shapeSDF(px, py, pz, e);
-    d = e.op === 1 ? Math.min(d, s) : Math.max(d, -(s - MINE_EPS));
+    d = applyOp(d, e, s);
   }
   // bedrock clamp AFTER edits: below BEDROCK_Y is solid by construction
   const b = py - BEDROCK_Y;
@@ -1877,7 +1896,7 @@ function materialAt(px, py, pz, edits, gen){
     // <= 0: boundary samples count as solid (SOLID = d <= 0), so a snapped
     // placement must claim its own faces or they'd fall through to the
     // generator's material (grass specks in placed obsidian)
-    if ((e.op === 1 || e.op === 2) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
+    if ((e.op === 1 || e.op === 2 || e.op === 3) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
   }
   return m;
 }
@@ -1925,7 +1944,7 @@ function editNormal(e, px, py, pz, axis){
     nx = w[0]; ny = w[1]; nz = w[2];
   }
   // subtract: the world field is max(d, -s), so its gradient is -grad(s)
-  if (e.op === 0){ nx = -nx; ny = -ny; nz = -nz; }
+  if (e.op === 0 || e.op === 4){ nx = -nx; ny = -ny; nz = -nz; }
   return [nx, ny, nz];
 }
 
@@ -2148,7 +2167,6 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
     const x0 = Math.max(-1, Math.floor(b[0] / VOX) - gx0), x1 = Math.min(N, Math.ceil(b[3] / VOX) - gx0);
     const y0 = Math.max(-1, Math.floor(b[1] / VOX) - gy0), y1 = Math.min(N, Math.ceil(b[4] / VOX) - gy0);
     const z0 = Math.max(-1, Math.floor(b[2] / VOX) - gz0), z1 = Math.min(N, Math.ceil(b[5] / VOX) - gz0);
-    const isU = e.op === 1;
     for (let z = z0; z <= z1; z++){
       const wz = (gz0 + z) * VOX;
       for (let y = y0; y <= y1; y++){
@@ -2156,7 +2174,7 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
         for (let x = x0; x <= x1; x++){
           const s = shapeSDF((gx0 + x) * VOX, wy, wz, e);
           const fi = FI(x, y, z);
-          field[fi] = isU ? Math.min(field[fi], s) : Math.max(field[fi], -(s - MINE_EPS));
+          field[fi] = applyOp(field[fi], e, s);
         }
       }
     }
@@ -2219,7 +2237,7 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
     // corners exact plane intersections. Terrain keeps the numeric gradient.
     let g = null, bestS = 0.035;
     for (let ei = 0; ei < le.length; ei++){
-      if (le[ei].op === 2) continue;
+      if (le[ei].op === 2 || le[ei].op >= 3) continue;   // blends have no face: numeric gradient
       const s = Math.abs(shapeSDF(px, py, pz, le[ei]));
       if (s < bestS){ bestS = s; g = editNormal(le[ei], px, py, pz, axis); }
     }
@@ -2783,6 +2801,10 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
+  // the trowel: a drill that blends
+  RECIPES.push({ kind: 'trowel', station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
+  // the bore: a drill that follows a curve you draw
+  RECIPES.push({ kind: 'bore', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
   // rails bolt together from smelted stock
   RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
   // the electric car ships as a kit: place it, drive it, charge it
@@ -2922,6 +2944,8 @@ function craft(slots, r, free){
                   : r.kind === 'disp' ? makeDispenser(r.tier)
                   : r.kind === 'sword' ? makeSword(r.tier)
                   : r.kind === 'wrench' ? makeWrench()
+                  : r.kind === 'trowel' ? { kind: 'trowel' }
+                  : r.kind === 'bore' ? { kind: 'bore' }
                   : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
@@ -2989,11 +3013,47 @@ function heightGrid(J, gen){
         }
     }
   }
+  // set-pieces that stand on the ground (landmark spires, ruin walls) are
+  // not in the heightfield but are in the field: where heightRange says
+  // something rises over the plain ground, march down from that top and
+  // take the first solid as the column's height. Judged once per 32 m cell.
+  const riseCache = new Map();
+  const riseOf = (x, z) => {
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL), k = cx + ',' + cz;
+    let v = riseCache.get(k);
+    if (v !== undefined) return v;
+    v = 0;
+    if (gen.heightRange && gen.sdf){
+      const wx0 = cx * CELL, wz0 = cz * CELL;
+      const hr = gen.heightRange(wx0, wz0, wx0 + CELL, wz0 + CELL);
+      let hmax = -1e9;
+      for (let a = 0; a <= 4; a++) for (let b = 0; b <= 4; b++){
+        const hh = gen.height(wx0 + CELL * a / 4, wz0 + CELL * b / 4);
+        if (hh > hmax) hmax = hh;
+      }
+      if (hr[1] - 4 > hmax + 1.5) v = hr[1] - 4;    // the top something reaches
+    }
+    riseCache.set(k, v);
+    return v;
+  };
+  const marchTop = (x, z, top, ground) => {
+    // sky islands float above everything: never take one as the ground
+    const S = gen.skyNear ? gen.skyNear(x, z) : null;
+    let y = S && top > S.bottom - 3 ? S.bottom - 3 : top;
+    for (let it = 0; it < 160 && y > ground + 0.3; it++){
+      const d = gen.sdf(x, y, z);
+      if (d < 0) return y;
+      y -= Math.max(0.6, d);
+    }
+    return ground;
+  };
   for (let r = 0; r <= n; r++){
     const z = z0 + r * s;
     for (let i = 0; i <= n; i++){
       const x = x0 + i * s, kk = r * N1 + i;
       let hh = gen.height(x, z);
+      const rise = riseOf(x, z);
+      if (rise > hh + 1){ const t = marchTop(x, z, rise + 1, hh); if (t > hh + 0.2) hh = t; }
       let mm = 0;                                   // 0: read the field below
       if (buckets){
         const L = buckets.get(Math.floor(x / CELL) + ',' + Math.floor(z / CELL));
@@ -3001,8 +3061,8 @@ function heightGrid(J, gen){
           const e = L[q];
           const p = editProfile(e, x, z);
           if (!p) continue;
-          if (e.op === 1){ if (p[1] > hh){ hh = p[1]; mm = e.mat; } }
-          else if (e.op === 0){ if (p[1] > hh - 0.05 && p[0] < hh){ hh = p[0]; mm = 0; } }
+          if (e.op === 1 || e.op === 3){ if (p[1] > hh){ hh = p[1]; mm = e.mat; } }
+          else if (e.op === 0 || e.op === 4){ if (p[1] > hh - 0.05 && p[0] < hh){ hh = p[0]; mm = 0; } }
           else if (e.op === 2){ if (hh >= p[0] - 0.3 && hh <= p[1] + 0.3) mm = e.mat; }
         }
       }
@@ -3122,6 +3182,10 @@ function serializeEdits(edits){
       while (row.length < 13) row.push(0);
       row.push(1);
     }
+    if (e.k){
+      while (row.length < 14) row.push(0);
+      row.push(e.k);
+    }
     a[i] = row;
   }
   return a;
@@ -3138,6 +3202,7 @@ function deserializeEdits(arr){
       if (r[11]) e.sy = r[11];
       if (r[12]) e.sz = r[12];
       if (r[13]) e.noLod = 1;
+      if (r[14]) e.k = r[14];
     }
     out[i] = e;
   }
@@ -3209,7 +3274,7 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, TIER_NAME, STEPS, tierMin, tierMax,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
@@ -4827,6 +4892,7 @@ function buildScene(){
   }
   Particles.init(scene);
   Embers.init(scene);
+  Smoke.init(scene);
   torchSys.init(scene);
   beaconSys.init(scene);
   bedSys.init(scene);
@@ -6455,6 +6521,8 @@ function makeParticleSys(MAX, size, upBias, grav, lifeMin, lifeVar){
 const Particles = makeParticleSys(800, 0.14);
 // embers: tiny, slow-rising, long-lived drift — subtle, not a fountain
 const Embers = makeParticleSys(240, 0.045, 0.32, 0.9, 1.1, 0.9);
+// chimney smoke: big soft puffs that drift up and thin out
+const Smoke = makeParticleSys(500, 0.6, 0.55, -0.12, 2.6, 2.6);
 
 // ---------- day/night ----------
 const DAY_CYCLE = 600;                       // seconds per full day
@@ -12449,7 +12517,8 @@ const siegeSys = {
 const cityLightSys = {
   mesh: null, cap: 6000, builtFor: '', lastDay: -1, checkT: 9,
   ensure(){
-    if (this.mesh) return;
+    if (this.mesh && this.mesh.parent === game.scene) return;
+    if (this.mesh){ game.scene.add(this.mesh); this.builtFor = ''; return; }   // a new world's scene
     const geo = new THREE.BoxGeometry(1, 1, 0.1);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 });
     this.mesh = new THREE.InstancedMesh(geo, mat, this.cap);
@@ -12502,6 +12571,268 @@ const cityLightSys = {
     // the set of nearby stamped cities, and the night, decide the panes
     const sig = Object.keys(game.cities || {}).filter(k => game.cities[k].stamped && Math.hypot(game.cities[k].x - game.pos.x, game.cities[k].z - game.pos.z) < 700).join('|') + '#' + (game.day || 0);
     if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
+  },
+};
+// ---------- SCULPT: the bore — a drill that follows a curve you draw ----------
+// Lay points through the world (they can float: the ghost goes where you
+// aim), a tube follows the curve through them, and a right click bores it:
+// a chain of smooth carves along the spline, spaced a third of the size
+// apart with a blend radius to match, so the neighbours merge into one
+// continuous pipe instead of a string of beads. Shift + right click lays
+// the same curve as a causeway of the ground's own material. The bore
+// works progressively -- you can walk in behind it -- and undoes as one.
+const boreSys = {
+  pts: [], group: null, tube: null, line: null, marks: null, job: null, key: '', seq: 0,
+  ensure(){
+    if (this.group && this.group.parent === game.scene) return;
+    if (this.group){ game.scene.add(this.group); return; }
+    this.group = new THREE.Group();
+    this.group.userData.noShadow = true;
+    this.tubeMat = new THREE.MeshBasicMaterial({ color: 0x9fd8ff, wireframe: true, transparent: true, opacity: 0.55, depthWrite: false });
+    this.lineMat = new THREE.LineBasicMaterial({ color: 0xdff2ff, transparent: true, opacity: 0.9 });
+    this.marks = new THREE.InstancedMesh(new THREE.SphereGeometry(0.22, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }), 32);
+    this.marks.count = 0; this.marks.frustumCulled = false;
+    this.group.add(this.marks);
+    game.scene.add(this.group);
+  },
+  curveOf(pts){
+    return new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal', 0.5);
+  },
+  action(edge){
+    if (!edge || !game.mouseL || !game.ghostPos) return;
+    const shift = game.keys['ShiftLeft'] || game.keys['ShiftRight'];
+    if (shift){
+      if (this.pts.length){ this.pts.pop(); toast(this.pts.length ? this.pts.length + ' points' : 'cleared'); AudioSys.sfx('toggle'); }
+      refreshToolHUD();
+      return;
+    }
+    if (this.pts.length >= 32){ toast('32 points is the most a bore can follow'); return; }
+    const p = game.ghostPos;
+    this.pts.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.z.toFixed(2)]);
+    AudioSys.sfx('select');
+    refreshToolHUD();
+  },
+  // the edits a commit would make along the current curve
+  plan(fill){
+    const eff = game.ghostEff || CORE.effSize(game.tool.size, 2);
+    const curve = this.curveOf(this.pts);
+    const len = curve.getLength();
+    const spacing = Math.max(0.3, eff * 0.35);
+    const n = Math.max(2, Math.ceil(len / spacing));
+    const samples = curve.getSpacedPoints(n);
+    const shape = game.tool.shape;
+    const out = [];
+    for (let i = 0; i < samples.length; i++){
+      const q = samples[i];
+      const t0 = samples[Math.max(0, i - 1)], t1 = samples[Math.min(samples.length - 1, i + 1)];
+      const rot = shape === 0 ? 0 : Math.atan2(-(t1.x - t0.x), -(t1.z - t0.z));
+      const e = CORE.makeEdit(fill ? 3 : 4, shape, +q.x.toFixed(2), +q.y.toFixed(2), +q.z.toFixed(2), eff, 0, +rot.toFixed(3));
+      e.k = +(eff * 0.35).toFixed(2);
+      out.push(e);
+    }
+    return { edits: out, len, eff };
+  },
+  commit(fill){
+    if (this.job){ toast('still boring'); return; }
+    if (this.pts.length < 2){ toast('lay at least two points first'); AudioSys.sfx('deny'); return; }
+    const P = this.plan(fill);
+    let mat = 0;
+    if (fill){
+      mat = groundMatNear({ x: this.pts[0][0], y: this.pts[0][1], z: this.pts[0][2] }, P.eff + 2);
+      if (!mat){ toast('the first point must be near solid ground to lay from'); AudioSys.sfx('deny'); return; }
+      for (const e of P.edits) e.mat = mat;
+    }
+    this.job = { edits: P.edits, i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
+                 step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    this.pts = [];
+    toast((fill ? 'laying ' : 'boring ') + Math.round(P.len) + ' m · ' + P.edits.length + ' cuts');
+    AudioSys.sfx('craft');
+    refreshToolHUD();
+  },
+  tick(dt){
+    if (!game.running) return;
+    const J = this.job;
+    if (J){
+      J.t += dt;
+      while (J && J.t >= J.step && J.i < J.edits.length){
+        J.t -= J.step;
+        const e = J.edits[J.i++];
+        if (J.fill){
+          const cost = CORE.placeCost(game.edits, e, game.gen);
+          if (cost > 0){
+            if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, J.mat, cost)){
+              toast('out of ' + CORE.MAT_NAME[J.mat] + ' — the causeway stops here'); AudioSys.sfx('deny');
+              this.job = null; break;
+            }
+            applyEdit(e);
+            game.undoStack.push({ edit: e, type: 'place', mat: J.mat, cost: game.mode === 'creative' ? 0 : cost, group: J.group });
+            J.spent += cost;
+            Particles.burst(e.x, e.y, e.z, e.size * 0.4, [MAT_COLOR[J.mat]], 6, 1.4);
+          }
+        } else {
+          const got = CORE.mineYield(game.edits, e, game.gen);
+          let units = 0; for (const m in got) units += got[m];
+          if (units > 0){
+            applyEdit(e);
+            game.undoStack.push({ edit: e, type: 'mine', gained: got, group: J.group });
+            for (const m in got){
+              const oreKind = CORE.ORE_ITEM[+m];
+              if (oreKind) addStackItem(oreKind, got[m]); else CORE.addMat(game.slots, +m, got[m]);
+              J.gained[m] = (J.gained[m] || 0) + got[m];
+            }
+            Particles.burst(e.x, e.y, e.z, e.size * 0.4, yieldColors(got), 8, 2.0);
+            if (J.i % 3 === 0) AudioSys.sfx('break', 1);
+          }
+        }
+        if (game.undoStack.length > 400) game.undoStack.shift();
+      }
+      if (this.job && J.i >= J.edits.length){
+        this.job = null;
+        if (J.fill) toast('causeway laid · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
+        else {
+          const parts = [];
+          for (const m in J.gained){ const ok = CORE.ORE_ITEM[+m]; parts.push('+' + J.gained[m] + ' ' + (ok ? itemLabel({ kind: ok }) : CORE.MAT_NAME[m])); }
+          toast('bored through' + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
+        }
+        AudioSys.sfx('craft');
+        refreshHotbar(); refreshToolHUD();
+      }
+    }
+    // the preview, while the bore is in hand
+    const tool = activeTool();
+    const held = !!(tool && tool.bore && game.ui === 'none');
+    if (!held){
+      if (this.group) this.group.visible = false;
+      if (!held && this.pts.length && !(tool && tool.bore)){ this.pts = []; this.key = ''; }
+      return;
+    }
+    this.ensure();
+    this.group.visible = true;
+    const pts = this.pts.slice();
+    if (game.ghostPos && !(game.keys['ShiftLeft'] || game.keys['ShiftRight'])) pts.push([game.ghostPos.x, game.ghostPos.y, game.ghostPos.z]);
+    const eff = game.ghostEff || 1;
+    const key = pts.map(p => p.map(v => v.toFixed(1)).join(',')).join('|') + '#' + eff.toFixed(2);
+    if (key === this.key) return;
+    this.key = key;
+    if (this.tube){ this.group.remove(this.tube); this.tube.geometry.dispose(); this.tube = null; }
+    if (this.line){ this.group.remove(this.line); this.line.geometry.dispose(); this.line = null; }
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < this.pts.length && i < 32; i++){ m.makeTranslation(this.pts[i][0], this.pts[i][1], this.pts[i][2]); this.marks.setMatrixAt(i, m); }
+    this.marks.count = Math.min(32, this.pts.length); this.marks.instanceMatrix.needsUpdate = true;
+    if (pts.length >= 2){
+      const curve = this.curveOf(pts);
+      const segs = Math.max(8, Math.min(200, Math.ceil(curve.getLength() / 0.8)));
+      this.tube = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, eff * 0.5, 8, false), this.tubeMat);
+      this.tube.frustumCulled = false;
+      this.group.add(this.tube);
+      this.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(segs)), this.lineMat);
+      this.line.frustumCulled = false;
+      this.group.add(this.line);
+    }
+  },
+};
+// ---------- HEARTHS: village windows glow after dark, chimneys smoke at dusk ----------
+// Walking up to a village at night should feel like arriving somewhere.
+// Every house window is a warm pane once the sun is down (most of them --
+// a few are dark tonight), every roof carries a chimney, and from dusk the
+// chimneys within earshot puff smoke that drifts up and thins.
+const hearthSys = {
+  panes: null, halos: null, chimneys: null, cap: 1200, builtFor: '', checkT: 9, puffT: 0, spots: [],
+  ensure(){
+    if (this.panes && this.panes.parent === game.scene) return;
+    if (this.panes){ game.scene.add(this.panes); game.scene.add(this.halos); game.scene.add(this.chimneys); this.builtFor = ''; return; }
+    const pg = new THREE.BoxGeometry(1, 1, 0.06);
+    const pm = new THREE.MeshBasicMaterial({ color: 0xffb457, transparent: true, opacity: 0.95 });
+    this.panes = new THREE.InstancedMesh(pg, pm, this.cap);
+    this.panes.frustumCulled = false; this.panes.count = 0; this.panes.visible = false;
+    this.panes.userData.noShadow = true;
+    // a soft spill of light on the wall around each pane, so a lit house
+    // reads from across the plaza
+    const hm = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.halos = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), hm, this.cap);
+    this.halos.frustumCulled = false; this.halos.count = 0; this.halos.visible = false;
+    this.halos.userData.noShadow = true;
+    const cg = new THREE.BoxGeometry(0.7, 1.3, 0.7);
+    const cm = new THREE.MeshLambertMaterial({ color: 0x77726e });
+    this.chimneys = new THREE.InstancedMesh(cg, cm, 400);
+    this.chimneys.frustumCulled = false; this.chimneys.count = 0;
+    this.chimneys.castShadow = true;
+    game.scene.add(this.panes); game.scene.add(this.halos); game.scene.add(this.chimneys);
+  },
+  rebuild(){
+    this.ensure();
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    const Y = new THREE.Vector3(0, 1, 0);
+    let i = 0, c = 0;
+    this.spots = [];
+    const day = game.day || 0;
+    for (const key in (game.villages || {})){
+      const rec = game.villages[key];
+      if (!rec.stamped || !rec.houses) continue;
+      if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 400) continue;
+      rec.houses.forEach((hrec, hi) => {
+        const w = hrec.w || 5.4, d = hrec.d || 5.4, two = !!hrec.two;
+        const g = hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z);
+        const [fx, fz] = hrec.face;
+        const px2 = fz, pz2 = fx;
+        const at = (af, ap) => [hrec.x + fx * af + px2 * ap, hrec.z + fz * af + pz2 * ap];
+        const hf = (fx ? w : d) / 2, hp = (fx ? d : w) / 2;
+        const shellTop = two ? 6.7 : 3.4;
+        // panes in every side window, facing across the perpendicular axis
+        const rows = two ? [2.1, 4.85] : [2.1];
+        for (const wy of rows) for (const sgn of [-1, 1]){
+          const h = CORE.mulberry32((rec.seed || 1) ^ Math.imul(hi + 3, 7919) ^ Math.imul(sgn + 5, 104729) ^ Math.imul(Math.round(wy * 10), 3331) ^ Math.imul(day + 1, 2654435761))();
+          if (h > 0.82 || i >= this.cap) continue;              // dark tonight
+          const [wx, wz] = at(0, (hp - 0.2) * sgn);
+          pos.set(wx, g + wy, wz);
+          q.setFromAxisAngle(Y, px2 ? Math.PI / 2 : 0);
+          scl.set(0.9, 0.8, 1);
+          m.compose(pos, q, scl);
+          this.panes.setMatrixAt(i, m);
+          // the halo sits just outside the wall, facing out
+          const [ox, oz] = at(0, (hp + 0.08) * sgn);
+          pos.set(ox, g + wy - 0.1, oz);
+          q.setFromAxisAngle(Y, px2 ? (px2 * sgn > 0 ? Math.PI / 2 : -Math.PI / 2) : (pz2 * sgn > 0 ? 0 : Math.PI));
+          scl.set(2.4, 2.0, 1);
+          m.compose(pos, q, scl);
+          this.halos.setMatrixAt(i++, m);
+        }
+        // the chimney on a back corner of the roof
+        if (c < 400){
+          const [cx, cz] = at(-(hf - 1.0), hp - 1.0);
+          const cy = g + shellTop + 0.5 + 0.55;
+          pos.set(cx, cy, cz); q.identity(); scl.set(1, 1, 1);
+          m.compose(pos, q, scl);
+          this.chimneys.setMatrixAt(c++, m);
+          this.spots.push([cx, cy + 0.75, cz]);
+        }
+      });
+    }
+    this.panes.count = i; this.panes.instanceMatrix.needsUpdate = true;
+    this.halos.count = i; this.halos.instanceMatrix.needsUpdate = true;
+    this.chimneys.count = c; this.chimneys.instanceMatrix.needsUpdate = true;
+  },
+  tick(dt){
+    if (!game.running || !game.villages) return;
+    this.checkT += dt;
+    const night = game.dayF < 0.32;
+    if (this.panes){ this.panes.visible = night; this.halos.visible = night; }
+    if (this.checkT >= 2){
+      this.checkT = 0;
+      const sig = Object.keys(game.villages).filter(k => game.villages[k].stamped && Math.hypot(game.villages[k].x - game.pos.x, game.villages[k].z - game.pos.z) < 400).join('|') + '#' + (game.day || 0);
+      if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); if (this.panes){ this.panes.visible = night; this.halos.visible = night; } }
+    }
+    // smoke from dusk on, from the chimneys near you
+    if (game.dayF < 0.5 && this.spots.length){
+      this.puffT += dt;
+      if (this.puffT > 0.45){
+        this.puffT = 0;
+        for (const sp of this.spots){
+          if (Math.hypot(sp[0] - game.pos.x, sp[2] - game.pos.z) > 80) continue;
+          Smoke.burst(sp[0], sp[1], sp[2], 0.15, [0xb5b0aa, 0xc9c4bd, 0x9a9691], 2, 0.35);
+        }
+      }
+    }
   },
 };
 // ---------- the Ziggurat ----------
@@ -14800,6 +15131,10 @@ function bindInput(){
         markSave();
         return;
       }
+      if (tool && tool.bore){
+        boreSys.commit(!!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
+        return;
+      }
       if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
         game.tool.shape = (game.tool.shape + 1) % 3;
         toast(CORE.SHAPE_NAME[game.tool.shape]);
@@ -15805,6 +16140,10 @@ function activeTool(){
   const it = selectedItem();
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  // the trowel is a drill that blends: ruby-tier speed and sizes, soft edges
+  if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
+  // the bore: a drill that follows a curve you draw
+  if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -17080,7 +17419,8 @@ function yieldColors(got){
   return cols;
 }
 function doMine(tool, p, shape, eff){
-  const e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  const e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  if (tool.smooth) e.k = +(eff * 0.5).toFixed(2);
   const got = CORE.mineYield(game.edits, e, game.gen);
   let units = 0, hw = 0;
   for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
@@ -17173,8 +17513,57 @@ function doPlace(tool, p, shape, eff){
   Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[tool.mat]], Math.min(40, 8 + cost / 6), 1.6);
   refreshHotbar(); refreshToolHUD();
 }
+// the trowel's fill: blend the ground's own material outward. The material
+// is whatever solid the shape touches (probed out from its centre), and it
+// costs that material by the hard shape's volume.
+// the nearest solid to a point, probed out along the six axes: what a fill
+// blends into. Returns its material, or 0 for open air / bedrock.
+function groundMatNear(p, reach){
+  const le = nearEdits([p.x - reach - 2, p.y - reach - 2, p.z - reach - 2, p.x + reach + 2, p.y + reach + 2, p.z + reach + 2]);
+  const dirs = [[0, -1, 0], [0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0]];
+  for (let t = 0; t <= reach; t += 0.25)
+    for (const d of dirs){
+      const x = p.x + d[0] * t, y = p.y + d[1] * t, z = p.z + d[2] * t;
+      if (CORE.evalSDF(x, y, z, le, game.gen) <= 0){
+        const m = CORE.materialAt(x, y, z, le, game.gen);
+        return m === CORE.MAT.BEDROCK ? 0 : m;
+      }
+    }
+  return 0;
+}
+function doSmoothFill(tool, p, shape, eff){
+  const m = groundMatNear(p, eff + 1.0);
+  if (!m){ toast('nothing to blend into'); AudioSys.sfx('deny'); return; }
+  const e = applyToolRot(CORE.makeEdit(3, shape, p.x, p.y, p.z, eff, m, editRot(shape)));
+  e.k = +(eff * 0.5).toFixed(2);
+  const cost = CORE.placeCost(game.edits, e, game.gen);
+  if (cost === 0) return;
+  if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, m, cost)){
+    toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' — have ' + CORE.countMat(game.slots, m));
+    AudioSys.sfx('deny');
+    return;
+  }
+  applyEdit(e);
+  game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost });
+  if (game.undoStack.length > 64) game.undoStack.shift();
+  toast('blended ' + cost + ' ' + CORE.MAT_NAME[m]);
+  AudioSys.sfx('place');
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[m]], Math.min(40, 8 + cost / 6), 1.6);
+  refreshHotbar(); refreshToolHUD();
+}
 function undoEdit(){
   if (!game.edits.length){ toast('nothing to undo'); return; }
+  const first = undoOne();
+  // a bore is one action: its edits share a group and come back together
+  if (first && first.group)
+    while (game.undoStack.length && game.undoStack[game.undoStack.length - 1].group === first.group &&
+           game.edits.length && game.edits[game.edits.length - 1] === game.undoStack[game.undoStack.length - 1].edit) undoOne();
+  wrenchSys.validate();
+  toast('undo');
+  AudioSys.sfx('undo');
+  refreshHotbar(); refreshToolHUD(); markSave();
+}
+function undoOne(){
   const e = game.edits.pop();
   game.terrain.invalidate(e);
   const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
@@ -17195,10 +17584,7 @@ function undoEdit(){
       CORE.addMat(game.slots, rec.mat, rec.cost);
     }
   }
-  wrenchSys.validate();
-  toast('undo');
-  AudioSys.sfx('undo');
-  refreshHotbar(); refreshToolHUD(); markSave();
+  return rec;
 }
 
 // Hold LMB to break one shape over the tier's mine time (drill keeps cycling
@@ -17803,7 +18189,7 @@ function tryAction(dt, now){
   }
 
   // drill chops trees (fighting needs a sword or the blaster)
-  if (tool.kind === 'drill' && game.mouseL){
+  if (tool.kind === 'drill' && game.mouseL && !tool.bore){
     const treeKey = treeSys.onRay(PLAYER.reach * 0.8);
     if (treeKey){
       const chopDur = game.mode === 'creative' ? 0.15 : 1.4 / (1 + tool.tier * 0.35);
@@ -17820,7 +18206,7 @@ function tryAction(dt, now){
 
   // TUNNELER CORE (the Burrower's drop): with the core in your pack, a held
   // drill bores a walking-pace corridor straight ahead -- no aiming, just go
-  if (tool.kind === 'drill' && game.mouseL && CORE.countItem(game.slots, 'tcore') > 0){
+  if (tool.kind === 'drill' && game.mouseL && !tool.bore && CORE.countItem(game.slots, 'tcore') > 0){
     if (now - (game.tunnelT || 0) > 450){
       const dir = new THREE.Vector3();
       game.camera.getWorldDirection(dir);
@@ -17840,6 +18226,13 @@ function tryAction(dt, now){
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
 
   if (tool.kind === 'drill'){
+    if (tool.bore){ game.act.t = 0; AudioSys.setHum(false, 0, 0); boreSys.action(edge); return; }
+    if (tool.smooth && (game.keys['ShiftLeft'] || game.keys['ShiftRight'])){
+      // the trowel's other face: smooth fill, once per click
+      game.act.t = 0; AudioSys.setHum(false, 0, 0);
+      if (edge && game.mouseL) doSmoothFill(tool, p, shape, eff);
+      return;
+    }
     if (!game.mouseL){ game.act.t = 0; AudioSys.setHum(false, 0, 0); return; }
     const plan = actionPlan(tool, p, shape, eff);
     if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
@@ -18491,6 +18884,22 @@ function itemIconURL(it){
     c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
     c.fillStyle = '#59c8d8'; c.fillRect(8, 3, 3, 2);
+  } else if (it.kind === 'bore'){
+    // a ringed cutter head on a stub
+    c.fillStyle = '#5a4632'; c.fillRect(2, 10, 4, 3);
+    c.fillStyle = '#3c3a44'; c.fillRect(5, 7, 3, 7);
+    c.fillStyle = '#9a9aa4'; c.fillRect(8, 3, 6, 11);
+    c.fillStyle = '#c8c8d0'; c.fillRect(9, 4, 4, 9);
+    c.fillStyle = '#3c3a44'; c.fillRect(10, 5, 2, 2); c.fillRect(10, 8, 2, 2); c.fillRect(10, 11, 2, 2);
+    c.fillStyle = '#ffffff44'; c.fillRect(8, 3, 6, 1);
+  } else if (it.kind === 'trowel'){
+    // a flat blade on a short handle
+    c.fillStyle = '#5a4632'; c.fillRect(2, 11, 4, 3);
+    c.fillStyle = '#7a6244'; c.fillRect(3, 10, 3, 2);
+    c.fillStyle = '#9a9aa4'; c.fillRect(6, 9, 2, 3);
+    c.fillStyle = '#c8c8d0';
+    c.fillRect(8, 3, 6, 9); c.fillRect(7, 5, 1, 6); c.fillRect(14, 5, 1, 5);
+    c.fillStyle = '#ffffff44'; c.fillRect(9, 4, 4, 1);
   } else if (it.kind === 'sword'){
     const col = TIER_COL[it.tier];
     c.fillStyle = '#5a4632'; c.fillRect(3, 11, 3, 3);
@@ -18626,6 +19035,8 @@ function itemLabel(it){
   if (it.kind === 'bulb') return 'lightbulb';
   if (it.kind === 'stove') return 'stove';
   if (it.kind === 'wrench') return 'wrench';
+  if (it.kind === 'trowel') return 'trowel';
+  if (it.kind === 'bore') return 'bore';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -18800,7 +19211,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -18856,6 +19267,8 @@ function catalogEntries(){
   const out = [];
   for (let m = 1; m <= CORE.NMAT; m++) out.push({ kind: 'mat', mat: m, count: 500 });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDrill(t));
+  out.push({ kind: 'trowel' });
+  out.push({ kind: 'bore' });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDispenser(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeSword(t));
   for (let t = 0; t < 5; t++) out.push({ kind: 'helm', tier: t });
@@ -19639,10 +20052,14 @@ function itemInfoHTML(it, tool){
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
           : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
-    const name = tool.kind === 'drill'
+    const name = tool.bore ? 'bore' : tool.smooth ? 'trowel'
+      : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
+    if (tool.smooth) html += '<div class="t2">soft edges: the join rounds over half the size</div><div class="t2">left click carves · shift + left click fills with the ground\'s own material</div>';
+    if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
+      '<div class="t2">left click lays a point · shift + left takes one back · right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material</div>';
     const eff = CORE.effSize(game.tool.size, tool.tier);
     let shape = CORE.SHAPE_NAME[game.tool.shape];
     if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
@@ -20080,6 +20497,10 @@ function wireItemTips(){
 function activeToolOf(it){
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
+  // the trowel is a drill that blends: ruby-tier speed and sizes, soft edges
+  if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
+  // the bore: a drill that follows a curve you draw
+  if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -20797,7 +21218,7 @@ attribute float aAO;
 uniform mat4 uShadowMatrix;
 uniform vec2 uPlayer; uniform vec2 uMorph;
 uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
-varying vec3 vW; varying vec3 vN; varying float vAO; varying vec4 vShadowCoord;
+varying vec3 vPos; varying vec3 vNrm; varying float vMat; varying float vSky; varying float vAO; varying vec3 vAxis; varying vec4 vShadowCoord;
 void main(){
   vec3 p = position;
   float d = max(abs(p.x - uPlayer.x), abs(p.z - uPlayer.y));
@@ -20805,95 +21226,40 @@ void main(){
   p.y = mix(position.y, aHc, m);
   vec3 n = normalize(mix(normal, aNc, m));
   if (uMaskOn > 0.5){
+    // under the two seam columns at the edge of coverage the skin ducks
+    // below the real surface: a little at the outer column, more inside,
+    // so the join is backed without a ledge at the boundary
     vec2 mi = (p.xz - uMaskOrigin) / uMaskSpan;
     if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){
       float r = texture2D(uMask, mi).r;
-      if ((r > 0.3 && r < 0.45) || (r > 0.7 && r < 0.9)) p.y -= 0.6;
+      if ((r > 0.38 && r < 0.41) || (r > 0.77 && r < 0.80)) p.y -= 0.12;
+      else if ((r > 0.42 && r < 0.45) || (r > 0.81 && r < 0.84)) p.y -= 0.45;
     }
   }
-  vW = p; vN = n; vAO = aAO;
+  vPos = p; vNrm = n; vMat = 0.0; vSky = 1.0; vAO = aAO; vAxis = vec3(0.0);
   vShadowCoord = uShadowMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
-const SKIN_FRAG = `
-precision highp float;
-uniform sampler2D uAtlas;
-uniform float uNMat;
-uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uAmbCol; uniform vec3 uFogCol;
-uniform float uFogFar; uniform float uLampSky; uniform float uTime; uniform vec3 uSeason;
-uniform sampler2D uShadowMap; uniform float uShadowOn; uniform float uShadowTexel;
-uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
-uniform sampler2D uMatTex; uniform vec2 uMatOrigin; uniform float uMatSpan;
-uniform vec4 uHole;
-varying vec3 vW; varying vec3 vN; varying float vAO; varying vec4 vShadowCoord;
-float hash3(vec3 p){
-  p = mod(p, 64.0);
-  return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
-}
-float vnoise(vec3 p){
-  vec3 i = floor(p), f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float a = hash3(i),                  b = hash3(i + vec3(1, 0, 0));
-  float c = hash3(i + vec3(0, 1, 0)),  d = hash3(i + vec3(1, 1, 0));
-  float e = hash3(i + vec3(0, 0, 1)),  g = hash3(i + vec3(1, 0, 1));
-  float h = hash3(i + vec3(0, 1, 1)),  k = hash3(i + vec3(1, 1, 1));
-  return mix(mix(mix(a, b, f.x), mix(c, d, f.x), f.y),
-             mix(mix(e, g, f.x), mix(h, k, f.x), f.y), f.z);
-}
-float unpackRGBAToDepth(const in vec4 v){
-  const vec4 UnpackFactors = (255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0);
-  return dot(v, UnpackFactors);
-}
-void main(){
-  // the finer level's extent is its hole
-  if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
-  if (uMaskOn > 0.5){
-    vec2 mi = (vW.xz - uMaskOrigin) / uMaskSpan;
-    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
-        texture2D(uMask, mi).r > 0.45) discard;
-  }
-  vec3 n = normalize(vN);
-  vec3 an = abs(n);
-  vec2 uv;
-  if (an.y >= an.x && an.y >= an.z)      uv = vW.xz;
-  else if (an.x >= an.z)                 uv = vW.zy;
-  else                                   uv = vW.xy;
-  float m = floor(texture2D(uMatTex, (vW.xz - uMatOrigin) / uMatSpan).r * 255.0 + 0.5);
-  float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
-  float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
-  vec3 tex = texture2D(uAtlas, vec2((m + fx) / uNMat, fy)).rgb;
-  vec3 col = tex;
-  float diff = max(dot(n, uSunDir), 0.0);
-  float sunVis = 1.0;
-  if (uShadowOn > 0.5){
-    vec3 sc = vShadowCoord.xyz / vShadowCoord.w;
-    if (sc.x > 0.002 && sc.x < 0.998 && sc.y > 0.002 && sc.y < 0.998 && sc.z < 1.0){
-      float ndl = clamp(dot(n, uSunDir), 0.0, 1.0);
-      float z = sc.z - max(0.0012, 0.0045 * (1.0 - ndl));
-      float lit = 0.0;
-      for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -1; dx <= 1; dx++)
-          lit += step(z, unpackRGBAToDepth(texture2D(uShadowMap,
-            sc.xy + vec2(float(dx), float(dy)) * uShadowTexel * 1.4)));
-      sunVis = lit / 9.0;
-    }
-  }
-  float dayF = clamp(uLampSky / 0.85 * 1.4, 0.0, 1.0);
-  sunVis = mix(1.0, sunVis, dayF);
-  sunVis *= 1.0 - dayF * 0.28 *
-    smoothstep(0.58, 0.82, vnoise(vec3(vW.x * 0.045 + uTime * 0.055, 3.7, vW.z * 0.045 + uTime * 0.013)));
-  vec3 ambCol = mix(uAmbCol * vec3(0.90, 0.96, 1.10), uAmbCol, sunVis);
-  vec3 lit = ambCol * (0.85 + 0.15 * n.y) + uSunCol * diff * sunVis;
-  col = col * min(lit, vec3(1.05));
-  col *= 0.72 + 0.28 * vAO;
-  col *= 0.95 + 0.10 * vnoise(vW * 0.33);
-  if (m == 15.0) col = max(col, tex * 1.2);   // lava stays lit at any distance
-  if (m == 6.0) col *= uSeason;
-  if (m == 16.0) col = max(col, tex * 0.55);  // crystal
-  float dist = gl_FragCoord.z / gl_FragCoord.w;
-  float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
-  gl_FragColor = vec4(mix(col, uFogCol, fog), 1.0);
-}`;
+// the far skin is lit by the terrain's own fragment shader -- same
+// triplanar tiles, sun, shadows, cloud shade, fog and grain -- so the line
+// where the real world ends is not a change of tone. Only the material
+// source differs: a per-level texture instead of a vertex attribute.
+const SKIN_FRAG = TERRAIN_FRAG
+  .replace('varying vec4 vShadowCoord;',
+    'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;\n' +
+    'uniform sampler2D uMatTex; uniform vec2 uMatOrigin; uniform float uMatSpan;\nuniform vec4 uHole;\nvarying vec4 vShadowCoord;')
+  .replace('void main(){',
+    'void main(){\n' +
+    '  if (vPos.x > uHole.x && vPos.x < uHole.z && vPos.z > uHole.y && vPos.z < uHole.w) discard;\n' +
+    '  if (uMaskOn > 0.5){\n' +
+    '    vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
+    '    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){\n' +
+    '      float r = texture2D(uMask, mi).r;\n' +
+    '      if ((r > 0.47 && r < 0.75) || r > 0.95) discard;\n' +
+    '    }\n' +
+    '  }\n')
+  .replace('float m = floor(vMat + 0.5);',
+    'float m = floor(texture2D(uMatTex, (vPos.xz - uMatOrigin) / uMatSpan).r * 255.0 + 0.5);');
 const SKIN_WATER_VERT = `
 attribute float aDep;
 uniform float uSeaY;
@@ -20966,12 +21332,7 @@ const farTerrain = {
       fragmentShader: SKIN_WATER_FRAG,
     }));
     this.mat = this.L.map((Lk, k) => new THREE.ShaderMaterial({
-      uniforms: Object.assign({
-        uAtlas: tu.uAtlas, uNMat: tu.uNMat,
-        uSunDir: tu.uSunDir, uSunCol: tu.uSunCol, uAmbCol: tu.uAmbCol,
-        uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uLampSky: tu.uLampSky,
-        uTime: tu.uTime, uSeason: tu.uSeason, uShadowMap: tu.uShadowMap, uShadowOn: tu.uShadowOn,
-        uShadowTexel: tu.uShadowTexel, uShadowMatrix: tu.uShadowMatrix,
+      uniforms: Object.assign(Object.assign({}, tu), {   // every live terrain uniform, shared
         uMaskOn: { value: k === 0 ? 1 : 0 },
         uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
         uPlayer: this.uPlayer,
@@ -20995,7 +21356,7 @@ const farTerrain = {
       this.dirty = false;
       for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
     }
-    if (++this.maskFrame >= 4){ this.maskFrame = 0; this.updateMask(); }
+    if (++this.maskFrame >= 2){ this.maskFrame = 0; this.updateMask(); }
     let inflight = 0;
     for (const lv of this.levels) if (lv.job) inflight++;
     if (inflight < 2)
@@ -21098,9 +21459,9 @@ const farTerrain = {
     }
     return r;
   },
-  // mask values: 0 open (skin draws) · 100 ring seam (ring draws, skin draws
-  // sunk) · 128 ring covered (ring draws) · 200 terrain seam (terrain draws,
-  // skin draws sunk) · 255 terrain covered. A column counts as covered by
+  // mask values: 0 open (skin draws) · 100/110 ring seam, outer/inner (ring
+  // draws, skin draws ducked 0.12/0.45) · 128 ring covered (ring draws) ·
+  // 200/210 terrain seam (terrain draws, skin ducked) · 255 terrain covered. A column counts as covered by
   // what is STANDING in it, never by what is queued or dirty: the old mesh
   // stays in the scene until its replacement lands, so nothing flips.
   updateMask(){
@@ -21132,12 +21493,24 @@ const farTerrain = {
         if (ring.feat) continue;                  // it draws only what rises over the skin
         const span = ring.m / CORE.CHUNK_M;
         if (ring.far > ringR) ringR = ring.far;
-        for (const [ck, pend] of ring.cols){
-          if (pend.size) continue;
+        // a column is covered when every chunk of it is STANDING: meshed,
+        // and if it has geometry, held by a tile mesh in the scene. Queued
+        // or stale does not count -- the old mesh is still there.
+        const colOK = this._colOK || (this._colOK = new Map());
+        colOK.clear();
+        for (const [k, ch] of ring.chunks){
+          const p1 = k.indexOf(','), p2 = k.indexOf(',', p1 + 1);
+          const ck = k.slice(0, p1) + ',' + k.slice(p2 + 1);
+          const ok = !!(ch.done && (!ch.hasData || ch.built));
+          const prev = colOK.get(ck);
+          colOK.set(ck, prev === undefined ? ok : (prev && ok));
+        }
+        for (const [ck, ok] of colOK){
+          if (!ok) continue;
+          const pend = ring.cols.get(ck);
+          if (!pend || pend.has('*')) continue;     // never scanned: unknown
           const ci = ck.indexOf(',');
           const cx = +ck.slice(0, ci), cz = +ck.slice(ci + 1);
-          const t = ring.tiles.get(Math.floor(cx * ring.m / ring.tile) + ',' + Math.floor(cz * ring.m / ring.tile));
-          if (!t || t.stale || !t.mesh) continue;
           const ix0 = cx * span - ox, iz0 = cz * span - oz;
           for (let dz2 = 0; dz2 < span; dz2++){
             const iz = iz0 + dz2;
@@ -21168,11 +21541,15 @@ const farTerrain = {
           if (ix < 1 || ix >= n - 1) continue;
           const v = src[iz * n + ix];
           if (v !== 255 && v !== 128) continue;
-          let edge = false;
-          for (let b = -2; b <= 2 && !edge; b++)
+          let edge = 0;
+          for (let b = -2; b <= 2 && edge !== 1; b++)
             for (let a = -2; a <= 2; a++)
-              if (src[(iz + b) * n + ix + a] === 0){ edge = true; break; }
-          if (edge) data[iz * n + ix] = v === 255 ? 200 : 100;
+              if (src[(iz + b) * n + ix + a] === 0){
+                const ring1 = Math.max(Math.abs(a), Math.abs(b)) === 1;
+                if (ring1){ edge = 1; break; }
+                edge = 2;
+              }
+          if (edge) data[iz * n + ix] = (v === 255 ? 200 : 100) + (edge === 2 ? 10 : 0);
         }
       }
     }
@@ -21239,24 +21616,35 @@ const lodTerrain = {
       uMaskSpan: { value: farTerrain.maskN * CORE.CHUNK_M },
     };
     for (const k in tu) u[k] = tu[k];            // share live uniform objects
+    // Yielding to the real terrain is decided PER VERTEX, and a triangle
+    // drops only when all three corners stand in covered columns. A quad
+    // that straddles a chunk border belongs to the higher chunk alone; when
+    // that chunk is a ring tile, a per-pixel cut at the column plane threw
+    // away the half inside the terrain's column and nothing else drew it --
+    // the dashed line of sky along the edge of the real world.
     const lodFrag = TERRAIN_FRAG
       .replace('varying vec4 vShadowCoord;',
-        'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskCut;\nvarying vec4 vShadowCoord;')
+        'uniform float uFeatNear;\nvarying float vCut;\nvarying vec4 vShadowCoord;')
       .replace('void main(){',
         'void main(){\n' +
-        '  vec2 mi2 = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
-        '  if (mi2.x > 0.0 && mi2.x < 1.0 && mi2.y > 0.0 && mi2.y < 1.0 &&\n' +
-        '      texture2D(uMask, mi2).r >= uMaskCut) discard;\n');
+        '  if (vCut > 0.999) discard;\n' +
+        '  if (uFeatNear > 0.0 && distance(vPos.xz, uPlayerPos.xz) < uFeatNear) discard;\n');
     const lodVert = TERRAIN_VERT
-      .replace('uniform mat4 uShadowMatrix;', 'uniform mat4 uShadowMatrix;\nuniform float uSink;')
+      .replace('uniform mat4 uShadowMatrix;',
+        'uniform mat4 uShadowMatrix;\nuniform float uSink;\n' +
+        'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskCut;\nvarying float vCut;')
       .replace('gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
-               'gl_Position = projectionMatrix * modelViewMatrix * vec4(position.x, position.y - uSink, position.z, 1.0);');
+        'vec2 mi2 = (position.xz - uMaskOrigin) / uMaskSpan;\n' +
+        '  vCut = 0.0;\n' +
+        '  if (mi2.x > 0.0 && mi2.x < 1.0 && mi2.y > 0.0 && mi2.y < 1.0 && texture2D(uMask, mi2).r >= uMaskCut) vCut = 1.0;\n' +
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position.x, position.y - uSink, position.z, 1.0);');
     this.rings.forEach((ring, ri) => {
       const ru = Object.assign({}, u);
       ru.uSink = { value: 0 };
       // the near ring yields to the terrain's own columns and their seam;
       // the feature ring yields to everything the near field covers
       ru.uMaskCut = { value: ring.feat ? 0.35 : 0.75 };
+      ru.uFeatNear = { value: 0 };                 // the feature ring: set every frame
       ring.mat = new THREE.ShaderMaterial({
         vertexShader: lodVert,
         fragmentShader: lodFrag,
@@ -21370,6 +21758,11 @@ const lodTerrain = {
         const wx0 = cx * m, wz0 = cz * m;
         const hr = gen.heightRange(wx0, wz0, wx0 + m, wz0 + m);
         let lo = hr[0] - 12, hi = hr[1] + 6;
+        if (ring.feat && gen.skyNear){
+          // the island's span only, never the ground below it
+          const S = gen.skyNear(wx0 + m / 2, wz0 + m / 2) || gen.skyNear(wx0, wz0) || gen.skyNear(wx0 + m, wz0 + m) || gen.skyNear(wx0 + m, wz0) || gen.skyNear(wx0, wz0 + m);
+          if (S) lo = S.bottom - 6;
+        }
         if (ring.feat){
           // only columns where something rises over (or dives under) the
           // heightfield: a sky island, a landmark spire, a ruin. Plain
@@ -21377,13 +21770,15 @@ const lodTerrain = {
           const FC = ring.featCache || (ring.featCache = new Map());
           let isF = FC.get(ck);
           if (isF === undefined){
-            let hmax = -1e9, hmin = 1e9;
-            for (let a = 0; a <= 2; a++) for (let b = 0; b <= 2; b++){
-              const hh = gen.height(wx0 + a * m / 2, wz0 + b * m / 2);
-              if (hh > hmax) hmax = hh;
-              if (hh < hmin) hmin = hh;
+            // only what FLOATS: sky islands (and their spires). Anything
+            // that stands on the ground is baked into the skin's heights.
+            isF = false;
+            if (gen.skyNear){
+              for (const o of [[0, 0], [m, 0], [0, m], [m, m], [m / 2, m / 2]]){
+                const S = gen.skyNear(wx0 + o[0], wz0 + o[1]);
+                if (S){ isF = true; break; }
+              }
             }
-            isF = !(hr[1] - 4 < hmax + 8 && hr[0] + 4 > hmin - 8);
             if (FC.size > 60000) FC.clear();
             FC.set(ck, isF);
           }
@@ -21467,6 +21862,8 @@ const lodTerrain = {
     const ch = ring.chunks.get(key);
     if (!ch) return;                              // scrolled out mid-flight
     ch.data = this.quantize(data);
+    ch.done = 1; ch.hasData = !!data;
+    if (ch.built === undefined) ch.built = 0;      // stands once a tile holds it
     const pend = ring.cols.get(cx + ',' + cz);
     if (pend) pend.delete(key);
     const tk = this.tileKey(ring, cx, cz);
@@ -21478,6 +21875,7 @@ const lodTerrain = {
   // merge finished chunks into supertile meshes, a couple per frame
   frame(){
     if (!this.rings) return;
+    for (const ring of this.rings) if (ring.feat && ring.mat) ring.mat.uniforms.uFeatNear.value = this.nearFar() - 24;
     this.scanCols(2.5);
     if (meshPool.ok && meshPool.idle.length) meshPool.pump();
     // per-tile cooldown so a tile mid-stream batches its arrivals instead
@@ -21497,17 +21895,32 @@ const lodTerrain = {
     }
     // settled tiles shed their source chunk data (the merged geometry is
     // the render copy) — a later edit re-meshes the members via the pool
+    // ... but only once every column of the tile is scanned and complete:
+    // a tile still receiving chunks that had shed would have to re-mesh all
+    // of them through the pool before it could rebuild, and at the frontier
+    // that cascade left the skin showing for seconds where the ring belonged
     this._sweep = ((this._sweep || 0) + 1) % 90;
     if (this._sweep === 0){
-      for (const ring of this.rings)
+      for (const ring of this.rings){
+        const span = ring.tile / ring.m;
         for (const [tk, t] of ring.tiles){
-          if (t.stale || !t.quietAt || now - t.quietAt < 5000 || t.shed) continue;
+          if (t.stale || !t.quietAt || now - t.quietAt < 8000 || t.shed) continue;
+          const ci = tk.indexOf(',');
+          const tx = +tk.slice(0, ci), tz = +tk.slice(ci + 1);
+          let complete = true;
+          for (let dz = 0; dz < span && complete; dz++)
+            for (let dx = 0; dx < span; dx++){
+              const pend = ring.cols.get((tx * span + dx) + ',' + (tz * span + dz));
+              if (!pend || pend.size){ complete = false; break; }
+            }
+          if (!complete) continue;
           for (const mk of t.members){
             const ch = ring.chunks.get(mk);
             if (ch) ch.data = null;
           }
           t.shed = true;
         }
+      }
     }
   },
   buildTile(ring, t){
@@ -21547,9 +21960,11 @@ const lodTerrain = {
       const tn = dm.length / 3;
       for (let ti = 0; ti < tn; ti++){
         const v1 = ti * 3;
-        // a tri lightless underground is invisible from LOD range — skip it
-        // (real chunks own it up close)
-        if (ds[v1] < 8 && ds[v1 + 1] < 8 && ds[v1 + 2] < 8) continue;
+        // the feature ring skips what is lightless underground; the near ring
+        // is the real world and keeps every triangle (skylight is judged by
+        // depth under the column's heightfield, so a cliff face reads as
+        // buried -- dropping it opened wiggling cracks down every cliff)
+        if (ring.feat && ds[v1] < 2 && ds[v1 + 1] < 2 && ds[v1 + 2] < 2) continue;
         const b9 = v1 * 3, w9 = o3, w3 = o1;
         for (let j = 0; j < 9; j++){ P[w9 + j] = dp[b9 + j]; Nr[w9 + j] = dn[b9 + j]; Ax[w9 + j] = da[b9 + j]; }
         for (let j = 0; j < 3; j++){ Mt[w3 + j] = dm[v1 + j]; Sk[w3 + j] = ds[v1 + j]; Ao[w3 + j] = dao[v1 + j]; }
@@ -21570,6 +21985,7 @@ const lodTerrain = {
     g.computeBoundingSphere();
     this.scene.add(mesh);
     t.mesh = mesh;
+    for (const k of t.members){ const ch = ring.chunks.get(k); if (ch) ch.built = 1; }
   },
   // no-worker fallback: mesh a little on the main thread once the real
   // terrain queue is clear
@@ -21901,6 +22317,8 @@ function frame(now){
   collapseSys.tick(dt);
   citySys.tick(dt);
   cityLightSys.tick(dt);
+  hearthSys.tick(dt);
+  boreSys.tick(dt);
   siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -21949,6 +22367,7 @@ function frame(now){
   }
   Particles.update(dt);
   Embers.update(dt);
+  Smoke.update(dt);
   beamFX.update(dt);
   updateProjectiles(dt);
   chargeSys.update(dt);
@@ -22111,7 +22530,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

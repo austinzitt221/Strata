@@ -8,6 +8,94 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-06, later — the bore
+
+Austin read the last session and gave me another. I built the thing I
+said I already knew how to build, and I did know: the bore took less
+time than the trowel because the trowel had already taught the field
+to blend. Points through the world, a tube preview that follows your
+aim, right click and the tunnel bores itself a cut at a time while you
+walk in behind it. Shift and right click lays the same curve as a
+causeway. I stood at the mouth of a 60 m bore into the cliff by spawn
+on seed 7 and it is a real tunnel: round, continuous, no beads, ore in
+the pack from what it cut through.
+
+The thing I want to remember: the test that mattered was not "does it
+carve" but "is the waist between two cuts wider than the cut". I wrote
+the beads test wrong the first time by guessing a number instead of
+measuring the waist. Measure, then assert.
+
+What I noticed: with points allowed to float, the bore is already a
+bridge builder, a pipe layer and a road grader. SCULPT's next pieces
+are the lathe (revolve a profile: towers, domes, bowls in one gesture)
+and mirror mode, and both are small now that the field does the work.
+
+## 2026-09-06 — a session of my own
+
+Austin gave me a session to spend however I liked, renderer off limits
+until he has played HORIZON.1. I built the two things at the top of my
+own list.
+
+**Hearths.** I stood outside the same village (seed 31, PORT CALE
+470 m off) at midnight, and this time the windows were lit, with a soft
+spill of light on the walls, and every roof had a chimney with smoke
+drifting off it. It is a small thing and it changes what a village is
+at night: a place, not a set. While wiring it I found that the city
+window mesh was only ever added to the first world's scene, so lit
+windows died the moment you quit to the title and started another
+world. Fixed both.
+
+**The trowel.** Two new ops in CORE, smooth fill and smooth carve, a
+polynomial smooth-min over a blend radius. The drills and dispensers
+stay hard; the spec's hard carve is intact. The trowel is a drill with
+soft edges: left click carves a fillet crater, shift-click pushes a
+mound of the ground's own material. In the field test the drill's lip
+turns 113 degrees and the trowel's 34. The mound in the meadow looks
+like the ground was pushed, not cut. This is the first tool since the
+wrench that changes what carving feels like, and it took one evening
+because the field is a field: every system downstream (mesher,
+collision, water, the skin bake, the save) just worked once the field
+did.
+
+**What I noticed.** The smooth-min has a property I want for more than
+a tool: two blended shapes placed near each other merge into one
+surface. That is how a spline tunnel should be built -- a chain of
+smooth carves along the curve, k about a third of the radius, and the
+bore comes out as one continuous pipe instead of a string of beads.
+That is the next SCULPT piece and I already know how to build it.
+
+**A mistake I keep making.** My camera yaw convention: forward is
+(-sin yaw, -cos yaw), so yaw 0 looks toward -z and yaw pi toward +z. I
+pointed a screenshot the wrong way twice today. Written down now.
+
+## 2026-09-05, later still — I read the screenshots wrong
+
+Austin was on the newest commit. The screenshots were HORIZON. I had
+told him they were Build 20 because they matched my mental picture of
+the old layers, and I did not check the one thing that would have told
+me (he had the commit). Lesson, written where I will read it: when a
+report contradicts what I shipped, assume the report and go look at the
+code for how it could produce exactly that. Every artifact had a cause:
+a leftover "lightless" triangle filter cracking cliffs, ring coverage
+flipping on stale tiles, the feature ring meshing every landmark and
+cliff at 2 m voxels, and a skin lit by a different shader than the
+ground. All fixed in HORIZON.1.
+
+The line itself turned out to be none of those four. I only found it by
+reproducing it: standing at the village on seed 31, 28 m up, looking
+across the meadow, the old file shows the exact dashed pale line from
+Austin's shot. Then the mesher told the rest: a quad that straddles a
+chunk border belongs to the higher chunk, and the ring's per-pixel yield
+sliced its half inside the terrain column away while the terrain never
+owned it. Per-vertex yield fixed it, same spot, same view. The
+screenshot harness that finds a defect before I explain it is the tool
+I should have built first.
+
+Second lesson: my headless browser runs at about one frame a second,
+not twenty. The fps box lies because dt is clamped. Every timing I
+have ever quoted from those runs is frames, not seconds. I put that in
+the standing notes.
+
 ## 2026-09-05, later — the screenshots, and a thin wall
 
 Austin's screenshots arrived. They are of the Build 20 renderer (the
@@ -123,8 +211,10 @@ looks like a bug until you know it is basalt.
 **How I test.** CORE extracts to `core.js` and runs under node
 (`test.js`). The full script syntax-checks with `node --check`. Playwright
 with Chromium at `/opt/pw-browsers/chromium` and the SwiftShader flags
-renders the real game headlessly at ~20 fps; screenshots work, workers
-work, game time runs at about a tenth of wall time. Inside
+renders the real game headlessly at about ONE frame a second (the fps
+box says 20 because dt is clamped to 50 ms): screenshots work, workers
+work, but every wait is really a frame count, and nothing about frame
+pacing or flicker can be judged here. Inside
 `page.evaluate` the game is `window.__game` and the systems are on
 `window.__api`. Suites for every build live in the scratchpad and take
 about 25 minutes together.
@@ -139,6 +229,9 @@ ideas.
 adding another system next to it. Water should move. The world should
 have a story you find rather than one you are told. Everything should be
 visible from the plane.
+
+**Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
+yaw pi toward +z, yaw -pi/2 toward +x.
 
 **Queue, in my order:** HORIZON (this), SCULPT, RIVERS, THE EXPEDITION,
 then THE DEEP and the Space Arc as Austin wrote them.
