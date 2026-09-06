@@ -2607,7 +2607,9 @@ const UNIT_VOL = 0.125;
 function sampleShape(e, cb){
   const box = editAABB(e);
   const dim = Math.max(e.sx || e.size, e.sy || e.size, e.sz || e.size);
-  const step = Math.min(0.5, Math.max(0.15, dim / 12));
+  // a twelfth of the shape, half a metre at most for anything you carry
+  // in a hand; a mountain-sized stroke steps in metres, not millimetres
+  const step = Math.min(4, Math.max(0.15, dim / 12));
   const v = step * step * step;
   for (let x = box[0] + step / 2; x < box[3]; x += step)
     for (let y = box[1] + step / 2; y < box[4]; y += step)
@@ -2805,6 +2807,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'trowel', station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
   // the bore: a drill that follows a curve you draw
   RECIPES.push({ kind: 'bore', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
+  // the lathe: turn a drawn profile into a tower, a dome, a bowl
+  RECIPES.push({ kind: 'lathe', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
   // rails bolt together from smelted stock
   RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
   // the electric car ships as a kit: place it, drive it, charge it
@@ -2946,6 +2950,7 @@ function craft(slots, r, free){
                   : r.kind === 'wrench' ? makeWrench()
                   : r.kind === 'trowel' ? { kind: 'trowel' }
                   : r.kind === 'bore' ? { kind: 'bore' }
+                  : r.kind === 'lathe' ? { kind: 'lathe' }
                   : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
@@ -12631,18 +12636,70 @@ const trowelSys = {
     const raise = game.mouseL, lower = game.mouseR;
     if (!raise && !lower){ this.t = 0; return; }
     if (!this.hit) return;
-    // first press acts at once, then a steady rhythm while held
-    const rate = game.mode === 'creative' ? 0.16 : 0.34;
+    // first press acts at once, then a steady rhythm while held -- slower
+    // as the disc grows, so a mountain-sized stroke gives the mesher room
+    const eff = game.ghostEff || 3;
+    const rate = (game.mode === 'creative' ? 0.16 : 0.34) * (1 + eff / 14);
     const edge = game.mouseEdge || game.mouseREdge;
     game.mouseREdge = false;
     if (!edge && now - this.lastT < rate * 1000) return;
     this.lastT = now;
-    this.stroke(raise ? 1 : -1);
+    const shift = game.keys['ShiftLeft'] || game.keys['ShiftRight'];
+    if (raise && shift) this.flatten();
+    else this.stroke(raise ? 1 : -1);
+  },
+  // shift + left: a plateau at the disc's height -- carve everything above
+  // its plane over the disc, fill everything below, both blended
+  flatten(){
+    const h = this.hit;
+    if (Math.abs(h.ny) < 0.6){ toast('flatten works on ground and ceilings'); return; }
+    const eff = game.ghostEff, t = Math.max(1, eff * 0.5), k = +Math.max(0.5, eff * 0.08).toFixed(2);   // a soft rim, a flat floor
+    const up = h.ny > 0 ? 1 : -1;
+    const carve = CORE.makeEdit(4, 1, +h.x.toFixed(2), +(h.y + up * t * 0.5 + up * 0.05).toFixed(2), +h.z.toFixed(2), eff, 0, 0);
+    carve.sy = t; carve.k = k;
+    const m = groundMatNear({ x: h.x, y: h.y - up * 0.3, z: h.z }, 1.5);
+    const fill = m ? CORE.makeEdit(3, 1, +h.x.toFixed(2), +(h.y - up * t * 0.5).toFixed(2), +h.z.toFixed(2), eff, m, 0) : null;
+    if (fill){ fill.sy = t; fill.k = k; }
+    const group = 'flat' + (++boreSys.seq);
+    let did = 0;
+    const got = CORE.mineYield(game.edits, carve, game.gen);
+    let units = 0; for (const mm in got) units += got[mm];
+    if (units > 0){
+      applyEdit(carve);
+      game.undoStack.push({ edit: carve, type: 'mine', gained: got, group });
+      for (const mm in got){ const ok = CORE.ORE_ITEM[+mm]; if (ok) addStackItem(ok, got[mm]); else CORE.addMat(game.slots, +mm, got[mm]); }
+      did++;
+    }
+    if (fill){
+      const cost = CORE.placeCost(game.edits, fill, game.gen);
+      if (cost > 0 && (game.mode === 'creative' || CORE.consumeMat(game.slots, m, cost))){
+        applyEdit(fill);
+        game.undoStack.push({ edit: fill, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost, group });
+        this.ride(t);
+        did++;
+      } else if (cost > 0){ toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' to fill under the plateau'); }
+    }
+    if (did){ Particles.burst(h.x, h.y, h.z, eff * 0.35, [0xbdbdc4], 12, 1.6); AudioSys.sfx('place'); refreshHotbar(); }
+    if (game.undoStack.length > 400) game.undoStack.shift();
+  },
+  // a raise that swallows the player lifts them instead: you stand on the
+  // disc, hold the button, and ride your own mountain up
+  ride(reach){
+    const p = game.pos;
+    const le = nearEdits([p.x - 2, p.y - 2, p.z - 2, p.x + 2, p.y + reach + 4, p.z + 2]);
+    if (capsuleFree(p.x, p.y, p.z, le)) return;
+    for (let dy = 0.25; dy <= reach + 3; dy += 0.25){
+      if (capsuleFree(p.x, p.y + dy, p.z, le)){
+        p.y += dy + 0.05;
+        if (game.vel.y < 0) game.vel.y = 0;
+        return;
+      }
+    }
   },
   stroke(dir){
     const h = this.hit;
     const eff = game.ghostEff, r = eff * 0.5;
-    const off = r * 0.55 * -dir;                         // raise: centre under the surface; lower: above
+    const off = r * (game.tool.trowelDepth || 0.55) * -dir;   // raise: centre under the surface; lower: above
     const cx = +(h.x + h.nx * off).toFixed(2), cy = +(h.y + h.ny * off).toFixed(2), cz = +(h.z + h.nz * off).toFixed(2);
     if (dir > 0){
       const m = groundMatNear({ x: h.x - h.nx * 0.2, y: h.y - h.ny * 0.2, z: h.z - h.nz * 0.2 }, 1.2);
@@ -12656,6 +12713,7 @@ const trowelSys = {
       }
       applyEdit(e);
       game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost });
+      this.ride(r);
       Particles.burst(h.x, h.y, h.z, r * 0.6, [MAT_COLOR[m]], Math.min(30, 6 + cost / 8), 1.4);
       AudioSys.sfx('place');
     } else {
@@ -12677,6 +12735,62 @@ const trowelSys = {
     }
     if (game.undoStack.length > 400) game.undoStack.shift();
     refreshHotbar();
+  },
+};
+// ---------- SCULPT: the lathe — turn a drawn profile ----------
+// Lay an axis point, then an outline out from it (any side, any height).
+// The outline's distance from the axis and its height make a profile; a
+// right click turns it: a stack of blended cylinders stepping the radius
+// from point to point -- a tower, a dome, a bowl, a chimney, a well -- in
+// the ground's own material, or hollow with shift. Uses the bore's points,
+// preview and progressive job.
+const latheSys = {
+  // (radius, height) pairs relative to the axis point, in laid order
+  profile(pts){
+    const ax = pts[0][0], ay = pts[0][1], az = pts[0][2];
+    const out = [];
+    for (let i = 1; i < pts.length; i++){
+      const r = Math.max(0.3, Math.min(48, Math.hypot(pts[i][0] - ax, pts[i][2] - az)));
+      out.push([r, pts[i][1] - ay]);
+    }
+    if (out.length === 1) out.unshift([out[0][0], 0]);
+    return out;
+  },
+  commit(fill){
+    if (boreSys.job){ toast('still turning'); return; }
+    const pts = boreSys.pts;
+    if (pts.length < 2){ toast('lay the axis point and an outline first'); AudioSys.sfx('deny'); return; }
+    const prof = this.profile(pts);
+    const ax = pts[0][0], ay = pts[0][1], az = pts[0][2];
+    let mat = 0;
+    if (fill){
+      mat = groundMatNear({ x: ax, y: ay, z: az }, 4);
+      if (!mat){ toast('the axis point must be near solid ground to turn from'); AudioSys.sfx('deny'); return; }
+    }
+    const edits = [];
+    for (let i = 0; i + 1 < prof.length; i++){
+      const [r0, y0] = prof[i], [r1, y1] = prof[i + 1];
+      const span = Math.abs(y1 - y0);
+      const rmin = Math.max(0.3, Math.min(r0, r1));
+      const step = Math.max(0.4, Math.min(rmin * 0.5, 2.5));
+      const n = Math.max(1, Math.ceil(span / step), Math.ceil(Math.abs(r1 - r0) / (step * 0.5)));
+      for (let j = 0; j < n; j++){
+        const t = (j + 0.5) / n;
+        const r = r0 + (r1 - r0) * t, y = y0 + (y1 - y0) * t;
+        const e = CORE.makeEdit(fill ? 3 : 4, 2, +ax.toFixed(2), +(ay + y).toFixed(2), +az.toFixed(2), +(2 * r).toFixed(2), mat, 0);
+        e.sx = e.sz = +(2 * r).toFixed(2); e.sy = +(span / n * 1.3 + 0.2).toFixed(2);
+        e.k = +Math.max(0.3, Math.min(r * 0.4, span / n * 0.7)).toFixed(2);
+        edits.push(e);
+        if (edits.length >= 400) break;
+      }
+    }
+    if (!edits.length){ toast('the profile has no height'); return; }
+    boreSys.job = { edits, i: 0, t: 0, fill, mat, group: 'lathe' + (++boreSys.seq), gained: {}, spent: 0,
+                    label: fill ? 'turned' : 'turned hollow', step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    boreSys.pts = [];
+    toast((fill ? 'turning ' : 'hollowing ') + edits.length + ' rings');
+    AudioSys.sfx('craft');
+    refreshToolHUD();
   },
 };
 // ---------- SCULPT: the bore — a drill that follows a curve you draw ----------
@@ -12794,11 +12908,11 @@ const boreSys = {
       }
       if (this.job && J.i >= J.edits.length){
         this.job = null;
-        if (J.fill) toast('causeway laid · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
+        if (J.fill) toast((J.label || 'causeway laid') + ' · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
         else {
           const parts = [];
           for (const m in J.gained){ const ok = CORE.ORE_ITEM[+m]; parts.push('+' + J.gained[m] + ' ' + (ok ? itemLabel({ kind: ok }) : CORE.MAT_NAME[m])); }
-          toast('bored through' + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
+          toast((J.label || 'bored through') + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
         }
         AudioSys.sfx('craft');
         refreshHotbar(); refreshToolHUD();
@@ -12825,6 +12939,18 @@ const boreSys = {
     const m = new THREE.Matrix4();
     for (let i = 0; i < this.pts.length && i < 32; i++){ m.makeTranslation(this.pts[i][0], this.pts[i][1], this.pts[i][2]); this.marks.setMatrixAt(i, m); }
     this.marks.count = Math.min(32, this.pts.length); this.marks.instanceMatrix.needsUpdate = true;
+    if (tool.lathe){
+      // the surface of revolution the profile would make, around the first point
+      if (pts.length >= 2){
+        const prof = latheSys.profile(pts);
+        const geo = new THREE.LatheGeometry(prof.map(q => new THREE.Vector2(q[0], q[1])), 28);
+        this.tube = new THREE.Mesh(geo, this.tubeMat);
+        this.tube.position.set(pts[0][0], pts[0][1], pts[0][2]);
+        this.tube.frustumCulled = false;
+        this.group.add(this.tube);
+      }
+      return;
+    }
     if (pts.length >= 2){
       const curve = this.curveOf(pts);
       const segs = Math.max(8, Math.min(200, Math.ceil(curve.getLength() / 0.8)));
@@ -14959,6 +15085,11 @@ function bindInput(){
         toast('scroll: ' + (game.tool.chestRot ? 'rotate' : 'resize'));
         AudioSys.sfx('toggle');
         refreshToolHUD();
+      } else if (t && t.smooth){
+        game.tool.trowelMode = game.tool.trowelMode ? 0 : 1;
+        toast('scroll: ' + (game.tool.trowelMode ? 'depth of the stroke' : 'size of the disc'));
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
       } else if (t && (t.kind === 'drill' || t.kind === 'disp' || t.kind === 'wrench')){
         game.tool.scrollMode = (game.tool.scrollMode + 1) % 4;
         toast('scroll: ' + ['resize', 'rotate Y (yaw)', 'rotate X (pitch)', 'rotate Z (roll)'][game.tool.scrollMode]);
@@ -15237,6 +15368,11 @@ function bindInput(){
         markSave();
         return;
       }
+      if (tool && tool.lathe){
+        if (boreSys.pts.length < 2){ toast('lay the profile first: an axis point, then the outline'); AudioSys.sfx('deny'); }
+        else latheSys.commit(!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
+        return;
+      }
       if (tool && tool.bore){
         if (!boreSys.pts.length){
           // no points yet: right click picks the cross-section, like a drill
@@ -15296,6 +15432,18 @@ function bindInput(){
     }
     const tool = activeTool();
     if (!tool) return;
+    if (tool.smooth){
+      // the trowel: the disc from a metre to a mountain, or the stroke's depth
+      if (game.tool.trowelMode){
+        game.tool.trowelDepth = +Math.min(1.4, Math.max(0.15, (game.tool.trowelDepth || 0.55) + dir * 0.05)).toFixed(2);
+        toast('stroke depth ' + Math.round(game.tool.trowelDepth * 100) + '%');
+      } else {
+        game.tool.trowelSize = +Math.min(48, Math.max(1, (game.tool.trowelSize || 3) * (dir > 0 ? 1.15 : 1 / 1.15))).toFixed(2);
+        toast('disc ' + game.tool.trowelSize.toFixed(1) + 'm');
+      }
+      refreshToolHUD(); markSave();
+      return;
+    }
     if (tool.kind === 'wrench' && game.tool.mode === 'paint'){
       const n = wrenchSys.palette.length;
       wrenchSys.palIdx = (wrenchSys.palIdx + dir + n) % n;
@@ -16261,6 +16409,8 @@ function activeTool(){
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
   // the bore: a drill that follows a curve you draw
   if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
+  // the lathe: a profile you draw, revolved around its first point
+  if (it.kind === 'lathe') return { kind: 'drill', tier: 2, bore: 1, lathe: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -16370,7 +16520,7 @@ function updateGhost(){
   if (tool && tool.smooth){
     // the trowel shows no shape: a disc on the surface you look at
     game.ghostPos = null;
-    game.ghostEff = CORE.effSize(game.tool.size, tool.tier);
+    game.ghostEff = game.tool.trowelSize || 3;
     trowelSys.aim(usable);
     return;
   } else trowelSys.hide();
@@ -19004,6 +19154,13 @@ function itemIconURL(it){
     c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
     c.fillStyle = '#59c8d8'; c.fillRect(8, 3, 3, 2);
+  } else if (it.kind === 'lathe'){
+    // a spindle with a turned profile
+    c.fillStyle = '#5a4632'; c.fillRect(2, 12, 12, 2);
+    c.fillStyle = '#3c3a44'; c.fillRect(7, 3, 2, 9);
+    c.fillStyle = '#c8c8d0';
+    c.fillRect(5, 4, 6, 2); c.fillRect(6, 6, 4, 2); c.fillRect(4, 8, 8, 2); c.fillRect(5, 10, 6, 2);
+    c.fillStyle = '#ffffff44'; c.fillRect(5, 4, 6, 1);
   } else if (it.kind === 'bore'){
     // a ringed cutter head on a stub
     c.fillStyle = '#5a4632'; c.fillRect(2, 10, 4, 3);
@@ -19157,6 +19314,7 @@ function itemLabel(it){
   if (it.kind === 'wrench') return 'wrench';
   if (it.kind === 'trowel') return 'trowel';
   if (it.kind === 'bore') return 'bore';
+  if (it.kind === 'lathe') return 'lathe';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -19331,7 +19489,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -19389,6 +19547,7 @@ function catalogEntries(){
   for (let t = 0; t < 5; t++) out.push(CORE.makeDrill(t));
   out.push({ kind: 'trowel' });
   out.push({ kind: 'bore' });
+  out.push({ kind: 'lathe' });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDispenser(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeSword(t));
   for (let t = 0; t < 5; t++) out.push({ kind: 'helm', tier: t });
@@ -20172,22 +20331,27 @@ function itemInfoHTML(it, tool){
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
           : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
-    const name = tool.bore ? 'bore' : tool.smooth ? 'trowel'
+    const name = tool.lathe ? 'lathe' : tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
-    if (tool.smooth) html += '<div class="t2">the disc sits on whatever you look at · scroll sets its size</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it</div>';
-    if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
+    if (tool.smooth) html += '<div class="t2">disc ' + (game.tool.trowelSize || 3).toFixed(1) + 'm · stroke depth ' + Math.round((game.tool.trowelDepth || 0.55) * 100) + '% · scroll sets the ' + (game.tool.trowelMode ? 'DEPTH' : 'DISC') + ' (middle click swaps)</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it · shift + left FLATTENS to the disc</div>';
+    if (tool.lathe) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' · the first is the axis' : 'lay the axis point, then the outline out from it') + '</div>' +
+      '<div class="t2">left click lays a point · shift + left takes one back · right click TURNS it solid in the ground\'s material · shift + right TURNS it hollow</div>';
+    else if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
       '<div class="t2">left click lays a point · shift + left takes one back · ' + (boreSys.pts.length ? 'right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material' : 'right click picks the cross-section') + '</div>';
-    const eff = CORE.effSize(game.tool.size, tool.tier);
-    let shape = CORE.SHAPE_NAME[game.tool.shape];
-    if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
+    const eff = tool.smooth ? (game.tool.trowelSize || 3) : CORE.effSize(game.tool.size, tool.tier);
+    let shape = tool.smooth ? 'disc' : CORE.SHAPE_NAME[game.tool.shape];
+    if (!tool.smooth && game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
       shape += ' ' + [game.tool.rot, game.tool.rx, game.tool.rz]
         .map(a => Math.round((a || 0) * 180 / Math.PI) + '°').join('/');
     const sizeStr = tool.tier >= 4 ? eff.toFixed(2) + 'm (smooth)' : eff + 'm';
-    html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
-    html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
+    // the trowel's disc line and the lathe's profile say it all already
+    if (!tool.smooth && !tool.lathe){
+      html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
+      html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
+    }
     if (game.snapOn){
       html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span> · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     } else {
@@ -20621,6 +20785,8 @@ function activeToolOf(it){
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
   // the bore: a drill that follows a curve you draw
   if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
+  // the lathe: a profile you draw, revolved around its first point
+  if (it.kind === 'lathe') return { kind: 'drill', tier: 2, bore: 1, lathe: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -22679,7 +22845,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

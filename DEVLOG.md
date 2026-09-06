@@ -2,6 +2,59 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 22 — MASS (2026-09-06)
+
+Austin's second playtest of the tools: "very fun", and one ask -- make
+the trowel's disc huge, mountains in thirty seconds, with the middle
+button swapping what the wheel does between the disc and the depth.
+Built that, then the third SCULPT piece I had queued. Verified headlessly
+(CORE 337, a build-22 suite that times a 48 m stroke, toggles the mode,
+measures the plateau and probes the turned tower inside and out, plus
+smoke, bore and Build 21 suites) and in screenshots.
+
+### The trowel at mountain scale
+- **Disc from 1 m to 48 m.** The wheel scales it by 15% a notch. The
+  stroke rate slows as the disc grows (a 48 m stroke every 0.7 s in
+  creative) so the mesher keeps up; one 48 m stroke costs about 30 ms
+  of main-thread work, and five held strokes raise a 66 m mountain.
+  48 m is where I stopped because a stroke's blend radius pads its box
+  to twice the disc, and at 96 m across it is 2 000 chunks re-meshed a
+  stroke; the workers absorb that, but not more of it every 0.7 s.
+- **Middle click swaps what the wheel does:** the disc's size, or the
+  stroke's depth (15%-140% of the radius). The panel says which.
+- **You ride your mountain up.** A raise that would swallow you lifts
+  you to the new surface instead of burying you, so you can stand on
+  the disc, hold the button, and go up with the ground. (First 48 m
+  stroke in the test buried the player 24 m; now it carries them.)
+- **Shift + left flattens.** A plateau at the disc's height: a smooth
+  carve of everything above the plane over the disc, a smooth fill of
+  everything below in the ground's own material, undone as one. The
+  blend is 8% of the disc (a soft rim, a floor flat to 0.4 m over a
+  20 m disc -- at 25% the floor domed a metre, so it came down).
+- Costing samples a big shape in metre steps instead of 15 cm ones
+  (a twelfth of the shape, capped at 4 m), so a mountain's cost is a
+  few ms, not seconds.
+
+### The lathe
+- A gadget (6 iron ingots, a ruby ingot at the table) that turns a
+  drawn profile. Lay the axis point, then an outline out from it, any
+  side, any height; the outline's distance from the axis and its
+  height make a profile, and the preview shows it revolved. Right click
+  turns it solid in the ground's material -- a tower, a dome, a bowl,
+  a chimney -- and shift + right turns it hollow. A stack of blended
+  cylinders through the bore's progressive job, so it undoes as one and
+  you can watch it grow. Rings follow the radius as well as the height,
+  so a flared lip keeps its flare.
+
+### Small
+- The trowel's and lathe's panels no longer carry the drill's shape,
+  size and scroll-mode lines under their own.
+
+### Known
+- The trowel at 48 m over water raises the seabed too; that is the SDF
+  being honest and I like it, but the lake does not drain into the
+  new hill. RIVERS is where water learns about terrain changes.
+
 ## Build 21 — SHAPE (2026-09-07)
 
 Austin's first playtest of HORIZON came back: no lines, "a million times

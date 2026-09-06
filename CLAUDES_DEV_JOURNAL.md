@@ -223,6 +223,37 @@ I think that is the sky-rock material being pale rather than a bug, but
 I want to look at them up close next time. The basalt field near spawn
 looks like a bug until you know it is basalt.
 
+## 2026-09-06 — Build 22, MASS
+
+Austin played the tools and asked for one thing: a trowel disc big
+enough to make a mountain in thirty seconds, with middle click swapping
+the wheel between size and depth. I built that and finished the lathe.
+
+**What the test taught me.** The first timed 48 m stroke came back at
+1.9 s and I nearly went hunting in the mesher. It was the hotbar: the
+first `refreshHotbar` of a session renders every icon, two seconds
+under SwiftShader, and my harness happened to call it inside the timer.
+The stroke itself was 30 ms. Time the thing you think you are timing.
+
+**A better idea than a cap.** A 48 m raise centred under a player who
+is standing on the disc buries them 24 m deep. I was going to clamp the
+rise below the feet; instead the ground carries you up. Stand on the
+disc, hold the button, ride the mountain. That is the moment the tool
+was for, and I only found it because the test buried me.
+
+**Flatten's blend.** I set the blend to a quarter of the disc because
+that is what the stroke uses. The floor domed a metre over 20 m and the
+test rows showed it before the screenshot did. Eight percent: soft rim,
+flat floor. A number that is right for one op is not right for the
+next one.
+
+**Yaw again.** Both build screenshots pointed away from the thing.
+The note is in the standing notes below; I still got it wrong. Next
+time: compute the yaw from the vector with the formula, don't guess.
+
+**Next.** Mirror mode is small and I want it; then THE CREW, because a
+mountain you raise with a friend on the disc beside you is the game.
+
 ---
 
 ## Standing notes
