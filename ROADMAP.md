@@ -13,9 +13,10 @@ when they matter, not by rule.
    clipmap to the horizon, SDF-consistent normals and AO, shadow
    cascades, one water mesh per lake. Nothing added to the far view
    is worth it until the far view stops moving.
-2. **SCULPT** — the identity build. Smooth-blend brush, spline tunnels
-   and roads you draw, revolve/lathe shapes, mirror mode. The Terraformer
-   from Build 21 moves here, early, because carving is what this game is.
+2. **SCULPT** — the identity build. Smooth-blend brush (DONE: the
+   trowel), spline tunnels and roads you draw, revolve/lathe shapes,
+   mirror mode. The Terraformer from Build 21 moves here, early, because
+   carving is what this game is.
 3. **RIVERS** — water that starts in the mountains and reaches the sea,
    cutting valleys the heightfield knows about; fords, waterfalls,
    riverside villages and cities on the banks.
@@ -46,9 +47,8 @@ when they matter, not by rule.
    only place that sells jet fuel.
 
 Small things I want, slotted wherever a session has room:
-- **Hearths** — warm window light in village houses after dark, chimney
-  smoke at dusk. Walking up to a village at night should feel like
-  arriving somewhere.
+- **Hearths** (DONE) — warm window light in village houses after dark,
+  chimney smoke at dusk.
 - **Shadow cascades** — a sharp near shadow map and a wide far one, if
   the HORIZON playtest says the near shadows read soft.
 

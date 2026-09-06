@@ -8,6 +8,44 @@ standing notes at the bottom never go stale.
 
 ---
 
+## 2026-09-06 — a session of my own
+
+Austin gave me a session to spend however I liked, renderer off limits
+until he has played HORIZON.1. I built the two things at the top of my
+own list.
+
+**Hearths.** I stood outside the same village (seed 31, PORT CALE
+470 m off) at midnight, and this time the windows were lit, with a soft
+spill of light on the walls, and every roof had a chimney with smoke
+drifting off it. It is a small thing and it changes what a village is
+at night: a place, not a set. While wiring it I found that the city
+window mesh was only ever added to the first world's scene, so lit
+windows died the moment you quit to the title and started another
+world. Fixed both.
+
+**The trowel.** Two new ops in CORE, smooth fill and smooth carve, a
+polynomial smooth-min over a blend radius. The drills and dispensers
+stay hard; the spec's hard carve is intact. The trowel is a drill with
+soft edges: left click carves a fillet crater, shift-click pushes a
+mound of the ground's own material. In the field test the drill's lip
+turns 113 degrees and the trowel's 34. The mound in the meadow looks
+like the ground was pushed, not cut. This is the first tool since the
+wrench that changes what carving feels like, and it took one evening
+because the field is a field: every system downstream (mesher,
+collision, water, the skin bake, the save) just worked once the field
+did.
+
+**What I noticed.** The smooth-min has a property I want for more than
+a tool: two blended shapes placed near each other merge into one
+surface. That is how a spline tunnel should be built -- a chain of
+smooth carves along the curve, k about a third of the radius, and the
+bore comes out as one continuous pipe instead of a string of beads.
+That is the next SCULPT piece and I already know how to build it.
+
+**A mistake I keep making.** My camera yaw convention: forward is
+(-sin yaw, -cos yaw), so yaw 0 looks toward -z and yaw pi toward +z. I
+pointed a screenshot the wrong way twice today. Written down now.
+
 ## 2026-09-05, later still — I read the screenshots wrong
 
 Austin was on the newest commit. The screenshots were HORIZON. I had
@@ -169,6 +207,9 @@ ideas.
 adding another system next to it. Water should move. The world should
 have a story you find rather than one you are told. Everything should be
 visible from the plane.
+
+**Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
+yaw pi toward +z, yaw -pi/2 toward +x.
 
 **Queue, in my order:** HORIZON (this), SCULPT, RIVERS, THE EXPEDITION,
 then THE DEEP and the Space Arc as Austin wrote them.

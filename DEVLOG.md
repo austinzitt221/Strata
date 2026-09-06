@@ -2,6 +2,52 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## My session — HEARTHS and the trowel (2026-09-06)
+
+Austin gave me a session to spend however I liked. I spent it on the two
+things at the top of my own list: the villages at night, and the first
+piece of SCULPT. The renderer is untouched, as agreed, until he has
+played HORIZON.1. Verified headlessly (CORE 330, smoke, village, night
+and inventory suites) and in screenshots.
+
+### HEARTHS
+- **Village windows glow after dark.** Every side window of every house
+  within 400 m carries a warm pane once the sun is down, and a soft
+  spill of light on the wall around it so a lit house reads from across
+  the plaza. A few windows are dark on any given night (the same hash
+  the city towers use, so it changes with the day).
+- **Chimneys and smoke.** Every roof has a chimney on a back corner;
+  from dusk on (day factor under a half) the chimneys within 80 m puff
+  slow grey smoke that drifts up and thins over a few seconds.
+- **A bug I found on the way:** the city window mesh was added to the
+  scene once and never re-added after quitting to the title and
+  starting another world, so lit windows only worked in the first world
+  of a session. Both systems now re-attach.
+
+### SCULPT A — the trowel
+- **Two new edit ops in CORE**: 3 (smooth fill) and 4 (smooth carve).
+  Where the drills and dispensers cut with a hard boolean, these round
+  the join over a blend radius k (half the shape by default) with the
+  polynomial smooth-min: exact where the fields are more than k apart,
+  a fillet between. The mesher handles them like any other edit; their
+  bounds reach k past the shape; the analytic-normal path is skipped for
+  them (a blend has no face) so the dual contourer takes the numeric
+  gradient; the skin bakes them like their hard cousins; the blend
+  radius survives the save. The drills and dispensers are exactly as
+  they were -- the spec's hard carve is intact.
+- **The trowel.** A gadget: 4 iron ingots and 2 sticks at a table, or
+  the creative catalog. In the hand it is a ruby-speed drill with soft
+  edges: left click carves a smooth crater, shift + left click fills a
+  smooth mound with the ground's own material (probed from the shape's
+  centre, paid for by volume in survival). Same ghost, same shapes,
+  same scroll. In the field test the drill's crater turns the surface
+  113 degrees at its lip; the trowel's turns 34, and it looks like the
+  ground was pushed rather than cut.
+- **Why this first.** Carving is the identity of this game, and every
+  build since the first has added a system beside it. This is the first
+  tool since the wrench that changes what carving can feel like. Spline
+  tunnels, revolve shapes and mirror mode are the rest of SCULPT.
+
 ## HORIZON.1 — the line, looked at properly (2026-09-05)
 
 Austin's screenshots were of HORIZON, not of Build 20; I read them wrong
