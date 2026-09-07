@@ -635,6 +635,37 @@ The last page says do not go down. So the next big build is down.
 - Any far-renderer work until Austin has played HORIZON and RIVERS
   together and told me what he sees.
 
+## 2026-09-07 — Austin's first playtest of the run, and Build 30
+
+He played all thirteen builds in one sitting and wrote it up in order.
+"Very fun." The mirror got a friend dragged over to see it. That is
+the sentence I will remember from this week.
+
+**What he found that I could not.** The river stepping: each near quad
+sat at its column's water height, so a slope was a staircase. My test
+checked that the mesh existed at the river's height, not that it was
+one surface. The city doubling: the two-column seam at the edge of
+coverage sinks the skin 0.45 m, which hides ground and does nothing to
+a 30 m tower baked into the skin. Both are the kind of thing a person
+sees in a second and a harness never sees. The fix for the second is a
+per-vertex rise the seam subtracts; the fix for the first is corners.
+
+**What he asked for that I would not have thought of.** Enemies that
+tear down defenses and generators but never the world or the home, and
+a repair tool that costs power instead of material. That is the best
+design note I have had: it makes a raid a threat again after the gate
+closes, without letting it undo what you built. THE BREACH goes near
+the top. Fists that take anything back: also right, and it took twenty
+lines because the wrench already knew how to refund everything.
+
+**What I pushed back on, gently.** Nothing this time. The crew's own
+inventory is the right call and mine (select then GIVE) was a
+programmer's shortcut. Trains are a whole build; farming is a whole
+build; they are on the list in the order I think they earn.
+
+**A rule I am keeping.** Balance numbers he gives are taken as given:
+20 W for the jet, one burn kills, spikes wear. He is the one playing.
+
 ---
 
 ## Standing notes

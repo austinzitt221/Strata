@@ -86,21 +86,46 @@ when they matter, not by rule.
    becomes yours: the garrison respawns as *your* guard, and it is the
    only place that sells jet fuel.
 
-## Next, in my order (brainstormed 2026-09-07, see the journal)
-1. **Playtest fixes** — Austin's eyes on thirteen builds come first.
-2. **THE DEEP, slice A** — the dark as the mechanic, a noise meter that
-   draws them, the first hall built by someone, the leader's last camp
-   under the mouth. The tool tiers become a choice: quiet and slow, or
-   loud and fast.
-3. **RIVERS II** — seasons on the water (ice, the spring rise, summer
-   fords), waterfalls with mist and sound, the water mill as a
-   generator, villages on the banks with bridges, river fish.
-4. **THE CREW C** — tents as beds, posts (stove, table, turret), meals
-   from a larder, the rescue of the second at camp 7, skill that grows
-   with work.
-5. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
+## Next, in my order (re-planned 2026-09-07 after Austin's first playtest)
+Austin's ideas from the playtest are folded in below with mine; the
+order is mine. Big items are split so each build is one session.
+1. **THE CREW C — a person, not a prop** (Austin's, mostly) — their own
+   inventory panel you drag into (dispensers, drills, guns, material,
+   torches), an armor slot, and they pick what fits the moment: the
+   drill when you dig, the gun when something comes; torches in their
+   pack get planted as they follow you through a cave. Hire in cities
+   too, mayors included; a trades tab stays open after hiring; pick a
+   hireable villager up over your head. Tents are beds. No fall damage
+   ever (they take none now); the catch-up teleport stays.
+2. **THE BREACH** (Austin's) — enemies tear down what defends you and
+   nothing else: gates, doors, spikes, trenches, bells, turrets, flame
+   jets, and generators (the real blow). Never material, real geometry,
+   beds, beacons, chests, tables or stoves. Broken things stay as
+   broken things. A **repair tool**, battery-charged, mends them for
+   power alone; a whole base is a few batteries. Spikes' wear joins the
+   list. The **gate**: a door you can size to any opening, raised and
+   lowered on a lever, built on the door system.
+3. **THE DEEP, slice A** — the dark, the noise meter, the first hall,
+   the leader's last camp under the mouth. And Austin's ramp for the
+   expedition: camps first, then a hut, a house with a little power, a
+   mining facility at the end, and a boss fight there.
+4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
+   on the banks with bridges, river fish.
+5. **THE LINE** (Austin's) — real trains: their own track (not the
+   player's rails, no free rides), a locomotive with box cars you sit
+   in, trains you catch arriving and leaving, and a route: the highway
+   corridor widened to carry the line, dropping into a tunnel between
+   cities and surfacing at the station.
+6. **FARMING** (Austin's) — a hoe, seeds, water you can carry and set
+   down, crops (tomatoes, wheat, lettuce), and meals that are the potion
+   system: a burger or a plate of spaghetti gives speed, dig speed,
+   jump, invisibility, for a while.
+7. **THE CREW D** — crew in vehicles: a follower takes the passenger
+   seat of your car, boat or plane; give them a vehicle and they drive
+   their own behind you; other crew ride with them. A squad on the road.
+8. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
    blueprints, the path made by walking.
-6. **THE GARRISON**, then the Space Arc.
+9. **THE GARRISON**, then the Space Arc.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
@@ -109,7 +134,9 @@ Small things I want, slotted wherever a session has room:
   the HORIZON playtest says the near shadows read soft.
 - **Place names on the map** — regions named in their archetype's
   voice, alongside the river names.
-- **The portcullis**, built on the door system.
+- **The lighting line in the skin** (shading differs between the near
+  field and the LOD ahead): shadow cascades, or the skin lit exactly
+  as the near field is.
 - **Footsteps that know the material**; birds along rivers; fish in the
   shallows.
 
