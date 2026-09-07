@@ -4,6 +4,17 @@ A running list, newest build first. Claude adds to it every build; Austin
 plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here.
 
+## Build 29 — THE PALISADE II
+- [ ] Oil trench (WEAPONS tab): lay one across a path, lure something
+      onto it, right click the tray. Thirty seconds of fire. Does the
+      fire read? Should it relight with coal instead of being spent?
+- [ ] Flame jet: wire it to your grid like a turret. Stand in front of
+      it yourself (it should not fire), then let an enemy come. Is 40 W
+      too hungry?
+- Feedback I want: the portcullis is the one piece missing. Would you
+  rather have it as a gate on a lever, or a wall section the wrench can
+  slide up and down?
+
 ## Build 28 — THE EXPEDITION
 New worlds only (the route is laid when a world is born).
 - [ ] From spawn there is a marker, ABANDONED CAMP, a few hundred metres

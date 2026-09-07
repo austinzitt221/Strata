@@ -2,6 +2,30 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 29 — THE PALISADE II (2026-09-07)
+
+The second half of roadmap item 4, minus the portcullis. Verified
+headlessly (a build-29 suite: the trench lights by hand, burns a husk
+from 95 to 41 in three seconds and not the grazer beside it, burns out
+in thirty and refuses a second match; the jet does nothing off the
+grid, and on it takes a husk in front from 95 to dead and leaves one
+behind it untouched; plus smoke, palisade, turret/siege and expedition
+suites).
+
+- **Oil trench** (2 for 2 iron ingots + 5 coal). A 3 m iron tray of
+  oil. Right click it to strike it alight: it burns for thirty seconds
+  with embers and smoke, and any enemy standing in it takes 9 every
+  half second. Then it is spent and stays as a burnt tray. One use;
+  the wrench takes it back for another.
+- **Flame jet** (6 iron ingots + 8 coal + 6 cells, at the table). A
+  wall nozzle on the grid: 3 W idle with a pilot light, 40 W when it
+  fires a fan of fire five metres out its front at any enemy in the
+  fan, 7 a quarter-second at full power, less on a starved grid. Never
+  at you, your crew or an animal.
+- The portcullis on a lever waits: a gate that opens and closes needs
+  the solid props rebuilt on every toggle, and I want to do that with
+  the door system rather than beside it.
+
 ## Build 28 — THE EXPEDITION (2026-09-07)
 
 Roadmap item 6, mine. A story you find rather than one you are told.

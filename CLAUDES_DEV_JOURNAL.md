@@ -510,6 +510,25 @@ that the door is there. THE DEEP is a big one and I want Austin's
 reaction to the story first: the Underdark should answer what the
 pages ask.
 
+## 2026-09-07 — Build 29, THE PALISADE II
+
+Small and quick, the way the first half was. The trench and the jet
+reuse the one hostile test and the palisade's front vector; the jet
+sits on the grid exactly where the turret sits, one line in the
+component walk and one in the dispatch. Twenty anchored replacements.
+
+**The portcullis I left.** It is a door: something that opens and
+closes and blocks when closed. The door system already does that with
+its own collision and hinge; a gate on a lever should be a door the
+lever drives, not a prop that rebuilds the solid list every toggle. A
+session with the door code open, not the tail of this one.
+
+**The day, in numbers.** Builds 27 to 29: rivers with tributaries,
+levees, a current and a moving surface; a story in eight pages with
+camps, a shaft and a survey; two defenses. Every one with a test that
+failed at least once first. Austin plays tonight with thirteen builds
+of notes in PLAYTEST.md.
+
 ---
 
 ## Standing notes

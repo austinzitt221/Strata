@@ -41,10 +41,11 @@ when they matter, not by rule.
    put them). My additions: they need a bed and a chest to call home,
    they eat from your stores, and a crew member who dies is gone. A
    dispenser crew member with a saved blueprint of YOURS builds that.
-4. **THE PALISADE** (Austin's, with my additions) — FIRST HALF DONE
-   (Build 26: the claymore, the one-way spikes, the tripwire bell that
-   calls your armed crew). Left: the oil trench, the portcullis, the
-   flame jet. The idea: defenses that know
+4. **THE PALISADE** (Austin's, with my additions) — DONE but for the
+   portcullis (Build 26: the claymore, the one-way spikes, the tripwire
+   bell that calls your armed crew; Build 29: the oil trench, the flame
+   jet). Left: the portcullis on a lever, to be built on the door
+   system. The idea: defenses that know
    whose side they are on. The claymore: a set charge that fires only for
    an enemy (never you, never a passive animal) and never marks the
    ground. One-way spikes: enemies bleed on them, you and your animals
