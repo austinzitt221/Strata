@@ -2,6 +2,45 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 25 — THE CREW, slice B (2026-09-07)
+
+The rest of what Austin drew, minus the posts. Verified headlessly (a
+build-25 suite: a husk hunts the crew and kills one, a dispenser and a
+stack build the next shape along your aim, a saved blueprint goes up in
+their material, out-of-material stops and more resumes; plus the crew A,
+mirror and smoke suites).
+
+### The night hunts your crew too
+- Lurkers, stalkers and husks now go for the **nearest of you and your
+  crew**, not you alone. A crew member takes real damage, mends slowly
+  when nothing is hitting them, and **dies when their hp is gone**: their
+  tool, their material and their pack fall where they fell, the house
+  takes in someone new with a new name and no goodwill, and the old name
+  is gone. Sieges still go for the walls first.
+- Your own hits on your crew still do nothing.
+
+### They build what you build
+- **GIVE now takes a dispenser and a stack of material** (the stack sits
+  on their belt; same material merges, another swaps back). Following,
+  with both, every shape you place queues the next shape along your
+  aim, with your brush's rotation, in the material they carry, at their
+  dispenser's pace (stone every 0.9 s, diamond every 0.2 s). Lay a wall
+  and it goes twice as far.
+- **BUILD a blueprint.** The panel lists your saved blueprints (PICK
+  cycles them); BUILD raises the chosen one where you are looking,
+  facing the way you face, one edit at a time in the material they
+  carry -- one material per build, whatever the blueprint was drawn in.
+  Cuts in the blueprint are cut for free. Out of material, they stop and
+  say so and keep their place in the plan; hand them more and they pick
+  it up. Props in a blueprint (torches, doors) are not placed.
+
+### Left for a later slice
+- Assign to a stove, a turret, a table. A bed and a chest to call home;
+  eating from your stores. "Left alone long enough they start on
+  blueprints of their own" -- the crew build yours now, which is most
+  of it; their own designs need a house generator I would want to write
+  properly. City folk for hire.
+
 ## Build 24 — THE CREW (2026-09-07)
 
 Roadmap item 3, Austin's, first slice. Verified headlessly (a build-24

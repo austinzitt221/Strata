@@ -23,9 +23,11 @@ when they matter, not by rule.
 3. **THE CREW** (Austin's, with my additions) — SLICE A DONE (Build 24:
    hire at 10 goodwill, follow / stay / roam disc, give a drill and they
    mine the next cut along your aim or dig a quarry, give a sword or gun
-   and they fight, saves with the village). Slice B: a dispenser and
-   they build what you build, blueprints of their own, assign to a
-   stove / turret / table, a bed and a chest, they eat, they can die.
+   and they fight, saves with the village). SLICE B DONE (Build 25:
+   the night hunts them and they can die; a dispenser and a stack and
+   they build what you build; they raise your saved blueprints where
+   you point). Left: assign to a stove / turret / table, a bed and a
+   chest, they eat, houses of their own design, city folk for hire.
    The idea: hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign

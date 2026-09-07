@@ -330,6 +330,40 @@ speech on each order, in the villager's voice, is small and next.
 your blueprints is the biggest promise on the roadmap; I want to do it
 with a clear head at the start of a session.
 
+## 2026-09-07 — Build 25, THE CREW (slice B)
+
+Austin gave me the day and asked for a running playtest list. The list
+is PLAYTEST.md now, in the repo, and every build adds to it.
+
+**The prey function.** Three enemy branches read `game.pos` and called
+`damagePlayer`. I did not want three copies of "nearest of the player
+and the crew", so `crewSys.prey(hostile, range)` returns whichever is
+nearer with a flag for which it is, and `hitPrey` routes the damage.
+The branches changed by a variable name each. The first test run said
+the husk never reached the crew: I had put the player 70 m away to keep
+them out of the fight, and the 70 m leash reaped the husk. Test
+scenarios have to live inside the game's own rules.
+
+**One material per build.** A blueprint drawn in three materials would
+need three stacks and a rule for which runs out first. The crew build
+in whatever they carry, and cuts are free. It is simpler to explain
+and, I think, better: the plan is the shape, the material is what you
+hand over.
+
+**A panel string that crashed.** The subtitle built every mode's text
+eagerly, so a build job crashed the quarry's string and vice versa.
+Small, dumb, and the kind of thing the test found before Austin did.
+
+**What I did not build and why.** Posts (stove, turret, table) each
+need a hook into a system that assumes the player is the operator.
+That is a session on its own and I would rather do it when I can also
+give them a bed and a meal, so the crew's day has a shape. Houses of
+their own design need a house generator I would want to be proud of.
+
+**Next.** THE PALISADE: the claymore and the one-way spikes, then my
+tripwire bell. Defenses that know whose side they are on, now that the
+crew can be on it.
+
 ---
 
 ## Standing notes
