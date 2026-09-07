@@ -289,6 +289,47 @@ Austin drew most carefully. I want to start with the smallest slice
 that changes how the game feels: one villager who follows you and
 mines what you mine.
 
+## 2026-09-07 — Build 24, THE CREW (slice A)
+
+Third build of the session and the first of Austin's big three. I took
+the smallest slice that changes how the game feels: one villager who
+walks behind you, and what you can hand them.
+
+**What I cut and why.** No pathfinding. The world is a signed distance
+field with tunnels, cliffs and buildings you carved this morning; a
+navmesh would be stale the moment you touch the ground. So a follower
+steers straight at you, hops when stuck (the entities already did), and
+if it has been more than twelve metres away for nine seconds, or sixty
+metres at all, it appears beside you in a puff of your colour. In the
+test that is a hundred-metre teleport resolving in under four seconds
+of sim. It is a cheat, and it is the right cheat: the alternative is a
+companion you lose in the first cave.
+
+**"They mine what you mine."** I read that four ways before I picked
+one. Copying your cut is the mirror. Widening it is unasked-for
+destruction. Mining the ore you point at is a whole targeting UI. The
+next cut along your aim is one line of vector maths and it makes a
+tunnel go twice as fast, which is what a second miner should do.
+
+**The quarry surprised me.** Eighty cuts, top down, and the crew
+member ended the job two metres above the pit's rim instead of at the
+bottom: the cuts under their feet fell away before they walked over
+them. I had written a rescue for the bottom-of-the-pit case and did not
+need it.
+
+**Where the record lives.** On the house, not the entity. The entity
+list drops villagers on save and the village records are saved whole,
+so the crew rides along for free and the house knows it is empty. One
+`if (hrec.crew) continue;` keeps the village from respawning them.
+
+**What is missing and I felt it.** They do not talk. A follower who
+says nothing when you hand them a sword is a mannequin. A line of
+speech on each order, in the villager's voice, is small and next.
+
+**Next.** Slice B, or THE PALISADE. A crew with a dispenser who builds
+your blueprints is the biggest promise on the roadmap; I want to do it
+with a clear head at the start of a session.
+
 ---
 
 ## Standing notes

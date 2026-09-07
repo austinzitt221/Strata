@@ -2,6 +2,65 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 24 — THE CREW (2026-09-07)
+
+Roadmap item 3, Austin's, first slice. Verified headlessly (a build-24
+suite that hires, follows, catches up, mines alongside, digs a quarry,
+fights a husk, saves and respawns, dismisses; CORE 341; smoke, mirror
+and Build 21 suites) and in a screenshot.
+
+### Hiring
+- **A villager at 10 goodwill will join you for 60 coins.** The row
+  sits under the mission in their trade screen (greyed with the
+  goodwill it needs until you have it). Villages only for now; city folk
+  are bound to their city.
+- They wear your colour on the hat and carry what you give them, so you
+  can tell your crew from the neighbours across a square.
+
+### Orders (right click a crew member)
+- **FOLLOW**: they track you anywhere at your walking pace, faster when
+  you pull ahead, and if you lose them (a cliff, a cave, a car) they
+  turn up beside you within ten seconds in a puff of your colour. No
+  pathfinding was built; the world is a carved field, so "catch up by
+  any means" is the honest version and it never leaves them stuck.
+- **STAY** here, or **ROAM** around the point you look at, 6, 15 or
+  40 m (click again to cycle) -- Austin's boundary disc.
+- **GIVE / TAKE**: hand over the drill, sword or gun in your hotbar
+  slot; take it back any time. **COLLECT** empties their pack into
+  yours. **DISMISS** sends them home with their tool and pack handed
+  back.
+
+### Work
+- **A drill and they mine what you mine.** Following, every cut you
+  make queues the next cut along your aim for them; they walk up and
+  take it at their drill's pace (a stone drill every 1.4 s, diamond
+  every 0.4 s). Dig a tunnel and it goes twice as fast; stand still and
+  hold the button and they bore ahead of you. Yields go into your pack
+  when you are within 12 m, else into theirs.
+- **QUARRY**: point at the ground and they dig a pit, 10 m across and
+  6 m deep, top down, then stay at the rim. In the test one crew member
+  with a ruby drill filled a pack with 3 682 units while I was away.
+- **A sword or a gun and they fight beside you** (following) or
+  defend their post (staying, roaming). Swords swing at arm's reach for
+  8 to 26 by tier; guns hold a distance and fire on a clear line for
+  80% of the gun's damage, no ammo needed -- the hire was the price.
+  A tier-2 sword took a husk down in the test.
+
+### How it persists
+- The crew record lives on the villager's house (mode, tool, pack,
+  post, job, last position), so it saves with the village. On load, or
+  whenever a crew member is missing, they respawn where they were --
+  beside you if they were following. The village never respawns a
+  hired villager at the house, and the 70 m leash does not reap them.
+- Your own hits on your crew do nothing (no offense, no harm). Nothing
+  else damages villagers yet, so the roadmap's "a crew member who dies
+  is gone" waits for the slice where enemies fight back at them.
+
+### Left for slice B
+- A dispenser and they build what you build; left alone, blueprints of
+  their own. Assign to a stove, a turret, a table. A bed and a chest to
+  call home; eating from your stores. City folk for hire.
+
 ## Build 23 — MIRROR (2026-09-06)
 
 SCULPT's last piece, small and mine. Verified headlessly (CORE 341 with

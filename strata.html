@@ -9772,6 +9772,7 @@ const ENT_DEF = {
   archangel: { hp: 900, speed: 9.0, r: 1.6, h: 3.6, cap: 0, boss: 'THE ARCHANGEL' },
   guardian:  { hp: 420, speed: 2.6, r: 0.9, h: 2.8, cap: 0, boss: 'THE TOMB GUARDIAN' },
 };
+const CREW_HAT = 0x4fc3f7;
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
   arms:    { name: 'arms dealer',  coat: 0x7a2f2f, hat: 0x4a1c1c },
@@ -10301,7 +10302,9 @@ function entMesh(type, ent){
     return g;
   }
   if (type === 'villager' || type === 'guard'){
-    const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
+    const R0 = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
+    // your crew wear your colour on the hat, and carry what you gave them
+    const R = ent && ent.crew ? { coat: R0.coat, hat: CREW_HAT } : R0;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, 0.1, 0.31, 0));
     box(0.44, 0.56, 0.26, R.coat, 0, 0.9, 0);                 // coat
@@ -10318,6 +10321,12 @@ function entMesh(type, ent){
       const e2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.03), eyeM);
       e2.position.set(s * 0.09, 1.46, -0.22);
       g.add(e2);
+    }
+    if (ent && ent.crew && ent.crew.tool){
+      const t = ent.crew.tool;
+      if (t.kind === 'drill') box(0.14, 0.14, 0.5, 0x6a7a8a, 0.34, 0.8, -0.25);
+      else if (t.kind === 'sword') box(0.06, 0.9, 0.1, 0xd8dde4, 0.34, 1.0, -0.15);
+      else if (t.kind === 'fw') box(0.1, 0.12, 0.62, 0x2c2c31, 0.34, 0.86, -0.3);
     }
     g.userData = { legs, phase: Math.random() * 6 };
     return g;
@@ -10702,6 +10711,7 @@ function killEntity(e, byPlayer){
 }
 function hurtEntity(e, dmg, kx, kz, quiet){
   if (e.type === 'villager'){
+    if (e.crew){ e.flash = 0.15; return; }              // yours: no offense taken, no harm done
     // you can't kill the neighbors — but they take offense
     e.flash = 0.15; e.fleeT = 5;
     villageSys.offend(e);
@@ -10951,6 +10961,7 @@ const villageSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 60) continue;
       for (let i = 0; i < rec.houses.length; i++){
         const hrec = rec.houses[i];
+        if (hrec.crew) continue;                          // hired: the crew keeps them alive
         const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
         if (alive) continue;
         const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
@@ -10974,6 +10985,376 @@ const villageSys = {
       if (e.ckey) citySys.cred(game.cities[e.ckey], -4, 'you struck ' + hrec.vname);
       markSave();
     }
+  },
+};
+
+// ---------- THE CREW: hire the people you have earned ----------
+// A villager at ten goodwill joins your crew for coin. They follow you
+// anywhere (and catch up by any means if you lose them), stay or roam
+// where you put them, and work with what you hand them: a sword or a gun
+// and they fight beside you; a drill and they mine what you mine -- the
+// next cut along your aim -- or dig a quarry where you point. What they
+// mine goes into your pack if you are near, else into theirs. The crew
+// record lives on the villager's house, so it saves with the village.
+const crewSys = {
+  HIRE_REP: 10, HIRE_COST: 60, accT: 0,
+  SWORD_DMG: [8, 12, 16, 20, 26],
+  DRILL_EFF: [1.5, 2.0, 2.4, 2.8, 3.2],
+  DRILL_RATE: [1.4, 1.0, 0.75, 0.55, 0.4],
+  all(){ return game.entities.filter(e => e.type === 'villager' && e.crew); },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel'); },
+  hire(e, hrec){
+    if (CORE.countItem(game.slots, 'coin') < this.HIRE_COST){ toast('need ' + this.HIRE_COST + ' coins to hire ' + hrec.vname); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', this.HIRE_COST);
+    hrec.crew = { mode: 'follow', tool: null, pack: {}, pos: [e.x, e.y, e.z], home: null, r: 12, tasks: [], job: null, hired: game.day || 0 };
+    e.crew = hrec.crew;
+    this.remesh(e);
+    toast(hrec.vname + ' joins your crew · right click them to give orders');
+    AudioSys.sfx('craft');
+    refreshHotbar();
+    this.open(e);
+    markSave();
+  },
+  remesh(e){ if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; } },
+  nameOf(e){ const h = villageSys.villagerRec(e); return h ? h.vname : 'crew'; },
+  // a word from them on every order, so they are people and not props
+  say(e, what){
+    const L = {
+      follow: ['right behind you.', 'lead on.', 'where to?'],
+      stay: ['I\'ll hold here.', 'not moving.', 'this spot, then.'],
+      roam: ['I\'ll keep an eye on the place.', 'I\'ll walk the ground.', 'round and round, got it.'],
+      quarry: ['stand back, this gets dusty.', 'a hole it is.', 'I\'ll have it down by supper.'],
+      drill: ['I know how to use one of these.', 'point me at the rock.', 'the good one, eh?'],
+      sword: ['I\'ve swung worse.', 'anything comes near you, it\'s mine.', 'sharp. good.'],
+      fw: ['I\'ve fired one before. once.', 'keep your head down, then.', 'loud thing.'],
+      take: ['all yours.', 'fair enough.', 'was getting heavy anyway.'],
+      collect: ['it\'s all there.', 'mind, some of it\'s sharp.', 'that\'s the lot.'],
+      dismiss: ['been good working with you.', 'the house will want airing.', 'find me if you need me.'],
+      done: ['that\'s the hole dug.', 'done. my arms know it.', 'quarry\'s finished.'],
+      lost: ['there you are.', 'nearly lost you.', 'keep up, you said. ha.'],
+    }[what];
+    if (L) toast(this.nameOf(e) + ': "' + L[(Math.random() * L.length) | 0] + '"');
+  },
+  // keep every hired villager in the world: spawn the missing ones where
+  // they were (or beside you if they were following), and remember where
+  // they are for the save
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      for (let i = 0; i < rec.houses.length; i++){
+        const hrec = rec.houses[i];
+        const C = hrec.crew;
+        if (!C) continue;
+        const e = game.entities.find(o => o.type === 'villager' && o.vkey === key && o.vi === i);
+        if (e){ C.pos = [+e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2)]; if (!e.crew) e.crew = C; continue; }
+        let x, y, z;
+        if (C.mode === 'follow' || !C.pos){ x = game.pos.x + 2; z = game.pos.z + 2; y = Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7; if (Math.abs(game.pos.y - y) < 12) y = game.pos.y + 0.2; }
+        else { x = C.pos[0]; y = C.pos[1] + 0.3; z = C.pos[2]; }
+        const ne = spawnEntity('villager', x, y, z);
+        ne.role = hrec.role; ne.vkey = key; ne.vi = i; ne.crew = C;
+        ne.home = { x: hrec.x, y, z: hrec.z };
+      }
+    }
+  },
+  // ---- orders ----
+  open(e){
+    const hrec = villageSys.villagerRec(e);
+    if (!hrec || !hrec.crew) return;
+    game.activeCrew = e;
+    game.ui = 'trade';
+    const main = $('trademain'), hot = $('tradehot');
+    main.innerHTML = ''; hot.innerHTML = '';
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    this.refresh();
+    show('tradescreen');
+    document.exitPointerLock();
+    AudioSys.sfx('toggle');
+  },
+  packText(C){
+    const parts = [];
+    for (const k in C.pack){ if (C.pack[k] > 0) parts.push(C.pack[k] + ' ' + (isNaN(+k) ? itemLabel({ kind: k }) : CORE.MAT_NAME[+k])); }
+    return parts.length ? parts.join(', ') : 'empty';
+  },
+  toolText(t){ return !t ? 'empty hands' : t.kind === 'drill' ? CORE.TIER_NAME[t.tier] + ' drill' : t.kind === 'sword' ? CORE.TIER_NAME[t.tier] + ' sword' : t.kind === 'fw' ? CORE.GUNS[t.g | 0].name : itemLabel(t); },
+  refresh(){
+    const e = game.activeCrew;
+    if (!e || game.ui !== 'trade') return;
+    const hrec = villageSys.villagerRec(e), C = e.crew;
+    if (!hrec || !C) return;
+    $('tradetitle').textContent = (hrec.vname + ' · your crew').toUpperCase();
+    const MODE = { follow: 'following you', stay: 'staying put', roam: 'roaming ' + C.r + ' m around their post', quarry: 'digging a quarry' + (C.job ? ' · ' + (C.job.cuts.length - C.job.i) + ' cuts to go' : '') };
+    $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · carrying: <b>' + this.toolText(C.tool) + '</b> · pack: ' + this.packText(C);
+    document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
+    const list = $('tradelist');
+    list.innerHTML = '';
+    const row = (label, act, colour, fn, dim) => {
+      const r = document.createElement('div');
+      r.className = 'craftrow';
+      r.style.borderLeft = '3px solid ' + colour;
+      const txt = document.createElement('div'); txt.className = 'cname'; txt.textContent = label;
+      const a = document.createElement('div'); a.style.marginLeft = 'auto'; a.style.color = dim ? '#666' : colour; a.textContent = act;
+      r.appendChild(txt); r.appendChild(a);
+      if (dim) r.style.opacity = 0.6; else r.addEventListener('click', fn);
+      list.appendChild(r);
+    };
+    const held = game.slots[game.hotSel];
+    const giveable = held && (held.kind === 'drill' || held.kind === 'sword' || held.kind === 'fw');
+    row('follow you everywhere' + (C.tool && C.tool.kind === 'drill' ? ' and mine the next cut along your aim' : C.tool ? ' and fight beside you' : ''), C.mode === 'follow' ? 'FOLLOWING' : 'FOLLOW', '#4fc3f7', () => this.order(e, 'follow'));
+    row('stay right here' + (C.tool && C.tool.kind !== 'drill' ? ', fighting what comes near' : ''), C.mode === 'stay' ? 'STAYING' : 'STAY', '#4fc3f7', () => this.order(e, 'stay'));
+    row('roam around here · ' + C.r + ' m (click again for ' + this.nextR(C.r) + ' m)', C.mode === 'roam' ? 'ROAMING' : 'ROAM', '#4fc3f7', () => this.order(e, 'roam'));
+    const drill = C.tool && C.tool.kind === 'drill';
+    row('dig a quarry where you are looking · 10 m across, 6 m down' + (drill ? '' : ' (needs a drill)'), C.mode === 'quarry' ? 'DIGGING' : 'QUARRY', '#ffb44d', () => this.order(e, 'quarry'), !drill);
+    row(giveable ? 'hand over your ' + this.toolText(held) : 'select a drill, sword or gun in your hotbar to hand it over', 'GIVE', '#9fe8a0', () => this.give(e), !giveable);
+    row(C.tool ? 'take back the ' + this.toolText(C.tool) : 'they carry nothing', 'TAKE', '#9fe8a0', () => this.takeTool(e), !C.tool);
+    const hasPack = Object.keys(C.pack).some(k => C.pack[k] > 0);
+    row('collect their pack: ' + this.packText(C), 'COLLECT', '#9fe8a0', () => this.collect(e), !hasPack);
+    row('let ' + hrec.vname + ' go home (their tool and pack come to you)', 'DISMISS', '#e07070', () => this.dismiss(e));
+  },
+  nextR(r){ return r >= 40 ? 6 : r >= 15 ? 40 : 15; },
+  order(e, mode){
+    const C = e.crew;
+    if (mode === 'roam'){
+      if (C.mode === 'roam') C.r = this.nextR(C.r);
+      const h = surfaceHit();
+      C.home = h ? { x: h[0], z: h[2] } : { x: e.x, z: e.z };
+    } else if (mode === 'stay'){
+      C.home = { x: e.x, z: e.z }; C.r = 3;
+    } else if (mode === 'quarry'){
+      if (!C.tool || C.tool.kind !== 'drill'){ toast('give them a drill first'); AudioSys.sfx('deny'); return; }
+      const h = surfaceHit();
+      if (!h){ toast('look at the ground where the quarry should go'); AudioSys.sfx('deny'); return; }
+      const tier = C.tool.tier | 0, eff = this.DRILL_EFF[tier];
+      C.job = { cx: +h[0].toFixed(2), cy: +h[1].toFixed(2), cz: +h[2].toFixed(2), i: 0, cuts: this.quarryPlan(h[0], h[1], h[2], 5, 6, eff), eff };
+      C.home = { x: h[0], z: h[2] }; C.r = 6;
+      toast(this.nameOf(e) + ' starts on the quarry · ' + C.job.cuts.length + ' cuts', 1);
+    }
+    if (mode !== 'quarry') C.job = null;
+    C.mode = mode;
+    C.tasks = [];
+    this.say(e, mode);
+    AudioSys.sfx('select');
+    this.refresh(); markSave();
+  },
+  quarryPlan(cx, cy, cz, R, depth, eff){
+    const cuts = [];
+    const step = eff * 0.7;
+    for (let y = cy + eff * 0.2; y > cy - depth; y -= eff * 0.55)
+      for (let x = cx - R; x <= cx + R + 1e-6; x += step)
+        for (let z = cz - R; z <= cz + R + 1e-6; z += step)
+          if (Math.hypot(x - cx, z - cz) <= R - eff * 0.2) cuts.push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2)]);
+    return cuts.slice(0, 320);
+  },
+  give(e){
+    const held = game.slots[game.hotSel];
+    if (!held || !(held.kind === 'drill' || held.kind === 'sword' || held.kind === 'fw')){ toast('select a drill, sword or gun first'); AudioSys.sfx('deny'); return; }
+    const C = e.crew;
+    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
+    C.tool = held; game.slots[game.hotSel] = null;
+    if (C.mode === 'quarry' && held.kind !== 'drill'){ C.mode = 'stay'; C.job = null; }
+    this.remesh(e);
+    this.say(e, held.kind);
+    AudioSys.sfx('craft');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  takeTool(e){
+    const C = e.crew;
+    if (!C.tool) return;
+    if (!giveItem(C.tool, 1)){ toast('no room in your pack'); AudioSys.sfx('deny'); return; }
+    C.tool = null;
+    if (C.mode === 'quarry'){ C.mode = 'stay'; C.job = null; }
+    C.tasks = [];
+    this.remesh(e);
+    this.say(e, 'take');
+    AudioSys.sfx('select');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  collect(e){
+    const C = e.crew;
+    let n = 0;
+    for (const k in C.pack){
+      const v = C.pack[k]; if (!(v > 0)) continue;
+      if (isNaN(+k)) addStackItem(k, v); else CORE.addMat(game.slots, +k, v);
+      n += v;
+    }
+    C.pack = {};
+    if (n) this.say(e, 'collect'); else toast('nothing to take');
+    AudioSys.sfx('craft');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  dismiss(e){
+    const hrec = villageSys.villagerRec(e), C = e.crew;
+    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
+    this.collect(e);
+    hrec.crew = null; e.crew = null; e.tt = 0;
+    const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
+    e.home = { x: hrec.x + hrec.face[0] * (villageSys.faceHalf(hrec) + 1.8), y: hy, z: hrec.z + hrec.face[1] * (villageSys.faceHalf(hrec) + 1.8) };
+    this.remesh(e);
+    this.say(e, 'dismiss');
+    closeOverlay();
+    markSave();
+  },
+  // ---- work ----
+  // you mined here: a following miner takes the next cut along your aim
+  onMine(p, shape, eff){
+    const crew = this.all();
+    if (!crew.length) return;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const step = eff * 0.9;
+    let k = 0;
+    for (const e of crew){
+      const C = e.crew;
+      if (C.mode !== 'follow' || !C.tool || C.tool.kind !== 'drill') continue;
+      if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 30) continue;
+      k++;
+      const t = { x: +(p.x + dir.x * step * k).toFixed(2), y: +(p.y + dir.y * step * k).toFixed(2), z: +(p.z + dir.z * step * k).toFixed(2), shape, eff };
+      C.tasks.push(t);
+      if (C.tasks.length > 6) C.tasks.shift();
+    }
+  },
+  // one cut by a crew member's drill: yields to you if you are near, else
+  // into their pack; no undo record (it is their work, not yours)
+  cut(e, x, y, z, shape, eff){
+    const ed = CORE.makeEdit(0, shape || 0, x, y, z, eff, 0, 0);
+    const got = CORE.mineYield(game.edits, ed, game.gen);
+    let units = 0, hw = 0;
+    for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+    if (units === 0) return false;
+    applyEdit(ed);
+    const near = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z) < 12;
+    const C = e.crew;
+    for (const m in got){
+      const ok = CORE.ORE_ITEM[+m];
+      if (near){ if (ok) addStackItem(ok, got[m]); else CORE.addMat(game.slots, +m, got[m]); }
+      else { const key = ok || String(m); C.pack[key] = (C.pack[key] || 0) + got[m]; }
+    }
+    collapseSys.note({ x, y, z }, eff);
+    Particles.burst(x, y, z, eff * 0.5, yieldColors(got), Math.min(30, 8 + units / 6), 2.2);
+    if (near){ AudioSys.sfx('break', hw / units); refreshHotbar(); }
+    return true;
+  },
+  // the nearest enemy within reach of a fighter
+  foe(e, range){
+    let best = null, bd = range;
+    for (const o of game.entities){
+      if (!this.hostile(o) || o.type === 'drop') continue;
+      const d = Math.hypot(o.x - e.x, o.z - e.z);
+      if (d < bd){ bd = d; best = o; }
+    }
+    return best ? [best, bd] : null;
+  },
+  fight(e, o, d, now){
+    const C = e.crew, t = C.tool;
+    if (t.kind === 'sword'){
+      if (d < 1.9 && e.atkT <= 0){
+        e.atkT = 0.9;
+        hurtEntity(o, this.SWORD_DMG[t.tier | 0] || 8, (o.x - e.x) * 2, (o.z - e.z) * 2, true);
+        if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) AudioSys.sfx('hit');
+      }
+      return d < 1.6 ? [0, 0, 0] : [o.x - e.x, o.z - e.z, 5.2];
+    }
+    // a gun: hold a distance and shoot on a clear line
+    const G = CORE.GUNS[t.g | 0] || CORE.GUNS[0];
+    const reach = Math.min(28, G.range * 0.6);
+    if (d < reach && e.atkT <= 0){
+      const def = ENT_DEF[o.type] || { h: 1 };
+      const mx = e.x, my = e.y + 1.3, mz = e.z, tx = o.x, ty = o.y + def.h * 0.6, tz = o.z;
+      const L = Math.hypot(tx - mx, ty - my, tz - mz) || 1;
+      const le = nearEdits([Math.min(mx, tx) - 1, Math.min(my, ty) - 1, Math.min(mz, tz) - 1, Math.max(mx, tx) + 1, Math.max(my, ty) + 1, Math.max(mz, tz) + 1]);
+      let clear = true;
+      for (let s = 0.8; s < L - 0.6; s += 0.5){ if (CORE.evalSDF(mx + (tx - mx) / L * s, my + (ty - my) / L * s, mz + (tz - mz) / L * s, le, game.gen) < 0.05){ clear = false; break; } }
+      if (clear){
+        e.atkT = Math.max(0.3, 60 / G.rpm * 2.5);
+        hurtEntity(o, Math.max(4, G.dmg * 0.8), (o.x - e.x), (o.z - e.z), true);
+        for (let s = 1; s < L; s += 1.2) Particles.burst(mx + (tx - mx) / L * s, my + (ty - my) / L * s, mz + (tz - mz) / L * s, 0.05, [0xfff0a0], 1, 0.25);
+        if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('shot');
+      }
+    }
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(o.x - e.x), -(o.z - e.z));
+    if (d < 5) return [e.x - o.x, e.z - o.z, 3.5];
+    if (d > reach * 0.8) return [o.x - e.x, o.z - e.z, 5.2];
+    return [0, 0, 0];
+  },
+  // where a crew member walks this frame: [sx, sz, speed]
+  steer(e, dt, now, pd){
+    const C = e.crew;
+    const armed = C.tool && (C.tool.kind === 'sword' || C.tool.kind === 'fw');
+    if (armed){
+      const f = this.foe(e, C.mode === 'follow' ? 24 : Math.max(18, (C.r || 3) + 12));
+      if (f && (C.mode === 'follow' || !C.home || Math.hypot(f[0].x - C.home.x, f[0].z - C.home.z) < (C.r || 3) + 16)) return this.fight(e, f[0], f[1], now);
+    }
+    if (C.mode === 'quarry' && C.job){
+      const J = C.job;
+      if (J.i >= J.cuts.length){
+        C.job = null; C.mode = 'stay'; C.home = { x: e.x, z: e.z };
+        this.say(e, 'done'); markSave();
+        return [0, 0, 0];
+      }
+      const c = J.cuts[J.i];
+      const d = Math.hypot(c[0] - e.x, c[2] - e.z);
+      if (d < 3.5 || (d < 7 && Math.abs(c[1] - e.y) < 3)){
+        e.workT = (e.workT || 0) - dt;
+        if (e.workT <= 0){
+          e.workT = this.DRILL_RATE[C.tool.tier | 0] || 1;
+          this.cut(e, c[0], c[1], c[2], 0, J.eff);
+          J.i++;
+        }
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(c[0] - e.x), -(c[2] - e.z));
+        return [0, 0, 0];
+      }
+      return [c[0] - e.x, c[2] - e.z, 3.2];
+    }
+    if (C.mode === 'follow'){
+      // a following miner works the cuts you left it
+      if (C.tasks.length && C.tool && C.tool.kind === 'drill'){
+        const t = C.tasks[0];
+        const d = Math.hypot(t.x - e.x, t.z - e.z);
+        if (d < 4.5 && Math.abs(t.y - e.y) < 4){
+          e.workT = (e.workT || 0) - dt;
+          if (e.workT <= 0){
+            e.workT = this.DRILL_RATE[C.tool.tier | 0] || 1;
+            this.cut(e, t.x, t.y, t.z, t.shape, t.eff);
+            C.tasks.shift();
+          }
+          if (e.mesh) e.mesh.rotation.y = Math.atan2(-(t.x - e.x), -(t.z - e.z));
+          return [0, 0, 0];
+        }
+        if (d < 14) return [t.x - e.x, t.z - e.z, 4.6];
+        C.tasks.shift();
+      }
+      // lost you: catch up by any means
+      if (pd > 60 || (pd > 12 && (e.lostT = (e.lostT || 0) + dt) > 9)){
+        e.lostT = 0;
+        e.x = game.pos.x + 1.5; e.z = game.pos.z + 1.5;
+        const gy = Math.max(game.gen.height(e.x, e.z), CORE.BEDROCK_Y + 1);
+        e.y = Math.abs(game.pos.y - gy) < 12 ? game.pos.y + 0.2 : gy + 0.7;
+        e.vx = e.vy = e.vz = 0;
+        Particles.burst(e.x, e.y + 0.8, e.z, 0.5, [0x4fc3f7], 10, 1.2);
+        if (Math.random() < 0.5) this.say(e, 'lost');
+      }
+      if (pd <= 12) e.lostT = 0;
+      if (pd < 2.8){
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+        return [0, 0, 0];
+      }
+      return [game.pos.x - e.x, game.pos.z - e.z, pd > 14 ? 6.8 : 5.0];
+    }
+    // stay / roam: wander the post
+    const H = C.home || { x: e.x, z: e.z }, R = C.mode === 'stay' ? 1.5 : (C.r || 12);
+    if (e.tt <= 0){
+      e.tt = 4 + Math.random() * 6;
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * R;
+      e.tx = H.x + Math.cos(a) * rr; e.tz = H.z + Math.sin(a) * rr;
+    }
+    const sx = e.tx - e.x, sz = e.tz - e.z;
+    if (Math.hypot(sx, sz) < 0.6){
+      if (pd < 3.2 && e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+      return [0, 0, 0];
+    }
+    return [sx, sz, 1.4];
   },
 };
 
@@ -11517,6 +11898,24 @@ const tradeSys = {
       }
       mrow.appendChild(txt); mrow.appendChild(act);
       list.appendChild(mrow);
+    }
+    if (!T.e.ckey && !hrec.crew){
+      // ---- hire: a villager you have earned joins your crew ----
+      const hrow = document.createElement('div');
+      hrow.className = 'craftrow';
+      hrow.style.borderLeft = '3px solid ' + (hrec.rep >= crewSys.HIRE_REP ? '#4fc3f7' : '#555');
+      const txt = document.createElement('div'); txt.className = 'cname';
+      const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = '#4fc3f7';
+      if ((hrec.rep || 0) >= crewSys.HIRE_REP){
+        txt.textContent = 'hire ' + hrec.vname + ' onto your crew — follows you, fights and works with what you give them';
+        act.textContent = 'HIRE ' + crewSys.HIRE_COST + 'c';
+        hrow.addEventListener('click', () => { crewSys.hire(T.e, hrec); });
+      } else {
+        txt.textContent = hrec.vname + ' would join your crew at ' + crewSys.HIRE_REP + ' goodwill';
+        act.textContent = 'HIRE'; act.style.color = '#666'; hrow.style.opacity = 0.6;
+      }
+      hrow.appendChild(txt); hrow.appendChild(act);
+      list.appendChild(hrow);
     }
     const coins = CORE.countItem(game.slots, 'coin');
     this.offers(T.e.role).filter(o => !o.crep || crec).forEach((o, idx) => {
@@ -14743,7 +15142,7 @@ function updateEntities(dt, now){
     if (e === game.driving) continue;            // driveCar owns it this frame
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (!VEH[e.type] && pd > (e.ckey ? 180 : 70)){
+    if (!VEH[e.type] && !e.crew && pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -14876,6 +15275,9 @@ function updateEntities(dt, now){
       if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
         ? (e.dir > 0 ? -Math.PI / 2 : Math.PI / 2)
         : (e.dir > 0 ? Math.PI : 0);
+    } else if (e.type === 'villager' && e.crew){
+      const st = crewSys.steer(e, dt, now, pd);
+      sx = st[0]; sz = st[1]; sp = st[2];
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
         sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
@@ -15452,6 +15854,7 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){
+        if (vent.crew){ crewSys.open(vent); return; }
         if (vent.walker){
           toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
                  'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
@@ -17848,6 +18251,7 @@ function doMineM(tool, p, shape, eff){
   const gp = mirrorSys.group();
   doMine(tool, p, shape, eff, gp);
   if (gp) doMine(tool, p, shape, eff, gp, true);
+  crewSys.onMine(p, shape, eff);
 }
 function doPlaceM(tool, p, shape, eff){
   const gp = mirrorSys.group();
@@ -21198,6 +21602,7 @@ function closeOverlay(){
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
+  game.activeCrew = null;
   game.activeBoard = null;
   game.activeCrafter = null;
   game.activeCont = null;
@@ -22789,6 +23194,7 @@ function frame(now){
   stoveSys.update(dt);
   powerSys.update(dt);
   villageSys.tick(dt);
+  crewSys.tick(dt);
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
@@ -23012,7 +23418,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

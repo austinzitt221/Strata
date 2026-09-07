@@ -20,7 +20,13 @@ when they matter, not by rule.
    bowl), the mirror (every edit repeated across a plane you set with
    K). Left for a later session: a smoothing stroke that erodes rather
    than adds, and the Terraformer from Build 21.
-3. **THE CREW** (Austin's, with my additions) — hire the people you have
+3. **THE CREW** (Austin's, with my additions) — SLICE A DONE (Build 24:
+   hire at 10 goodwill, follow / stay / roam disc, give a drill and they
+   mine the next cut along your aim or dig a quarry, give a sword or gun
+   and they fight, saves with the village). Slice B: a dispenser and
+   they build what you build, blueprints of their own, assign to a
+   stove / turret / table, a bed and a chest, they eat, they can die.
+   The idea: hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign
    points them at a thing: a stove, a turret they will man instead of
