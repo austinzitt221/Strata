@@ -2,6 +2,49 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 28 — THE EXPEDITION (2026-09-07)
+
+Roadmap item 6, mine. A story you find rather than one you are told.
+Verified headlessly (a build-28 suite: the route lays dry and off
+villages, the shaft is air inside and rock beside, camp 1 stamps and
+its page marks camp 2, camp 8 has bones, the rope, the leader's chest
+at the bottom, and the survey marks the mouth; it all saves) and in
+screenshots.
+
+### Someone was here before you
+- **Eight camps walk out from where you spawn**, a day apart along a
+  route that bends as it goes, each snapped to dry, gentle, open land
+  away from villages and rivers. Camp 1 is marked from the start as
+  an ABANDONED CAMP; the rest you find by reading.
+- **A camp** is a tent (a new prop, canvas on a ridge pole), a fire, a
+  sign with the survey's name and the day, and a chest holding that
+  day's page of the surveyor's journal and what they left: cooked meat
+  and coal early, coal and rope later, less and less. From the fourth
+  camp on, bones. Camps appear as you come within 140 m, once, like
+  villages.
+- **The journal.** Eight pages in the leader's hand, right click to
+  read. The council of the nearest city sent a survey to find what
+  makes the sound under the hills; a second, two porters, eleven days
+  of food. Something follows them; they ford a river; they find bones
+  laid out with care below a hole the porters will not go near; a
+  porter leaves with the good rope, the other simply goes; the second
+  is hurt; the leader goes on alone to a shaft "with the scrape coming
+  up out of it like breath". Reading a page marks the next camp.
+- **The mouth.** Beside the last camp a sheer shaft, carved into the
+  world at birth, 26 m down, with the long rope left hanging in it. At
+  the bottom, the leader's chest: the survey, 150 coins, two diamonds,
+  three rope, and one more set of bones. The survey marks every camp on
+  your map and THE MOUTH in red, and points at THE DEEP, the next thing
+  on the roadmap. The last page says do not go down.
+- Names are the world's own: the leader and the second from the
+  villager name-maker, the city the nearest one to spawn, and the
+  river the route crosses gets a name -- rivers have names now, twelve
+  of them, by the cell they rise in (the stream, if no river is near).
+
+### Also
+- A readable-page overlay (E closes), a bones decor variant, a placeable
+  tent for anyone who wants one.
+
 ## Build 27 — RIVERS (2026-09-07)
 
 Roadmap item 5, mine, and the one I kept circling. Water that starts in

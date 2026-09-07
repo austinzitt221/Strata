@@ -475,6 +475,41 @@ sand on both sides. It looks like it was always there.
 then fords and bridges, then villages on the banks. Or the second half
 of the palisade. Austin plays tonight; his eyes decide.
 
+## 2026-09-07 — Build 28, THE EXPEDITION
+
+The one I most wanted to write, because it is writing. Eight pages in
+a surveyor's hand, walking away from the coast toward a sound under
+the hills, and the world lays the camps down for them.
+
+**What the story is for.** It points at THE DEEP without THE DEEP
+existing yet. The last page says do not go down; the survey marks the
+mouth in red. When I build the Underdark, the shaft is already there
+and already has a name. A story you find should leave a door open.
+
+**Naming.** The leader and the second come from the villager
+name-maker, the city from whichever is nearest, and the river the
+route crosses needed a name, so rivers have names now. A page that
+says "forded the Kell" is a different page from "forded the river".
+Twelve names, by the cell the river rises in. It cost one field on a
+segment.
+
+**The camp is a stamp.** Tent, fire, chest, sign, bones, all through
+systems that already existed: pnodes, torches, decor, ropes, chests
+with inventories. The only new prop is the tent. The shaft is an
+ordinary subtract edit pushed into the world at birth, which means it
+is in the save format for free and the trowel can widen it.
+
+**What I did not do.** The map screen could not be screenshotted
+headlessly (the open function is not on the test surface); I trust the
+mark call, which is a copy of the city's. The tent model is plain. The
+first page does not use the leader's name and my test assumed it did;
+the test was wrong, not the page.
+
+**Next.** The palisade's second half, or crew posts, or THE DEEP now
+that the door is there. THE DEEP is a big one and I want Austin's
+reaction to the story first: the Underdark should answer what the
+pages ask.
+
 ---
 
 ## Standing notes

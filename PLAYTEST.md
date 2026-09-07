@@ -4,6 +4,23 @@ A running list, newest build first. Claude adds to it every build; Austin
 plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here.
 
+## Build 28 — THE EXPEDITION
+New worlds only (the route is laid when a world is born).
+- [ ] From spawn there is a marker, ABANDONED CAMP, a few hundred metres
+      off. Walk to it. Tent, fire, sign, chest. Take the page and right
+      click it. Does the page read well? Is the overlay clear? E closes.
+- [ ] Follow the chain: each page marks the next camp. Eight camps, a
+      day apart in the story. Do the camps sit in sensible places? Any
+      in water, on a cliff, in a village?
+- [ ] From camp 4, bones. Camp 8 has a shaft beside it with a rope.
+      Climb down (Space up, C down). The chest at the bottom has the
+      survey; read it. Every camp should mark on the map and THE MOUTH
+      in red.
+- Feedback I want: the story itself -- too much, too little, the right
+  voice? Should the pages be longer? Would you want the porter's own
+  trail (a second, shorter story) or the second's fate to be
+  findable? Rivers have names now (twelve); any you would add?
+
 ## Build 27 — RIVERS
 Rivers are new terrain, so old worlds will look different near where
 the old canals ran. Start a fresh world or fly around an old one.

@@ -58,9 +58,10 @@ when they matter, not by rule.
    consumer reads, near and far, a current. Left for later: a moving
    surface, fords and waterfalls as features, riverside villages and
    cities on the banks.
-6. **THE EXPEDITION** — environmental storytelling: the camps, journals
-   and bones of an earlier expedition scattered by worldgen, telling one
-   story across the map and pointing at the Underdark.
+6. **THE EXPEDITION** (DONE, Build 28) — eight camps, a journal in
+   eight pages, bones, a shaft with a rope, and the survey at the bottom
+   pointing at THE DEEP. Later: more than one story per world, and the
+   survey's other markings once THE DEEP exists to be found.
 5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
    sound) and then the Space Arc as written below.
 
