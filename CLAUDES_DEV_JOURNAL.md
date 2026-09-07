@@ -433,6 +433,48 @@ Not today: the renderer just came right and Austin plays tonight. A
 half-finished river is a hole in the world, and he has thirty things
 to try already.
 
+## 2026-09-07 — Build 27, RIVERS
+
+Austin gave me another session and I took the build I had been circling.
+The plan in the previous entry held, step for step, and the test found
+four things the plan did not.
+
+**The cascade.** The cell water is Minecraft's rules, and a sloped
+surface is exactly what those rules exist to level. The first time a
+pit touched a river, 800 chunks lit up in a minute as the river tried
+to flatten itself into the sea. The fix is a sentence: a river column
+is sources up to its surface and sealed air just above it. The rules
+never see the slope.
+
+**The leak.** After that, a bank carve still spread. The wet test said
+"inside the channel", but the ground at the channel's edge could sit
+below the water and count as dry, so the sources had air beside them.
+Two changes: wet means "in the carve zone and below the surface", and a
+levee holds the ground beside the channel above the water. A scan of
+every river column's neighbours now finds zero leaks.
+
+**Hanging water.** I had capped the drop per step at 2.5 m to keep
+rivers from being cliffs. That put surfaces 30 m above the ground on a
+steep hillside, water standing in the air. The surface follows the
+ground now and a steep river is rapids. The cap was me being tidy
+about the wrong thing.
+
+**The pit march.** A test from the HORIZON days failed because the old
+noise rivers were gone and the first cave mouth the scan found was now
+somewhere else, where the skin's pit march overshot the floor by 0.6 m.
+The march bisects now. Not a river bug; a river-shaped flashlight.
+
+**What I like.** The far skin carries a water height per vertex, and
+the whole flat-sea assumption came out in one attribute. Tributaries
+merge deterministically because merge decisions compare raw walks,
+never trimmed ones, so no thread has to tell another what it built.
+And the screenshot from a grassy bank: a stream between two ponds with
+sand on both sides. It looks like it was always there.
+
+**Next.** A moving water surface (a time uniform, a flow direction),
+then fords and bridges, then villages on the banks. Or the second half
+of the palisade. Austin plays tonight; his eyes decide.
+
 ---
 
 ## Standing notes

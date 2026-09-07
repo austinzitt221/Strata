@@ -882,7 +882,169 @@ function makeGen(seed){
     const target = (seaLevel - 6) + sstep(0.3, 0.78, u) * 10.5;
     return h + (target - h) * w;
   }
-  function height(x, z){
+  // ---- RIVERS: water that starts in the mountains and reaches the sea ----
+  // One river per 768 m macro cell: the highest of a dozen candidate
+  // points is its source, and from there it walks downhill 22 m at a time,
+  // picking the lowest of eight ways forward within a fan of its heading,
+  // its surface never rising (through a rise it cuts a gorge), widening as
+  // it goes, until it reaches the sea, sinks too deep, or leaves its
+  // neighbourhood -- where it ends in a tarn. Segments go into 64 m
+  // buckets so a column's query is a handful of distance tests. Built
+  // lazily and deterministically, so every worker agrees with the main
+  // thread without a message.
+  const RIV_CELL = 768, RIV_STEP = 22, RIV_BUCKET = 64, RIV_MAX = 130;
+  const rivCells = new Map(), rivBuckets = new Map(), rivRawCache = new Map();
+  let rivReady = '';
+  // the raw walk of a cell's river: a pure function of the cell, so every
+  // thread gets the same one, and every merge decision below is made
+  // against these raw walks and never against an already-trimmed river
+  function rivRaw(cx, cz){
+    const ck = cx + ',' + cz;
+    let R = rivRawCache.get(ck);
+    if (R !== undefined) return R;
+    R = null;
+    const h0 = hashInt(sRv ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    let sx = 0, sz = 0, sh = -1e9;
+    for (let k = 0; k < 12; k++){
+      const x = (cx + 0.1 + (hashInt(h0 ^ (k * 2 + 1)) / 4294967296) * 0.8) * RIV_CELL;
+      const z = (cz + 0.1 + (hashInt(h0 ^ (k * 2 + 2)) / 4294967296) * 0.8) * RIV_CELL;
+      const h = heightRaw(x, z, true);
+      if (h > sh){ sh = h; sx = x; sz = z; }
+    }
+    if (sh >= seaLevel + 7 && archAt(sx, sz) !== 7){
+      const pts = [];
+      let x = sx, z = sz, y = sh - 0.6, dirA = 0, hasDir = false, w = 2.2 * rivW;
+      pts.push([x, z, y, w]);
+      for (let i = 0; i < RIV_MAX; i++){
+        let bx = 0, bz = 0, bh = 1e9, ba = 0;
+        for (let k = 0; k < 8; k++){
+          const a = hasDir ? dirA + (k / 7 - 0.5) * 2.4 : (k / 8) * Math.PI * 2;
+          const nx = x + Math.cos(a) * RIV_STEP, nz = z + Math.sin(a) * RIV_STEP;
+          const hh = heightRaw(nx, nz, true) + (noise2(sRv, nx * 0.05, nz * 0.05) - 0.5) * 1.5;
+          if (hh < bh){ bh = hh; bx = nx; bz = nz; ba = a; }
+        }
+        x = bx; z = bz; dirA = ba; hasDir = true;
+        const g = heightRaw(x, z, true);
+        y = Math.min(y - 0.05, g - 0.5);                            // never rises; follows the ground down (rapids where it is steep)
+        w = Math.min(11, w + 0.06 * rivW);
+        pts.push([x, z, y, w]);
+        if (g < seaLevel + 0.3 || y < seaLevel - 0.5) break;      // the sea, or a lake
+        if (g - y > 22) break;                                      // too deep a gorge: it goes underground
+        const px = Math.floor(x / RIV_CELL), pz = Math.floor(z / RIV_CELL);
+        if (px < cx - 1 || px > cx + 1 || pz < cz - 1 || pz > cz + 1) break;
+      }
+      if (pts.length >= 4) R = pts;
+    }
+    rivRawCache.set(ck, R);
+    return R;
+  }
+  // is (x, z) inside the raw channel of pts, and at what water height
+  function rivInRaw(pts, x, z){
+    for (let i = 0; i + 1 < pts.length; i++){
+      const a = pts[i], b = pts[i + 1];
+      const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1;
+      let t = ((x - a[0]) * dx + (z - a[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(x - (a[0] + dx * t), z - (a[1] + dz * t));
+      if (d < a[3] + (b[3] - a[3]) * t) return a[2] + (b[2] - a[2]) * t;
+    }
+    return null;
+  }
+  function rivInsert(seg, x0, z0, x1, z1, pad){
+    const b0x = Math.floor((Math.min(x0, x1) - pad) / RIV_BUCKET), b1x = Math.floor((Math.max(x0, x1) + pad) / RIV_BUCKET);
+    const b0z = Math.floor((Math.min(z0, z1) - pad) / RIV_BUCKET), b1z = Math.floor((Math.max(z0, z1) + pad) / RIV_BUCKET);
+    for (let bz = b0z; bz <= b1z; bz++) for (let bx = b0x; bx <= b1x; bx++){
+      const k = bx + ',' + bz;
+      let L = rivBuckets.get(k);
+      if (!L){ L = []; rivBuckets.set(k, L); }
+      L.push(seg);
+    }
+  }
+  function rivBuild(cx, cz){
+    const ck = cx + ',' + cz;
+    if (rivCells.has(ck)) return;
+    rivCells.set(ck, true);
+    const raw = rivRaw(cx, cz);
+    if (!raw) return;
+    // a tributary: the walk ends where it enters a neighbour's raw channel
+    // that is no higher than it (ties go to the lower cell key), joining it
+    const others = [];
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++){
+      if (!i && !j) continue;
+      const o = rivRaw(cx + i, cz + j);
+      if (o) others.push({ pts: o, first: (cz + j) < cz || ((cz + j) === cz && (cx + i) < cx) });
+    }
+    let pts = raw, joined = false;
+    outer: for (let k = 1; k < raw.length; k++){
+      for (const o of others){
+        const oy = rivInRaw(o.pts, raw[k][0], raw[k][1]);
+        if (oy != null && (oy < raw[k][2] || (oy === raw[k][2] && o.first))){ pts = raw.slice(0, k + 1); joined = true; break outer; }
+      }
+    }
+    if (pts.length < 3) return;
+    for (let i = 0; i + 1 < pts.length; i++){
+      const a = pts[i], b = pts[i + 1];
+      const seg = { x0: a[0], z0: a[1], x1: b[0], z1: b[1], y0: a[2], y1: b[2], w0: a[3], w1: b[3], tarn: 0 };
+      rivInsert(seg, a[0], a[1], b[0], b[1], Math.max(a[3], b[3]) * 2.6 + 8);
+    }
+    const last = pts[pts.length - 1];
+    if (!joined && last[2] > seaLevel){                           // ended on land: a tarn
+      const r = 6 + last[3] * 0.6;
+      const t = { tarn: 1, x: last[0], z: last[1], y: last[2], w: r };
+      rivInsert(t, last[0], last[1], last[0], last[1], r * 2.6 + 8);
+    }
+  }
+  // the nearest river to a column: its distance, half-width, surface
+  // height and direction of flow, or null beyond any valley
+  const RIV_OUT = { d: 0, w: 0, y: 0, tx: 0, tz: 0 };
+  function riverAt(x, z){
+    const cx = Math.floor(x / RIV_CELL), cz = Math.floor(z / RIV_CELL);
+    const ck = cx + ',' + cz;
+    if (ck !== rivReady){
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) rivBuild(cx + i, cz + j);
+      rivReady = ck;
+    }
+    const L = rivBuckets.get(Math.floor(x / RIV_BUCKET) + ',' + Math.floor(z / RIV_BUCKET));
+    if (!L) return null;
+    let best = null, bd = 1e9, bt = 0, by = 1e9, inside = false;
+    for (let q = 0; q < L.length; q++){
+      const s = L[q];
+      let d, t = 0, yy;
+      if (s.tarn){ d = Math.hypot(x - s.x, z - s.z) - s.w; yy = s.y; }
+      else {
+        const dx = s.x1 - s.x0, dz = s.z1 - s.z0, l2 = dx * dx + dz * dz || 1;
+        t = ((x - s.x0) * dx + (z - s.z0) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        d = Math.hypot(x - (s.x0 + dx * t), z - (s.z0 + dz * t)) - (s.w0 + (s.w1 - s.w0) * t);
+        yy = s.y0 + (s.y1 - s.y0) * t;
+      }
+      if (d < 0){                                   // inside this channel: the lowest water wins
+        if (!inside || yy < by){ inside = true; bd = d; best = s; bt = t; by = yy; }
+      } else if (!inside && d < bd){ bd = d; best = s; bt = t; }
+    }
+    if (!best) return null;
+    const w = best.tarn ? best.w : best.w0 + (best.w1 - best.w0) * bt;
+    const d = bd + w;
+    if (d > w * 2.6 + 6) return null;
+    RIV_OUT.d = d; RIV_OUT.w = w;
+    if (best.tarn){ RIV_OUT.y = best.y; RIV_OUT.tx = 0; RIV_OUT.tz = 0; }
+    else {
+      RIV_OUT.y = best.y0 + (best.y1 - best.y0) * bt;
+      const dx = best.x1 - best.x0, dz = best.z1 - best.z0, l = Math.hypot(dx, dz) || 1;
+      RIV_OUT.tx = dx / l; RIV_OUT.tz = dz / l;
+    }
+    return RIV_OUT;
+  }
+  // the water surface over a column, or null where the ground is dry:
+  // the sea and the lakes at sea level, a river at its own height
+  function waterYAt(x, z, h){
+    if (h === undefined) h = height(x, z);
+    if (archAt(x, z) === 7) return null;
+    const R = riverAt(x, z);
+    if (R && R.d < R.w * 1.1 && h < R.y - 0.05) return Math.max(seaLevel, R.y);
+    if (h < seaLevel) return wetAt(x, z, h) ? seaLevel : null;
+    return null;
+  }
+  function height(x, z){ return heightRaw(x, z, false); }
+  function heightRaw(x, z, noRiver){
     const q = regionQuery(x, z);          // may create cells (clobbers FLD)
     const F = fieldsAt(x, z);             // so the fields come after
     const aa = q.a.arch, ab = q.b.arch;
@@ -897,18 +1059,25 @@ function makeGen(seed){
         h += ((seaLevel - 2.0) - h) * t;
       }
     }
-    // ---- rivers: the zero-line of a warped noise becomes a channel carved
-    // to just below the water table, so every river actually holds water.
-    // High ground gets pulled down to a gorge rim first, so crossing a
-    // highland the river runs at the bottom of a canyon.
-    if (h > seaLevel - 3){
-      const rv = Math.abs(2 * fbm2(sRv, F.wx * fRiv, F.wz * fRiv, 2) - 1);
-      if (rv < 0.17){
-        const vt = sstep(0.17, 0.05, rv);                    // valley shoulders
-        const rim = seaLevel + 4 + Math.max(0, h - seaLevel) * 0.30;
+    // ---- rivers: the valley first (shoulders pulled down to a rim over
+    // the water, so a highland is crossed at the bottom of a gorge), then
+    // the channel, carved below the river's own surface so it holds water
+    if (!noRiver && h > seaLevel - 3){
+      const R = riverAt(x, z);
+      if (R){
+        const vw = R.w * 2.6 + 6;
+        const vt = sstep(vw, R.w * 1.15, R.d);               // valley shoulders
+        const rim = R.y + 3.2 + Math.max(0, h - R.y) * 0.32;
         h += (Math.min(h, rim) - h) * vt;
-        const ct = sstep(0.050 * rivW, 0.024 * rivW, rv);    // the channel
-        h += ((seaLevel - 2.6) - h) * ct;
+        const ct = sstep(R.w * 1.1, R.w * 0.5, R.d);         // the channel
+        h += (Math.min(h, R.y - (1.5 + 0.12 * R.w)) - h) * ct;
+        // a levee: ground beside the channel never sits below the water,
+        // so the river holds -- where the land falls away on one side it
+        // runs on a raised bank instead of spilling
+        if (R.d >= R.w * 1.05){
+          const lev = R.y + 0.5;
+          if (h < lev) h += (lev - h) * sstep(vw, R.w * 1.1, R.d);
+        }
       }
     }
     const L = lmAt(x, z);
@@ -918,12 +1087,12 @@ function makeGen(seed){
   // a guaranteed-dry spawn: with real oceans in the world, (0,0) can be
   // open water -- walk outward deterministically until we find a beachhead
   function findSpawn(){
-    if (height(0, 0) > seaLevel + 1.6 && archAt(0, 0) !== 7) return { x: 0, z: 0 };
+    if (height(0, 0) > seaLevel + 1.6 && archAt(0, 0) !== 7 && !wetAt(0, 0)) return { x: 0, z: 0 };
     for (let r = 40; r <= 2400; r += 40){
       for (let k = 0; k < 10; k++){
         const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
         const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
-        if (height(x, z) > seaLevel + 1.6 && archAt(x, z) !== 7) return { x, z };
+        if (height(x, z) > seaLevel + 1.6 && archAt(x, z) !== 7 && !wetAt(x, z)) return { x, z };
       }
     }
     return { x: 0, z: 0 };
@@ -933,7 +1102,10 @@ function makeGen(seed){
   // (those pools are lava) and dry sinkhole shafts
   function wetAt(x, z, h){
     if (h === undefined) h = height(x, z);
-    if (h >= seaLevel) return false;
+    if (h >= seaLevel){
+      const R = riverAt(x, z);
+      return !!(R && R.d < R.w * 1.1 && h < R.y - 0.05 && archAt(x, z) !== 7);
+    }
     const L = lmAt(x, z);
     if (L && L.type === 'sinkhole' && L.dry &&
         Math.hypot(x - L.x, z - L.z) < L.r) return false;
@@ -1420,6 +1592,7 @@ function makeGen(seed){
       if (a === 4) return MAT.SAND;              // dunes
       if (a === 8) return h < seaLevel + 2.6 ? MAT.SAND : MAT.GRASS;   // islands: wide beaches
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
+      { const R = riverAt(x, z); if (R && R.d < R.w * 1.3 && h < R.y + 1.4) return MAT.SAND; }   // riverbeds and banks
       if (a === 3) return h < 6 ? MAT.SAND : MAT.ROCK;  // badlands
       if (h >= 33) return MAT.SNOW;              // snow-capped peaks
       if (h < 27) return MAT.GRASS;
@@ -1510,7 +1683,7 @@ function makeGen(seed){
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
     return {
-      height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+      height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
       caveInBox, floodedAt, chamberAt, caveNetCell,
       sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z, lPrims),
       makeLocal,
@@ -1535,6 +1708,7 @@ function makeGen(seed){
       return { x, z, y: h, type, s: 0.8 + (hashInt(h0 ^ 21) / 4294967296) * 0.6, vc: hashInt(h0 ^ 33) % 4, dry: false, key: cx + ',' + cz };
     }
     if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
+    { const R = riverAt(x, z); if (R && R.d < R.w * 1.4) return null; }   // nor in a river
     if (inCity(x, z)) return null;                      // no tufts in the streets
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
@@ -1563,6 +1737,7 @@ function makeGen(seed){
     if (a !== 0 && a !== 1 && a !== 5 && a !== 8) return null;  // trees: plains, hills, swamp, islands
     const h = height(x, z);
     if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
+    { const R = riverAt(x, z); if (R && R.d < R.w * 1.5) return null; }   // nor in a river
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
     if (inCity(x, z)) return null;                   // streets stay paved
@@ -1708,7 +1883,7 @@ function makeGen(seed){
       }
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
            caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
@@ -1722,7 +1897,7 @@ const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
   seaLevel: null, ruinInCell: () => null,
-  wetAt: () => false, archAt: () => 0, lmAt: () => null,
+  wetAt: () => false, archAt: () => 0, lmAt: () => null, riverAt: () => null, waterYAt: () => null,
   caveInBox: () => false, floodedAt: () => false, chamberAt: () => null, caveNetCell: null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
@@ -3015,7 +3190,7 @@ function editProfile(e, x, z){
 }
 function heightGrid(J, gen){
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
-  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1);
+  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1);
   const sea = J.sea != null ? J.sea : -1e9;
   const edits = J.edits || [];
   const CELL = 32;
@@ -3060,11 +3235,16 @@ function heightGrid(J, gen){
   const marchTop = (x, z, top, ground) => {
     // sky islands float above everything: never take one as the ground
     const S = gen.skyNear ? gen.skyNear(x, z) : null;
-    let y = S && top > S.bottom - 3 ? S.bottom - 3 : top;
+    let y = S && top > S.bottom - 3 ? S.bottom - 3 : top, py = y;
     for (let it = 0; it < 160 && y > ground + 0.3; it++){
       const d = gen.sdf(x, y, z);
-      if (d < 0) return y;
-      y -= Math.max(0.6, d);
+      if (d < 0){
+        // bisect back to the floor between the last open sample and this one
+        let a = py, b = y;
+        for (let k = 0; k < 4; k++){ const m = (a + b) * 0.5; if (gen.sdf(x, m, z) < 0) b = m; else a = m; }
+        return b;
+      }
+      py = y; y -= Math.max(0.6, d);
     }
     return ground;
   };
@@ -3079,11 +3259,15 @@ function heightGrid(J, gen){
         // open ground right under the surface: a cave mouth or a shaft. The
         // skin cannot show the cave, but it can show the hole -- march down
         // to the first solid so the pit is there before the real chunks are
-        let y = hh - 0.7;
+        let y = hh - 0.7, py = y;
         for (let it = 0; it < 60 && y > hh - 40; it++){
           const d = gen.sdf(x, y, z);
-          if (d < 0){ break; }
-          y -= Math.max(0.5, d);
+          if (d < 0){
+            let a = py, b = y;                    // bisect back onto the floor
+            for (let k = 0; k < 4; k++){ const m = (a + b) * 0.5; if (gen.sdf(x, m, z) < 0) b = m; else a = m; }
+            y = b; break;
+          }
+          py = y; y -= Math.max(0.5, d);
         }
         if (y > hh - 40) hh = y;
       }
@@ -3101,10 +3285,17 @@ function heightGrid(J, gen){
       }
       h[kk] = hh;
       m[kk] = mm || (gen.mat(x, hh - 0.1, z) || 1);
-      wet[kk] = hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? 1 : 0;
+      // the water over this column: the sea, a lake, or a river at its own
+      // height; a dry vertex in a wet quad still carries the nearest
+      // water's height so the quad lies flat on it
+      let wv = gen.waterYAt ? gen.waterYAt(x, z, hh) : (hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? sea : null);
+      if (wv != null && hh >= wv) wv = null;
+      wet[kk] = wv != null ? 1 : 0;
+      const R = wv == null && gen.riverAt ? gen.riverAt(x, z) : null;
+      wy[kk] = wv != null ? wv : R ? Math.max(sea, R.y) : sea;
     }
   }
-  return { h, m, wet };
+  return { h, m, wet, wy };
 }
 // The whole skin level, worker-side: heights, the height the next-coarser
 // level reads at every vertex (its grid is this one at every other line,
@@ -3144,7 +3335,7 @@ function skinGrid(J, gen){
     const hd = h[Math.max(0, r - 1) * N1 + i], hu = h[Math.min(n, r + 1) * N1 + i];
     const cc = (hl + hr + hd + hu) * 0.25 - h[kk];
     ao[kk] = Math.round(255 * Math.max(0.35, Math.min(1, 1 - cc / (s * 1.6))));
-    dep[kk] = Math.max(0, sea - h[kk]);
+    dep[kk] = Math.max(0, G.wy[kk] - h[kk]);
   }
   const mt = new Uint8Array(n * n);
   for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
@@ -3168,7 +3359,7 @@ function skinGrid(J, gen){
       widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
     }
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, idx, widx: widx.slice(0, ww) };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -3808,7 +3999,7 @@ const meshPool = {
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
-        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.idx.buffer, g.widx.buffer]);\n' +
+        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.idx.buffer, g.widx.buffer]);\n' +
         '    return;\n' +
         '  }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
@@ -4046,7 +4237,7 @@ class Terrain {
       if (fresh){ ch = { mesh: null }; this.chunks.set(key, ch); }
       else if (!ch.banded) continue;       // already meshed, queued, or empty
       const [cx, cy, cz] = key.split(',').map(Number);
-      if (fresh && cy !== seaCy){          // sea-band chunks always process (water mesh)
+      if (fresh && cy !== seaCy && !this.waterInfo(cx, cz).bands.has(cy)){   // water-band chunks always process (water mesh)
         const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
         if (topY < floorY && topY < this.editMinY() - 1 &&
             !(this.gen.caveInBox && this.gen.caveInBox(
@@ -4208,6 +4399,31 @@ class Terrain {
   // lake surface quads for this chunk footprint: 1m cells at sea level over
   // columns whose ground is below it. Built only for the vertical chunk
   // containing the sea plane, so a footprint gets exactly one water mesh.
+  // a chunk footprint's water: the corner heights, each cell's water
+  // surface (NaN where dry), the highest, and the vertical bands that hold
+  // one -- the sea and the lakes at sea level, a river at its own height
+  waterInfo(cx, cz){
+    if (!this.wInfo) this.wInfo = new Map();
+    const key = cx + ',' + cz;
+    let W = this.wInfo.get(key);
+    if (W) return W;
+    const M = CORE.CHUNK_M, x0 = cx * M, z0 = cz * M, g = this.gen;
+    const hs = new Float32Array((M + 1) * (M + 1)), wy = new Float32Array(M * M);
+    for (let j = 0; j <= M; j++) for (let i = 0; i <= M; i++) hs[i + j * (M + 1)] = g.height(x0 + i, z0 + j);
+    let maxWy = null; const bands = new Set();
+    for (let j = 0; j < M; j++) for (let i = 0; i < M; i++){
+      const hm = Math.min(hs[i + j * (M + 1)], hs[i + 1 + j * (M + 1)], hs[i + (j + 1) * (M + 1)], hs[i + 1 + (j + 1) * (M + 1)]);
+      let w = g.waterYAt ? g.waterYAt(x0 + i + 0.5, z0 + j + 0.5, hm)
+            : (g.seaLevel != null && hm < g.seaLevel && (!g.wetAt || g.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) ? g.seaLevel : null);
+      if (w != null && hm >= w) w = null;
+      wy[i + j * M] = w == null ? NaN : w;
+      if (w != null){ if (maxWy == null || w > maxWy) maxWy = w; bands.add(Math.floor(w / M)); }
+    }
+    W = { hs, wy, maxWy, bands };
+    if (this.wInfo.size > 6000) this.wInfo.clear();
+    this.wInfo.set(key, W);
+    return W;
+  }
   remeshWater(ch, cx, cy, cz){
     const sea = this.gen.seaLevel, M = CORE.CHUNK_M;
     const seaCy = sea != null ? Math.floor(sea / M) : null;
@@ -4226,19 +4442,14 @@ class Terrain {
       const dd = d == null ? 0.8 : d;
       dep.push(dd, dd, dd, dd, dd, dd);
     };
-    if (cy === seaCy){
-      const hs = [];                                  // 9x9 corner heights
-      for (let j = 0; j <= M; j++)
-        for (let i = 0; i <= M; i++)
-          hs.push(this.gen.height(x0 + i, z0 + j));
+    const W = this.waterInfo(cx, cz);
+    if (W.bands.has(cy)){
       for (let j = 0; j < M; j++)
         for (let i = 0; i < M; i++){
-          const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
-          const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
-          const hm = Math.min(a, b, c, d);
-          if (hm >= sea) continue;                    // dry cell
-          if (this.gen.wetAt && !this.gen.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) continue;
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, sea, sea - hm);
+          const w = W.wy[i + j * M];
+          if (w !== w || Math.floor(w / M) !== cy) continue;     // NaN: dry, or another band's
+          const hm = Math.min(W.hs[i + j * (M + 1)], W.hs[i + 1 + j * (M + 1)], W.hs[i + (j + 1) * (M + 1)], W.hs[i + 1 + (j + 1) * (M + 1)]);
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -4403,11 +4614,14 @@ function inWater(x, y, z){
   if (wa){
     const v = wa[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
     if (v === W_SOLID || v === 0) return false;
+    if (v === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > gy - 0.5 + 1) return y < wy; }
     return y < gy - 0.5 + v / 8;
   }
   if (g.floodedAt && g.floodedAt(x, y, z)) return true;   // flooded galleries
   const sea = g.seaLevel;
-  if (sea == null || y >= sea) return false;
+  if (sea == null) return false;
+  if (g.waterYAt){ const wy = g.waterYAt(x, z); return wy != null && y < wy; }
+  if (y >= sea) return false;
   return g.wetAt ? g.wetAt(x, z) : g.height(x, z) < sea;
 }
 // ---------- water that flows ----------
@@ -4432,7 +4646,11 @@ const waterSys = {
   staticLevel(gx, gy, gz){
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
     if (g.sdf(x, gy, z) < 0) return W_SOLID;
-    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.seaLevel != null){
+      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      if (wy != null && gy < wy) return W_SRC;
+      if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
+    }
     if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
     return 0;
   },
@@ -4442,7 +4660,11 @@ const waterSys = {
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
     if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
     if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
-    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.seaLevel != null){
+      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      if (wy != null && gy < wy) return W_SRC;
+      if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
+    }
     if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
     return 0;
   },
@@ -4459,7 +4681,10 @@ const waterSys = {
   hasWater(key){
     const [cx, cy, cz] = key.split(',').map(Number);
     const g = game.gen;
-    if (cy * 8 - 0.5 > (g.seaLevel != null ? g.seaLevel : -1e9) + 0.5 && cy * 8 > -6) return false;
+    const W = game.terrain ? game.terrain.waterInfo(cx, cz) : null;
+    let top = g.seaLevel != null ? g.seaLevel : -1e9;
+    if (W && W.maxWy != null && W.maxWy > top) top = W.maxWy;
+    if (cy * 8 - 0.5 > top + 0.5 && cy * 8 > -6) return false;
     const a = this.cells.get(key) || this.statArr(key);
     for (let q = 0; q < 512; q++) if (a[q] >= 1 && a[q] <= 8) return true;
     return false;
@@ -4494,11 +4719,15 @@ const waterSys = {
     const g = game.gen;
     if (!g || g.seaLevel == null || !game.running) return;
     const B = CORE.editAABB(e);
-    if (B[1] > g.seaLevel + 1 && B[1] > -6) return;           // dry land, above every water table
+    if (B[1] > 95 && B[1] > -6) return;                         // above every water there is
     const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
     const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
     const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
     if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return;   // a city slab: not a water event
+    // dry land, above every water table under this footprint (the sea, or a river)
+    let top = g.seaLevel;
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){ const W = game.terrain.waterInfo(cx, cz); if (W.maxWy != null && W.maxWy > top) top = W.maxWy; }
+    if (B[1] > top + 1 && B[1] > -6) return;
     const keys = [];
     let wet = false;
     for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
@@ -4622,7 +4851,12 @@ const waterSys = {
       const v = a[this.idx(i, j, k)];
       if (!this.isW(v)) continue;
       const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
-      const bottom = gy - 0.5, top = bottom + v / 8;
+      const bottom = gy - 0.5;
+      let top = bottom + v / 8;
+      if (v === W_SRC && game.gen.waterYAt && !this.isW(this.lv(gx, gy + 1, gz))){
+        const wyc = game.gen.waterYAt(gx + 0.5, gz + 0.5);
+        if (wyc != null && wyc > game.gen.seaLevel + 1e-6 && wyc > top - 1 && wyc < top + 1) top = wyc;
+      }
       if (!this.isW(this.lv(gx, gy + 1, gz))){
         let d = 0.5;
         for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
@@ -9763,7 +9997,8 @@ function waterTopAt(x, z, y){
     const a = waterSys.cells.get(key);
     if (!a){
       // untouched water: the sea and the lakes sit at seaLevel
-      if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
+      if (g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && gy < wy + 1) return wy; }
+      else if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
       if (g.floodedAt && g.floodedAt(x, gy, z)){ let t = gy; while (g.floodedAt(x, t + 1, z)) t++; return t + 0.5; }
       continue;
     }
@@ -9772,6 +10007,7 @@ function waterTopAt(x, z, y){
     let t = gy;
     while (waterSys.isW(waterSys.lv(gx, t + 1, gz))) t++;
     const tv = waterSys.lv(gx, t, gz);
+    if (tv === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > t - 0.5 + 1 && wy < t + 1.5) return wy; }
     return t - 0.5 + tv / 8;
   }
   return null;
@@ -16697,6 +16933,11 @@ function driveCar(dt){
   } else e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
+  if (afloat && game.gen.riverAt){
+    // a boat drifts with the river it floats on
+    const RR = game.gen.riverAt(e.x, e.z);
+    if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); e.x += RR.tx * f * dt; e.z += RR.tz * f * dt; }
+  }
   e.y += e.vy * dt;
   const R = V.r;
   const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
@@ -17085,6 +17326,11 @@ function updatePlayer(dt){
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
   game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
+  // wading a river: the current pushes at your legs
+  if (!game.fly && !game.swim && game.gen.riverAt && inWater(game.pos.x, game.pos.y + 0.35, game.pos.z)){
+    const RR = game.gen.riverAt(game.pos.x, game.pos.z);
+    if (RR && RR.d < RR.w){ const f = 0.9 * (1 - RR.d / RR.w); game.pos.x += RR.tx * f * dt; game.pos.z += RR.tz * f * dt; }
+  }
   game.onIce = false;
   if (seasonSys.winter) seasonSys.ice();
   // camera-relative on the horizontal plane (yaw only — never world axes)
@@ -17105,8 +17351,12 @@ function updatePlayer(dt){
   } else if (game.swim){
     // buoyant water movement: slow drift, space up / C down, no hard jumps
     const sp = PLAYER.walk * 0.55;
-    game.vel.x += (mx * sp - game.vel.x) * Math.min(1, 8 * dt);
-    game.vel.z += (mz * sp - game.vel.z) * Math.min(1, 8 * dt);
+    // a river carries you: strongest mid-channel, nothing at the banks
+    let flx = 0, flz = 0;
+    const RR = game.gen.riverAt && game.gen.riverAt(game.pos.x, game.pos.z);
+    if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); flx = RR.tx * f; flz = RR.tz * f; }
+    game.vel.x += (mx * sp + flx - game.vel.x) * Math.min(1, 8 * dt);
+    game.vel.z += (mz * sp + flz - game.vel.z) * Math.min(1, 8 * dt);
     let ty = -1.4;                                   // slow sink at rest
     if (canMove && k['Space']) ty = 3.4;             // swim up (enough to climb out)
     else if (canMove && k['KeyC']) ty = -3.6;        // dive
@@ -21896,10 +22146,11 @@ function mapCellColor(cx, cz){
   const g = game.gen;
   const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
   const h = g.height(x, z);
-  const wet = g.wetAt ? g.wetAt(x, z, h) : (g.seaLevel != null && h < g.seaLevel);
+  const wyM = g.waterYAt ? g.waterYAt(x, z, h) : (g.wetAt ? (g.wetAt(x, z, h) ? g.seaLevel : null) : (g.seaLevel != null && h < g.seaLevel ? g.seaLevel : null));
+  const wet = wyM != null;
   let r, gc, b;
   if (wet){
-    const deep = Math.min(1, ((g.seaLevel || 0) - h) / 12);
+    const deep = Math.min(1, (wyM - h) / 12);
     r = 46 - 20 * deep; gc = 96 - 34 * deep; b = 150 - 40 * deep;
   } else {
     const m = g.mat(x, h - 0.2, z) || 1;
@@ -22500,11 +22751,11 @@ void main(){
   gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
 }`;
 const SKIN_WATER_VERT = `
-attribute float aDep;
+attribute float aDep; attribute float aWY;
 uniform float uSeaY;
 varying vec3 vW; varying float vDep;
 void main(){
-  vec3 p = vec3(position.x, uSeaY, position.z);
+  vec3 p = vec3(position.x, aWY - 0.02, position.z);
   vW = p; vDep = aDep;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
@@ -22669,6 +22920,7 @@ const farTerrain = {
         const wg = new THREE.BufferGeometry();
         wg.setAttribute('position', posAttr);
         wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
+        wg.setAttribute('aWY', new THREE.BufferAttribute(g.wy, 1));
         wg.setIndex(new THREE.BufferAttribute(widx, 1));
         wg.boundingSphere = geo.boundingSphere;
         this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
@@ -23779,7 +24031,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, mapCellColor,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

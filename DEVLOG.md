@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 27 — RIVERS (2026-09-07)
+
+Roadmap item 5, mine, and the one I kept circling. Water that starts in
+the mountains and reaches the sea. Verified headlessly (CORE 352 with
+eleven river proofs: rivers exist, every channel column is wet under
+its own surface, a second generator agrees on every one, banks rise,
+shoulders are dry, the surface never rises downstream, and 30k height
+calls cost 50 ms; a build-27 browser suite for the near mesh, the far
+skin, swimming, the current, the map, the cells; plus the water, boat,
+seasons, skin, trowel, crew and LOD suites) and in screenshots.
+
+### How a river is made
+- **One source per 768 m cell**: the highest of a dozen candidate
+  points, if it is high enough and not a volcano. From there the river
+  walks downhill 22 m at a time, taking the lowest of eight ways
+  forward within a fan of its heading, its surface following the ground
+  down and never rising (through a rise it cuts a gorge), widening as
+  it goes -- until it reaches the sea, sinks too deep, or leaves its
+  neighbourhood, where it ends in a tarn.
+- **Tributaries join.** A river that walks into a neighbour's channel
+  no higher than itself ends there, and the lowest water wins inside a
+  channel, so a confluence is a step down, sometimes a small fall. The
+  raw walks are pure functions of the cell, so the decision is the same
+  on every worker without a message.
+- **The valley** is carved from the river: shoulders pulled down to a
+  rim over the water, a channel carved below the surface, sand in the
+  bed and on the banks, no trees or tufts in it, and a levee where the
+  land beside the channel would sit below the water, so a river never
+  spills and, crossing a low place, runs on a raised bank.
+- The old rivers (a noise zero-line carved to sea level, canals rather
+  than rivers) are gone. Terrain near them has changed.
+
+### Every kind of water now has a height
+- `waterYAt(x, z)` is the one question: the sea and the lakes answer
+  sea level, a river answers its own surface, dry ground answers null.
+  The still-water mesh per chunk emits quads at each column's height in
+  whatever vertical band holds it; the far skin carries a water height
+  per vertex (a new attribute; the flat sea uniform is retired);
+  `inWater`, `waterTopAt`, the water cells, the map and the chunk-skip
+  logic all read it. The seams between the near mesh and the skin are
+  handled the way the sea's were.
+- **The cells hold their slope.** A river column is sources up to its
+  surface and sealed just above it, so the Minecraft rules do not try
+  to level a sloped river into a cascade (the first version did, and it
+  spread 800 chunks in a minute). A pit dug through the bed floods from
+  the river; the flow then goes quiet.
+- **The current.** Swimming in a river carries you downstream at up to
+  1.6 m/s mid-channel; wading, it pushes at your legs; a boat drifts
+  with it.
+
+### Not yet
+- The water surface does not visibly move; fords, waterfalls as a
+  feature, riverside villages and cities on the banks; ice on rivers in
+  winter reads the surface but the freeze logic was written for lakes.
+
 ## Build 26 — THE PALISADE (2026-09-07)
 
 Roadmap item 4, Austin's two with my bell. Verified headlessly (a

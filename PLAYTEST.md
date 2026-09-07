@@ -4,6 +4,30 @@ A running list, newest build first. Claude adds to it every build; Austin
 plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here.
 
+## Build 27 — RIVERS
+Rivers are new terrain, so old worlds will look different near where
+the old canals ran. Start a fresh world or fly around an old one.
+- [ ] Find a river (they show on the map as blue threads; seed 7 has
+      one at about 504, -180, another at 448, -160). Follow it up to its
+      source in the hills and down to the sea or a tarn. Does it read as
+      a river at every scale: from the bank, from the plane, on the map?
+- [ ] Swim in it: you should drift downstream mid-channel and barely at
+      the banks. Wade it: a push at the legs. Put a boat on it.
+- [ ] Look for seams: where the near geometry meets the far skin along a
+      river, and where a river meets the sea. Any steps in the water,
+      any water hanging in the air, any bank the water spills over?
+- [ ] Dig into a riverbed: the pit should fill from the river and then
+      go quiet. Carve a bank away: does the water behave?
+- [ ] Gorges: where a river crosses a highland it cuts down through it.
+      Do the gorge walls look right? Any place the river runs on a
+      raised bank across low ground (the levee) that looks wrong?
+- [ ] Confluences: a tributary meeting a river should step down into
+      it, sometimes as a small fall. Ugly anywhere?
+- [ ] Frame rate on a new world's first minute (river building is lazy
+      and happens on every thread as the world streams in).
+- Feedback I want: are rivers wide enough, too many, too few? Should a
+  river be deeper mid-channel? Would you want a bridge prop?
+
 ## Build 26 — THE PALISADE
 Craft them at the table (WEAPONS tab): claymores, one-way spikes, a
 tripwire bell. Place them like any prop; they face the way you face.

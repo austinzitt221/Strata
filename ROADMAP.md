@@ -52,11 +52,12 @@ when they matter, not by rule.
    crew before the enemy is in range; an oil trench you light from a
    torch; a portcullis on a lever. And the turret's cousin, a flame jet
    for the walls, short and brutal.
-5. **RIVERS** — water that starts in the mountains and reaches the sea,
-   cutting valleys the heightfield knows about; fords, waterfalls,
-   riverside villages and cities on the banks. (Plan written, in the
-   journal: a downhill river graph per macro cell drives the carve
-   and a per-column water height that every water consumer reads.)
+5. **RIVERS** (DONE, Build 27) — water that starts in the mountains and
+   reaches the sea: a downhill river per macro cell with tributaries,
+   valleys carved from it, a per-column water height that every water
+   consumer reads, near and far, a current. Left for later: a moving
+   surface, fords and waterfalls as features, riverside villages and
+   cities on the banks.
 6. **THE EXPEDITION** — environmental storytelling: the camps, journals
    and bones of an earlier expedition scattered by worldgen, telling one
    story across the map and pointing at the Underdark.
