@@ -10358,6 +10358,16 @@ function entMesh(type, ent){
       e2.position.set(s * 0.09, 1.46, -0.22);
       g.add(e2);
     }
+    let hpbar = null;
+    if (ent && ent.crew){
+      // a health bar over the head, shown only while they are hurt
+      const bg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x1a1a1e, depthTest: false, transparent: true, opacity: 0.8 }));
+      const fg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x5fe08a, depthTest: false }));
+      bg.scale.set(0.96, 0.1, 1); fg.scale.set(0.9, 0.06, 1);
+      bg.position.set(0, 2.05, 0); fg.position.set(0, 2.05, 0);
+      bg.renderOrder = 30; fg.renderOrder = 31; bg.visible = fg.visible = false;
+      g.add(bg, fg); hpbar = { bg, fg };
+    }
     if (ent && ent.crew && ent.crew.tool){
       const t = ent.crew.tool;
       if (t.kind === 'drill') box(0.14, 0.14, 0.5, 0x6a7a8a, 0.34, 0.8, -0.25);
@@ -10365,7 +10375,7 @@ function entMesh(type, ent){
       else if (t.kind === 'sword') box(0.06, 0.9, 0.1, 0xd8dde4, 0.34, 1.0, -0.15);
       else if (t.kind === 'fw') box(0.1, 0.12, 0.62, 0x2c2c31, 0.34, 0.86, -0.3);
     }
-    g.userData = { legs, phase: Math.random() * 6 };
+    g.userData = { legs, phase: Math.random() * 6, hpbar };
     return g;
   }
   if (type === 'grazer'){
@@ -15693,6 +15703,15 @@ function updateEntities(dt, now){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
     e.mesh.scale.setScalar((e.bountyTag ? 1.25 : 1) * (e.flash > 0 ? 1.1 : 1));
+    if (e.crew && ud.hpbar){
+      const f = Math.max(0, Math.min(1, e.hp / 60)), hurt = f < 0.99;
+      ud.hpbar.bg.visible = ud.hpbar.fg.visible = hurt;
+      if (hurt){
+        ud.hpbar.fg.scale.x = 0.9 * f;
+        ud.hpbar.fg.position.x = -(1 - f) * 0.45;
+        ud.hpbar.fg.material.color.setHex(f > 0.5 ? 0x5fe08a : f > 0.25 ? 0xffb44d : 0xe05050);
+      }
+    }
   }
 }
 // closest entity intersecting the view ray

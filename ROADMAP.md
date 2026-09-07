@@ -54,7 +54,9 @@ when they matter, not by rule.
    for the walls, short and brutal.
 5. **RIVERS** — water that starts in the mountains and reaches the sea,
    cutting valleys the heightfield knows about; fords, waterfalls,
-   riverside villages and cities on the banks.
+   riverside villages and cities on the banks. (Plan written, in the
+   journal: a downhill river graph per macro cell drives the carve
+   and a per-column water height that every water consumer reads.)
 6. **THE EXPEDITION** — environmental storytelling: the camps, journals
    and bones of an earlier expedition scattered by worldgen, telling one
    story across the map and pointing at the Underdark.

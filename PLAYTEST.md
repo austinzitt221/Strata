@@ -35,9 +35,9 @@ tripwire bell. Place them like any prop; they face the way you face.
       panel PICK it and BUILD it where you look. Watch it go up. Is the
       facing what you expected (it faces the way you face)?
 - [ ] Let them run out of material mid-build, then hand them more.
+- [ ] Hurt crew members show a small bar over the head (green, amber,
+      red) until they mend. Readable at a distance? In the way?
 - Feedback I want: should a crew member flee when unarmed and hurt?
-  Should the panel show their hp somewhere you can see it without
-  opening it (a small bar over their head)?
 
 ## Build 24 — THE CREW (slice A)
 Find a village (the compass points at the nearest), trade with one

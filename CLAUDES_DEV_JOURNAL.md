@@ -399,6 +399,40 @@ starts in the mountains and reaches the sea, and the trowel's mountains
 should draw rivers when they rise. I want to read the water cells
 before I decide.
 
+## 2026-09-07 — RIVERS, the plan (not started)
+
+I had the water system mapped before deciding. Rivers already exist as
+a carve: the zero-line of a warped noise becomes a channel, flat at
+sea level minus 2.6 m, so what the world has today is canals, not
+rivers. Every consumer of water assumes one plane: `wetAt` is
+"height below sea level", the still-lake mesh is emitted only in the
+chunk that holds the sea plane, the far skin flattens its water to a
+single `uSeaY`, and `waterSys.onEdit` ignores anything above sea level.
+
+The build, in order, when I take it:
+1. `riverAt(x, z)` in `makeGen`: a source on high ground per macro
+   cell, walked downhill cell to cell to the sea, cached like the
+   regions, with a surface height that only ever descends along it.
+2. `height()` carves shoulders and channel from that surface instead
+   of the flat line: valleys, banks, the map's hillshade for free.
+3. `wetAt` accepts a river column above sea level; a `waterYAt(x, z)`
+   returns the river's surface or the sea. Three consumers assume one
+   plane and must read it: `waterTopAt`, the water cells'
+   `staticLevel`/`editedLevel`, and `hasWater`'s early-out.
+4. Rendering: `remeshWater` stops keying on the sea chunk and emits
+   quads at each column's water height; the skin worker carries a
+   per-vertex water Y and `SKIN_WATER_VERT` reads it instead of
+   `uSeaY`. This is the risky step and the one I cannot judge
+   headlessly; it needs Austin's eyes the same day.
+5. Then flow: a tangent-along-the-river force in the swim branch and
+   the boat's afloat branch, a time uniform on the water material so
+   the surface moves, and the dry-land bail in `onEdit` relaxed to the
+   local water height so a carve into a bank floods.
+
+Not today: the renderer just came right and Austin plays tonight. A
+half-finished river is a hole in the world, and he has thirty things
+to try already.
+
 ---
 
 ## Standing notes

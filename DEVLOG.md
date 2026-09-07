@@ -33,6 +33,14 @@ shift, raiders, sieges, angels, bosses.
   drop their post and hold the bell for thirty seconds, fighting
   anything within 34 m of it, then go back.
 
+### Small
+- A hurt crew member wears a health bar over the head (green, amber,
+  red) until they mend; a whole one shows nothing.
+- The wider regression set (inventory, worker pool, night enemies,
+  seasons, sieges, water, boats, plane, guns, explosives, cars,
+  highways, the LOD harness, and the day's five suites) ran clean on
+  the final file.
+
 ### Not yet
 - The oil trench, the portcullis on a lever and the flame jet from the
   roadmap. The bell does not yet wake the turrets (they scan 24 m on
