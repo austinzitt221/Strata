@@ -223,6 +223,418 @@ I think that is the sky-rock material being pale rather than a bug, but
 I want to look at them up close next time. The basalt field near spawn
 looks like a bug until you know it is basalt.
 
+## 2026-09-06 — Build 22, MASS
+
+Austin played the tools and asked for one thing: a trowel disc big
+enough to make a mountain in thirty seconds, with middle click swapping
+the wheel between size and depth. I built that and finished the lathe.
+
+**What the test taught me.** The first timed 48 m stroke came back at
+1.9 s and I nearly went hunting in the mesher. It was the hotbar: the
+first `refreshHotbar` of a session renders every icon, two seconds
+under SwiftShader, and my harness happened to call it inside the timer.
+The stroke itself was 30 ms. Time the thing you think you are timing.
+
+**A better idea than a cap.** A 48 m raise centred under a player who
+is standing on the disc buries them 24 m deep. I was going to clamp the
+rise below the feet; instead the ground carries you up. Stand on the
+disc, hold the button, ride the mountain. That is the moment the tool
+was for, and I only found it because the test buried me.
+
+**Flatten's blend.** I set the blend to a quarter of the disc because
+that is what the stroke uses. The floor domed a metre over 20 m and the
+test rows showed it before the screenshot did. Eight percent: soft rim,
+flat floor. A number that is right for one op is not right for the
+next one.
+
+**Yaw again.** Both build screenshots pointed away from the thing.
+The note is in the standing notes below; I still got it wrong. Next
+time: compute the yaw from the vector with the formula, don't guess.
+
+**Next.** Mirror mode is small and I want it; then THE CREW, because a
+mountain you raise with a friend on the disc beside you is the game.
+
+## 2026-09-06 — Build 23, MIRROR
+
+Same session, second build. Mirror mode was the smallest thing on the
+list and the one I wanted most: a gatehouse is two towers and a wall,
+and drawing the second tower by hand is the part of building that is
+not play.
+
+**The reflection was the whole problem, and it was a maths problem.**
+An edit has a yaw, a pitch and a roll, applied as Ry Rx Rz. Reflect
+the world across an x plane and the edit's frame is conjugated by the
+reflection: the yaw flips, the roll flips, the pitch stays. Across a z
+plane the yaw and pitch flip and the roll stays. I worked it out on
+paper, wrote the CORE function in four lines, and then wrote a test
+that reflects a thousand random points through rotated stretched cubes
+and cylinders and checks the distance fields agree. It did, first run.
+That test is the kind I trust: it does not know what the answer is,
+it just checks two things that must be equal.
+
+**Where the plane goes.** I first had the plane facing you, a wall in
+front of you with the copy behind it. Useless. The plane runs along
+your view: stand on the axis of your building, look down it, and the
+left becomes the right. That is what a mirror in a map editor is for.
+
+**Doubling the tools was mostly plumbing.** The drill and dispenser
+paths take a group and a mirrored flag; the trowel's stroke and flatten
+take a hit; the bore and lathe jobs take a doubled edit list at twice
+the pace. The frame loop, the ghost and the HUD each got one line.
+Twenty-nine anchored replacements, one syntax check, no errors. When a
+patch is that mechanical the design was right.
+
+**Next.** THE CREW. It is the biggest thing on the list and the one
+Austin drew most carefully. I want to start with the smallest slice
+that changes how the game feels: one villager who follows you and
+mines what you mine.
+
+## 2026-09-07 — Build 24, THE CREW (slice A)
+
+Third build of the session and the first of Austin's big three. I took
+the smallest slice that changes how the game feels: one villager who
+walks behind you, and what you can hand them.
+
+**What I cut and why.** No pathfinding. The world is a signed distance
+field with tunnels, cliffs and buildings you carved this morning; a
+navmesh would be stale the moment you touch the ground. So a follower
+steers straight at you, hops when stuck (the entities already did), and
+if it has been more than twelve metres away for nine seconds, or sixty
+metres at all, it appears beside you in a puff of your colour. In the
+test that is a hundred-metre teleport resolving in under four seconds
+of sim. It is a cheat, and it is the right cheat: the alternative is a
+companion you lose in the first cave.
+
+**"They mine what you mine."** I read that four ways before I picked
+one. Copying your cut is the mirror. Widening it is unasked-for
+destruction. Mining the ore you point at is a whole targeting UI. The
+next cut along your aim is one line of vector maths and it makes a
+tunnel go twice as fast, which is what a second miner should do.
+
+**The quarry surprised me.** Eighty cuts, top down, and the crew
+member ended the job two metres above the pit's rim instead of at the
+bottom: the cuts under their feet fell away before they walked over
+them. I had written a rescue for the bottom-of-the-pit case and did not
+need it.
+
+**Where the record lives.** On the house, not the entity. The entity
+list drops villagers on save and the village records are saved whole,
+so the crew rides along for free and the house knows it is empty. One
+`if (hrec.crew) continue;` keeps the village from respawning them.
+
+**What is missing and I felt it.** They do not talk. A follower who
+says nothing when you hand them a sword is a mannequin. A line of
+speech on each order, in the villager's voice, is small and next.
+
+**Next.** Slice B, or THE PALISADE. A crew with a dispenser who builds
+your blueprints is the biggest promise on the roadmap; I want to do it
+with a clear head at the start of a session.
+
+## 2026-09-07 — Build 25, THE CREW (slice B)
+
+Austin gave me the day and asked for a running playtest list. The list
+is PLAYTEST.md now, in the repo, and every build adds to it.
+
+**The prey function.** Three enemy branches read `game.pos` and called
+`damagePlayer`. I did not want three copies of "nearest of the player
+and the crew", so `crewSys.prey(hostile, range)` returns whichever is
+nearer with a flag for which it is, and `hitPrey` routes the damage.
+The branches changed by a variable name each. The first test run said
+the husk never reached the crew: I had put the player 70 m away to keep
+them out of the fight, and the 70 m leash reaped the husk. Test
+scenarios have to live inside the game's own rules.
+
+**One material per build.** A blueprint drawn in three materials would
+need three stacks and a rule for which runs out first. The crew build
+in whatever they carry, and cuts are free. It is simpler to explain
+and, I think, better: the plan is the shape, the material is what you
+hand over.
+
+**A panel string that crashed.** The subtitle built every mode's text
+eagerly, so a build job crashed the quarry's string and vice versa.
+Small, dumb, and the kind of thing the test found before Austin did.
+
+**What I did not build and why.** Posts (stove, turret, table) each
+need a hook into a system that assumes the player is the operator.
+That is a session on its own and I would rather do it when I can also
+give them a bed and a meal, so the crew's day has a shape. Houses of
+their own design need a house generator I would want to be proud of.
+
+**Next.** THE PALISADE: the claymore and the one-way spikes, then my
+tripwire bell. Defenses that know whose side they are on, now that the
+crew can be on it.
+
+## 2026-09-07 — Build 26, THE PALISADE
+
+Fourth build of the day. Austin's claymore and spikes and my bell, and
+the bell is the one I like, because it closes a loop: the crew can be
+posted, the bell calls them, and a base at night is a thing that
+defends itself with people rather than turrets.
+
+**One predicate.** The turrets had a hostile test, the crew had
+another. The palisade uses the crew's. If enemies ever get a faction
+flag, there is one place to change it. I should fold the turret's in
+too some day.
+
+**The claymore never marks the ground** because the explode function
+carves a sphere and then hurts entities, and I only wanted the second
+half. Austin asked for exactly that and it was a two-line decision. A
+blast on the entities and not the field is also, I notice, the only
+kind of explosion this game has that respects a building.
+
+**The spikes slow every frame.** I first put the slow in the
+five-a-second scan and a husk crossed the strip at nearly full speed
+between two scans. A slow that lands five times a second is no slow at
+all; it is now applied every frame and the bite every half second.
+
+**The day, in numbers.** Builds 22 to 26: a trowel that makes
+mountains, a lathe, a mirror, a crew that follows, fights, mines,
+builds and dies, and three defenses. Each with a test that failed at
+least once before it passed. PLAYTEST.md has thirty-odd things for
+Austin to try tonight.
+
+**Next.** The second half of the palisade (oil trench, portcullis,
+flame jet) is small; RIVERS is the big one I keep circling. Water that
+starts in the mountains and reaches the sea, and the trowel's mountains
+should draw rivers when they rise. I want to read the water cells
+before I decide.
+
+## 2026-09-07 — RIVERS, the plan (not started)
+
+I had the water system mapped before deciding. Rivers already exist as
+a carve: the zero-line of a warped noise becomes a channel, flat at
+sea level minus 2.6 m, so what the world has today is canals, not
+rivers. Every consumer of water assumes one plane: `wetAt` is
+"height below sea level", the still-lake mesh is emitted only in the
+chunk that holds the sea plane, the far skin flattens its water to a
+single `uSeaY`, and `waterSys.onEdit` ignores anything above sea level.
+
+The build, in order, when I take it:
+1. `riverAt(x, z)` in `makeGen`: a source on high ground per macro
+   cell, walked downhill cell to cell to the sea, cached like the
+   regions, with a surface height that only ever descends along it.
+2. `height()` carves shoulders and channel from that surface instead
+   of the flat line: valleys, banks, the map's hillshade for free.
+3. `wetAt` accepts a river column above sea level; a `waterYAt(x, z)`
+   returns the river's surface or the sea. Three consumers assume one
+   plane and must read it: `waterTopAt`, the water cells'
+   `staticLevel`/`editedLevel`, and `hasWater`'s early-out.
+4. Rendering: `remeshWater` stops keying on the sea chunk and emits
+   quads at each column's water height; the skin worker carries a
+   per-vertex water Y and `SKIN_WATER_VERT` reads it instead of
+   `uSeaY`. This is the risky step and the one I cannot judge
+   headlessly; it needs Austin's eyes the same day.
+5. Then flow: a tangent-along-the-river force in the swim branch and
+   the boat's afloat branch, a time uniform on the water material so
+   the surface moves, and the dry-land bail in `onEdit` relaxed to the
+   local water height so a carve into a bank floods.
+
+Not today: the renderer just came right and Austin plays tonight. A
+half-finished river is a hole in the world, and he has thirty things
+to try already.
+
+## 2026-09-07 — Build 27, RIVERS
+
+Austin gave me another session and I took the build I had been circling.
+The plan in the previous entry held, step for step, and the test found
+four things the plan did not.
+
+**The cascade.** The cell water is Minecraft's rules, and a sloped
+surface is exactly what those rules exist to level. The first time a
+pit touched a river, 800 chunks lit up in a minute as the river tried
+to flatten itself into the sea. The fix is a sentence: a river column
+is sources up to its surface and sealed air just above it. The rules
+never see the slope.
+
+**The leak.** After that, a bank carve still spread. The wet test said
+"inside the channel", but the ground at the channel's edge could sit
+below the water and count as dry, so the sources had air beside them.
+Two changes: wet means "in the carve zone and below the surface", and a
+levee holds the ground beside the channel above the water. A scan of
+every river column's neighbours now finds zero leaks.
+
+**Hanging water.** I had capped the drop per step at 2.5 m to keep
+rivers from being cliffs. That put surfaces 30 m above the ground on a
+steep hillside, water standing in the air. The surface follows the
+ground now and a steep river is rapids. The cap was me being tidy
+about the wrong thing.
+
+**The pit march.** A test from the HORIZON days failed because the old
+noise rivers were gone and the first cave mouth the scan found was now
+somewhere else, where the skin's pit march overshot the floor by 0.6 m.
+The march bisects now. Not a river bug; a river-shaped flashlight.
+
+**What I like.** The far skin carries a water height per vertex, and
+the whole flat-sea assumption came out in one attribute. Tributaries
+merge deterministically because merge decisions compare raw walks,
+never trimmed ones, so no thread has to tell another what it built.
+And the screenshot from a grassy bank: a stream between two ponds with
+sand on both sides. It looks like it was always there.
+
+**Next.** A moving water surface (a time uniform, a flow direction),
+then fords and bridges, then villages on the banks. Or the second half
+of the palisade. Austin plays tonight; his eyes decide.
+
+## 2026-09-07 — Build 28, THE EXPEDITION
+
+The one I most wanted to write, because it is writing. Eight pages in
+a surveyor's hand, walking away from the coast toward a sound under
+the hills, and the world lays the camps down for them.
+
+**What the story is for.** It points at THE DEEP without THE DEEP
+existing yet. The last page says do not go down; the survey marks the
+mouth in red. When I build the Underdark, the shaft is already there
+and already has a name. A story you find should leave a door open.
+
+**Naming.** The leader and the second come from the villager
+name-maker, the city from whichever is nearest, and the river the
+route crosses needed a name, so rivers have names now. A page that
+says "forded the Kell" is a different page from "forded the river".
+Twelve names, by the cell the river rises in. It cost one field on a
+segment.
+
+**The camp is a stamp.** Tent, fire, chest, sign, bones, all through
+systems that already existed: pnodes, torches, decor, ropes, chests
+with inventories. The only new prop is the tent. The shaft is an
+ordinary subtract edit pushed into the world at birth, which means it
+is in the save format for free and the trowel can widen it.
+
+**What I did not do.** The map screen could not be screenshotted
+headlessly (the open function is not on the test surface); I trust the
+mark call, which is a copy of the city's. The tent model is plain. The
+first page does not use the leader's name and my test assumed it did;
+the test was wrong, not the page.
+
+**Next.** The palisade's second half, or crew posts, or THE DEEP now
+that the door is there. THE DEEP is a big one and I want Austin's
+reaction to the story first: the Underdark should answer what the
+pages ask.
+
+## 2026-09-07 — Build 29, THE PALISADE II
+
+Small and quick, the way the first half was. The trench and the jet
+reuse the one hostile test and the palisade's front vector; the jet
+sits on the grid exactly where the turret sits, one line in the
+component walk and one in the dispatch. Twenty anchored replacements.
+
+**The portcullis I left.** It is a door: something that opens and
+closes and blocks when closed. The door system already does that with
+its own collision and hinge; a gate on a lever should be a door the
+lever drives, not a prop that rebuilds the solid list every toggle. A
+session with the door code open, not the tail of this one.
+
+**The day, in numbers.** Builds 27 to 29: rivers with tributaries,
+levees, a current and a moving surface; a story in eight pages with
+camps, a shaft and a survey; two defenses. Every one with a test that
+failed at least once first. Austin plays tonight with thirteen builds
+of notes in PLAYTEST.md.
+
+## 2026-09-07 — a brainstorm, nothing built
+
+Austin has thirteen builds to play and asked me to think instead of
+build. So: where I want to take this, in the order I would take it,
+and the ideas behind each.
+
+### The stance
+Carving is the identity. Every system should either give you a reason
+to carve, or answer what you carved. Rivers answer terrain; the crew
+answers the tools; the expedition answers the question "why go down".
+The next builds should keep to that: no system that sits beside the
+carving without touching it.
+
+### 1. THE DEEP (the door is open)
+The last page says do not go down. So the next big build is down.
+- **The dark is the mechanic.** Underground light comes from what you
+  bring and what grows: torches, glow fungus, lava. Beyond it, black.
+  The terrain shader already knows torch light; the Deep turns the
+  ambient off below the mouth's depth.
+- **They hunt by sound.** A noise meter: drilling, explosions, a
+  dropped tool, the bell. Loud work draws "them" from the second hall.
+  A stone drill is quiet and slow; a diamond drill is loud and fast.
+  For the first time the tool tiers are a choice, not a ladder.
+- **Halls, not caves.** The survey names a first hall and a second. The
+  cave network already has chambers; the Deep makes a few of them
+  built: pillars, a floor, something that was a door. Bones laid out
+  with care, as in page four. Someone lived down here.
+- **The answer to the pages.** Not a boss fight first. The first thing
+  you find under the mouth is the leader's last camp, and the leader.
+  What the sound is, I want to decide when I have written the second
+  hall; the pages promise a place, not a monster, and I will keep that
+  promise.
+- **The way back up matters.** Ropes, the elevator, the grapple. A
+  return trip with a full pack and a noise meter climbing is the
+  tension I want.
+
+### 2. RIVERS II (the river should do things)
+- **Seasons on the water.** Winter freezes rivers to walk across
+  (the ice code reads the surface already). Spring raises every river a
+  metre: fords vanish, low banks flood. Summer drops it: fords appear.
+  The per-column water height makes this a number per season.
+- **Waterfalls.** Where a segment drops more than three metres, mist,
+  sound, and a pool cut at the foot. The tributary mouths are already
+  falls; they should look and sound like it.
+- **The mill.** A water wheel prop that sits in a river and gives
+  watts from the current: free, placed, quiet power. The grid already
+  exists; this is the best generator in the game and it costs a river.
+- **Villages on the banks.** Village placement prefers a river within
+  60 m; those villages get a plank bridge and a jetty. The bridge is a
+  prop the player can craft too.
+- **River fish and a ford marker.** Trout, pike; the fishing rod knows
+  the difference. Boats that drift to the sea while you sleep.
+- **Sound.** Running water within 30 m, louder at a fall.
+
+### 3. THE CREW C (a day with a shape)
+- **Tents are beds.** A crew member sleeps in a tent at night and
+  works by day; give them no tent and they sleep on the ground and
+  grumble. The expedition's tent is now a prop; it earns its keep.
+- **Posts.** Stove (they smelt what is in the hopper), table (they
+  craft a standing order), turret (they man it: it fires without the
+  grid, at 24 m, because a person is aiming it). Each post is a hook
+  into a system that assumed the player; that is why it is a session.
+- **Meals.** A crew member eats from a chest you mark as the larder.
+  No food, slower work; three days, they go home.
+- **The rescue.** The second was left hurt at camp 7 and the page says
+  it. If you find him within N days of world start he is alive, and
+  bringing him home makes him crew: the only one who has been down.
+  His lines are different. This is the expedition's second story and
+  it costs one entity and twenty lines.
+- **Skill.** Work makes them better at it: a miner's rate improves by
+  a tenth per hundred cuts, capped. Losing a veteran should hurt.
+
+### 4. SCULPT II (the last strokes)
+- **The smoothing stroke.** Trowel with shift + right: a local blur of
+  the field, no add, no take. The one SCULPT piece I never built.
+- **Radial symmetry.** The mirror with N planes through a point: a
+  tower with six faces, a temple with eight. The mirror code takes an
+  axis; radial takes a count.
+- **Brushes from blueprints.** Save a carved shape as a brush and
+  stamp it with the drill. Ornament at scale.
+- **The path.** Walk with the trowel held and shift: the ground under
+  you flattens a metre wide and paints to stone. Roads by walking.
+
+### 5. THE GARRISON, then the Space Arc (Austin's)
+- Both are big and both are built on things that now exist: the crew
+  for soldiers, the palisade for base defenses, the flame jet and the
+  turret for the walls. The radar dish I want to sabotage is a powered
+  prop, so the grid is the stealth route. I would do the garrison
+  after THE DEEP and RIVERS II, because a base worth taking should sit
+  on a river and have a reason to be there.
+
+### Small things I want, whenever a session has room
+- Shadow cascades (still).
+- Place names on the map: a region's name in its archetype's voice,
+  the river names already there, "the Harrow hills".
+- A moving sky of birds along rivers; fish visible in shallow water.
+- The portcullis, built on the door system.
+- Footsteps that know the material (sand, snow, planks).
+- The claymore's red eye reflected on the ground at night.
+
+### What I would not do
+- Another vehicle. There are eight.
+- Another boss before the Deep has its own.
+- Any far-renderer work until Austin has played HORIZON and RIVERS
+  together and told me what he sees.
+
 ---
 
 ## Standing notes

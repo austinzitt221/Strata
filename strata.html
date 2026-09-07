@@ -261,6 +261,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   </div>
 </div>
 
+<div id="pagescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:520px; max-width:640px;">
+    <h2 id="pagetitle">A PAGE</h2>
+    <div id="pagebody" style="white-space:pre-wrap; line-height:1.5; font-size:14px; padding:8px 4px 12px 4px;"></div>
+    <div class="sub" id="pagesub">E to close</div>
+  </div>
+</div>
 <div id="boardscreen" class="screen hidden dim">
   <div class="panel" style="min-width:520px;">
     <h2 id="boardtitle">NOTICES</h2>
@@ -882,7 +889,169 @@ function makeGen(seed){
     const target = (seaLevel - 6) + sstep(0.3, 0.78, u) * 10.5;
     return h + (target - h) * w;
   }
-  function height(x, z){
+  // ---- RIVERS: water that starts in the mountains and reaches the sea ----
+  // One river per 768 m macro cell: the highest of a dozen candidate
+  // points is its source, and from there it walks downhill 22 m at a time,
+  // picking the lowest of eight ways forward within a fan of its heading,
+  // its surface never rising (through a rise it cuts a gorge), widening as
+  // it goes, until it reaches the sea, sinks too deep, or leaves its
+  // neighbourhood -- where it ends in a tarn. Segments go into 64 m
+  // buckets so a column's query is a handful of distance tests. Built
+  // lazily and deterministically, so every worker agrees with the main
+  // thread without a message.
+  const RIV_CELL = 768, RIV_STEP = 22, RIV_BUCKET = 64, RIV_MAX = 130;
+  const rivCells = new Map(), rivBuckets = new Map(), rivRawCache = new Map();
+  let rivReady = '';
+  // the raw walk of a cell's river: a pure function of the cell, so every
+  // thread gets the same one, and every merge decision below is made
+  // against these raw walks and never against an already-trimmed river
+  function rivRaw(cx, cz){
+    const ck = cx + ',' + cz;
+    let R = rivRawCache.get(ck);
+    if (R !== undefined) return R;
+    R = null;
+    const h0 = hashInt(sRv ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    let sx = 0, sz = 0, sh = -1e9;
+    for (let k = 0; k < 12; k++){
+      const x = (cx + 0.1 + (hashInt(h0 ^ (k * 2 + 1)) / 4294967296) * 0.8) * RIV_CELL;
+      const z = (cz + 0.1 + (hashInt(h0 ^ (k * 2 + 2)) / 4294967296) * 0.8) * RIV_CELL;
+      const h = heightRaw(x, z, true);
+      if (h > sh){ sh = h; sx = x; sz = z; }
+    }
+    if (sh >= seaLevel + 7 && archAt(sx, sz) !== 7){
+      const pts = [];
+      let x = sx, z = sz, y = sh - 0.6, dirA = 0, hasDir = false, w = 2.2 * rivW;
+      pts.push([x, z, y, w]);
+      for (let i = 0; i < RIV_MAX; i++){
+        let bx = 0, bz = 0, bh = 1e9, ba = 0;
+        for (let k = 0; k < 8; k++){
+          const a = hasDir ? dirA + (k / 7 - 0.5) * 2.4 : (k / 8) * Math.PI * 2;
+          const nx = x + Math.cos(a) * RIV_STEP, nz = z + Math.sin(a) * RIV_STEP;
+          const hh = heightRaw(nx, nz, true) + (noise2(sRv, nx * 0.05, nz * 0.05) - 0.5) * 1.5;
+          if (hh < bh){ bh = hh; bx = nx; bz = nz; ba = a; }
+        }
+        x = bx; z = bz; dirA = ba; hasDir = true;
+        const g = heightRaw(x, z, true);
+        y = Math.min(y - 0.05, g - 0.5);                            // never rises; follows the ground down (rapids where it is steep)
+        w = Math.min(11, w + 0.06 * rivW);
+        pts.push([x, z, y, w]);
+        if (g < seaLevel + 0.3 || y < seaLevel - 0.5) break;      // the sea, or a lake
+        if (g - y > 22) break;                                      // too deep a gorge: it goes underground
+        const px = Math.floor(x / RIV_CELL), pz = Math.floor(z / RIV_CELL);
+        if (px < cx - 1 || px > cx + 1 || pz < cz - 1 || pz > cz + 1) break;
+      }
+      if (pts.length >= 4) R = pts;
+    }
+    rivRawCache.set(ck, R);
+    return R;
+  }
+  // is (x, z) inside the raw channel of pts, and at what water height
+  function rivInRaw(pts, x, z){
+    for (let i = 0; i + 1 < pts.length; i++){
+      const a = pts[i], b = pts[i + 1];
+      const dx = b[0] - a[0], dz = b[1] - a[1], l2 = dx * dx + dz * dz || 1;
+      let t = ((x - a[0]) * dx + (z - a[1]) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(x - (a[0] + dx * t), z - (a[1] + dz * t));
+      if (d < a[3] + (b[3] - a[3]) * t) return a[2] + (b[2] - a[2]) * t;
+    }
+    return null;
+  }
+  function rivInsert(seg, x0, z0, x1, z1, pad){
+    const b0x = Math.floor((Math.min(x0, x1) - pad) / RIV_BUCKET), b1x = Math.floor((Math.max(x0, x1) + pad) / RIV_BUCKET);
+    const b0z = Math.floor((Math.min(z0, z1) - pad) / RIV_BUCKET), b1z = Math.floor((Math.max(z0, z1) + pad) / RIV_BUCKET);
+    for (let bz = b0z; bz <= b1z; bz++) for (let bx = b0x; bx <= b1x; bx++){
+      const k = bx + ',' + bz;
+      let L = rivBuckets.get(k);
+      if (!L){ L = []; rivBuckets.set(k, L); }
+      L.push(seg);
+    }
+  }
+  function rivBuild(cx, cz){
+    const ck = cx + ',' + cz;
+    if (rivCells.has(ck)) return;
+    rivCells.set(ck, true);
+    const raw = rivRaw(cx, cz);
+    if (!raw) return;
+    // a tributary: the walk ends where it enters a neighbour's raw channel
+    // that is no higher than it (ties go to the lower cell key), joining it
+    const others = [];
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++){
+      if (!i && !j) continue;
+      const o = rivRaw(cx + i, cz + j);
+      if (o) others.push({ pts: o, first: (cz + j) < cz || ((cz + j) === cz && (cx + i) < cx) });
+    }
+    let pts = raw, joined = false;
+    outer: for (let k = 1; k < raw.length; k++){
+      for (const o of others){
+        const oy = rivInRaw(o.pts, raw[k][0], raw[k][1]);
+        if (oy != null && (oy < raw[k][2] || (oy === raw[k][2] && o.first))){ pts = raw.slice(0, k + 1); joined = true; break outer; }
+      }
+    }
+    if (pts.length < 3) return;
+    for (let i = 0; i + 1 < pts.length; i++){
+      const a = pts[i], b = pts[i + 1];
+      const seg = { x0: a[0], z0: a[1], x1: b[0], z1: b[1], y0: a[2], y1: b[2], w0: a[3], w1: b[3], tarn: 0, c: ck };
+      rivInsert(seg, a[0], a[1], b[0], b[1], Math.max(a[3], b[3]) * 2.6 + 8);
+    }
+    const last = pts[pts.length - 1];
+    if (!joined && last[2] > seaLevel){                           // ended on land: a tarn
+      const r = 6 + last[3] * 0.6;
+      const t = { tarn: 1, x: last[0], z: last[1], y: last[2], w: r, c: ck };
+      rivInsert(t, last[0], last[1], last[0], last[1], r * 2.6 + 8);
+    }
+  }
+  // the nearest river to a column: its distance, half-width, surface
+  // height and direction of flow, or null beyond any valley
+  const RIV_OUT = { d: 0, w: 0, y: 0, tx: 0, tz: 0, c: '' };
+  function riverAt(x, z){
+    const cx = Math.floor(x / RIV_CELL), cz = Math.floor(z / RIV_CELL);
+    const ck = cx + ',' + cz;
+    if (ck !== rivReady){
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) rivBuild(cx + i, cz + j);
+      rivReady = ck;
+    }
+    const L = rivBuckets.get(Math.floor(x / RIV_BUCKET) + ',' + Math.floor(z / RIV_BUCKET));
+    if (!L) return null;
+    let best = null, bd = 1e9, bt = 0, by = 1e9, inside = false;
+    for (let q = 0; q < L.length; q++){
+      const s = L[q];
+      let d, t = 0, yy;
+      if (s.tarn){ d = Math.hypot(x - s.x, z - s.z) - s.w; yy = s.y; }
+      else {
+        const dx = s.x1 - s.x0, dz = s.z1 - s.z0, l2 = dx * dx + dz * dz || 1;
+        t = ((x - s.x0) * dx + (z - s.z0) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
+        d = Math.hypot(x - (s.x0 + dx * t), z - (s.z0 + dz * t)) - (s.w0 + (s.w1 - s.w0) * t);
+        yy = s.y0 + (s.y1 - s.y0) * t;
+      }
+      if (d < 0){                                   // inside this channel: the lowest water wins
+        if (!inside || yy < by){ inside = true; bd = d; best = s; bt = t; by = yy; }
+      } else if (!inside && d < bd){ bd = d; best = s; bt = t; }
+    }
+    if (!best) return null;
+    const w = best.tarn ? best.w : best.w0 + (best.w1 - best.w0) * bt;
+    const d = bd + w;
+    if (d > w * 2.6 + 6) return null;
+    RIV_OUT.d = d; RIV_OUT.w = w; RIV_OUT.c = best.c;
+    if (best.tarn){ RIV_OUT.y = best.y; RIV_OUT.tx = 0; RIV_OUT.tz = 0; }
+    else {
+      RIV_OUT.y = best.y0 + (best.y1 - best.y0) * bt;
+      const dx = best.x1 - best.x0, dz = best.z1 - best.z0, l = Math.hypot(dx, dz) || 1;
+      RIV_OUT.tx = dx / l; RIV_OUT.tz = dz / l;
+    }
+    return RIV_OUT;
+  }
+  // the water surface over a column, or null where the ground is dry:
+  // the sea and the lakes at sea level, a river at its own height
+  function waterYAt(x, z, h){
+    if (h === undefined) h = height(x, z);
+    if (archAt(x, z) === 7) return null;
+    const R = riverAt(x, z);
+    if (R && R.d < R.w * 1.1 && h < R.y - 0.05) return Math.max(seaLevel, R.y);
+    if (h < seaLevel) return wetAt(x, z, h) ? seaLevel : null;
+    return null;
+  }
+  function height(x, z){ return heightRaw(x, z, false); }
+  function heightRaw(x, z, noRiver){
     const q = regionQuery(x, z);          // may create cells (clobbers FLD)
     const F = fieldsAt(x, z);             // so the fields come after
     const aa = q.a.arch, ab = q.b.arch;
@@ -897,18 +1066,25 @@ function makeGen(seed){
         h += ((seaLevel - 2.0) - h) * t;
       }
     }
-    // ---- rivers: the zero-line of a warped noise becomes a channel carved
-    // to just below the water table, so every river actually holds water.
-    // High ground gets pulled down to a gorge rim first, so crossing a
-    // highland the river runs at the bottom of a canyon.
-    if (h > seaLevel - 3){
-      const rv = Math.abs(2 * fbm2(sRv, F.wx * fRiv, F.wz * fRiv, 2) - 1);
-      if (rv < 0.17){
-        const vt = sstep(0.17, 0.05, rv);                    // valley shoulders
-        const rim = seaLevel + 4 + Math.max(0, h - seaLevel) * 0.30;
+    // ---- rivers: the valley first (shoulders pulled down to a rim over
+    // the water, so a highland is crossed at the bottom of a gorge), then
+    // the channel, carved below the river's own surface so it holds water
+    if (!noRiver && h > seaLevel - 3){
+      const R = riverAt(x, z);
+      if (R){
+        const vw = R.w * 2.6 + 6;
+        const vt = sstep(vw, R.w * 1.15, R.d);               // valley shoulders
+        const rim = R.y + 3.2 + Math.max(0, h - R.y) * 0.32;
         h += (Math.min(h, rim) - h) * vt;
-        const ct = sstep(0.050 * rivW, 0.024 * rivW, rv);    // the channel
-        h += ((seaLevel - 2.6) - h) * ct;
+        const ct = sstep(R.w * 1.1, R.w * 0.5, R.d);         // the channel
+        h += (Math.min(h, R.y - (1.5 + 0.12 * R.w)) - h) * ct;
+        // a levee: ground beside the channel never sits below the water,
+        // so the river holds -- where the land falls away on one side it
+        // runs on a raised bank instead of spilling
+        if (R.d >= R.w * 1.05){
+          const lev = R.y + 0.5;
+          if (h < lev) h += (lev - h) * sstep(vw, R.w * 1.1, R.d);
+        }
       }
     }
     const L = lmAt(x, z);
@@ -918,12 +1094,12 @@ function makeGen(seed){
   // a guaranteed-dry spawn: with real oceans in the world, (0,0) can be
   // open water -- walk outward deterministically until we find a beachhead
   function findSpawn(){
-    if (height(0, 0) > seaLevel + 1.6 && archAt(0, 0) !== 7) return { x: 0, z: 0 };
+    if (height(0, 0) > seaLevel + 1.6 && archAt(0, 0) !== 7 && !wetAt(0, 0)) return { x: 0, z: 0 };
     for (let r = 40; r <= 2400; r += 40){
       for (let k = 0; k < 10; k++){
         const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
         const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
-        if (height(x, z) > seaLevel + 1.6 && archAt(x, z) !== 7) return { x, z };
+        if (height(x, z) > seaLevel + 1.6 && archAt(x, z) !== 7 && !wetAt(x, z)) return { x, z };
       }
     }
     return { x: 0, z: 0 };
@@ -933,7 +1109,10 @@ function makeGen(seed){
   // (those pools are lava) and dry sinkhole shafts
   function wetAt(x, z, h){
     if (h === undefined) h = height(x, z);
-    if (h >= seaLevel) return false;
+    if (h >= seaLevel){
+      const R = riverAt(x, z);
+      return !!(R && R.d < R.w * 1.1 && h < R.y - 0.05 && archAt(x, z) !== 7);
+    }
     const L = lmAt(x, z);
     if (L && L.type === 'sinkhole' && L.dry &&
         Math.hypot(x - L.x, z - L.z) < L.r) return false;
@@ -1420,6 +1599,7 @@ function makeGen(seed){
       if (a === 4) return MAT.SAND;              // dunes
       if (a === 8) return h < seaLevel + 2.6 ? MAT.SAND : MAT.GRASS;   // islands: wide beaches
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
+      { const R = riverAt(x, z); if (R && R.d < R.w * 1.3 && h < R.y + 1.4) return MAT.SAND; }   // riverbeds and banks
       if (a === 3) return h < 6 ? MAT.SAND : MAT.ROCK;  // badlands
       if (h >= 33) return MAT.SNOW;              // snow-capped peaks
       if (h < 27) return MAT.GRASS;
@@ -1510,7 +1690,7 @@ function makeGen(seed){
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
     return {
-      height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+      height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
       caveInBox, floodedAt, chamberAt, caveNetCell,
       sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z, lPrims),
       makeLocal,
@@ -1535,6 +1715,7 @@ function makeGen(seed){
       return { x, z, y: h, type, s: 0.8 + (hashInt(h0 ^ 21) / 4294967296) * 0.6, vc: hashInt(h0 ^ 33) % 4, dry: false, key: cx + ',' + cz };
     }
     if (h < seaLevel + 0.6 || h > 23) return null;      // no beaches, no snowline
+    { const R = riverAt(x, z); if (R && R.d < R.w * 1.4) return null; }   // nor in a river
     if (inCity(x, z)) return null;                      // no tufts in the streets
     if (arch === 2 || arch === 6 || arch === 7) return null;  // crags, ice, basalt
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
@@ -1563,6 +1744,7 @@ function makeGen(seed){
     if (a !== 0 && a !== 1 && a !== 5 && a !== 8) return null;  // trees: plains, hills, swamp, islands
     const h = height(x, z);
     if (h < seaLevel + 1.8 || h > 22) return null;   // no trees on beaches or underwater
+    { const R = riverAt(x, z); if (R && R.d < R.w * 1.5) return null; }   // nor in a river
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > 2.2) return null;
     if (inCity(x, z)) return null;                   // streets stay paved
@@ -1708,7 +1890,7 @@ function makeGen(seed){
       }
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt,
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
            caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
@@ -1722,7 +1904,7 @@ const DECOR_CELL = 3;
 const FLAT_GEN = {
   treeAt: () => null,
   seaLevel: null, ruinInCell: () => null,
-  wetAt: () => false, archAt: () => 0, lmAt: () => null,
+  wetAt: () => false, archAt: () => 0, lmAt: () => null, riverAt: () => null, waterYAt: () => null,
   caveInBox: () => false, floodedAt: () => false, chamberAt: () => null, caveNetCell: null,
   height: () => SURFACE_Y,
   heightRange: () => [SURFACE_Y, SURFACE_Y],
@@ -1763,6 +1945,18 @@ function rotToWorld(e, x, y, z){
   if (e.rot){ const c = Math.cos(e.rot), s = Math.sin(e.rot);
     const r = x * c - z * s; z = x * s + z * c; x = r; }
   return [x, y, z];
+}
+// the same edit reflected across the plane x = c (axis 0) or z = c (axis 1).
+// A reflection conjugates the rotation: the yaw flips either way, the roll
+// flips across an x plane and the pitch across a z plane; the shapes are
+// symmetric in their own frames, so the reflected point lands in the same
+// shape. Every other field (size, blend, material) carries over.
+function mirrorEdit(e, axis, c){
+  const m = Object.assign({}, e);
+  if (axis === 0) m.x = +(2 * c - e.x).toFixed(3); else m.z = +(2 * c - e.z).toFixed(3);
+  if (e.rot) m.rot = -e.rot;
+  if (axis === 0){ if (e.rz) m.rz = -e.rz; } else { if (e.rx) m.rx = -e.rx; }
+  return m;
 }
 function sdSphere(px, py, pz, e){
   const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
@@ -2538,7 +2732,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -2607,7 +2801,9 @@ const UNIT_VOL = 0.125;
 function sampleShape(e, cb){
   const box = editAABB(e);
   const dim = Math.max(e.sx || e.size, e.sy || e.size, e.sz || e.size);
-  const step = Math.min(0.5, Math.max(0.15, dim / 12));
+  // a twelfth of the shape, half a metre at most for anything you carry
+  // in a hand; a mountain-sized stroke steps in metres, not millimetres
+  const step = Math.min(4, Math.max(0.15, dim / 12));
   const v = step * step * step;
   for (let x = box[0] + step / 2; x < box[3]; x += step)
     for (let y = box[1] + step / 2; y < box[4]; y += step)
@@ -2805,6 +3001,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'trowel', station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
   // the bore: a drill that follows a curve you draw
   RECIPES.push({ kind: 'bore', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
+  // the lathe: turn a drawn profile into a tower, a dome, a bowl
+  RECIPES.push({ kind: 'lathe', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }] });
   // rails bolt together from smelted stock
   RECIPES.push({ kind: 'rail', yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 2 }] });
   // the electric car ships as a kit: place it, drive it, charge it
@@ -2828,6 +3026,12 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'cannon', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'aetheringot', n: 2 }, { mat: MAT.PLANKS, n: 4 }] });
   // the wall turret: wire it to your grid and it shoots what comes at you
   RECIPES.push({ kind: 'turret', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'cells', n: 16 }] });
+  // THE PALISADE: defenses that know whose side they are on
+  RECIPES.push({ kind: 'claymore', yields: 2, station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'rounds', n: 6 }] });
+  RECIPES.push({ kind: 'spikes', yields: 2, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
+  RECIPES.push({ kind: 'bell', yields: 1, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 3 }] });
+  RECIPES.push({ kind: 'trench', yields: 2, costs: [{ item: 'ironingot', n: 2 }, { item: 'coal', n: 5 }] });
+  RECIPES.push({ kind: 'flamejet', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'coal', n: 8 }, { item: 'cells', n: 6 }] });
   RECIPES.push({ kind: 'windsock', yields: 1, costs: [{ item: 'stick', n: 3 }, { item: 'wool', n: 2 }] });
   RECIPES.push({ kind: 'hangar', yields: 1, station: true, costs: [{ mat: MAT.STONEBRICK, n: 60 }, { item: 'ironingot', n: 6 }] });
   RECIPES.push({ kind: 'airstrip', yields: 1, station: true, costs: [{ mat: MAT.BASALT, n: 40 }, { mat: MAT.ROCK, n: 40 }] });
@@ -2946,6 +3150,7 @@ function craft(slots, r, free){
                   : r.kind === 'wrench' ? makeWrench()
                   : r.kind === 'trowel' ? { kind: 'trowel' }
                   : r.kind === 'bore' ? { kind: 'bore' }
+                  : r.kind === 'lathe' ? { kind: 'lathe' }
                   : r.kind === 'battery' ? { kind: 'battery', tier: r.tier, charge: BATTERY_CAP[r.tier | 0] || 100 }
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
@@ -2994,7 +3199,7 @@ function editProfile(e, x, z){
 }
 function heightGrid(J, gen){
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
-  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1);
+  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1), fl = new Float32Array(N1 * N1 * 2);
   const sea = J.sea != null ? J.sea : -1e9;
   const edits = J.edits || [];
   const CELL = 32;
@@ -3039,11 +3244,16 @@ function heightGrid(J, gen){
   const marchTop = (x, z, top, ground) => {
     // sky islands float above everything: never take one as the ground
     const S = gen.skyNear ? gen.skyNear(x, z) : null;
-    let y = S && top > S.bottom - 3 ? S.bottom - 3 : top;
+    let y = S && top > S.bottom - 3 ? S.bottom - 3 : top, py = y;
     for (let it = 0; it < 160 && y > ground + 0.3; it++){
       const d = gen.sdf(x, y, z);
-      if (d < 0) return y;
-      y -= Math.max(0.6, d);
+      if (d < 0){
+        // bisect back to the floor between the last open sample and this one
+        let a = py, b = y;
+        for (let k = 0; k < 4; k++){ const m = (a + b) * 0.5; if (gen.sdf(x, m, z) < 0) b = m; else a = m; }
+        return b;
+      }
+      py = y; y -= Math.max(0.6, d);
     }
     return ground;
   };
@@ -3058,11 +3268,15 @@ function heightGrid(J, gen){
         // open ground right under the surface: a cave mouth or a shaft. The
         // skin cannot show the cave, but it can show the hole -- march down
         // to the first solid so the pit is there before the real chunks are
-        let y = hh - 0.7;
+        let y = hh - 0.7, py = y;
         for (let it = 0; it < 60 && y > hh - 40; it++){
           const d = gen.sdf(x, y, z);
-          if (d < 0){ break; }
-          y -= Math.max(0.5, d);
+          if (d < 0){
+            let a = py, b = y;                    // bisect back onto the floor
+            for (let k = 0; k < 4; k++){ const m = (a + b) * 0.5; if (gen.sdf(x, m, z) < 0) b = m; else a = m; }
+            y = b; break;
+          }
+          py = y; y -= Math.max(0.5, d);
         }
         if (y > hh - 40) hh = y;
       }
@@ -3080,10 +3294,18 @@ function heightGrid(J, gen){
       }
       h[kk] = hh;
       m[kk] = mm || (gen.mat(x, hh - 0.1, z) || 1);
-      wet[kk] = hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? 1 : 0;
+      // the water over this column: the sea, a lake, or a river at its own
+      // height; a dry vertex in a wet quad still carries the nearest
+      // water's height so the quad lies flat on it
+      let wv = gen.waterYAt ? gen.waterYAt(x, z, hh) : (hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? sea : null);
+      if (wv != null && hh >= wv) wv = null;
+      wet[kk] = wv != null ? 1 : 0;
+      const R = gen.riverAt ? gen.riverAt(x, z) : null;
+      wy[kk] = wv != null ? wv : R ? Math.max(sea, R.y) : sea;
+      if (R && wv != null && wv > sea + 1e-6){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fl[kk * 2] = R.tx * f; fl[kk * 2 + 1] = R.tz * f; }
     }
   }
-  return { h, m, wet };
+  return { h, m, wet, wy, fl };
 }
 // The whole skin level, worker-side: heights, the height the next-coarser
 // level reads at every vertex (its grid is this one at every other line,
@@ -3123,7 +3345,7 @@ function skinGrid(J, gen){
     const hd = h[Math.max(0, r - 1) * N1 + i], hu = h[Math.min(n, r + 1) * N1 + i];
     const cc = (hl + hr + hd + hu) * 0.25 - h[kk];
     ao[kk] = Math.round(255 * Math.max(0.35, Math.min(1, 1 - cc / (s * 1.6))));
-    dep[kk] = Math.max(0, sea - h[kk]);
+    dep[kk] = Math.max(0, G.wy[kk] - h[kk]);
   }
   const mt = new Uint8Array(n * n);
   for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
@@ -3147,7 +3369,7 @@ function skinGrid(J, gen){
       widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
     }
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, idx, widx: widx.slice(0, ww) };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -3288,7 +3510,7 @@ return {
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
-  editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS,
+  editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS, mirrorEdit,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, frameToWorld, worldToFrame, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
   noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL,
@@ -3787,7 +4009,7 @@ const meshPool = {
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
-        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.idx.buffer, g.widx.buffer]);\n' +
+        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.fl.buffer, g.idx.buffer, g.widx.buffer]);\n' +
         '    return;\n' +
         '  }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
@@ -4025,7 +4247,7 @@ class Terrain {
       if (fresh){ ch = { mesh: null }; this.chunks.set(key, ch); }
       else if (!ch.banded) continue;       // already meshed, queued, or empty
       const [cx, cy, cz] = key.split(',').map(Number);
-      if (fresh && cy !== seaCy){          // sea-band chunks always process (water mesh)
+      if (fresh && cy !== seaCy && !this.waterInfo(cx, cz).bands.has(cy)){   // water-band chunks always process (water mesh)
         const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
         if (topY < floorY && topY < this.editMinY() - 1 &&
             !(this.gen.caveInBox && this.gen.caveInBox(
@@ -4187,6 +4409,31 @@ class Terrain {
   // lake surface quads for this chunk footprint: 1m cells at sea level over
   // columns whose ground is below it. Built only for the vertical chunk
   // containing the sea plane, so a footprint gets exactly one water mesh.
+  // a chunk footprint's water: the corner heights, each cell's water
+  // surface (NaN where dry), the highest, and the vertical bands that hold
+  // one -- the sea and the lakes at sea level, a river at its own height
+  waterInfo(cx, cz){
+    if (!this.wInfo) this.wInfo = new Map();
+    const key = cx + ',' + cz;
+    let W = this.wInfo.get(key);
+    if (W) return W;
+    const M = CORE.CHUNK_M, x0 = cx * M, z0 = cz * M, g = this.gen;
+    const hs = new Float32Array((M + 1) * (M + 1)), wy = new Float32Array(M * M);
+    for (let j = 0; j <= M; j++) for (let i = 0; i <= M; i++) hs[i + j * (M + 1)] = g.height(x0 + i, z0 + j);
+    let maxWy = null; const bands = new Set();
+    for (let j = 0; j < M; j++) for (let i = 0; i < M; i++){
+      const hm = Math.min(hs[i + j * (M + 1)], hs[i + 1 + j * (M + 1)], hs[i + (j + 1) * (M + 1)], hs[i + 1 + (j + 1) * (M + 1)]);
+      let w = g.waterYAt ? g.waterYAt(x0 + i + 0.5, z0 + j + 0.5, hm)
+            : (g.seaLevel != null && hm < g.seaLevel && (!g.wetAt || g.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) ? g.seaLevel : null);
+      if (w != null && hm >= w) w = null;
+      wy[i + j * M] = w == null ? NaN : w;
+      if (w != null){ if (maxWy == null || w > maxWy) maxWy = w; bands.add(Math.floor(w / M)); }
+    }
+    W = { hs, wy, maxWy, bands };
+    if (this.wInfo.size > 6000) this.wInfo.clear();
+    this.wInfo.set(key, W);
+    return W;
+  }
   remeshWater(ch, cx, cy, cz){
     const sea = this.gen.seaLevel, M = CORE.CHUNK_M;
     const seaCy = sea != null ? Math.floor(sea / M) : null;
@@ -4196,28 +4443,30 @@ class Terrain {
     // meshed. Beyond the cell-mesh radius the still lake is the truth again
     if (waterSys.cells.has(CK(cx, cy, cz)) && waterSys.inMeshRange(cx, cz)) return;
     const x0 = cx * M, z0 = cz * M;
-    const pos = [], uv = [], dep = [];
-    const quad = (xa, za, xb, zb, wy, d) => {
+    const pos = [], uv = [], dep = [], flow = [];
+    const quad = (xa, za, xb, zb, wy, d, fx, fz) => {
       pos.push(xa, wy, za, xa, wy, zb, xb, wy, zb,
                xa, wy, za, xb, wy, zb, xb, wy, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
               xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       const dd = d == null ? 0.8 : d;
       dep.push(dd, dd, dd, dd, dd, dd);
+      fx = fx || 0; fz = fz || 0;
+      for (let q = 0; q < 6; q++) flow.push(fx, fz);
     };
-    if (cy === seaCy){
-      const hs = [];                                  // 9x9 corner heights
-      for (let j = 0; j <= M; j++)
-        for (let i = 0; i <= M; i++)
-          hs.push(this.gen.height(x0 + i, z0 + j));
+    const W = this.waterInfo(cx, cz);
+    if (W.bands.has(cy)){
       for (let j = 0; j < M; j++)
         for (let i = 0; i < M; i++){
-          const a = hs[i + j * (M + 1)], b = hs[i + 1 + j * (M + 1)];
-          const c = hs[i + (j + 1) * (M + 1)], d = hs[i + 1 + (j + 1) * (M + 1)];
-          const hm = Math.min(a, b, c, d);
-          if (hm >= sea) continue;                    // dry cell
-          if (this.gen.wetAt && !this.gen.wetAt(x0 + i + 0.5, z0 + j + 0.5, hm)) continue;
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, sea, sea - hm);
+          const w = W.wy[i + j * M];
+          if (w !== w || Math.floor(w / M) !== cy) continue;     // NaN: dry, or another band's
+          const hm = Math.min(W.hs[i + j * (M + 1)], W.hs[i + 1 + j * (M + 1)], W.hs[i + (j + 1) * (M + 1)], W.hs[i + 1 + (j + 1) * (M + 1)]);
+          let fx = 0, fz = 0;
+          if (w > sea + 1e-6 && this.gen.riverAt){
+            const R = this.gen.riverAt(x0 + i + 0.5, z0 + j + 0.5);
+            if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
+          }
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm, fx, fz);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -4247,6 +4496,7 @@ class Terrain {
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     g.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(dep), 1));
+    g.setAttribute('aFlow', new THREE.BufferAttribute(new Float32Array(flow), 2));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, game.waterMat);
     mesh.userData.noShadow = true;
@@ -4382,11 +4632,14 @@ function inWater(x, y, z){
   if (wa){
     const v = wa[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
     if (v === W_SOLID || v === 0) return false;
+    if (v === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > gy - 0.5 + 1) return y < wy; }
     return y < gy - 0.5 + v / 8;
   }
   if (g.floodedAt && g.floodedAt(x, y, z)) return true;   // flooded galleries
   const sea = g.seaLevel;
-  if (sea == null || y >= sea) return false;
+  if (sea == null) return false;
+  if (g.waterYAt){ const wy = g.waterYAt(x, z); return wy != null && y < wy; }
+  if (y >= sea) return false;
   return g.wetAt ? g.wetAt(x, z) : g.height(x, z) < sea;
 }
 // ---------- water that flows ----------
@@ -4411,7 +4664,11 @@ const waterSys = {
   staticLevel(gx, gy, gz){
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
     if (g.sdf(x, gy, z) < 0) return W_SOLID;
-    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.seaLevel != null){
+      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      if (wy != null && gy < wy) return W_SRC;
+      if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
+    }
     if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
     return 0;
   },
@@ -4421,7 +4678,11 @@ const waterSys = {
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
     if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
     if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
-    if (g.seaLevel != null && gy < g.seaLevel && g.wetAt && g.wetAt(x, z)) return W_SRC;
+    if (g.seaLevel != null){
+      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      if (wy != null && gy < wy) return W_SRC;
+      if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
+    }
     if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
     return 0;
   },
@@ -4438,7 +4699,10 @@ const waterSys = {
   hasWater(key){
     const [cx, cy, cz] = key.split(',').map(Number);
     const g = game.gen;
-    if (cy * 8 - 0.5 > (g.seaLevel != null ? g.seaLevel : -1e9) + 0.5 && cy * 8 > -6) return false;
+    const W = game.terrain ? game.terrain.waterInfo(cx, cz) : null;
+    let top = g.seaLevel != null ? g.seaLevel : -1e9;
+    if (W && W.maxWy != null && W.maxWy > top) top = W.maxWy;
+    if (cy * 8 - 0.5 > top + 0.5 && cy * 8 > -6) return false;
     const a = this.cells.get(key) || this.statArr(key);
     for (let q = 0; q < 512; q++) if (a[q] >= 1 && a[q] <= 8) return true;
     return false;
@@ -4473,11 +4737,15 @@ const waterSys = {
     const g = game.gen;
     if (!g || g.seaLevel == null || !game.running) return;
     const B = CORE.editAABB(e);
-    if (B[1] > g.seaLevel + 1 && B[1] > -6) return;           // dry land, above every water table
+    if (B[1] > 95 && B[1] > -6) return;                         // above every water there is
     const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
     const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
     const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
     if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return;   // a city slab: not a water event
+    // dry land, above every water table under this footprint (the sea, or a river)
+    let top = g.seaLevel;
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){ const W = game.terrain.waterInfo(cx, cz); if (W.maxWy != null && W.maxWy > top) top = W.maxWy; }
+    if (B[1] > top + 1 && B[1] > -6) return;
     const keys = [];
     let wet = false;
     for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
@@ -4585,27 +4853,39 @@ const waterSys = {
     // the cells are the water here: the still surface must not double it
     const chS = game.terrain && game.terrain.chunks.get(key);
     if (chS && chS.water){ game.scene.remove(chS.water); chS.water.geometry.dispose(); chS.water = null; }
-    const pos = [], uv = [], dep = [];
-    const quadH = (xa, za, xb, zb, y, d) => {
+    const pos = [], uv = [], dep = [], flow = [];
+    const quadH = (xa, za, xb, zb, y, d, fx, fz) => {
       pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4, xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       dep.push(d, d, d, d, d, d);
+      fx = fx || 0; fz = fz || 0;
+      for (let q = 0; q < 6; q++) flow.push(fx, fz);
     };
     const quadV = (xa, za, xb, zb, y0, y1) => {
       pos.push(xa, y0, za, xb, y0, zb, xb, y1, zb, xa, y0, za, xb, y1, zb, xa, y1, za);
       uv.push(xa / 4, y0 / 4, xb / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y1 / 4);
       dep.push(1, 1, 1, 1, 1, 1);
+      for (let q = 0; q < 6; q++) flow.push(0, 0);
     };
     const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isW(v) ? gy - 0.5 + v / 8 : null; };
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
       const v = a[this.idx(i, j, k)];
       if (!this.isW(v)) continue;
       const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
-      const bottom = gy - 0.5, top = bottom + v / 8;
+      const bottom = gy - 0.5;
+      let top = bottom + v / 8, fx = 0, fz = 0;
+      if (v === W_SRC && game.gen.waterYAt && !this.isW(this.lv(gx, gy + 1, gz))){
+        const wyc = game.gen.waterYAt(gx + 0.5, gz + 0.5);
+        if (wyc != null && wyc > game.gen.seaLevel + 1e-6){
+          if (wyc > top - 1 && wyc < top + 1) top = wyc;
+          const R = game.gen.riverAt(gx + 0.5, gz + 0.5);
+          if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
+        }
+      }
       if (!this.isW(this.lv(gx, gy + 1, gz))){
         let d = 0.5;
         for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
-        quadH(gx, gz, gx + 1, gz + 1, top, d);
+        quadH(gx, gz, gx + 1, gz + 1, top, d, fx, fz);
       }
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
         const nn = this.lv(gx + dx, gy, gz + dz);
@@ -4624,6 +4904,7 @@ const waterSys = {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setAttribute('aDep', new THREE.Float32BufferAttribute(dep, 1));
+    geo.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 2));
     const m = new THREE.Mesh(geo, game.waterMat);
     m.renderOrder = 3; m.userData.noShadow = true; m.frustumCulled = false;
     game.scene.add(m);
@@ -4882,22 +5163,24 @@ function buildScene(){
     // depth-aware, like the LOD water: translucent over a visible shallow
     // bed, deepening to an opaque ocean blue -- WG3's seas are too deep for
     // a fixed 62% wash to read as anything but grey
+    game.uTime = game.uTime || { value: 0 };
     game.waterMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTex: { value: wt } },
+      uniforms: { uTex: { value: wt }, uTime: game.uTime },
       vertexShader: `
-        attribute float aDep;
-        varying vec2 vUv; varying float vDep;
+        attribute float aDep; attribute vec2 aFlow;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
         void main(){
-          vUv = uv; vDep = aDep;
+          vUv = uv; vDep = aDep; vFlow = aFlow;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
       fragmentShader: `
         precision highp float;
-        uniform sampler2D uTex;
-        varying vec2 vUv; varying float vDep;
+        uniform sampler2D uTex; uniform float uTime;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
         void main(){
-          vec3 col = texture2D(uTex, vUv).rgb * vec3(0.737, 0.831, 0.910);
+          // a river's surface drifts downstream; still water stays put
+          vec3 col = texture2D(uTex, vUv + vFlow * uTime * 0.12).rgb * vec3(0.737, 0.831, 0.910);
           float deep = smoothstep(0.6, 7.5, vDep);
           col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
           gl_FragColor = vec4(col, mix(0.68, 0.96, deep));
@@ -7703,6 +7986,30 @@ const pnodeSys = {
       board.position.set(0, 2.05, -0.62); board.rotation.y = Math.PI;
       g.add(booth, post1, post2, roof, board);
       g.userData.station = { cv, tex };
+    } else if (t === 'claymore'){
+      // a curved plate on two legs, the red eye toward its front (-z)
+      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.3, 0.07), M.dark); plate.position.set(0, 0.32, 0); plate.rotation.x = -0.18;
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.18, 0.02), M.steel); face.position.set(0, 0.32, -0.045); face.rotation.x = -0.18;
+      for (const sx of [-0.18, 0.18]){ const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), M.dark); leg.position.set(sx, 0.1, 0.03); g.add(leg); }
+      const eye = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.02), new THREE.MeshBasicMaterial({ color: 0xff3333 })); eye.position.set(0, 0.4, -0.07);
+      g.add(plate, face, eye); g.userData.eye = eye;
+    } else if (t === 'spikes'){
+      // a strip of iron points on a plank, long across x
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.08, 1.0), M.wood); plank.position.y = 0.04; g.add(plank);
+      for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++){
+        const sp = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.42, 5), M.steel);
+        sp.position.set(-0.75 + i * 0.5 + (j ? 0.25 : 0), 0.29, -0.25 + j * 0.5); g.add(sp);
+      }
+    } else if (t === 'bell'){
+      // a post, an arm, a bell that swings when it rings
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.7, 7), M.bark); post.position.y = 0.85;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.5), M.bark); arm.position.set(0, 1.62, -0.22);
+      const pivot = new THREE.Group(); pivot.position.set(0, 1.6, -0.4);
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 0.28, 10), new THREE.MeshBasicMaterial({ color: 0xd9b25a })); bell.position.y = -0.2;
+      const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.05, 10), new THREE.MeshBasicMaterial({ color: 0xb08d3f })); lip.position.y = -0.34;
+      const clap = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), M.dark); clap.position.y = -0.4;
+      pivot.add(bell, lip, clap);
+      g.add(post, arm, pivot); g.userData.pivot = pivot;
     } else if (t === 'turret'){
       // a squat mount with twin barrels on a pivot; the muzzles glow when it fires
       const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), M.dark); base.position.y = 0.2;
@@ -7797,6 +8104,31 @@ const pnodeSys = {
       const top = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), M.steel);
       top.position.y = 0.92;
       g.add(base, col, top);
+    } else if (t === 'trench'){
+      // a shallow iron tray of oil, long across x
+      const tray = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.3, 1.1), M.dark); tray.position.y = 0.15;
+      const oil = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.06, 0.9), new THREE.MeshBasicMaterial({ color: 0x14141c })); oil.position.y = 0.28;
+      g.add(tray, oil); g.userData.oil = oil;
+    } else if (t === 'flamejet'){
+      // a squat iron block with a nozzle out its front (-z) and a pilot light
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.6), M.dark); base.position.y = 0.25;
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.5, 8), M.steel); tank.position.set(0.16, 0.7, 0.1);
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.5, 8), M.steel); pipe.rotation.x = Math.PI / 2; pipe.position.set(-0.1, 0.55, -0.45);
+      const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.07, 0.16, 8), M.dark); nozzle.rotation.x = Math.PI / 2; nozzle.position.set(-0.1, 0.55, -0.74);
+      const pilot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0xff8830 })); pilot.position.set(-0.1, 0.55, -0.83);
+      g.add(base, tank, pipe, nozzle, pilot); g.userData.pilot = pilot;
+    } else if (t === 'tent'){
+      // a canvas A-frame on a ridge pole, open at the front (-z)
+      const cloth = new THREE.MeshBasicMaterial({ color: 0xb8a27a }), inner = new THREE.MeshBasicMaterial({ color: 0x8a7a58 });
+      for (const sx of [-1, 1]){
+        const side = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.06, 2.0), cloth);
+        side.position.set(sx * 0.62, 0.72, 0); side.rotation.z = sx * 1.02; g.add(side);
+      }
+      const back = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.5, 0.05), inner); back.position.set(0, 0.7, 0.98);
+      const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.1), M.bark); ridge.position.y = 1.46;
+      for (const z of [-1.0, 1.0]){ const pole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.46, 0.07), M.bark); pole.position.set(0, 0.73, z); g.add(pole); }
+      const roll = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 1.6), new THREE.MeshBasicMaterial({ color: 0x6a5a4a })); roll.position.set(0.25, 0.1, 0.05);
+      g.add(back, ridge, roll);
     } else if (t === 'sign'){
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), M.bark);
       post.position.y = 0.55;
@@ -7987,11 +8319,11 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5, flamejet: 0.55 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
     }
     if (k === 'r'){
@@ -8107,6 +8439,14 @@ const pnodeSys = {
         } else ud.pivot.rotation.y += dt * 0.4;   // idle sweep
         if (ud.eye) ud.eye.material.color.setHex(n.aim ? 0xff2222 : (powerSys.turretMap && powerSys.turretMap.get(n.id) > 0 ? 0xff5544 : 0x442222));
       }
+      if (n.t === 'bell' && ud.pivot){
+        const sw = n.swing || 0;
+        ud.pivot.rotation.z = Math.sin(performance.now() * 0.02) * 0.5 * sw;
+        if (sw > 0) n.swing = Math.max(0, sw - dt * 0.35);
+      }
+      if (n.t === 'claymore' && ud.eye) ud.eye.material.color.setHex((performance.now() % 1400) < 100 ? 0xff9999 : 0xff3333);
+      if (n.t === 'flamejet' && ud.pilot) ud.pilot.material.color.setHex(n.firing ? 0xffdd66 : (powerSys.jetMap && powerSys.jetMap.get(n.id) > 0 ? 0xff8830 : 0x442211));
+      if (n.t === 'trench' && ud.oil) ud.oil.material.color.setHex(n.lit ? 0x3a2410 : n.spent ? 0x2a2a2e : 0x14141c);
       if (n.t === 'cannon' && ud.pivot){
         // the barrel follows whoever stands near it
         const dd = Math.hypot(n.x - game.pos.x, n.z - game.pos.z);
@@ -8377,6 +8717,7 @@ const powerSys = {
           else if (n.t === 'wtable'){ c.d += 8; (c.wtabs = c.wtabs || []).push(n); }
           else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
           else if (n.t === 'turret'){ c.d += n.aim ? 30 : 4; c.turrets.push(n); }
+          else if (n.t === 'flamejet'){ c.d += n.firing ? 40 : 3; (c.jets = c.jets || []).push(n); }
           else if (n.t === 'charger'){ if (this.chargerWants(n)) c.d += 40; (c.chargers = c.chargers || []).push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
@@ -8449,6 +8790,8 @@ const powerSys = {
       }
       this.turretMap = this.turretMap || new Map();
       for (const n of c.turrets) this.turretMap.set(n.id, c.w > 0 ? ratio : 0);
+      this.jetMap = this.jetMap || new Map();
+      for (const n of (c.jets || [])) this.jetMap.set(n.id, c.w > 0 ? ratio : 0);
       for (const n of c.crafters){
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
@@ -8607,6 +8950,7 @@ const powerSys = {
       else if (n.t === 'pad') this.padTick(n, dt);
       else if (n.t === 'charger') this.chargerTick(n, dt);
       else if (n.t === 'turret') this.turretTick(n, dt);
+      else if (n.t === 'flamejet') palisadeSys.jetTick(n, dt, this.jetMap ? (this.jetMap.get(n.id) || 0) : 0);
     }
     game.onElev = onElev;
     this.tubeT = (this.tubeT || 0) + dt;
@@ -8908,6 +9252,7 @@ const decorSys = {
     { id: 'coral0',  w: 1.0,  h: 0.9 },
     { id: 'coral1',  w: 1.0,  h: 0.9 },
     { id: 'kelp',    w: 0.7,  h: 2.8 },
+    { id: 'bones',   w: 1.1,  h: 0.5 },
   ],
   texFor(id){
     return PixTex.make('decor_' + id, (c, w, h, rng) => {
@@ -8921,6 +9266,13 @@ const decorSys = {
       };
       if (id === 'tuft') blades('#3f8c2f', '#57a63f');
       else if (id === 'tuftdry') blades('#a89552', '#c2ad66');
+      else if (id === 'bones'){
+        // a skull and two long bones, laid out
+        c.fillStyle = '#e6e2d6';
+        c.fillRect(2, 5, 4, 4); c.fillRect(3, 4, 2, 1); c.fillRect(3, 9, 2, 1);
+        c.fillStyle = '#2a2622'; c.fillRect(3, 6, 1, 1); c.fillRect(5, 6, 1, 1);
+        c.fillStyle = '#d8d2c4'; c.fillRect(7, 9, 8, 1); c.fillRect(7, 8, 1, 1); c.fillRect(14, 10, 1, 1); c.fillRect(8, 12, 7, 1); c.fillRect(8, 11, 1, 1); c.fillRect(14, 13, 1, 1);
+      }
       else if (id === 'kelp'){
         // ribbons of kelp reaching up
         for (let i = 0; i < 3; i++){
@@ -8997,11 +9349,12 @@ const decorSys = {
     if (d.type === 'shrub') return 'shrub';
     if (d.type === 'coral') return 'coral' + (d.vc & 1);
     if (d.type === 'kelp') return 'kelp';
+    if (d.type === 'bones') return 'bones';
     return d.dry ? 'tuftdry' : 'tuft';
   },
   // one plain (non-instanced) plant, for the placement preview
   model(type){
-    const id = type === 'flower' ? 'flower0' : type === 'shrub' ? 'shrub' : type === 'coral' ? 'coral0' : type === 'kelp' ? 'kelp' : 'tuft';
+    const id = type === 'flower' ? 'flower0' : type === 'shrub' ? 'shrub' : type === 'coral' ? 'coral0' : type === 'kelp' ? 'kelp' : type === 'bones' ? 'bones' : 'tuft';
     const v = this.VARIANTS.find(v => v.id === id);
     const m = new THREE.Mesh(this.crossGeo(v.w, v.h),
       new THREE.MeshBasicMaterial({ map: this.texFor(v.id), alphaTest: 0.5, side: THREE.DoubleSide }));
@@ -9661,6 +10014,12 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.85, z: n.z, hx: 0.3, hy: 0.85, hz: 0.3 });
     else if (n.t === 'turret')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.45, z: n.z, hx: 0.5, hy: 0.45, hz: 0.5 });
+    else if (n.t === 'bell')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.8, z: n.z, hx: 0.1, hy: 0.8, hz: 0.1 });
+    else if (n.t === 'tent')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.7, z: n.z, hx: 1.2, hy: 0.7, hz: 0.9 });
+    else if (n.t === 'flamejet')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.35, hy: 0.4, hz: 0.35 });
     else if (n.t === 'station')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.65, z: n.z, hx: 0.8, hy: 0.65, hz: 0.6 });
     else if (n.t === 'pad')
@@ -9710,7 +10069,8 @@ function waterTopAt(x, z, y){
     const a = waterSys.cells.get(key);
     if (!a){
       // untouched water: the sea and the lakes sit at seaLevel
-      if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
+      if (g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && gy < wy + 1) return wy; }
+      else if (g.seaLevel != null && gy < g.seaLevel + 1 && g.wetAt && g.wetAt(x, z) && g.height(x, z) < g.seaLevel) return g.seaLevel;
       if (g.floodedAt && g.floodedAt(x, gy, z)){ let t = gy; while (g.floodedAt(x, t + 1, z)) t++; return t + 0.5; }
       continue;
     }
@@ -9719,6 +10079,7 @@ function waterTopAt(x, z, y){
     let t = gy;
     while (waterSys.isW(waterSys.lv(gx, t + 1, gz))) t++;
     const tv = waterSys.lv(gx, t, gz);
+    if (tv === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > t - 0.5 + 1 && wy < t + 1.5) return wy; }
     return t - 0.5 + tv / 8;
   }
   return null;
@@ -9755,6 +10116,7 @@ const ENT_DEF = {
   archangel: { hp: 900, speed: 9.0, r: 1.6, h: 3.6, cap: 0, boss: 'THE ARCHANGEL' },
   guardian:  { hp: 420, speed: 2.6, r: 0.9, h: 2.8, cap: 0, boss: 'THE TOMB GUARDIAN' },
 };
+const CREW_HAT = 0x4fc3f7;
 const VROLE = {
   broker:  { name: 'ore broker',   coat: 0x8a6d2f, hat: 0x5a4520 },
   arms:    { name: 'arms dealer',  coat: 0x7a2f2f, hat: 0x4a1c1c },
@@ -10284,7 +10646,9 @@ function entMesh(type, ent){
     return g;
   }
   if (type === 'villager' || type === 'guard'){
-    const R = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
+    const R0 = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
+    // your crew wear your colour on the hat, and carry what you gave them
+    const R = ent && ent.crew ? { coat: R0.coat, hat: CREW_HAT } : R0;
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, -0.1, 0.31, 0));
     legs.push(box(0.16, 0.62, 0.18, 0x3a3540, 0.1, 0.31, 0));
     box(0.44, 0.56, 0.26, R.coat, 0, 0.9, 0);                 // coat
@@ -10302,7 +10666,24 @@ function entMesh(type, ent){
       e2.position.set(s * 0.09, 1.46, -0.22);
       g.add(e2);
     }
-    g.userData = { legs, phase: Math.random() * 6 };
+    let hpbar = null;
+    if (ent && ent.crew){
+      // a health bar over the head, shown only while they are hurt
+      const bg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x1a1a1e, depthTest: false, transparent: true, opacity: 0.8 }));
+      const fg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x5fe08a, depthTest: false }));
+      bg.scale.set(0.96, 0.1, 1); fg.scale.set(0.9, 0.06, 1);
+      bg.position.set(0, 2.05, 0); fg.position.set(0, 2.05, 0);
+      bg.renderOrder = 30; fg.renderOrder = 31; bg.visible = fg.visible = false;
+      g.add(bg, fg); hpbar = { bg, fg };
+    }
+    if (ent && ent.crew && ent.crew.tool){
+      const t = ent.crew.tool;
+      if (t.kind === 'drill') box(0.14, 0.14, 0.5, 0x6a7a8a, 0.34, 0.8, -0.25);
+      else if (t.kind === 'disp') box(0.16, 0.16, 0.44, 0x8a7a5a, 0.34, 0.8, -0.22);
+      else if (t.kind === 'sword') box(0.06, 0.9, 0.1, 0xd8dde4, 0.34, 1.0, -0.15);
+      else if (t.kind === 'fw') box(0.1, 0.12, 0.62, 0x2c2c31, 0.34, 0.86, -0.3);
+    }
+    g.userData = { legs, phase: Math.random() * 6, hpbar };
     return g;
   }
   if (type === 'grazer'){
@@ -10685,6 +11066,7 @@ function killEntity(e, byPlayer){
 }
 function hurtEntity(e, dmg, kx, kz, quiet){
   if (e.type === 'villager'){
+    if (e.crew){ e.flash = 0.15; return; }              // yours: no offense taken, no harm done
     // you can't kill the neighbors — but they take offense
     e.flash = 0.15; e.fleeT = 5;
     villageSys.offend(e);
@@ -10934,6 +11316,7 @@ const villageSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 60) continue;
       for (let i = 0; i < rec.houses.length; i++){
         const hrec = rec.houses[i];
+        if (hrec.crew) continue;                          // hired: the crew keeps them alive
         const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
         if (alive) continue;
         const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
@@ -10960,6 +11343,908 @@ const villageSys = {
   },
 };
 
+// ---------- THE EXPEDITION: a story you find ----------
+// Before you, someone went looking for the sound under the hills. Eight
+// camps walk out from the coast, a day apart, each with a tent, a fire, a
+// chest and a page of the surveyor's journal; from the fourth, bones.
+// The last camp sits at a shaft with a rope down it, and at the bottom
+// the survey and the last page. Reading a page marks the next camp. The
+// route is laid once per world and saved; camps are stamped as you come
+// near, like villages.
+const EXPEDITION_PAGES = [
+  // 1 — the first camp, a day out from the coast
+  `Day {D}. Left {C} at first light with {S}, the two porters and eleven days of food. The council's brief is simple: find what makes the sound. Every miner under the {C} hills has heard it, a slow knock from below, never twice in the same place. We make camp on the open ground. Sleep well tonight; there will be less of it.`,
+  // 2
+  `Day {D}. The porters will not walk after dark and I do not blame them. Something followed us along the ridge, low and quick, gone when the torch turned. {S} says a stalker. We keep a fire now. The knock again tonight, felt more than heard, through the ground under the bedrolls.`,
+  // 3
+  `Day {D}. Forded the {R} at the shallows. The water is colder than it should be for the season and {S} swears it runs the wrong way. I have marked the ford on the survey. Lost a sack of meal to the current. The porters are quiet. I counted the knocks tonight: nine, then a long silence, then one.`,
+  // 4
+  `Day {D}. Found bones on the slope above camp. Not ours, not animal. Old, and laid out, as if someone had set them down with care. There is a hole in the hillside above them that the porters will not go near, and I did not press them. The knock came from that hole. I am sure of it now. We go around, and on.`,
+  // 5
+  `Day {D}. One porter left in the night with half the food and the good rope. {S} wanted to go after him. I said no. The survey is the thing. The ground here is hollow, you can hear it under the boots, and the sound is close, and it has changed: not a knock now but a scrape, like a great slow thing turning over.`,
+  // 6
+  `Day {D}. The second porter is gone. No tracks. His bedroll was still warm and the fire was still lit. {S} sat up the rest of the night with the pick across his knees. I wrote to the council and put the letter in the chest; if you are reading this and are not {S}, take it to {C}. We go on. I do not know how to go back.`,
+  // 7
+  `Day {D}. {S} is hurt, a fall, the leg. He cannot walk the last of it. I have left him what food there is and the short rope and I am going up alone to the mouth we found: a shaft, sheer, and the scrape coming up out of it like breath. I will go down at first light. If I find what makes the sound I will know what to tell them.`,
+  // 8 — the last camp, at the shaft
+  `Day {D}. It is not one thing. It is a place. I have been down twice on the long rope and I have seen the first hall and I have heard them moving in the second. I have left the rope. I have left the survey. Whoever comes after: the council was wrong to want to know, and I was wrong to want to tell them. Do not go down. I am going down.`,
+];
+const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
+function riverNameAt(x, z){
+  const g = game.gen; if (!g || !g.riverAt) return null;
+  const R = g.riverAt(x, z); if (!R || !R.c) return null;
+  return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + R.c) % RIVER_NAMES.length];
+}
+const expeditionSys = {
+  DAYS: [1, 2, 4, 5, 7, 8, 10, 11],
+  // lay the route once, when a world is born
+  create(sx, sz){
+    const g = game.gen, seed = game.seed >>> 0;
+    const rnd = CORE.mulberry32(seed ^ 0x5eed);
+    const L = villageSys.nameFor((seed ^ 0x51ed) >>> 0), S = villageSys.nameFor((Math.imul(seed, 7) + 3) >>> 0);
+    let city = null, cd = 1e9;
+    const CC = CORE.CITY_CELL;
+    for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++){
+      const c = g.cityAt && g.cityAt(Math.floor(sx / CC) + i, Math.floor(sz / CC) + j);
+      if (!c) continue; const d = Math.hypot(c.x - sx, c.z - sz); if (d < cd){ cd = d; city = c; }
+    }
+    const C = city ? citySys.nameFor(city.seed) : 'the coast';
+    const camps = [];
+    let ang = rnd() * Math.PI * 2, x = sx, z = sz;
+    for (let i = 0; i < 8; i++){
+      ang += (rnd() - 0.5) * 1.1;
+      const leg = 240 + rnd() * 120;
+      const tx = x + Math.cos(ang) * leg, tz = z + Math.sin(ang) * leg;
+      const spot = this.freeLand(tx, tz, rnd);
+      x = spot.x; z = spot.z;
+      camps.push({ i: i + 1, x: +x.toFixed(1), z: +z.toFixed(1), y: +g.height(x, z).toFixed(2), yaw: +(rnd() * Math.PI * 2).toFixed(2), stamped: false, found: false, known: i === 0 });
+    }
+    // the mouth: a sheer shaft beside the last camp, carved into the world
+    const last = camps[7];
+    const shx = +(last.x + Math.cos(last.yaw) * 5.5).toFixed(2), shz = +(last.z + Math.sin(last.yaw) * 5.5).toFixed(2);
+    const shy = g.height(shx, shz);
+    const e = CORE.makeEdit(0, 2, shx, +(shy - 12).toFixed(2), shz, 3.2, 0, 0);
+    e.sx = e.sz = 3.2; e.sy = 26;
+    game.edits.push(e);
+    if (game.terrain) game.terrain.invalidate(e);
+    let river = null;
+    for (const c of camps){ river = riverNameAt(c.x, c.z); if (river) break; }
+    game.expedition = { L, S, C, R: river || 'the stream', camps, shaft: { x: shx, z: shz, y: +shy.toFixed(2), bottom: +(shy - 25).toFixed(2) }, read: 0, deep: false };
+    markSave();
+    return game.expedition;
+  },
+  // the nearest free, dry, gently sloping land to a point, off villages and cities
+  freeLand(tx, tz, rnd){
+    const g = game.gen;
+    const ok = (x, z) => {
+      const h = g.height(x, z);
+      if (h < g.seaLevel + 2.5 || h > 60) return false;
+      if (g.wetAt && g.wetAt(x, z, h)) return false;
+      if (g.inCity && g.inCity(x, z)) return false;
+      const R = g.riverAt && g.riverAt(x, z); if (R && R.d < R.w * 2.6 + 6) return false;
+      const sl = Math.abs(g.height(x + 3, z) - g.height(x - 3, z)) + Math.abs(g.height(x, z + 3) - g.height(x, z - 3));
+      if (sl > 2.4) return false;
+      for (const v of villageSys.candidatesNear(x, z, 70)) if (v) return false;
+      return true;
+    };
+    if (ok(tx, tz)) return { x: tx, z: tz };
+    for (let r = 12; r <= 220; r += 12) for (let k = 0; k < 10; k++){
+      const a = rnd() * Math.PI * 2, x = tx + Math.cos(a) * r, z = tz + Math.sin(a) * r;
+      if (ok(x, z)) return { x, z };
+    }
+    return { x: tx, z: tz };
+  },
+  text(i){
+    const E = game.expedition;
+    return EXPEDITION_PAGES[i - 1].replace(/\{L\}/g, E.L).replace(/\{S\}/g, E.S).replace(/\{C\}/g, E.C).replace(/\{R\}/g, E.R).replace(/\{D\}/g, String(this.DAYS[i - 1]));
+  },
+  // the camp appears when you come within reach, once
+  stamp(c){
+    const g = game.gen, E = game.expedition;
+    const gy = (x, z) => g.height(x, z);
+    const cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
+    const at = (dx, dz) => ({ x: c.x + dx * cs - dz * sn, z: c.z + dx * sn + dz * cs });
+    const t = at(0, 0), f = at(2.4, 1.3), ch = at(-2.0, 1.5), sg = at(1.6, -2.3);
+    pnodeSys.addQuiet('tent', t.x, gy(t.x, t.z), t.z, c.yaw + Math.PI);
+    (game.torches = game.torches || []).push([+f.x.toFixed(2), +(gy(f.x, f.z) + 0.1).toFixed(2), +f.z.toFixed(2)]);
+    const chest = pnodeSys.addQuiet('chest', ch.x, gy(ch.x, ch.z) + 0.4, ch.z, c.yaw, { sc: 0.6 });
+    chest.inv = new Array(chestSlots(0.6)).fill(null);
+    chest.inv[0] = { kind: 'page', page: c.i };
+    if (c.i <= 3){ chest.inv[1] = { kind: 'cookedmeat', count: 2 }; chest.inv[2] = { kind: 'coal', count: 4 }; }
+    else if (c.i <= 6){ chest.inv[1] = { kind: 'coal', count: 3 }; if (c.i === 5) chest.inv[2] = { kind: 'rope', count: 2 }; }
+    else if (c.i === 7){ chest.inv[1] = { kind: 'rope', count: 1 }; }
+    pnodeSys.addQuiet('sign', sg.x, gy(sg.x, sg.z), sg.z, c.yaw + Math.PI, { text: E.L.toUpperCase() + ' SURVEY\nCAMP ' + c.i + '\nDAY ' + this.DAYS[c.i - 1] });
+    if (c.i >= 4){
+      for (let k = 0; k < (c.i >= 6 ? 3 : 2); k++){
+        const b = at(-3 + k * 2.4, -1.6 - (k % 2) * 1.2);
+        game.decorPlaced.push({ x: +b.x.toFixed(2), z: +b.z.toFixed(2), y: +gy(b.x, b.z).toFixed(2), type: 'bones', s: 1, vc: 0, dry: false, yaw: c.yaw + k, key: 'x' + c.i + '_' + k, placed: true });
+      }
+      decorSys.dirty = true;
+    }
+    if (c.i === 8){
+      // the rope down the shaft, and the leader's last chest at the bottom
+      const sh = E.shaft;
+      const rx = +(sh.x + 1.35).toFixed(2), rz = +sh.z.toFixed(2);
+      (game.ropes = game.ropes || []).push([rx, +(sh.y + 0.15).toFixed(2), rz, +(sh.y - sh.bottom - 0.8).toFixed(1)]);
+      const last = pnodeSys.addQuiet('chest', sh.x - 0.9, sh.bottom + 0.35, sh.z, 0, { sc: 0.6 });
+      last.inv = new Array(chestSlots(0.6)).fill(null);
+      last.inv[0] = { kind: 'survey' };
+      last.inv[1] = { kind: 'coin', count: 150 };
+      last.inv[2] = { kind: 'diamond', count: 2 };
+      last.inv[3] = { kind: 'rope', count: 3 };
+      game.torches.push([+(sh.x + 0.9).toFixed(2), +(sh.bottom + 0.1).toFixed(2), +(sh.z + 0.9).toFixed(2)]);
+      game.decorPlaced.push({ x: +(sh.x + 0.4).toFixed(2), z: +(sh.z - 0.9).toFixed(2), y: +sh.bottom.toFixed(2), type: 'bones', s: 1, vc: 0, dry: false, yaw: 1.2, key: 'x8_b', placed: true });
+      decorSys.dirty = true;
+      ropeSys.rebuild();
+    }
+    pnodeSys.rebuild(); torchSys.rebuild(); decorSys.refresh();
+    c.stamped = true;
+    markSave();
+  },
+  accT: 0,
+  tick(dt){
+    const E = game.expedition;
+    if (!E || !game.running) return;
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    for (const c of E.camps){
+      const d = Math.hypot(c.x - game.pos.x, c.z - game.pos.z);
+      if (!c.stamped && d < 140) this.stamp(c);
+      if (!c.found && d < 26){
+        c.found = true; c.known = true;
+        toast(c.i === 1 ? 'an abandoned camp — someone was here before you' : 'camp ' + c.i + ' of the ' + E.L + ' survey');
+        AudioSys.sfx('craft'); markSave();
+      }
+    }
+    if (E.deep && !E.deepFound && Math.hypot(E.shaft.x - game.pos.x, E.shaft.z - game.pos.z) < 8 && game.pos.y < E.shaft.y - 10){ E.deepFound = true; markSave(); }
+  },
+  // objective markers: the next camp you know of, and the mouth
+  markers(out){
+    const E = game.expedition; if (!E) return;
+    for (const c of E.camps){
+      if (c.found || !c.known) continue;
+      out.push({ id: 'camp' + c.i, x: c.x, z: c.z, label: c.i === 1 ? 'ABANDONED CAMP' : 'CAMP ' + c.i + ' · THE SURVEY', rec: { name: 'camp' } });
+    }
+    if (E.deep && !E.deepFound) out.push({ id: 'themouth', x: E.shaft.x, z: E.shaft.z, y: E.shaft.y + 2, label: 'THE MOUTH', rec: { name: 'the mouth' } });
+  },
+  // reading a page
+  read(it){
+    const E = game.expedition; if (!E) return;
+    if (it.kind === 'page'){
+      const i = Math.max(1, Math.min(8, it.page | 0));
+      $('pagetitle').textContent = ('the ' + E.L + ' survey — day ' + this.DAYS[i - 1] + ' — page ' + i + ' of 8').toUpperCase();
+      $('pagebody').textContent = this.text(i);
+      if (i < 8 && !E.camps[i].known){ E.camps[i].known = true; $('pagesub').textContent = 'the next camp is marked · E to close'; }
+      else $('pagesub').textContent = 'E to close';
+      E.read = Math.max(E.read || 0, i);
+    } else {
+      $('pagetitle').textContent = ('the ' + E.L + ' survey').toUpperCase();
+      let body = 'A map in a careful hand: ' + E.C + ' at the edge, and eight camps walked out from it, a day apart, each marked with its day.\n\n';
+      for (const c of E.camps) body += 'camp ' + c.i + ' · day ' + this.DAYS[c.i - 1] + ' · ' + Math.round(c.x) + ', ' + Math.round(c.z) + '\n';
+      body += '\nAt the end, in red, a circle marked THE MOUTH, at ' + Math.round(E.shaft.x) + ', ' + Math.round(E.shaft.z) + '. Under it, in the same hand, smaller: "not one thing. a place."';
+      $('pagebody').textContent = body;
+      $('pagesub').textContent = 'every camp is on your map now · E to close';
+      for (const c of E.camps){ c.known = true; c.found = true; }
+      E.deep = true;
+    }
+    game.ui = 'page';
+    show('pagescreen');
+    document.exitPointerLock();
+    AudioSys.sfx('toggle');
+    markSave();
+  },
+};
+// ---------- THE PALISADE: defenses that know whose side they are on ----------
+// Every one of these asks the same question of whatever comes near it:
+// is that an enemy? Your crew, the animals and you are never an answer.
+// The claymore fires once, in a fan out its front, and never touches the
+// ground. The spikes bleed and slow what crosses them. The bell rings for
+// an enemy within ten metres and calls your armed crew to it.
+const palisadeSys = {
+  scanT: 0,
+  front(n){ return [-Math.sin(n.yaw || 0), -Math.cos(n.yaw || 0)]; },
+  tick(dt){
+    if (!game.running || !game.pnodes) return;
+    const now = performance.now();
+    // spikes bite every frame they are stood in (a slow that only lands
+    // five times a second is no slow at all)
+    for (const n of game.pnodes){
+      if (n.t === 'trench'){ this.trenchTick(n, dt, now); continue; }
+      if (n.t !== 'spikes') continue;
+      const c = Math.cos(n.yaw || 0), sn = Math.sin(n.yaw || 0);
+      for (const en of game.entities){
+        if (!crewSys.hostile(en)) continue;
+        const dx = en.x - n.x, dz = en.z - n.z, dy = en.y - n.y;
+        if (dy < -1.2 || dy > 1.4) continue;
+        const lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+        if (Math.abs(lx) > 1.15 || Math.abs(lz) > 0.65) continue;
+        en.vx *= 0.35; en.vz *= 0.35;
+        en.spikeT = (en.spikeT || 0) + dt;
+        if (en.spikeT >= 0.5){
+          en.spikeT = 0;
+          hurtEntity(en, 7, 0, 0, true);
+          Particles.burst(en.x, en.y + 0.4, en.z, 0.25, [0x8a1c1c, 0xc8ccd4], 4, 1.0);
+          if (Math.hypot(en.x - game.pos.x, en.z - game.pos.z) < 30) AudioSys.sfx('hit');
+        }
+      }
+    }
+    this.scanT -= dt;
+    if (this.scanT > 0) return;
+    this.scanT = 0.2;
+    for (const n of [...game.pnodes]){
+      if (n.t === 'claymore') this.claymore(n, now);
+      else if (n.t === 'bell') this.bell(n, now);
+    }
+  },
+  // the oil trench: struck alight by hand, it burns half a minute and
+  // burns what stands in it; then it is spent
+  light(n){
+    if (n.spent){ toast('the trench is burnt out'); return; }
+    if (n.lit){ toast('it is already burning'); return; }
+    n.lit = 1; n.burnT = 30;
+    toast('the oil catches');
+    AudioSys.sfx('craft');
+    markSave();
+  },
+  trenchTick(n, dt, now){
+    if (!n.lit) return;
+    n.burnT -= dt;
+    const c = Math.cos(n.yaw || 0), sn = Math.sin(n.yaw || 0);
+    if (Math.random() < dt * 40){
+      const lx = (Math.random() - 0.5) * 2.6;
+      Embers.burst(n.x + lx * c, n.y + 0.4, n.z + lx * sn, 0.15, [0xffb347, 0xff8830, 0xffdd66], 2, 0.9);
+      if (Math.random() < 0.3) Smoke.burst(n.x + lx * c, n.y + 1.2, n.z + lx * sn, 0.2, [0x3a3a3a], 1, 0.5);
+    }
+    for (const en of game.entities){
+      if (!crewSys.hostile(en)) continue;
+      const dx = en.x - n.x, dz = en.z - n.z, dy = en.y - n.y;
+      if (dy < -1.2 || dy > 1.6) continue;
+      const lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+      if (Math.abs(lx) > 1.7 || Math.abs(lz) > 0.8) continue;
+      en.burnT2 = (en.burnT2 || 0) + dt;
+      if (en.burnT2 >= 0.5){
+        en.burnT2 = 0;
+        hurtEntity(en, 9, dx * 0.5, dz * 0.5, true);
+        Particles.burst(en.x, en.y + 0.6, en.z, 0.3, [0xff8830, 0xffdd66], 5, 1.4);
+        if (Math.hypot(en.x - game.pos.x, en.z - game.pos.z) < 30) AudioSys.sfx('hit');
+      }
+    }
+    if (n.burnT <= 0){ n.lit = 0; n.spent = 1; toast('the trench burns out'); markSave(); pnodeSys.rebuild(); }
+  },
+  // the flame jet: on the grid, it throws a fan of fire five metres out
+  // its front at any enemy in it
+  jetTick(n, dt, ratio){
+    if (ratio <= 0){ n.firing = 0; return; }
+    const [fx, fz] = this.front(n);
+    let any = false;
+    for (const en of game.entities){
+      if (!crewSys.hostile(en)) continue;
+      const dx = en.x - n.x, dz = en.z - n.z, d = Math.hypot(dx, dz);
+      if (d > 5.5 || Math.abs(en.y - n.y) > 2.5) continue;
+      if ((dx * fx + dz * fz) / (d || 1) < 0.4) continue;
+      any = true;
+      en.jetT = (en.jetT || 0) + dt;
+      if (en.jetT >= 0.25){
+        en.jetT = 0;
+        hurtEntity(en, Math.round(7 * Math.max(0.5, ratio)), fx * 1.2, fz * 1.2, true);
+        Particles.burst(en.x, en.y + 0.6, en.z, 0.3, [0xff8830, 0xffdd66], 4, 1.4);
+      }
+    }
+    n.firing = any ? 1 : 0;
+    if (any && Math.random() < dt * 60){
+      const t = 0.5 + Math.random() * 4.6, sp = (Math.random() - 0.5) * 0.9 * t / 5;
+      Embers.burst(n.x + fx * t - fz * sp, n.y + 0.55 + Math.random() * 0.4, n.z + fz * t + fx * sp, 0.12, [0xffb347, 0xff8830, 0xffdd66], 2, 1.6);
+    }
+    if (any && Math.random() < dt * 2 && Math.hypot(n.x - game.pos.x, n.z - game.pos.z) < 40) AudioSys.sfx('laser');
+  },
+  claymore(n, now){
+    const [fx, fz] = this.front(n);
+    let trip = false;
+    for (const en of game.entities){
+      if (!crewSys.hostile(en)) continue;
+      const dx = en.x - n.x, dz = en.z - n.z, d = Math.hypot(dx, dz);
+      if (Math.abs(en.y - n.y) > 2.2) continue;
+      if (d < 1.4 || (d < 5.5 && (dx * fx + dz * fz) / (d || 1) > 0.45)){ trip = true; break; }
+    }
+    if (!trip) return;
+    // the fan: everything hostile out the front, hardest up close
+    let hits = 0;
+    for (const en of [...game.entities]){
+      if (!crewSys.hostile(en)) continue;
+      const dx = en.x - n.x, dz = en.z - n.z, d = Math.hypot(dx, dz);
+      if (d > 7.5 || Math.abs(en.y - n.y) > 3) continue;
+      const dot = (dx * fx + dz * fz) / (d || 1);
+      if (d > 1.4 && dot < 0.2) continue;
+      const f = 1 - d / 8.5;
+      hurtEntity(en, Math.round(70 * f), dx / (d || 1) * 6 * f, dz / (d || 1) * 6 * f);
+      hits++;
+    }
+    for (let i = 0; i < 14; i++){
+      const a = (i / 13 - 0.5) * 1.4, cs = Math.cos(a), sn = Math.sin(a);
+      const ex = fx * cs - fz * sn, ez = fx * sn + fz * cs;
+      Particles.burst(n.x + ex * 1.2, n.y + 0.5, n.z + ez * 1.2, 0.2, [0xffd070, 0xff8830, 0x3a3f46], 3, 2.6);
+    }
+    Particles.burst(n.x, n.y + 0.4, n.z, 0.5, [0xffe0a0, 0x555a60], 18, 2.2);
+    AudioSys.sfx('boom');
+    toast('claymore — ' + hits + ' hit');
+    pnodeSys.removeNode(n);           // one shot; the ground under it untouched
+  },
+  bell(n, now){
+    if (now - (n.rang || 0) < 8000) return;
+    let foe = null, bd = 10;
+    for (const en of game.entities){
+      if (!crewSys.hostile(en)) continue;
+      const d = Math.hypot(en.x - n.x, en.z - n.z);
+      if (d < bd && Math.abs(en.y - n.y) < 8){ bd = d; foe = en; }
+    }
+    if (!foe) return;
+    n.rang = now; n.swing = 1;
+    const dx = foe.x - n.x, dz = foe.z - n.z;
+    const dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'east' : 'west') : (dz > 0 ? 'south' : 'north');
+    toast('the bell rings — something at the ' + dir + ' side');
+    for (let i = 0; i < 3; i++) setTimeout(() => AudioSys.tone({ freq: 1320 - i * 60, dur: 0.5, gain: 0.22, type: 'triangle' }), i * 380);
+    Particles.burst(n.x, n.y + 1.5, n.z, 0.3, [0xd9b25a, 0xffffff], 8, 1.2);
+    // your armed crew within 45 m come running, and hold there half a minute
+    for (const e of crewSys.all()){
+      const C = e.crew;
+      if (!C.tool || !(C.tool.kind === 'sword' || C.tool.kind === 'fw')) continue;
+      if (C.mode !== 'stay' && C.mode !== 'roam') continue;
+      if (Math.hypot(e.x - n.x, e.z - n.z) > 45) continue;
+      C.alarm = { x: n.x, z: n.z, until: now + 30000 };
+      e.tt = 0;
+    }
+  },
+};
+// ---------- THE CREW: hire the people you have earned ----------
+// A villager at ten goodwill joins your crew for coin. They follow you
+// anywhere (and catch up by any means if you lose them), stay or roam
+// where you put them, and work with what you hand them: a sword or a gun
+// and they fight beside you; a drill and they mine what you mine -- the
+// next cut along your aim -- or dig a quarry where you point. What they
+// mine goes into your pack if you are near, else into theirs. The crew
+// record lives on the villager's house, so it saves with the village.
+const crewSys = {
+  HIRE_REP: 10, HIRE_COST: 60, accT: 0,
+  SWORD_DMG: [8, 12, 16, 20, 26],
+  DRILL_EFF: [1.5, 2.0, 2.4, 2.8, 3.2],
+  DRILL_RATE: [1.4, 1.0, 0.75, 0.55, 0.4],
+  all(){ return game.entities.filter(e => e.type === 'villager' && e.crew); },
+  // ---- the night hunts your crew too ----
+  // the nearest of you and your crew within range of a hostile, or null
+  prey(h, range){
+    const t = performance.now();
+    if (!this.cacheAt || t - this.cacheAt > 150){ this.cacheAt = t; this.cached = this.all(); }
+    let best = null, bd = range;
+    const pd = Math.hypot(h.x - game.pos.x, h.z - game.pos.z);
+    if (pd < bd && game.ui === 'none' && !game.photo){ bd = pd; best = { x: game.pos.x, y: game.pos.y, z: game.pos.z, d: pd, ent: null }; }
+    for (const c of this.cached){
+      if (c === h) continue;
+      const d = Math.hypot(h.x - c.x, h.z - c.z);
+      if (d < bd){ bd = d; best = { x: c.x, y: c.y, z: c.z, d, ent: c }; }
+    }
+    return best;
+  },
+  playerPrey(pd){ return { x: game.pos.x, y: game.pos.y, z: game.pos.z, d: pd, ent: null }; },
+  hitPrey(P, dmg, kx, kz){
+    if (!P.ent){ damagePlayer(dmg, kx, kz); return; }
+    this.hurt(P.ent, dmg, kx, kz);
+  },
+  hurt(e, dmg, kx, kz){
+    e.hp -= dmg; e.flash = 0.2;
+    e.vx += (kx || 0) * 0.6; e.vz += (kz || 0) * 0.6; e.vy += 1.5;
+    if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('hurt');
+    if (e.hp <= 0) this.die(e);
+  },
+  // a crew member who dies is gone: their things fall where they fell,
+  // and the house takes in someone new, who owes you nothing
+  die(e){
+    const hrec = villageSys.villagerRec(e), C = e.crew;
+    const name = this.nameOf(e);
+    const at = { x: e.x, y: e.y + 0.8, z: e.z };
+    if (C){
+      if (C.tool) dropItem(C.tool, at);
+      if (C.mat && C.mat.count > 0) dropItem(C.mat, at);
+      for (const k in C.pack){ const v = C.pack[k]; if (!(v > 0)) continue; dropItem(isNaN(+k) ? { kind: k, count: v } : { kind: 'mat', mat: +k, count: v }, at); }
+    }
+    if (hrec){
+      hrec.crew = null;
+      hrec.vname = villageSys.nameFor((Math.random() * 4294967295) >>> 0);
+      hrec.rep = 0;
+    }
+    e.crew = null;
+    toast(name + ' is dead.');
+    killEntity(e, false);
+    markSave();
+  },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel'); },
+  hire(e, hrec){
+    if (CORE.countItem(game.slots, 'coin') < this.HIRE_COST){ toast('need ' + this.HIRE_COST + ' coins to hire ' + hrec.vname); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', this.HIRE_COST);
+    hrec.crew = { mode: 'follow', tool: null, mat: null, pack: {}, pos: [e.x, e.y, e.z], home: null, r: 12, tasks: [], job: null, bp: 0, hired: game.day || 0 };
+    e.crew = hrec.crew;
+    this.remesh(e);
+    toast(hrec.vname + ' joins your crew · right click them to give orders');
+    AudioSys.sfx('craft');
+    refreshHotbar();
+    this.open(e);
+    markSave();
+  },
+  remesh(e){ if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; } },
+  nameOf(e){ const h = villageSys.villagerRec(e); return h ? h.vname : 'crew'; },
+  // a word from them on every order, so they are people and not props
+  say(e, what){
+    const L = {
+      follow: ['right behind you.', 'lead on.', 'where to?'],
+      stay: ['I\'ll hold here.', 'not moving.', 'this spot, then.'],
+      roam: ['I\'ll keep an eye on the place.', 'I\'ll walk the ground.', 'round and round, got it.'],
+      quarry: ['stand back, this gets dusty.', 'a hole it is.', 'I\'ll have it down by supper.'],
+      drill: ['I know how to use one of these.', 'point me at the rock.', 'the good one, eh?'],
+      disp: ['I\'ve laid a wall or two.', 'show me where.', 'building, then. good.'],
+      mat: ['that\'ll do for a start.', 'heavy. good.', 'I\'ll make it go far.'],
+      build: ['I\'ll have it up before you know it.', 'a fine plan. mine now.', 'stand clear of the footings.'],
+      built: ['there. done.', 'it\'s up. go look.', 'finished, and it\'s straight.'],
+      out: ['I\'m out of material.', 'nothing left to build with.', 'more stone, if you want more wall.'],
+      sword: ['I\'ve swung worse.', 'anything comes near you, it\'s mine.', 'sharp. good.'],
+      fw: ['I\'ve fired one before. once.', 'keep your head down, then.', 'loud thing.'],
+      take: ['all yours.', 'fair enough.', 'was getting heavy anyway.'],
+      collect: ['it\'s all there.', 'mind, some of it\'s sharp.', 'that\'s the lot.'],
+      dismiss: ['been good working with you.', 'the house will want airing.', 'find me if you need me.'],
+      done: ['that\'s the hole dug.', 'done. my arms know it.', 'quarry\'s finished.'],
+      lost: ['there you are.', 'nearly lost you.', 'keep up, you said. ha.'],
+    }[what];
+    if (L) toast(this.nameOf(e) + ': "' + L[(Math.random() * L.length) | 0] + '"');
+  },
+  // keep every hired villager in the world: spawn the missing ones where
+  // they were (or beside you if they were following), and remember where
+  // they are for the save
+  tick(dt){
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    for (const key in game.villages){
+      const rec = game.villages[key];
+      for (let i = 0; i < rec.houses.length; i++){
+        const hrec = rec.houses[i];
+        const C = hrec.crew;
+        if (!C) continue;
+        const e = game.entities.find(o => o.type === 'villager' && o.vkey === key && o.vi === i);
+        if (e){ C.pos = [+e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2)]; if (!e.crew) e.crew = C; continue; }
+        let x, y, z;
+        if (C.mode === 'follow' || !C.pos){ x = game.pos.x + 2; z = game.pos.z + 2; y = Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7; if (Math.abs(game.pos.y - y) < 12) y = game.pos.y + 0.2; }
+        else { x = C.pos[0]; y = C.pos[1] + 0.3; z = C.pos[2]; }
+        const ne = spawnEntity('villager', x, y, z);
+        ne.role = hrec.role; ne.vkey = key; ne.vi = i; ne.crew = C;
+        ne.home = { x: hrec.x, y, z: hrec.z };
+      }
+    }
+  },
+  // ---- orders ----
+  open(e){
+    const hrec = villageSys.villagerRec(e);
+    if (!hrec || !hrec.crew) return;
+    game.activeCrew = e;
+    game.ui = 'trade';
+    const main = $('trademain'), hot = $('tradehot');
+    main.innerHTML = ''; hot.innerHTML = '';
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    this.refresh();
+    show('tradescreen');
+    document.exitPointerLock();
+    AudioSys.sfx('toggle');
+  },
+  packText(C){
+    const parts = [];
+    for (const k in C.pack){ if (C.pack[k] > 0) parts.push(C.pack[k] + ' ' + (isNaN(+k) ? itemLabel({ kind: k }) : CORE.MAT_NAME[+k])); }
+    return parts.length ? parts.join(', ') : 'empty';
+  },
+  toolText(t){ return !t ? 'empty hands' : t.kind === 'drill' ? CORE.TIER_NAME[t.tier] + ' drill' : t.kind === 'disp' ? CORE.TIER_NAME[t.tier] + ' dispenser' : t.kind === 'sword' ? CORE.TIER_NAME[t.tier] + ' sword' : t.kind === 'fw' ? CORE.GUNS[t.g | 0].name : itemLabel(t); },
+  matText(m){ return m && m.count > 0 ? m.count + ' ' + CORE.MAT_NAME[m.mat] : 'no material'; },
+  giveable(it){ return !!it && (it.kind === 'drill' || it.kind === 'sword' || it.kind === 'fw' || it.kind === 'disp' || it.kind === 'mat'); },
+  DISP_RATE: [0.9, 0.7, 0.5, 0.35, 0.2],
+  bpList(){ return loadBlueprints().filter(b => b.rows && b.rows.length); },
+  refresh(){
+    const e = game.activeCrew;
+    if (!e || game.ui !== 'trade') return;
+    const hrec = villageSys.villagerRec(e), C = e.crew;
+    if (!hrec || !C) return;
+    $('tradetitle').textContent = (hrec.vname + ' · your crew').toUpperCase();
+    const MODE = { follow: 'following you', stay: 'staying put', roam: 'roaming ' + C.r + ' m around their post', quarry: 'digging a quarry' + (C.job && C.job.cuts ? ' · ' + (C.job.cuts.length - C.job.i) + ' cuts to go' : ''),
+                   build: 'building ' + (C.job && C.job.edits ? '“' + C.job.name + '” · ' + (C.job.edits.length - C.job.i) + ' to go' : '') };
+    $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · hp ' + Math.max(0, Math.round(e.hp)) + ' · carrying: <b>' + this.toolText(C.tool) + '</b> · material: <b>' + this.matText(C.mat) + '</b> · pack: ' + this.packText(C);
+    document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
+    const list = $('tradelist');
+    list.innerHTML = '';
+    const row = (label, act, colour, fn, dim) => {
+      const r = document.createElement('div');
+      r.className = 'craftrow';
+      r.style.borderLeft = '3px solid ' + colour;
+      const txt = document.createElement('div'); txt.className = 'cname'; txt.textContent = label;
+      const a = document.createElement('div'); a.style.marginLeft = 'auto'; a.style.color = dim ? '#666' : colour; a.textContent = act;
+      r.appendChild(txt); r.appendChild(a);
+      if (dim) r.style.opacity = 0.6; else r.addEventListener('click', fn);
+      list.appendChild(r);
+    };
+    const held = game.slots[game.hotSel];
+    const giveable = this.giveable(held);
+    const disp = C.tool && C.tool.kind === 'disp';
+    row('follow you everywhere' + (C.tool && C.tool.kind === 'drill' ? ' and mine the next cut along your aim' : disp ? ' and place the next shape along your aim' : C.tool ? ' and fight beside you' : ''), C.mode === 'follow' ? 'FOLLOWING' : 'FOLLOW', '#4fc3f7', () => this.order(e, 'follow'));
+    row('stay right here' + (C.tool && C.tool.kind !== 'drill' ? ', fighting what comes near' : ''), C.mode === 'stay' ? 'STAYING' : 'STAY', '#4fc3f7', () => this.order(e, 'stay'));
+    row('roam around here · ' + C.r + ' m (click again for ' + this.nextR(C.r) + ' m)', C.mode === 'roam' ? 'ROAMING' : 'ROAM', '#4fc3f7', () => this.order(e, 'roam'));
+    const drill = C.tool && C.tool.kind === 'drill';
+    row('dig a quarry where you are looking · 10 m across, 6 m down' + (drill ? '' : ' (needs a drill)'), C.mode === 'quarry' ? 'DIGGING' : 'QUARRY', '#ffb44d', () => this.order(e, 'quarry'), !drill);
+    const bps = this.bpList();
+    if (bps.length){
+      const cur = bps[Math.min(C.bp || 0, bps.length - 1)];
+      row('blueprint: “' + cur.name + '” · ' + cur.rows.length + ' edits' + (bps.length > 1 ? ' (click to pick the next)' : ''), 'PICK', '#ffb44d', () => { C.bp = ((C.bp || 0) + 1) % bps.length; this.refresh(); });
+      row('build “' + cur.name + '” where you are looking, in the material they carry' + (disp ? '' : ' (needs a dispenser)') + (C.mat && C.mat.count > 0 ? '' : ' (needs material)'), C.mode === 'build' ? 'BUILDING' : 'BUILD', '#ffb44d', () => this.order(e, 'build'), !disp || !(C.mat && C.mat.count > 0));
+    } else {
+      row('no saved blueprints yet — copy something with the wrench (Ctrl+C) and save it (N)', 'BUILD', '#ffb44d', null, true);
+    }
+    row(giveable ? 'hand over your ' + (held.kind === 'mat' ? this.matText(held) : this.toolText(held)) : 'select a drill, dispenser, sword, gun or a stack of material in your hotbar to hand it over', 'GIVE', '#9fe8a0', () => this.give(e), !giveable);
+    row(C.tool ? 'take back the ' + this.toolText(C.tool) : 'they carry no tool', 'TAKE', '#9fe8a0', () => this.takeTool(e), !C.tool);
+    row(C.mat && C.mat.count > 0 ? 'take back the ' + this.matText(C.mat) : 'they carry no material', 'TAKE', '#9fe8a0', () => this.takeMat(e), !(C.mat && C.mat.count > 0));
+    const hasPack = Object.keys(C.pack).some(k => C.pack[k] > 0);
+    row('collect their pack: ' + this.packText(C), 'COLLECT', '#9fe8a0', () => this.collect(e), !hasPack);
+    row('let ' + hrec.vname + ' go home (their tool and pack come to you)', 'DISMISS', '#e07070', () => this.dismiss(e));
+  },
+  nextR(r){ return r >= 40 ? 6 : r >= 15 ? 40 : 15; },
+  order(e, mode){
+    const C = e.crew;
+    if (mode === 'roam'){
+      if (C.mode === 'roam') C.r = this.nextR(C.r);
+      const h = surfaceHit();
+      C.home = h ? { x: h[0], z: h[2] } : { x: e.x, z: e.z };
+    } else if (mode === 'stay'){
+      C.home = { x: e.x, z: e.z }; C.r = 3;
+    } else if (mode === 'quarry'){
+      if (!C.tool || C.tool.kind !== 'drill'){ toast('give them a drill first'); AudioSys.sfx('deny'); return; }
+      const h = surfaceHit();
+      if (!h){ toast('look at the ground where the quarry should go'); AudioSys.sfx('deny'); return; }
+      const tier = C.tool.tier | 0, eff = this.DRILL_EFF[tier];
+      C.job = { cx: +h[0].toFixed(2), cy: +h[1].toFixed(2), cz: +h[2].toFixed(2), i: 0, cuts: this.quarryPlan(h[0], h[1], h[2], 5, 6, eff), eff };
+      C.home = { x: h[0], z: h[2] }; C.r = 6;
+      toast(this.nameOf(e) + ' starts on the quarry · ' + C.job.cuts.length + ' cuts', 1);
+    } else if (mode === 'build'){
+      if (!C.tool || C.tool.kind !== 'disp'){ toast('give them a dispenser first'); AudioSys.sfx('deny'); return; }
+      if (!C.mat || !(C.mat.count > 0)){ toast('give them a stack of material first'); AudioSys.sfx('deny'); return; }
+      const bps = this.bpList(), bp = bps[Math.min(C.bp || 0, bps.length - 1)];
+      if (!bp){ toast('no blueprint to build'); AudioSys.sfx('deny'); return; }
+      const h = surfaceHit();
+      if (!h){ toast('look at the ground where it should stand'); AudioSys.sfx('deny'); return; }
+      const q = ((Math.round(game.yaw / (Math.PI / 2)) % 4) + 4) % 4;
+      const edits = CORE.pasteSelection({ items: CORE.deserializeEdits(bp.rows) }, +h[0].toFixed(2), +h[1].toFixed(2), +h[2].toFixed(2), q);
+      C.job = { kind: 'build', name: bp.name, edits, i: 0 };
+      C.home = { x: h[0], z: h[2] }; C.r = 6;
+    }
+    if (mode !== 'quarry' && mode !== 'build') C.job = null;
+    C.mode = mode;
+    C.tasks = [];
+    this.say(e, mode);
+    AudioSys.sfx('select');
+    this.refresh(); markSave();
+  },
+  quarryPlan(cx, cy, cz, R, depth, eff){
+    const cuts = [];
+    const step = eff * 0.7;
+    for (let y = cy + eff * 0.2; y > cy - depth; y -= eff * 0.55)
+      for (let x = cx - R; x <= cx + R + 1e-6; x += step)
+        for (let z = cz - R; z <= cz + R + 1e-6; z += step)
+          if (Math.hypot(x - cx, z - cz) <= R - eff * 0.2) cuts.push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2)]);
+    return cuts.slice(0, 320);
+  },
+  give(e){
+    const held = game.slots[game.hotSel];
+    if (!this.giveable(held)){ toast('select a drill, dispenser, sword, gun or material first'); AudioSys.sfx('deny'); return; }
+    const C = e.crew;
+    if (held.kind === 'mat'){
+      // a stack of material for the dispenser: same kind merges, another swaps back
+      if (C.mat && C.mat.count > 0 && C.mat.mat === held.mat) C.mat.count += held.count;
+      else { if (C.mat && C.mat.count > 0) CORE.addMat(game.slots, C.mat.mat, C.mat.count); C.mat = { kind: 'mat', mat: held.mat, count: held.count }; }
+      game.slots[game.hotSel] = null;
+      // out of material mid-build: this resumes it
+      if (C.job && C.job.kind === 'build' && C.mode !== 'build' && C.tool && C.tool.kind === 'disp') C.mode = 'build';
+      this.say(e, 'mat');
+      AudioSys.sfx('craft');
+      refreshHotbar(); this.refresh(); markSave();
+      return;
+    }
+    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
+    C.tool = held; game.slots[game.hotSel] = null;
+    if (C.mode === 'quarry' && held.kind !== 'drill'){ C.mode = 'stay'; C.job = null; }
+    if (C.mode === 'build' && held.kind !== 'disp'){ C.mode = 'stay'; }
+    this.remesh(e);
+    this.say(e, held.kind);
+    AudioSys.sfx('craft');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  takeTool(e){
+    const C = e.crew;
+    if (!C.tool) return;
+    if (!giveItem(C.tool, 1)){ toast('no room in your pack'); AudioSys.sfx('deny'); return; }
+    C.tool = null;
+    if (C.mode === 'quarry'){ C.mode = 'stay'; C.job = null; }
+    if (C.mode === 'build') C.mode = 'stay';
+    C.tasks = [];
+    this.remesh(e);
+    this.say(e, 'take');
+    AudioSys.sfx('select');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  takeMat(e){
+    const C = e.crew;
+    if (!C.mat || !(C.mat.count > 0)) return;
+    CORE.addMat(game.slots, C.mat.mat, C.mat.count);
+    C.mat = null;
+    if (C.mode === 'build') C.mode = 'stay';
+    C.tasks = C.tasks.filter(t => !t.place);
+    this.say(e, 'take');
+    AudioSys.sfx('select');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  collect(e){
+    const C = e.crew;
+    let n = 0;
+    for (const k in C.pack){
+      const v = C.pack[k]; if (!(v > 0)) continue;
+      if (isNaN(+k)) addStackItem(k, v); else CORE.addMat(game.slots, +k, v);
+      n += v;
+    }
+    C.pack = {};
+    if (n) this.say(e, 'collect'); else toast('nothing to take');
+    AudioSys.sfx('craft');
+    refreshHotbar(); this.refresh(); markSave();
+  },
+  dismiss(e){
+    const hrec = villageSys.villagerRec(e), C = e.crew;
+    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
+    if (C.mat && C.mat.count > 0){ CORE.addMat(game.slots, C.mat.mat, C.mat.count); C.mat = null; }
+    this.collect(e);
+    hrec.crew = null; e.crew = null; e.tt = 0;
+    const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
+    e.home = { x: hrec.x + hrec.face[0] * (villageSys.faceHalf(hrec) + 1.8), y: hy, z: hrec.z + hrec.face[1] * (villageSys.faceHalf(hrec) + 1.8) };
+    this.remesh(e);
+    this.say(e, 'dismiss');
+    closeOverlay();
+    markSave();
+  },
+  // ---- work ----
+  // you mined here: a following miner takes the next cut along your aim
+  onMine(p, shape, eff){
+    const crew = this.all();
+    if (!crew.length) return;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const step = eff * 0.9;
+    let k = 0;
+    for (const e of crew){
+      const C = e.crew;
+      if (C.mode !== 'follow' || !C.tool || C.tool.kind !== 'drill') continue;
+      if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 30) continue;
+      k++;
+      const t = { x: +(p.x + dir.x * step * k).toFixed(2), y: +(p.y + dir.y * step * k).toFixed(2), z: +(p.z + dir.z * step * k).toFixed(2), shape, eff };
+      C.tasks.push(t);
+      if (C.tasks.length > 6) C.tasks.shift();
+    }
+  },
+  // you placed here: a following builder lays the next shape along your
+  // aim, in the material they carry, with your brush's rotation
+  onPlace(p, shape, eff){
+    const crew = this.all();
+    if (!crew.length) return;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const step = eff * 0.98;
+    let k = 0;
+    for (const e of crew){
+      const C = e.crew;
+      if (C.mode !== 'follow' || !C.tool || C.tool.kind !== 'disp' || !C.mat || !(C.mat.count > 0)) continue;
+      if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 30) continue;
+      k++;
+      const t = { place: 1, x: +(p.x + dir.x * step * k).toFixed(2), y: +(p.y + dir.y * step * k).toFixed(2), z: +(p.z + dir.z * step * k).toFixed(2), shape, eff,
+                  rot: editRot(shape), rx: brushRX(), rz: brushRZ() };
+      C.tasks.push(t);
+      if (C.tasks.length > 6) C.tasks.shift();
+    }
+  },
+  // one shape by a crew member's dispenser, paid from their stack; false
+  // when they cannot (nothing to fill, or out of material -- they say so)
+  place(e, ed){
+    const C = e.crew;
+    if (!C.mat || !(C.mat.count > 0)){ this.say(e, 'out'); return false; }
+    ed.mat = C.mat.mat;
+    const cost = CORE.placeCost(game.edits, ed, game.gen);
+    if (cost === 0) return true;                        // already solid: nothing to do, carry on
+    if (game.mode !== 'creative'){
+      if (C.mat.count < cost){ this.say(e, 'out'); return false; }
+      C.mat.count -= cost;
+    }
+    applyEdit(ed);
+    Particles.burst(ed.x, ed.y, ed.z, (ed.size || 1) * 0.5, [MAT_COLOR[ed.mat]], Math.min(30, 8 + cost / 6), 1.6);
+    if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) AudioSys.sfx('place');
+    if (C.mat.count <= 0){ C.mat = null; this.say(e, 'out'); }
+    return true;
+  },
+  // one cut by a crew member's drill: yields to you if you are near, else
+  // into their pack; no undo record (it is their work, not yours)
+  cut(e, x, y, z, shape, eff){
+    const ed = CORE.makeEdit(0, shape || 0, x, y, z, eff, 0, 0);
+    const got = CORE.mineYield(game.edits, ed, game.gen);
+    let units = 0, hw = 0;
+    for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+    if (units === 0) return false;
+    applyEdit(ed);
+    const near = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z) < 12;
+    const C = e.crew;
+    for (const m in got){
+      const ok = CORE.ORE_ITEM[+m];
+      if (near){ if (ok) addStackItem(ok, got[m]); else CORE.addMat(game.slots, +m, got[m]); }
+      else { const key = ok || String(m); C.pack[key] = (C.pack[key] || 0) + got[m]; }
+    }
+    collapseSys.note({ x, y, z }, eff);
+    Particles.burst(x, y, z, eff * 0.5, yieldColors(got), Math.min(30, 8 + units / 6), 2.2);
+    if (near){ AudioSys.sfx('break', hw / units); refreshHotbar(); }
+    return true;
+  },
+  // the nearest enemy within reach of a fighter
+  foe(e, range){
+    let best = null, bd = range;
+    for (const o of game.entities){
+      if (!this.hostile(o) || o.type === 'drop') continue;
+      const d = Math.hypot(o.x - e.x, o.z - e.z);
+      if (d < bd){ bd = d; best = o; }
+    }
+    return best ? [best, bd] : null;
+  },
+  fight(e, o, d, now){
+    const C = e.crew, t = C.tool;
+    if (t.kind === 'sword'){
+      if (d < 1.9 && e.atkT <= 0){
+        e.atkT = 0.9;
+        hurtEntity(o, this.SWORD_DMG[t.tier | 0] || 8, (o.x - e.x) * 2, (o.z - e.z) * 2, true);
+        if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) AudioSys.sfx('hit');
+      }
+      return d < 1.6 ? [0, 0, 0] : [o.x - e.x, o.z - e.z, 5.2];
+    }
+    // a gun: hold a distance and shoot on a clear line
+    const G = CORE.GUNS[t.g | 0] || CORE.GUNS[0];
+    const reach = Math.min(28, G.range * 0.6);
+    if (d < reach && e.atkT <= 0){
+      const def = ENT_DEF[o.type] || { h: 1 };
+      const mx = e.x, my = e.y + 1.3, mz = e.z, tx = o.x, ty = o.y + def.h * 0.6, tz = o.z;
+      const L = Math.hypot(tx - mx, ty - my, tz - mz) || 1;
+      const le = nearEdits([Math.min(mx, tx) - 1, Math.min(my, ty) - 1, Math.min(mz, tz) - 1, Math.max(mx, tx) + 1, Math.max(my, ty) + 1, Math.max(mz, tz) + 1]);
+      let clear = true;
+      for (let s = 0.8; s < L - 0.6; s += 0.5){ if (CORE.evalSDF(mx + (tx - mx) / L * s, my + (ty - my) / L * s, mz + (tz - mz) / L * s, le, game.gen) < 0.05){ clear = false; break; } }
+      if (clear){
+        e.atkT = Math.max(0.3, 60 / G.rpm * 2.5);
+        hurtEntity(o, Math.max(4, G.dmg * 0.8), (o.x - e.x), (o.z - e.z), true);
+        for (let s = 1; s < L; s += 1.2) Particles.burst(mx + (tx - mx) / L * s, my + (ty - my) / L * s, mz + (tz - mz) / L * s, 0.05, [0xfff0a0], 1, 0.25);
+        if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('shot');
+      }
+    }
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(o.x - e.x), -(o.z - e.z));
+    if (d < 5) return [e.x - o.x, e.z - o.z, 3.5];
+    if (d > reach * 0.8) return [o.x - e.x, o.z - e.z, 5.2];
+    return [0, 0, 0];
+  },
+  // where a crew member walks this frame: [sx, sz, speed]
+  steer(e, dt, now, pd){
+    const C = e.crew;
+    const armed = C.tool && (C.tool.kind === 'sword' || C.tool.kind === 'fw');
+    if (e.hp < 60 && e.flash <= 0) e.hp = Math.min(60, e.hp + dt * 0.4);     // they mend, slowly
+    const alarm = C.alarm && C.alarm.until > performance.now() ? C.alarm : null;
+    if (C.alarm && !alarm) C.alarm = null;
+    if (armed){
+      const f = this.foe(e, C.mode === 'follow' ? 24 : alarm ? 34 : Math.max(18, (C.r || 3) + 12));
+      const post = alarm || C.home;
+      if (f && (C.mode === 'follow' || !post || Math.hypot(f[0].x - post.x, f[0].z - post.z) < (alarm ? 30 : (C.r || 3) + 16))) return this.fight(e, f[0], f[1], now);
+    }
+    if (C.mode === 'build' && C.job && C.job.kind === 'build'){
+      const J = C.job;
+      if (J.i >= J.edits.length){
+        C.job = null; C.mode = 'stay'; C.home = { x: e.x, z: e.z };
+        this.say(e, 'built'); markSave();
+        return [0, 0, 0];
+      }
+      const ed = J.edits[J.i];
+      const d = Math.hypot(ed.x - e.x, ed.z - e.z);
+      if (d < 7 && Math.abs(ed.y - e.y) < 8){
+        e.workT = (e.workT || 0) - dt;
+        if (e.workT <= 0){
+          e.workT = this.DISP_RATE[C.tool.tier | 0] || 0.6;
+          const one = Object.assign({}, ed);
+          let ok = true;
+          if (one.op === 0 || one.op === 4){ const got = CORE.mineYield(game.edits, one, game.gen); let u = 0; for (const m in got) u += got[m]; if (u > 0) applyEdit(one); }
+          else if (one.op === 2){ one.mat = C.mat ? C.mat.mat : one.mat; applyEdit(one); }
+          else ok = this.place(e, one);
+          if (!ok){ C.mode = 'stay'; C.home = { x: e.x, z: e.z }; markSave(); return [0, 0, 0]; }
+          J.i++;
+        }
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(ed.x - e.x), -(ed.z - e.z));
+        return [0, 0, 0];
+      }
+      return [ed.x - e.x, ed.z - e.z, 3.2];
+    }
+    if (C.mode === 'quarry' && C.job){
+      const J = C.job;
+      if (J.i >= J.cuts.length){
+        C.job = null; C.mode = 'stay'; C.home = { x: e.x, z: e.z };
+        this.say(e, 'done'); markSave();
+        return [0, 0, 0];
+      }
+      const c = J.cuts[J.i];
+      const d = Math.hypot(c[0] - e.x, c[2] - e.z);
+      if (d < 3.5 || (d < 7 && Math.abs(c[1] - e.y) < 3)){
+        e.workT = (e.workT || 0) - dt;
+        if (e.workT <= 0){
+          e.workT = this.DRILL_RATE[C.tool.tier | 0] || 1;
+          this.cut(e, c[0], c[1], c[2], 0, J.eff);
+          J.i++;
+        }
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(c[0] - e.x), -(c[2] - e.z));
+        return [0, 0, 0];
+      }
+      return [c[0] - e.x, c[2] - e.z, 3.2];
+    }
+    if (C.mode === 'follow'){
+      // a following miner works the cuts you left it; a builder, the shapes
+      if (C.tasks.length && C.tool && (C.tool.kind === 'drill' || C.tool.kind === 'disp')){
+        const t = C.tasks[0];
+        const d = Math.hypot(t.x - e.x, t.z - e.z);
+        if (d < 4.5 && Math.abs(t.y - e.y) < 4){
+          e.workT = (e.workT || 0) - dt;
+          if (e.workT <= 0){
+            if (t.place){
+              e.workT = this.DISP_RATE[C.tool.tier | 0] || 0.6;
+              const ed = CORE.makeEdit(1, t.shape, t.x, t.y, t.z, t.eff, 0, t.rot || 0);
+              if (t.rx) ed.rx = t.rx; if (t.rz) ed.rz = t.rz;
+              if (!this.place(e, ed)) C.tasks = [];
+            } else {
+              e.workT = this.DRILL_RATE[C.tool.tier | 0] || 1;
+              this.cut(e, t.x, t.y, t.z, t.shape, t.eff);
+            }
+            C.tasks.shift();
+          }
+          if (e.mesh) e.mesh.rotation.y = Math.atan2(-(t.x - e.x), -(t.z - e.z));
+          return [0, 0, 0];
+        }
+        if (d < 14) return [t.x - e.x, t.z - e.z, 4.6];
+        C.tasks.shift();
+      }
+      // lost you: catch up by any means
+      if (pd > 60 || (pd > 12 && (e.lostT = (e.lostT || 0) + dt) > 9)){
+        e.lostT = 0;
+        e.x = game.pos.x + 1.5; e.z = game.pos.z + 1.5;
+        const gy = Math.max(game.gen.height(e.x, e.z), CORE.BEDROCK_Y + 1);
+        e.y = Math.abs(game.pos.y - gy) < 12 ? game.pos.y + 0.2 : gy + 0.7;
+        e.vx = e.vy = e.vz = 0;
+        Particles.burst(e.x, e.y + 0.8, e.z, 0.5, [0x4fc3f7], 10, 1.2);
+        if (Math.random() < 0.5) this.say(e, 'lost');
+      }
+      if (pd <= 12) e.lostT = 0;
+      if (pd < 2.8){
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+        return [0, 0, 0];
+      }
+      return [game.pos.x - e.x, game.pos.z - e.z, pd > 14 ? 6.8 : 5.0];
+    }
+    // stay / roam: wander the post -- or the bell, while it calls
+    const H = alarm || C.home || { x: e.x, z: e.z }, R = alarm ? 4 : C.mode === 'stay' ? 1.5 : (C.r || 12);
+    if (alarm && Math.hypot(H.x - e.x, H.z - e.z) > 6) return [H.x - e.x, H.z - e.z, 5.0];
+    if (e.tt <= 0){
+      e.tt = 4 + Math.random() * 6;
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * R;
+      e.tx = H.x + Math.cos(a) * rr; e.tz = H.z + Math.sin(a) * rr;
+    }
+    const sx = e.tx - e.x, sz = e.tz - e.z;
+    if (Math.hypot(sx, sz) < 0.6){
+      if (pd < 3.2 && e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+      return [0, 0, 0];
+    }
+    return [sx, sz, 1.4];
+  },
+};
+
 // ---------- objective markers: see your work in the world ----------
 // A COD-style marker layer: every active mission and accepted explore
 // contract projects a floating diamond with a live meter count. Off-screen
@@ -10970,6 +12255,7 @@ const objectiveSys = {
   // every active objective in the world right now
   list(){
     const out = [];
+    expeditionSys.markers(out);
     for (const key in game.villages){
       const rec = game.villages[key];
       if (!rec.stamped) continue;
@@ -11500,6 +12786,24 @@ const tradeSys = {
       }
       mrow.appendChild(txt); mrow.appendChild(act);
       list.appendChild(mrow);
+    }
+    if (!T.e.ckey && !hrec.crew){
+      // ---- hire: a villager you have earned joins your crew ----
+      const hrow = document.createElement('div');
+      hrow.className = 'craftrow';
+      hrow.style.borderLeft = '3px solid ' + (hrec.rep >= crewSys.HIRE_REP ? '#4fc3f7' : '#555');
+      const txt = document.createElement('div'); txt.className = 'cname';
+      const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = '#4fc3f7';
+      if ((hrec.rep || 0) >= crewSys.HIRE_REP){
+        txt.textContent = 'hire ' + hrec.vname + ' onto your crew — follows you, fights and works with what you give them';
+        act.textContent = 'HIRE ' + crewSys.HIRE_COST + 'c';
+        hrow.addEventListener('click', () => { crewSys.hire(T.e, hrec); });
+      } else {
+        txt.textContent = hrec.vname + ' would join your crew at ' + crewSys.HIRE_REP + ' goodwill';
+        act.textContent = 'HIRE'; act.style.color = '#666'; hrow.style.opacity = 0.6;
+      }
+      hrow.appendChild(txt); hrow.appendChild(act);
+      list.appendChild(hrow);
     }
     const coins = CORE.countItem(game.slots, 'coin');
     this.offers(T.e.role).filter(o => !o.crep || crec).forEach((o, idx) => {
@@ -12589,6 +13893,128 @@ const cityLightSys = {
     if (sig !== this.builtFor){ this.builtFor = sig; this.rebuild(); this.mesh.visible = night; }
   },
 };
+// ---------- SCULPT: the mirror — every edit twice, across a plane ----------
+// Tap K and a plane stands through the ghost, running the way you face, so
+// what you build on the left of it appears on the right: a gatehouse with
+// two matching towers, a hall with two aisles, a symmetric face on a cliff.
+// Drill, dispenser, trowel, bore and lathe all repeat across it; undo takes
+// both halves. Shift + K turns the plane a quarter; K again clears it. The
+// plane is part of the tool state, so it is saved with the world.
+const mirrorSys = {
+  sheet: null, ghosts: null,
+  get(){ return game.tool.mirror || null; },
+  on(){ return !!game.tool.mirror; },
+  // the reflection of a point, or null with no mirror
+  ptOf(p){
+    const M = this.get(); if (!M) return null;
+    return M.axis === 0 ? { x: +(2 * M.c - p.x).toFixed(2), y: p.y, z: p.z } : { x: p.x, y: p.y, z: +(2 * M.c - p.z).toFixed(2) };
+  },
+  // a trowel hit reflected: position and normal
+  hitOf(h){
+    const M = this.get(); if (!M || !h) return null;
+    return M.axis === 0 ? { x: 2 * M.c - h.x, y: h.y, z: h.z, nx: -h.nx, ny: h.ny, nz: h.nz }
+                        : { x: h.x, y: h.y, z: 2 * M.c - h.z, nx: h.nx, ny: h.ny, nz: -h.nz };
+  },
+  edit(e){ const M = this.get(); return M ? CORE.mirrorEdit(e, M.axis, M.c) : null; },
+  // a job's edit list with each edit followed by its reflection
+  jobEdits(list){
+    if (!this.on()) return list;
+    const out = [];
+    for (const e of list){ out.push(e); out.push(this.edit(e)); }
+    return out;
+  },
+  stepScale(){ return this.on() ? 0.5 : 1; },
+  group(){ return this.on() ? 'mir' + (++boreSys.seq) : null; },
+  // K: set the plane through the ghost, along the view; K again clears;
+  // shift + K turns it a quarter around the same point
+  toggle(shift){
+    const M = this.get();
+    if (M && shift){
+      M.axis = M.axis ? 0 : 1;
+      M.c = M.axis === 0 ? M.ax : M.az;
+      toast('mirror turned: across ' + (M.axis ? 'z' : 'x') + ' = ' + M.c.toFixed(1));
+    } else if (M){
+      game.tool.mirror = null;
+      toast('mirror off');
+    } else {
+      const p = game.ghostPos || trowelSys.hit || (() => {
+        const d = new THREE.Vector3(); game.camera.getWorldDirection(d);
+        return { x: game.camera.position.x + d.x * 4, y: game.camera.position.y + d.y * 4, z: game.camera.position.z + d.z * 4 };
+      })();
+      // the plane runs the way you face: facing along x, it is a z plane
+      const fx = -Math.sin(game.yaw), fz = -Math.cos(game.yaw);
+      const axis = Math.abs(fx) > Math.abs(fz) ? 1 : 0;
+      game.tool.mirror = { axis, c: +(axis === 0 ? p.x : p.z).toFixed(2), ax: +p.x.toFixed(2), az: +p.z.toFixed(2) };
+      toast('mirror on: across ' + (axis ? 'z' : 'x') + ' = ' + game.tool.mirror.c.toFixed(1) + ' · shift + K turns it, K clears it');
+    }
+    AudioSys.sfx('toggle');
+    refreshToolHUD(); markSave();
+  },
+  hudLine(){
+    const M = this.get();
+    return M ? '<div class="t2">mirror: <span class="on">on · across ' + (M.axis ? 'z' : 'x') + ' = ' + M.c.toFixed(1) + '</span> (K clears · shift + K turns)</div>'
+             : '<div class="t2">mirror: off (K sets one at the ghost)</div>';
+  },
+  ensure(){
+    if (this.sheet && this.sheet.parent === game.scene) return;
+    if (this.sheet){ game.scene.add(this.sheet); return; }
+    const g = new THREE.Group();
+    g.userData.noShadow = true;
+    const W = 60, H = 36;
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(W, H),
+      new THREE.MeshBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.09, side: THREE.DoubleSide, depthWrite: false }));
+    sheet.userData.noShadow = true;
+    g.add(sheet);
+    const pts = [];
+    for (let i = -5; i <= 5; i++){ pts.push(i * W / 10, -H / 2, 0, i * W / 10, H / 2, 0); }
+    for (let j = -3; j <= 3; j++){ pts.push(-W / 2, j * H / 6, 0, W / 2, j * H / 6, 0); }
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pts), 3));
+    const lines = new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.22, depthWrite: false }));
+    lines.userData.noShadow = true;
+    g.add(lines);
+    g.renderOrder = 3;
+    this.sheet = g;
+    game.scene.add(g);
+  },
+  tick(){
+    const M = game.running ? this.get() : null;
+    if (!M){ if (this.sheet) this.sheet.visible = false; return; }
+    this.ensure();
+    // the sheet slides along the plane to stay beside you
+    const p = game.pos;
+    if (M.axis === 0){ this.sheet.position.set(M.c, p.y + 6, p.z); this.sheet.rotation.set(0, Math.PI / 2, 0); }
+    else { this.sheet.position.set(p.x, p.y + 6, M.c); this.sheet.rotation.set(0, 0, 0); }
+    this.sheet.visible = game.ui === 'none';
+  },
+  // the ghost's twin: the same outline on the far side of the plane
+  syncGhost(shape, p, eff, rot, rx, rz){
+    const M = this.get();
+    if (!M){ this.hideGhost(); return; }
+    if (!this.ghosts){
+      const mat = new THREE.LineBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.55, depthWrite: false });
+      this.ghosts = {};
+      for (const k of [0, 1, 2]){
+        const w = new THREE.LineSegments(game.ghostSet[k].wire.geometry, mat);
+        w.visible = false; w.renderOrder = 6; w.userData.noShadow = true;
+        this.ghosts[k] = w;
+      }
+    }
+    for (const k of [0, 1, 2]){
+      const w = this.ghosts[k];
+      if (w.parent !== game.scene) game.scene.add(w);
+      w.visible = false;
+    }
+    const q = this.ptOf(p);
+    const e = CORE.mirrorEdit({ x: p.x, y: p.y, z: p.z, rot, rx, rz }, M.axis, M.c);
+    const w = this.ghosts[shape];
+    w.visible = true;
+    w.position.set(q.x, q.y, q.z);
+    w.scale.setScalar(eff);
+    applyEditRot(w, e.rot, e.rx, e.rz);
+  },
+  hideGhost(){ if (this.ghosts) for (const k in this.ghosts) this.ghosts[k].visible = false; },
+};
 // ---------- SCULPT: the trowel — a disc on the ground, raise and lower ----------
 // The terrain tool of a map editor, in first person. Look at any surface
 // and a disc sits on it; scroll sets its size. Hold left click and the
@@ -12609,8 +14035,12 @@ const trowelSys = {
     this.disc.add(this.dot);
     this.disc.frustumCulled = false;
     game.scene.add(this.disc);
+    this.mdisc = new THREE.Mesh(this.disc.geometry,
+      new THREE.MeshBasicMaterial({ color: 0xa8e4ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthTest: false, depthWrite: false }));
+    this.mdisc.renderOrder = 20; this.mdisc.frustumCulled = false; this.mdisc.visible = false;
+    game.scene.add(this.mdisc);
   },
-  hide(){ if (this.disc) this.disc.visible = false; this.hit = null; },
+  hide(){ if (this.disc) this.disc.visible = false; if (this.mdisc) this.mdisc.visible = false; this.hit = null; },
   aim(usable){
     if (!usable){ this.hide(); return; }
     this.ensure();
@@ -12624,6 +14054,14 @@ const trowelSys = {
     this.disc.position.set(hit[0] + g[0] * 0.04, hit[1] + g[1] * 0.04, hit[2] + g[2] * 0.04);
     this.disc.scale.set(r, r, 1);
     this.disc.lookAt(hit[0] + g[0], hit[1] + g[1], hit[2] + g[2]);
+    const mh = mirrorSys.hitOf(this.hit);
+    if (this.mdisc.parent !== game.scene) game.scene.add(this.mdisc);
+    this.mdisc.visible = !!mh;
+    if (mh){
+      this.mdisc.position.set(mh.x + mh.nx * 0.04, mh.y + mh.ny * 0.04, mh.z + mh.nz * 0.04);
+      this.mdisc.scale.set(r, r, 1);
+      this.mdisc.lookAt(mh.x + mh.nx, mh.y + mh.ny, mh.z + mh.nz);
+    }
   },
   action(dt, now){
     AudioSys.setHum(false, 0, 0);
@@ -12631,18 +14069,71 @@ const trowelSys = {
     const raise = game.mouseL, lower = game.mouseR;
     if (!raise && !lower){ this.t = 0; return; }
     if (!this.hit) return;
-    // first press acts at once, then a steady rhythm while held
-    const rate = game.mode === 'creative' ? 0.16 : 0.34;
+    // first press acts at once, then a steady rhythm while held -- slower
+    // as the disc grows, so a mountain-sized stroke gives the mesher room
+    const eff = game.ghostEff || 3;
+    const rate = (game.mode === 'creative' ? 0.16 : 0.34) * (1 + eff / 14);
     const edge = game.mouseEdge || game.mouseREdge;
     game.mouseREdge = false;
     if (!edge && now - this.lastT < rate * 1000) return;
     this.lastT = now;
-    this.stroke(raise ? 1 : -1);
+    const shift = game.keys['ShiftLeft'] || game.keys['ShiftRight'];
+    const mh = mirrorSys.hitOf(this.hit), grp = mirrorSys.group();
+    if (raise && shift){ this.flatten(null, grp); if (mh) this.flatten(mh, grp); }
+    else { this.stroke(raise ? 1 : -1, null, grp); if (mh) this.stroke(raise ? 1 : -1, mh, grp); }
   },
-  stroke(dir){
-    const h = this.hit;
+  // shift + left: a plateau at the disc's height -- carve everything above
+  // its plane over the disc, fill everything below, both blended
+  flatten(hit, grp){
+    const h = hit || this.hit;
+    if (Math.abs(h.ny) < 0.6){ toast('flatten works on ground and ceilings'); return; }
+    const eff = game.ghostEff, t = Math.max(1, eff * 0.5), k = +Math.max(0.5, eff * 0.08).toFixed(2);   // a soft rim, a flat floor
+    const up = h.ny > 0 ? 1 : -1;
+    const carve = CORE.makeEdit(4, 1, +h.x.toFixed(2), +(h.y + up * t * 0.5 + up * 0.05).toFixed(2), +h.z.toFixed(2), eff, 0, 0);
+    carve.sy = t; carve.k = k;
+    const m = groundMatNear({ x: h.x, y: h.y - up * 0.3, z: h.z }, 1.5);
+    const fill = m ? CORE.makeEdit(3, 1, +h.x.toFixed(2), +(h.y - up * t * 0.5).toFixed(2), +h.z.toFixed(2), eff, m, 0) : null;
+    if (fill){ fill.sy = t; fill.k = k; }
+    const group = grp || ('flat' + (++boreSys.seq));
+    let did = 0;
+    const got = CORE.mineYield(game.edits, carve, game.gen);
+    let units = 0; for (const mm in got) units += got[mm];
+    if (units > 0){
+      applyEdit(carve);
+      game.undoStack.push({ edit: carve, type: 'mine', gained: got, group });
+      for (const mm in got){ const ok = CORE.ORE_ITEM[+mm]; if (ok) addStackItem(ok, got[mm]); else CORE.addMat(game.slots, +mm, got[mm]); }
+      did++;
+    }
+    if (fill){
+      const cost = CORE.placeCost(game.edits, fill, game.gen);
+      if (cost > 0 && (game.mode === 'creative' || CORE.consumeMat(game.slots, m, cost))){
+        applyEdit(fill);
+        game.undoStack.push({ edit: fill, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost, group });
+        if (!hit) this.ride(t);
+        did++;
+      } else if (cost > 0){ toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' to fill under the plateau'); }
+    }
+    if (did){ Particles.burst(h.x, h.y, h.z, eff * 0.35, [0xbdbdc4], 12, 1.6); AudioSys.sfx('place'); refreshHotbar(); }
+    if (game.undoStack.length > 400) game.undoStack.shift();
+  },
+  // a raise that swallows the player lifts them instead: you stand on the
+  // disc, hold the button, and ride your own mountain up
+  ride(reach){
+    const p = game.pos;
+    const le = nearEdits([p.x - 2, p.y - 2, p.z - 2, p.x + 2, p.y + reach + 4, p.z + 2]);
+    if (capsuleFree(p.x, p.y, p.z, le)) return;
+    for (let dy = 0.25; dy <= reach + 3; dy += 0.25){
+      if (capsuleFree(p.x, p.y + dy, p.z, le)){
+        p.y += dy + 0.05;
+        if (game.vel.y < 0) game.vel.y = 0;
+        return;
+      }
+    }
+  },
+  stroke(dir, hit, group){
+    const h = hit || this.hit;
     const eff = game.ghostEff, r = eff * 0.5;
-    const off = r * 0.55 * -dir;                         // raise: centre under the surface; lower: above
+    const off = r * (game.tool.trowelDepth || 0.55) * -dir;   // raise: centre under the surface; lower: above
     const cx = +(h.x + h.nx * off).toFixed(2), cy = +(h.y + h.ny * off).toFixed(2), cz = +(h.z + h.nz * off).toFixed(2);
     if (dir > 0){
       const m = groundMatNear({ x: h.x - h.nx * 0.2, y: h.y - h.ny * 0.2, z: h.z - h.nz * 0.2 }, 1.2);
@@ -12655,7 +14146,8 @@ const trowelSys = {
         toast('need ' + cost + ' ' + CORE.MAT_NAME[m] + ' — have ' + CORE.countMat(game.slots, m)); AudioSys.sfx('deny'); return;
       }
       applyEdit(e);
-      game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost });
+      game.undoStack.push({ edit: e, type: 'place', mat: m, cost: game.mode === 'creative' ? 0 : cost, group });
+      if (!hit) this.ride(r);
       Particles.burst(h.x, h.y, h.z, r * 0.6, [MAT_COLOR[m]], Math.min(30, 6 + cost / 8), 1.4);
       AudioSys.sfx('place');
     } else {
@@ -12666,7 +14158,7 @@ const trowelSys = {
       for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
       if (units === 0) return;
       applyEdit(e);
-      game.undoStack.push({ edit: e, type: 'mine', gained: got });
+      game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
       for (const m in got){
         const oreKind = CORE.ORE_ITEM[+m];
         if (oreKind) addStackItem(oreKind, got[m]); else CORE.addMat(game.slots, +m, got[m]);
@@ -12677,6 +14169,62 @@ const trowelSys = {
     }
     if (game.undoStack.length > 400) game.undoStack.shift();
     refreshHotbar();
+  },
+};
+// ---------- SCULPT: the lathe — turn a drawn profile ----------
+// Lay an axis point, then an outline out from it (any side, any height).
+// The outline's distance from the axis and its height make a profile; a
+// right click turns it: a stack of blended cylinders stepping the radius
+// from point to point -- a tower, a dome, a bowl, a chimney, a well -- in
+// the ground's own material, or hollow with shift. Uses the bore's points,
+// preview and progressive job.
+const latheSys = {
+  // (radius, height) pairs relative to the axis point, in laid order
+  profile(pts){
+    const ax = pts[0][0], ay = pts[0][1], az = pts[0][2];
+    const out = [];
+    for (let i = 1; i < pts.length; i++){
+      const r = Math.max(0.3, Math.min(48, Math.hypot(pts[i][0] - ax, pts[i][2] - az)));
+      out.push([r, pts[i][1] - ay]);
+    }
+    if (out.length === 1) out.unshift([out[0][0], 0]);
+    return out;
+  },
+  commit(fill){
+    if (boreSys.job){ toast('still turning'); return; }
+    const pts = boreSys.pts;
+    if (pts.length < 2){ toast('lay the axis point and an outline first'); AudioSys.sfx('deny'); return; }
+    const prof = this.profile(pts);
+    const ax = pts[0][0], ay = pts[0][1], az = pts[0][2];
+    let mat = 0;
+    if (fill){
+      mat = groundMatNear({ x: ax, y: ay, z: az }, 4);
+      if (!mat){ toast('the axis point must be near solid ground to turn from'); AudioSys.sfx('deny'); return; }
+    }
+    const edits = [];
+    for (let i = 0; i + 1 < prof.length; i++){
+      const [r0, y0] = prof[i], [r1, y1] = prof[i + 1];
+      const span = Math.abs(y1 - y0);
+      const rmin = Math.max(0.3, Math.min(r0, r1));
+      const step = Math.max(0.4, Math.min(rmin * 0.5, 2.5));
+      const n = Math.max(1, Math.ceil(span / step), Math.ceil(Math.abs(r1 - r0) / (step * 0.5)));
+      for (let j = 0; j < n; j++){
+        const t = (j + 0.5) / n;
+        const r = r0 + (r1 - r0) * t, y = y0 + (y1 - y0) * t;
+        const e = CORE.makeEdit(fill ? 3 : 4, 2, +ax.toFixed(2), +(ay + y).toFixed(2), +az.toFixed(2), +(2 * r).toFixed(2), mat, 0);
+        e.sx = e.sz = +(2 * r).toFixed(2); e.sy = +(span / n * 1.3 + 0.2).toFixed(2);
+        e.k = +Math.max(0.3, Math.min(r * 0.4, span / n * 0.7)).toFixed(2);
+        edits.push(e);
+        if (edits.length >= 400) break;
+      }
+    }
+    if (!edits.length){ toast('the profile has no height'); return; }
+    boreSys.job = { edits: mirrorSys.jobEdits(edits), i: 0, t: 0, fill, mat, group: 'lathe' + (++boreSys.seq), gained: {}, spent: 0,
+                    label: fill ? 'turned' : 'turned hollow', step: (game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3)) * mirrorSys.stepScale() };
+    boreSys.pts = [];
+    toast((fill ? 'turning ' : 'hollowing ') + edits.length + ' rings');
+    AudioSys.sfx('craft');
+    refreshToolHUD();
   },
 };
 // ---------- SCULPT: the bore — a drill that follows a curve you draw ----------
@@ -12748,8 +14296,8 @@ const boreSys = {
       if (!mat){ toast('the first point must be near solid ground to lay from'); AudioSys.sfx('deny'); return; }
       for (const e of P.edits) e.mat = mat;
     }
-    this.job = { edits: P.edits, i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
-                 step: game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3) };
+    this.job = { edits: mirrorSys.jobEdits(P.edits), i: 0, t: 0, fill, mat, group: 'bore' + (++this.seq), gained: {}, spent: 0,
+                 step: (game.mode === 'creative' ? 0.07 : (fill ? 0.2 : 0.3)) * mirrorSys.stepScale() };
     this.pts = [];
     toast((fill ? 'laying ' : 'boring ') + Math.round(P.len) + ' m · ' + P.edits.length + ' cuts');
     AudioSys.sfx('craft');
@@ -12794,11 +14342,11 @@ const boreSys = {
       }
       if (this.job && J.i >= J.edits.length){
         this.job = null;
-        if (J.fill) toast('causeway laid · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
+        if (J.fill) toast((J.label || 'causeway laid') + ' · -' + J.spent + ' ' + CORE.MAT_NAME[J.mat]);
         else {
           const parts = [];
           for (const m in J.gained){ const ok = CORE.ORE_ITEM[+m]; parts.push('+' + J.gained[m] + ' ' + (ok ? itemLabel({ kind: ok }) : CORE.MAT_NAME[m])); }
-          toast('bored through' + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
+          toast((J.label || 'bored through') + (parts.length ? ' · ' + parts.join('  ·  ') : ''));
         }
         AudioSys.sfx('craft');
         refreshHotbar(); refreshToolHUD();
@@ -12825,6 +14373,18 @@ const boreSys = {
     const m = new THREE.Matrix4();
     for (let i = 0; i < this.pts.length && i < 32; i++){ m.makeTranslation(this.pts[i][0], this.pts[i][1], this.pts[i][2]); this.marks.setMatrixAt(i, m); }
     this.marks.count = Math.min(32, this.pts.length); this.marks.instanceMatrix.needsUpdate = true;
+    if (tool.lathe){
+      // the surface of revolution the profile would make, around the first point
+      if (pts.length >= 2){
+        const prof = latheSys.profile(pts);
+        const geo = new THREE.LatheGeometry(prof.map(q => new THREE.Vector2(q[0], q[1])), 28);
+        this.tube = new THREE.Mesh(geo, this.tubeMat);
+        this.tube.position.set(pts[0][0], pts[0][1], pts[0][2]);
+        this.tube.frustumCulled = false;
+        this.group.add(this.tube);
+      }
+      return;
+    }
     if (pts.length >= 2){
       const curve = this.curveOf(pts);
       const segs = Math.max(8, Math.min(200, Math.ceil(curve.getLength() / 0.8)));
@@ -14470,7 +16030,7 @@ function updateEntities(dt, now){
     if (e === game.driving) continue;            // driveCar owns it this frame
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (!VEH[e.type] && pd > (e.ckey ? 180 : 70)){
+    if (!VEH[e.type] && !e.crew && pd > (e.ckey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -14504,13 +16064,14 @@ function updateEntities(dt, now){
       sx = tg[0]; sz = tg[1]; sp *= 1.1;
       const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
       if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5); }
-    } else if (e.type === 'lurker' && (pd < 15 || e.raider)){
+    } else if (e.type === 'lurker' && (crewSys.prey(e, 15) || e.raider)){
       if (e.raider) sp *= 1.15;
-      sx = game.pos.x - e.x; sz = game.pos.z - e.z;
-      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
+      const P = crewSys.prey(e, 15) || crewSys.playerPrey(pd);
+      sx = P.x - e.x; sz = P.z - e.z;
+      const d3 = Math.hypot(e.x - P.x, e.y - P.y, e.z - P.z);
       if (d3 < 1.6 && e.atkT <= 0){
         e.atkT = 1;
-        damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5);
+        crewSys.hitPrey(P, 8, (P.x - e.x) * 2.5, (P.z - e.z) * 2.5);
       }
     } else if (e.type === 'stalker'){
       // fast and low: it circles in rather than charging, backs off from
@@ -14524,15 +16085,16 @@ function updateEntities(dt, now){
         for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
         for (const b of game.beacons){ const d = Math.hypot(b[0]-e.x, b[2]-e.z) * 0.6; if (d < bd){ bd = d; lx = b[0]; lz = b[2]; } }
         sx = e.x - lx; sz = e.z - lz; sp *= 1.1;
-      } else if (pd < 24){
-        const dx = game.pos.x - e.x, dz = game.pos.z - e.z;
+      } else if (crewSys.prey(e, 24)){
+        const P = crewSys.prey(e, 24);
+        const dx = P.x - e.x, dz = P.z - e.z;
         const px2 = -dz * e.orbit, pz2 = dx * e.orbit;             // sideways
-        const close = Math.max(0, Math.min(1, (pd - 2.5) / 6));   // spiral in
+        const close = Math.max(0, Math.min(1, (P.d - 2.5) / 6));  // spiral in
         sx = dx + px2 * close * 0.9; sz = dz + pz2 * close * 0.9;
-        const d3 = Math.hypot(dx, e.y - game.pos.y, dz);
+        const d3 = Math.hypot(dx, e.y - P.y, dz);
         if (d3 < 1.5 && e.atkT <= 0){
           e.atkT = 0.55;
-          damagePlayer(5, (game.pos.x - e.x) * 1.5, (game.pos.z - e.z) * 1.5);
+          crewSys.hitPrey(P, 5, (P.x - e.x) * 1.5, (P.z - e.z) * 1.5);
           if (Math.random() < 0.3) e.orbit = -e.orbit;
         }
       } else {
@@ -14542,12 +16104,13 @@ function updateEntities(dt, now){
       }
     } else if (e.type === 'husk'){
       // it saw you. it is coming. nothing about that changes.
-      if (pd < 36){
-        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
-        const d3 = Math.hypot(sx, e.y - game.pos.y, sz);
+      const P = crewSys.prey(e, 36);
+      if (P){
+        sx = P.x - e.x; sz = P.z - e.z;
+        const d3 = Math.hypot(sx, e.y - P.y, sz);
         if (d3 < 2.3 && e.atkT <= 0){
           e.atkT = 1.7;
-          damagePlayer(18, (game.pos.x - e.x) * 4, (game.pos.z - e.z) * 4);
+          crewSys.hitPrey(P, 18, (P.x - e.x) * 4, (P.z - e.z) * 4);
           AudioSys.sfx('hit');
         }
         if (e.atkT > 1.3) sp *= 0.2;                              // the swing plants its feet
@@ -14603,6 +16166,9 @@ function updateEntities(dt, now){
       if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
         ? (e.dir > 0 ? -Math.PI / 2 : Math.PI / 2)
         : (e.dir > 0 ? Math.PI : 0);
+    } else if (e.type === 'villager' && e.crew){
+      const st = crewSys.steer(e, dt, now, pd);
+      sx = st[0]; sz = st[1]; sp = st[2];
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
         sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
@@ -14700,6 +16266,15 @@ function updateEntities(dt, now){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
     e.mesh.scale.setScalar((e.bountyTag ? 1.25 : 1) * (e.flash > 0 ? 1.1 : 1));
+    if (e.crew && ud.hpbar){
+      const f = Math.max(0, Math.min(1, e.hp / 60)), hurt = f < 0.99;
+      ud.hpbar.bg.visible = ud.hpbar.fg.visible = hurt;
+      if (hurt){
+        ud.hpbar.fg.scale.x = 0.9 * f;
+        ud.hpbar.fg.position.x = -(1 - f) * 0.45;
+        ud.hpbar.fg.material.color.setHex(f > 0.5 ? 0x5fe08a : f > 0.25 ? 0xffb44d : 0xe05050);
+      }
+    }
   }
 }
 // closest entity intersecting the view ray
@@ -14959,6 +16534,11 @@ function bindInput(){
         toast('scroll: ' + (game.tool.chestRot ? 'rotate' : 'resize'));
         AudioSys.sfx('toggle');
         refreshToolHUD();
+      } else if (t && t.smooth){
+        game.tool.trowelMode = game.tool.trowelMode ? 0 : 1;
+        toast('scroll: ' + (game.tool.trowelMode ? 'depth of the stroke' : 'size of the disc'));
+        AudioSys.sfx('toggle');
+        refreshToolHUD(); markSave();
       } else if (t && (t.kind === 'drill' || t.kind === 'disp' || t.kind === 'wrench')){
         game.tool.scrollMode = (game.tool.scrollMode + 1) % 4;
         toast('scroll: ' + ['resize', 'rotate Y (yaw)', 'rotate X (pitch)', 'rotate Z (roll)'][game.tool.scrollMode]);
@@ -15134,6 +16714,7 @@ function bindInput(){
           }
           return;
         }
+        if (pn.t === 'trench'){ palisadeSys.light(pn); return; }
         if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger' || pn.t === 'repair'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
@@ -15174,6 +16755,7 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){
+        if (vent.crew){ crewSys.open(vent); return; }
         if (vent.walker){
           toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
                  'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
@@ -15214,6 +16796,7 @@ function bindInput(){
         return;
       }
       const selIt = selectedItem();
+      if (selIt && (selIt.kind === 'page' || selIt.kind === 'survey')){ expeditionSys.read(selIt); return; }
       if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' || selIt.kind === 'fish' || selIt.kind === 'cookedfish' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
         tryEat();
@@ -15235,6 +16818,11 @@ function bindInput(){
         doorSys.rebuild();
         AudioSys.sfx('toggle');
         markSave();
+        return;
+      }
+      if (tool && tool.lathe){
+        if (boreSys.pts.length < 2){ toast('lay the profile first: an axis point, then the outline'); AudioSys.sfx('deny'); }
+        else latheSys.commit(!(game.keys['ShiftLeft'] || game.keys['ShiftRight']));
         return;
       }
       if (tool && tool.bore){
@@ -15296,6 +16884,18 @@ function bindInput(){
     }
     const tool = activeTool();
     if (!tool) return;
+    if (tool.smooth){
+      // the trowel: the disc from a metre to a mountain, or the stroke's depth
+      if (game.tool.trowelMode){
+        game.tool.trowelDepth = +Math.min(1.4, Math.max(0.15, (game.tool.trowelDepth || 0.55) + dir * 0.05)).toFixed(2);
+        toast('stroke depth ' + Math.round(game.tool.trowelDepth * 100) + '%');
+      } else {
+        game.tool.trowelSize = +Math.min(48, Math.max(1, (game.tool.trowelSize || 3) * (dir > 0 ? 1.15 : 1 / 1.15))).toFixed(2);
+        toast('disc ' + game.tool.trowelSize.toFixed(1) + 'm');
+      }
+      refreshToolHUD(); markSave();
+      return;
+    }
     if (tool.kind === 'wrench' && game.tool.mode === 'paint'){
       const n = wrenchSys.palette.length;
       wrenchSys.palIdx = (wrenchSys.palIdx + dir + n) % n;
@@ -15342,10 +16942,10 @@ function bindInput(){
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
     if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station'){
+  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
       if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station')) closeOverlay();
-      else if (code === 'KeyE' && game.ui === 'board') closeOverlay();
+      else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
@@ -15409,6 +17009,7 @@ function bindInput(){
     if (code === 'KeyQ'){ if (!game.photo) openCraft(); }
     if (code === 'KeyN'){ if (!game.photo) openBlueprints(); }
     if (code === 'KeyM'){ if (!game.photo) openMap(); }
+    if (code === 'KeyK'){ const t = activeTool(); if (!game.photo && t && (t.kind === 'drill' || t.kind === 'disp')) mirrorSys.toggle(e.shiftKey); }
     if (code === 'KeyP'){
       if (game.photo){ exitPhoto(); }
       else if (game.mode === 'creative') enterPhoto();
@@ -15661,6 +17262,11 @@ function driveCar(dt){
   } else e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
+  if (afloat && game.gen.riverAt){
+    // a boat drifts with the river it floats on
+    const RR = game.gen.riverAt(e.x, e.z);
+    if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); e.x += RR.tx * f * dt; e.z += RR.tz * f * dt; }
+  }
   e.y += e.vy * dt;
   const R = V.r;
   const box = [e.x - 2.2, e.y - 2.2, e.z - 2.2, e.x + 2.2, e.y + 3, e.z + 2.2];
@@ -16049,6 +17655,11 @@ function updatePlayer(dt){
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
   game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
+  // wading a river: the current pushes at your legs
+  if (!game.fly && !game.swim && game.gen.riverAt && inWater(game.pos.x, game.pos.y + 0.35, game.pos.z)){
+    const RR = game.gen.riverAt(game.pos.x, game.pos.z);
+    if (RR && RR.d < RR.w){ const f = 0.9 * (1 - RR.d / RR.w); game.pos.x += RR.tx * f * dt; game.pos.z += RR.tz * f * dt; }
+  }
   game.onIce = false;
   if (seasonSys.winter) seasonSys.ice();
   // camera-relative on the horizontal plane (yaw only — never world axes)
@@ -16069,8 +17680,12 @@ function updatePlayer(dt){
   } else if (game.swim){
     // buoyant water movement: slow drift, space up / C down, no hard jumps
     const sp = PLAYER.walk * 0.55;
-    game.vel.x += (mx * sp - game.vel.x) * Math.min(1, 8 * dt);
-    game.vel.z += (mz * sp - game.vel.z) * Math.min(1, 8 * dt);
+    // a river carries you: strongest mid-channel, nothing at the banks
+    let flx = 0, flz = 0;
+    const RR = game.gen.riverAt && game.gen.riverAt(game.pos.x, game.pos.z);
+    if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); flx = RR.tx * f; flz = RR.tz * f; }
+    game.vel.x += (mx * sp + flx - game.vel.x) * Math.min(1, 8 * dt);
+    game.vel.z += (mz * sp + flz - game.vel.z) * Math.min(1, 8 * dt);
     let ty = -1.4;                                   // slow sink at rest
     if (canMove && k['Space']) ty = 3.4;             // swim up (enough to climb out)
     else if (canMove && k['KeyC']) ty = -3.6;        // dive
@@ -16261,6 +17876,8 @@ function activeTool(){
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
   // the bore: a drill that follows a curve you draw
   if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
+  // the lathe: a profile you draw, revolved around its first point
+  if (it.kind === 'lathe') return { kind: 'drill', tier: 2, bore: 1, lathe: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -16273,7 +17890,7 @@ function activeTool(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -16334,6 +17951,7 @@ function updateGhost(){
     game.ghostSet[k].wire.visible = false;
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
+  mirrorSys.hideGhost();
   if (game.gridViz) game.gridViz.visible = false;
   // held door: skinny door-shaped ghost with grid + side alignment
   if (tool && tool.kind === 'door' && game.ui === 'none' && isLocked()){
@@ -16370,7 +17988,7 @@ function updateGhost(){
   if (tool && tool.smooth){
     // the trowel shows no shape: a disc on the surface you look at
     game.ghostPos = null;
-    game.ghostEff = CORE.effSize(game.tool.size, tool.tier);
+    game.ghostEff = game.tool.trowelSize || 3;
     trowelSys.aim(usable);
     return;
   } else trowelSys.hide();
@@ -16416,6 +18034,7 @@ function updateGhost(){
     // charging feedback: the shape visibly "fills in" as the action completes
     gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
   }
+  mirrorSys.syncGhost(game.tool.shape, p, eff, rot, grx, grz);
 
   if (game.snapOn){
     // visualize the actual placement lattice (spacing = shape size when the
@@ -16479,6 +18098,7 @@ const wrenchProps = {
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
                   tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
                   cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5], station: [1.3, 1.5, 1.35, 1.2],
+                  claymore: [0.22, 0.32, 0.24, 0.16], spikes: [0.25, 1.05, 0.3, 0.55], bell: [0.9, 0.35, 0.95, 0.35], tent: [0.8, 1.3, 0.85, 1.0], trench: [0.2, 1.55, 0.25, 0.6], flamejet: [0.45, 0.4, 0.5, 0.4],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
                   sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
@@ -17542,15 +19162,30 @@ function yieldColors(got){
   for (const m in got) cols.push(MAT_COLOR[m]);
   return cols;
 }
-function doMine(tool, p, shape, eff){
-  const e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+// the mirror's twin of a mine or a place: the same call again with the
+// edit reflected, the two sharing an undo group
+function doMineM(tool, p, shape, eff){
+  const gp = mirrorSys.group();
+  doMine(tool, p, shape, eff, gp);
+  if (gp) doMine(tool, p, shape, eff, gp, true);
+  crewSys.onMine(p, shape, eff);
+}
+function doPlaceM(tool, p, shape, eff){
+  const gp = mirrorSys.group();
+  doPlace(tool, p, shape, eff, gp);
+  if (gp) doPlace(tool, p, shape, eff, gp, true);
+  crewSys.onPlace(p, shape, eff);
+}
+function doMine(tool, p, shape, eff, group, mir){
+  let e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
   if (tool.smooth) e.k = +(eff * 0.5).toFixed(2);
+  if (mir){ e = mirrorSys.edit(e); p = { x: e.x, y: e.y, z: e.z }; }
   const got = CORE.mineYield(game.edits, e, game.gen);
   let units = 0, hw = 0;
   for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
   if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
-  game.undoStack.push({ edit: e, type: 'mine', gained: got });
+  game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
   if (game.undoStack.length > 64) game.undoStack.shift();
   const parts = [];
   for (const m in got){
@@ -17616,9 +19251,10 @@ function doMine(tool, p, shape, eff){
   Particles.burst(p.x, p.y, p.z, eff * 0.5, yieldColors(got), Math.min(70, 14 + units / 4), 2.6);
   refreshHotbar(); refreshToolHUD();
 }
-function doPlace(tool, p, shape, eff){
+function doPlace(tool, p, shape, eff, group, mir){
   const paint = false;   // dispenser paint moved to the wrench
-  const e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
+  let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
+  if (mir){ e = mirrorSys.edit(e); p = { x: e.x, y: e.y, z: e.z }; }
   const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
                      : CORE.placeCost(game.edits, e, game.gen);
   if (cost === 0) return;
@@ -17630,7 +19266,7 @@ function doPlace(tool, p, shape, eff){
   }
   applyEdit(e);
   game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat,
-                        cost: game.mode === 'creative' ? 0 : cost });
+                        cost: game.mode === 'creative' ? 0 : cost, group });
   if (game.undoStack.length > 64) game.undoStack.shift();
   toast('-' + cost + ' ' + CORE.MAT_NAME[tool.mat] + (paint ? ' (painted)' : ''));
   AudioSys.sfx(paint ? 'paint' : 'place');
@@ -18357,7 +19993,7 @@ function tryAction(dt, now){
     const plan = actionPlan(tool, p, shape, eff);
     if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
     if (plan.dur === 0){
-      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMine(tool, p, shape, eff); }
+      if (edge || now - game.lastAction > 250){ game.lastAction = now; doMineM(tool, p, shape, eff); }
       return;
     }
     game.act.t += dt;
@@ -18365,7 +20001,7 @@ function tryAction(dt, now){
     AudioSys.setHum(true, tool.tier, game.actProgress);
     if (Math.random() < dt * 22)
       Particles.burst(p.x, p.y, p.z, eff * 0.4, [0x9a9aa0], 2, 1.2);
-    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMine(tool, p, shape, eff); }
+    if (game.act.t >= plan.dur){ game.act.t = 0; game.act.key = null; doMineM(tool, p, shape, eff); }
     return;
   }
 
@@ -18374,7 +20010,7 @@ function tryAction(dt, now){
   const plan = actionPlan(tool, p, shape, eff);
   if (plan.dur < 0) return;                                       // nothing to fill/paint
   if (plan.dur === 0){
-    if (edge) doPlace(tool, p, shape, eff);
+    if (edge) doPlaceM(tool, p, shape, eff);
     return;
   }
   if (edge){ game.act.charging = true; game.act.t = 0; }
@@ -18384,7 +20020,7 @@ function tryAction(dt, now){
     game.actProgress = Math.min(1, game.act.t / plan.dur);
     if (game.act.t >= plan.dur){
       game.act.charging = false; game.act.t = 0; game.act.key = null;
-      doPlace(tool, p, shape, eff);
+      doPlaceM(tool, p, shape, eff);
     }
   }
 }
@@ -18475,7 +20111,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -18652,6 +20288,39 @@ function itemIconURL(it){
     c.fillStyle = '#3a3f52'; c.fillRect(4, 6, 8, 4); c.fillRect(3, 7, 10, 2);
     c.fillStyle = '#b9a3ff'; c.fillRect(2, 11, 4, 2); c.fillRect(10, 11, 4, 2); c.fillRect(4, 7, 8, 1);
     c.fillStyle = '#1c1c22'; c.fillRect(6, 5, 4, 1);
+  } else if (it.kind === 'trench'){
+    c.fillStyle = '#4a4a50'; c.fillRect(1, 9, 14, 5);
+    c.fillStyle = '#1a1a22'; c.fillRect(2, 10, 12, 3);
+    c.fillStyle = '#ff8830'; c.fillRect(4, 5, 2, 5); c.fillRect(8, 3, 2, 7); c.fillRect(11, 6, 2, 4);
+    c.fillStyle = '#ffdd66'; c.fillRect(8, 6, 2, 3);
+  } else if (it.kind === 'flamejet'){
+    c.fillStyle = '#3a3f46'; c.fillRect(2, 6, 6, 6); c.fillRect(8, 8, 3, 2);
+    c.fillStyle = '#9aa0ab'; c.fillRect(3, 7, 4, 4);
+    c.fillStyle = '#ff8830'; c.fillRect(11, 7, 3, 4); c.fillStyle = '#ffdd66'; c.fillRect(12, 8, 2, 2);
+  } else if (it.kind === 'page'){
+    c.fillStyle = '#e8dcc0'; c.fillRect(3, 1, 10, 14);
+    c.fillStyle = '#5a4a3a'; for (let i = 0; i < 5; i++) c.fillRect(5, 3 + i * 2.4, i === 4 ? 4 : 6, 1);
+    c.fillStyle = '#c9b990'; c.fillRect(11, 1, 2, 2);
+  } else if (it.kind === 'survey'){
+    c.fillStyle = '#d9c9a0'; c.fillRect(1, 3, 14, 10);
+    c.fillStyle = '#5a4a3a'; c.fillRect(3, 5, 1, 1); c.fillRect(6, 7, 1, 1); c.fillRect(9, 6, 1, 1); c.fillRect(12, 9, 1, 1);
+    c.fillStyle = '#8a1c1c'; c.fillRect(11, 8, 3, 3);
+    c.fillStyle = '#4a7aa0'; c.fillRect(2, 9, 3, 1); c.fillRect(4, 10, 3, 1); c.fillRect(6, 11, 4, 1);
+  } else if (it.kind === 'tent'){
+    c.fillStyle = '#b8a27a'; c.fillRect(2, 8, 12, 5); c.fillRect(4, 5, 8, 3); c.fillRect(6, 3, 4, 2);
+    c.fillStyle = '#6a5a3a'; c.fillRect(7, 2, 2, 12);
+  } else if (it.kind === 'claymore'){
+    c.fillStyle = '#3a3f46'; c.fillRect(3, 5, 10, 6);
+    c.fillStyle = '#5a6068'; c.fillRect(4, 6, 8, 3);
+    c.fillStyle = '#2c2c31'; c.fillRect(4, 11, 2, 3); c.fillRect(10, 11, 2, 3);
+    c.fillStyle = '#ff3333'; c.fillRect(7, 7, 2, 2);
+  } else if (it.kind === 'spikes'){
+    c.fillStyle = '#5a4a3a'; c.fillRect(1, 12, 14, 3);
+    c.fillStyle = '#c8ccd4'; for (let i = 0; i < 4; i++){ c.fillRect(2 + i * 4, 6, 2, 6); c.fillRect(2 + i * 4, 4, 1, 2); }
+  } else if (it.kind === 'bell'){
+    c.fillStyle = '#5a4a3a'; c.fillRect(2, 2, 2, 12); c.fillRect(2, 2, 9, 2);
+    c.fillStyle = '#d9b25a'; c.fillRect(7, 4, 6, 6); c.fillRect(6, 9, 8, 2);
+    c.fillStyle = '#8a6d2f'; c.fillRect(9, 11, 2, 2);
   } else if (it.kind === 'turret'){
     c.fillStyle = '#6a7080'; c.fillRect(3, 11, 10, 3); c.fillRect(6, 8, 4, 3);
     c.fillStyle = '#9aa0ab'; c.fillRect(7, 3, 2, 6); c.fillRect(10, 4, 2, 5);
@@ -19004,6 +20673,13 @@ function itemIconURL(it){
     c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
     c.fillStyle = '#59c8d8'; c.fillRect(8, 3, 3, 2);
+  } else if (it.kind === 'lathe'){
+    // a spindle with a turned profile
+    c.fillStyle = '#5a4632'; c.fillRect(2, 12, 12, 2);
+    c.fillStyle = '#3c3a44'; c.fillRect(7, 3, 2, 9);
+    c.fillStyle = '#c8c8d0';
+    c.fillRect(5, 4, 6, 2); c.fillRect(6, 6, 4, 2); c.fillRect(4, 8, 8, 2); c.fillRect(5, 10, 6, 2);
+    c.fillStyle = '#ffffff44'; c.fillRect(5, 4, 6, 1);
   } else if (it.kind === 'bore'){
     // a ringed cutter head on a stub
     c.fillStyle = '#5a4632'; c.fillRect(2, 10, 4, 3);
@@ -19147,6 +20823,14 @@ function itemLabel(it){
   if (it.kind === 'hover') return (it.wrecked ? 'wrecked ' : '') + 'hoverbike';
   if (it.kind === 'cannon') return 'launch cannon';
   if (it.kind === 'turret') return 'wall turret';
+  if (it.kind === 'claymore') return 'claymore';
+  if (it.kind === 'page') return 'journal page ' + (it.page || 1);
+  if (it.kind === 'trench') return 'oil trench';
+  if (it.kind === 'flamejet') return 'flame jet';
+  if (it.kind === 'survey') return 'the survey';
+  if (it.kind === 'tent') return 'tent';
+  if (it.kind === 'spikes') return 'one-way spikes';
+  if (it.kind === 'bell') return 'tripwire bell';
   if (it.kind === 'windsock') return 'windsock';
   if (it.kind === 'hangar') return 'hangar kit';
   if (it.kind === 'airstrip') return 'airstrip kit';
@@ -19157,6 +20841,7 @@ function itemLabel(it){
   if (it.kind === 'wrench') return 'wrench';
   if (it.kind === 'trowel') return 'trowel';
   if (it.kind === 'bore') return 'bore';
+  if (it.kind === 'lathe') return 'lathe';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
   const t = CORE.TIER_NAME[it.tier];
@@ -19331,14 +21016,14 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
-const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge'];   // swords, blaster, the arsenal, explosives
+const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
-                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed'];
+                      'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
   { id: 'gadget',   label: 'GADGETS',     kinds: CAT_GADGETS,   icon: () => CORE.makeDrill(1) },
@@ -19389,6 +21074,7 @@ function catalogEntries(){
   for (let t = 0; t < 5; t++) out.push(CORE.makeDrill(t));
   out.push({ kind: 'trowel' });
   out.push({ kind: 'bore' });
+  out.push({ kind: 'lathe' });
   for (let t = 0; t < 5; t++) out.push(CORE.makeDispenser(t));
   for (let t = 0; t < 5; t++) out.push(CORE.makeSword(t));
   for (let t = 0; t < 5; t++) out.push({ kind: 'helm', tier: t });
@@ -19408,7 +21094,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -20172,27 +21858,33 @@ function itemInfoHTML(it, tool){
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
           : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
-    const name = tool.bore ? 'bore' : tool.smooth ? 'trowel'
+    const name = tool.lathe ? 'lathe' : tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
-    if (tool.smooth) html += '<div class="t2">the disc sits on whatever you look at · scroll sets its size</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it</div>';
-    if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
+    if (tool.smooth) html += '<div class="t2">disc ' + (game.tool.trowelSize || 3).toFixed(1) + 'm · stroke depth ' + Math.round((game.tool.trowelDepth || 0.55) * 100) + '% · scroll sets the ' + (game.tool.trowelMode ? 'DEPTH' : 'DISC') + ' (middle click swaps)</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it · shift + left FLATTENS to the disc</div>';
+    if (tool.lathe) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' · the first is the axis' : 'lay the axis point, then the outline out from it') + '</div>' +
+      '<div class="t2">left click lays a point · shift + left takes one back · right click TURNS it solid in the ground\'s material · shift + right TURNS it hollow</div>';
+    else if (tool.bore) html += '<div class="t2">' + (boreSys.pts.length ? boreSys.pts.length + ' point' + (boreSys.pts.length > 1 ? 's' : '') + ' laid' : 'lay points through the world, it follows the curve') + '</div>' +
       '<div class="t2">left click lays a point · shift + left takes one back · ' + (boreSys.pts.length ? 'right click BORES the tunnel · shift + right LAYS a causeway of the ground\'s material' : 'right click picks the cross-section') + '</div>';
-    const eff = CORE.effSize(game.tool.size, tool.tier);
-    let shape = CORE.SHAPE_NAME[game.tool.shape];
-    if (game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
+    const eff = tool.smooth ? (game.tool.trowelSize || 3) : CORE.effSize(game.tool.size, tool.tier);
+    let shape = tool.smooth ? 'disc' : CORE.SHAPE_NAME[game.tool.shape];
+    if (!tool.smooth && game.tool.shape !== 0 && (game.tool.rot || game.tool.rx || game.tool.rz))
       shape += ' ' + [game.tool.rot, game.tool.rx, game.tool.rz]
         .map(a => Math.round((a || 0) * 180 / Math.PI) + '°').join('/');
     const sizeStr = tool.tier >= 4 ? eff.toFixed(2) + 'm (smooth)' : eff + 'm';
-    html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
-    html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
+    // the trowel's disc line and the lathe's profile say it all already
+    if (!tool.smooth && !tool.lathe){
+      html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
+      html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
+    }
     if (game.snapOn){
       html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span> · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     } else {
       html += '<div class="t2">snap: off · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
     }
+    html += mirrorSys.hudLine();
   } else if (it.kind === 'battery'){
     html = '<div class="t1">' + itemLabel(it) + ' · ' + Math.round(it.charge || 0) + '/' + CORE.batteryCap(it) + '</div>' +
       '<div class="t2">fill it in a battery charger · in your inventory, click it onto a jetpack, drone or car kit to pour charge in · slot it in a car (E while driving)</div>';
@@ -20240,6 +21932,22 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">wisp core</div><div class="t2">a charge that still wants to go off: TNT, rockets or mining charges at a crafting table</div>';
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
+  } else if (it.kind === 'trench'){
+    html = '<div class="t1">oil trench</div><div class="t2">a 3 m tray of oil. Right click it to strike it alight: it burns for half a minute, and enemies in it burn with it. One use</div>';
+  } else if (it.kind === 'flamejet'){
+    html = '<div class="t1">flame jet</div><div class="t2">a wall nozzle on the grid (3 W idle, 40 W firing) that throws a fan of fire five metres out its front at any enemy that comes near — never at you, your crew or an animal</div>';
+  } else if (it.kind === 'page'){
+    html = '<div class="t1">journal page ' + (it.page || 1) + '</div><div class="t2">a page torn from a surveyor\'s journal — right click to read it</div>';
+  } else if (it.kind === 'survey'){
+    html = '<div class="t1">the survey</div><div class="t2">the expedition\'s own map, every camp marked and the mouth at the end — right click to read it</div>';
+  } else if (it.kind === 'tent'){
+    html = '<div class="t1">tent</div><div class="t2">a canvas tent on a ridge pole; place it anywhere</div>';
+  } else if (it.kind === 'claymore'){
+    html = '<div class="t1">claymore</div><div class="t2">a set charge that faces the way you face. It fires once, for an enemy and only an enemy, in a fan out its front — never for you, your crew or an animal — and it never marks the ground</div>';
+  } else if (it.kind === 'spikes'){
+    html = '<div class="t1">one-way spikes</div><div class="t2">a 2 m strip. Enemies that cross it bleed and slow; you, your crew and your animals walk over it</div>';
+  } else if (it.kind === 'bell'){
+    html = '<div class="t1">tripwire bell</div><div class="t2">rings when an enemy comes within 10 m, and your armed crew within 45 m come running to it</div>';
   } else if (it.kind === 'turret'){
     html = '<div class="t1">wall turret</div><div class="t2">place it and wire it to your grid (4 W idle, 30 W firing) — it shoots anything hostile within 24 m, on its own, all night</div>';
   } else if (it.kind === 'cannon'){
@@ -20621,6 +22329,8 @@ function activeToolOf(it){
   if (it.kind === 'trowel') return { kind: 'drill', tier: 2, smooth: 1, item: it };
   // the bore: a drill that follows a curve you draw
   if (it.kind === 'bore') return { kind: 'drill', tier: 2, bore: 1, item: it };
+  // the lathe: a profile you draw, revolved around its first point
+  if (it.kind === 'lathe') return { kind: 'drill', tier: 2, bore: 1, lathe: 1, item: it };
   if (it.kind === 'sword') return { kind: 'sword', tier: it.tier };
   if (it.kind === 'gun') return { kind: 'gun', tier: 0 };
   if (it.kind === 'fw') return { kind: 'fw', g: it.g | 0, tier: 0, item: it };
@@ -20801,10 +22511,11 @@ function mapCellColor(cx, cz){
   const g = game.gen;
   const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
   const h = g.height(x, z);
-  const wet = g.wetAt ? g.wetAt(x, z, h) : (g.seaLevel != null && h < g.seaLevel);
+  const wyM = g.waterYAt ? g.waterYAt(x, z, h) : (g.wetAt ? (g.wetAt(x, z, h) ? g.seaLevel : null) : (g.seaLevel != null && h < g.seaLevel ? g.seaLevel : null));
+  const wet = wyM != null;
   let r, gc, b;
   if (wet){
-    const deep = Math.min(1, ((g.seaLevel || 0) - h) / 12);
+    const deep = Math.min(1, (wyM - h) / 12);
     r = 46 - 20 * deep; gc = 96 - 34 * deep; b = 150 - 40 * deep;
   } else {
     const m = g.mat(x, h - 0.2, z) || 1;
@@ -20844,6 +22555,7 @@ function drawMap(){
   for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
   for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
   for (const k in (game.cities || {})) if (game.cities[k].stamped) mark(game.cities[k].x, game.cities[k].z, '#ffb44d', 9);
+  if (game.expedition){ for (const cp of game.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (game.expedition.deep) mark(game.expedition.shaft.x, game.expedition.shaft.z, '#8a1c1c', 8); }
   for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
@@ -20863,10 +22575,11 @@ function openMap(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
+  game.activeCrew = null;
   game.activeBoard = null;
   game.activeCrafter = null;
   game.activeCont = null;
@@ -21107,6 +22820,7 @@ function saveNow(){
     villages: game.villages,
     forts: game.forts || {},
     spires: game.spires || {},
+    expedition: game.expedition || null,
     zigs: game.zigs || {},
     wrecks: game.wrecks || {},
     cities: game.cities || {},
@@ -21168,6 +22882,7 @@ function startWorld(id){
   game.wrecks = data.wrecks || {};
   endFishing();
   game.cities = data.cities || {};
+  game.expedition = data.expedition || null;
   game.rails = data.rails || [];
   game.roads = data.roads || {};
   waterSys.load(data.water || []);
@@ -21247,6 +22962,7 @@ function startWorld(id){
   const sp0 = p.x == null ? game.gen.spawn() : { x: p.x, z: p.z || 0 };
   const spawnY = game.gen.height(sp0.x, sp0.z) + 1.5;
   game.pos.set(sp0.x, p.y == null ? spawnY : p.y, sp0.z);
+  if (!game.expedition) expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
     game.pos.y += 0.5;
@@ -21404,20 +23120,20 @@ void main(){
   gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
 }`;
 const SKIN_WATER_VERT = `
-attribute float aDep;
+attribute float aDep; attribute float aWY; attribute vec2 aFlow;
 uniform float uSeaY;
-varying vec3 vW; varying float vDep;
+varying vec3 vW; varying float vDep; varying vec2 vFlow;
 void main(){
-  vec3 p = vec3(position.x, uSeaY, position.z);
-  vW = p; vDep = aDep;
+  vec3 p = vec3(position.x, aWY - 0.02, position.z);
+  vW = p; vDep = aDep; vFlow = aFlow;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const SKIN_WATER_FRAG = `
 precision highp float;
 uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
 uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
-uniform vec4 uHole;
-varying vec3 vW; varying float vDep;
+uniform vec4 uHole; uniform float uTime;
+varying vec3 vW; varying float vDep; varying vec2 vFlow;
 void main(){
   if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
   if (uMaskOn > 0.5){
@@ -21425,7 +23141,7 @@ void main(){
     if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
         texture2D(uMask, mi).r > 0.75) discard;
   }
-  vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
+  vec3 col = texture2D(uWaterTex, vW.xz / 4.0 + vFlow * uTime * 0.12).rgb * vec3(0.737, 0.831, 0.910);
   float deep = smoothstep(0.6, 7.5, vDep);
   col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
   float dist = gl_FragCoord.z / gl_FragCoord.w;
@@ -21470,6 +23186,7 @@ const farTerrain = {
         uMaskOn: { value: k === 0 ? 1 : 0 },
         uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
         uSeaY: { value: game.gen && game.gen.seaLevel != null ? game.gen.seaLevel - 0.02 : 0 },
+        uTime: (game.uTime = game.uTime || { value: 0 }),
       }, maskU()),
       vertexShader: SKIN_WATER_VERT,
       fragmentShader: SKIN_WATER_FRAG,
@@ -21573,6 +23290,8 @@ const farTerrain = {
         const wg = new THREE.BufferGeometry();
         wg.setAttribute('position', posAttr);
         wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
+        wg.setAttribute('aWY', new THREE.BufferAttribute(g.wy, 1));
+        wg.setAttribute('aFlow', new THREE.BufferAttribute(g.fl, 2));
         wg.setIndex(new THREE.BufferAttribute(widx, 1));
         wg.boundingSphere = geo.boundingSphere;
         this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
@@ -22264,6 +23983,7 @@ function enterPhoto(drone){
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
   }
   placePreview.hide();
+  mirrorSys.hideGhost();
   if (game.gridViz) game.gridViz.visible = false;
   toast(drone
     ? (drone.kind === 'tdrone'
@@ -22457,6 +24177,8 @@ function frame(now){
   stoveSys.update(dt);
   powerSys.update(dt);
   villageSys.tick(dt);
+  crewSys.tick(dt);
+  expeditionSys.tick(dt);
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
@@ -22468,6 +24190,8 @@ function frame(now){
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
+  mirrorSys.tick(dt);
+  if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
   siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
@@ -22520,6 +24244,7 @@ function frame(now){
   beamFX.update(dt);
   updateProjectiles(dt);
   chargeSys.update(dt);
+  palisadeSys.tick(dt);
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
   }
@@ -22679,7 +24404,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, mapCellColor, expeditionSys, riverNameAt,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,

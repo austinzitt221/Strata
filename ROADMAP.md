@@ -13,13 +13,22 @@ when they matter, not by rule.
    clipmap to the horizon, SDF-consistent normals and AO, shadow
    cascades, one water mesh per lake. Nothing added to the far view
    is worth it until the far view stops moving.
-2. **SCULPT** — the identity build. The trowel (DONE: now a disc on
-   the ground that raises and lowers, the terrain tool of a map editor
-   in first person), the bore (DONE: spline tunnels and causeways),
-   still to come: a smoothing stroke for the trowel, revolve/lathe
-   shapes, mirror mode. The Terraformer from Build 21 moves here, early, because
-   carving is what this game is.
-3. **THE CREW** (Austin's, with my additions) — hire the people you have
+2. **SCULPT** (DONE) — the identity build. The trowel (a disc on the
+   ground from 1 m to 48 m that raises, lowers and flattens, and
+   carries you up with the ground), the bore (spline tunnels and
+   causeways), the lathe (turn a drawn profile into a tower, a dome, a
+   bowl), the mirror (every edit repeated across a plane you set with
+   K). Left for a later session: a smoothing stroke that erodes rather
+   than adds, and the Terraformer from Build 21.
+3. **THE CREW** (Austin's, with my additions) — SLICE A DONE (Build 24:
+   hire at 10 goodwill, follow / stay / roam disc, give a drill and they
+   mine the next cut along your aim or dig a quarry, give a sword or gun
+   and they fight, saves with the village). SLICE B DONE (Build 25:
+   the night hunts them and they can die; a dispenser and a stack and
+   they build what you build; they raise your saved blueprints where
+   you point). Left: assign to a stove / turret / table, a bed and a
+   chest, they eat, houses of their own design, city folk for hire.
+   The idea: hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign
    points them at a thing: a stove, a turret they will man instead of
@@ -32,7 +41,11 @@ when they matter, not by rule.
    put them). My additions: they need a bed and a chest to call home,
    they eat from your stores, and a crew member who dies is gone. A
    dispenser crew member with a saved blueprint of YOURS builds that.
-4. **THE PALISADE** (Austin's, with my additions) — defenses that know
+4. **THE PALISADE** (Austin's, with my additions) — DONE but for the
+   portcullis (Build 26: the claymore, the one-way spikes, the tripwire
+   bell that calls your armed crew; Build 29: the oil trench, the flame
+   jet). Left: the portcullis on a lever, to be built on the door
+   system. The idea: defenses that know
    whose side they are on. The claymore: a set charge that fires only for
    an enemy (never you, never a passive animal) and never marks the
    ground. One-way spikes: enemies bleed on them, you and your animals
@@ -40,12 +53,16 @@ when they matter, not by rule.
    crew before the enemy is in range; an oil trench you light from a
    torch; a portcullis on a lever. And the turret's cousin, a flame jet
    for the walls, short and brutal.
-5. **RIVERS** — water that starts in the mountains and reaches the sea,
-   cutting valleys the heightfield knows about; fords, waterfalls,
-   riverside villages and cities on the banks.
-6. **THE EXPEDITION** — environmental storytelling: the camps, journals
-   and bones of an earlier expedition scattered by worldgen, telling one
-   story across the map and pointing at the Underdark.
+5. **RIVERS** (DONE, Build 27) — water that starts in the mountains and
+   reaches the sea: a downhill river per macro cell with tributaries,
+   valleys carved from it, a per-column water height that every water
+   consumer reads, near and far, a current. Left for later: a moving
+   surface, fords and waterfalls as features, riverside villages and
+   cities on the banks.
+6. **THE EXPEDITION** (DONE, Build 28) — eight camps, a journal in
+   eight pages, bones, a shaft with a rope, and the survey at the bottom
+   pointing at THE DEEP. Later: more than one story per world, and the
+   survey's other markings once THE DEEP exists to be found.
 5. **Build 21 — THE DEEP** (Underdark, trinkets, difficulty tiers, map,
    sound) and then the Space Arc as written below.
 
@@ -69,11 +86,32 @@ when they matter, not by rule.
    becomes yours: the garrison respawns as *your* guard, and it is the
    only place that sells jet fuel.
 
+## Next, in my order (brainstormed 2026-09-07, see the journal)
+1. **Playtest fixes** — Austin's eyes on thirteen builds come first.
+2. **THE DEEP, slice A** — the dark as the mechanic, a noise meter that
+   draws them, the first hall built by someone, the leader's last camp
+   under the mouth. The tool tiers become a choice: quiet and slow, or
+   loud and fast.
+3. **RIVERS II** — seasons on the water (ice, the spring rise, summer
+   fords), waterfalls with mist and sound, the water mill as a
+   generator, villages on the banks with bridges, river fish.
+4. **THE CREW C** — tents as beds, posts (stove, table, turret), meals
+   from a larder, the rescue of the second at camp 7, skill that grows
+   with work.
+5. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
+   blueprints, the path made by walking.
+6. **THE GARRISON**, then the Space Arc.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.
 - **Shadow cascades** — a sharp near shadow map and a wide far one, if
   the HORIZON playtest says the near shadows read soft.
+- **Place names on the map** — regions named in their archetype's
+  voice, alongside the river names.
+- **The portcullis**, built on the door system.
+- **Footsteps that know the material**; birds along rivers; fish in the
+  shallows.
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube

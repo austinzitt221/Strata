@@ -2,6 +2,363 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 29 — THE PALISADE II (2026-09-07)
+
+The second half of roadmap item 4, minus the portcullis. Verified
+headlessly (a build-29 suite: the trench lights by hand, burns a husk
+from 95 to 41 in three seconds and not the grazer beside it, burns out
+in thirty and refuses a second match; the jet does nothing off the
+grid, and on it takes a husk in front from 95 to dead and leaves one
+behind it untouched; plus smoke, palisade, turret/siege and expedition
+suites).
+
+- **Oil trench** (2 for 2 iron ingots + 5 coal). A 3 m iron tray of
+  oil. Right click it to strike it alight: it burns for thirty seconds
+  with embers and smoke, and any enemy standing in it takes 9 every
+  half second. Then it is spent and stays as a burnt tray. One use;
+  the wrench takes it back for another.
+- **Flame jet** (6 iron ingots + 8 coal + 6 cells, at the table). A
+  wall nozzle on the grid: 3 W idle with a pilot light, 40 W when it
+  fires a fan of fire five metres out its front at any enemy in the
+  fan, 7 a quarter-second at full power, less on a starved grid. Never
+  at you, your crew or an animal.
+- The portcullis on a lever waits: a gate that opens and closes needs
+  the solid props rebuilt on every toggle, and I want to do that with
+  the door system rather than beside it.
+
+## Build 28 — THE EXPEDITION (2026-09-07)
+
+Roadmap item 6, mine. A story you find rather than one you are told.
+Verified headlessly (a build-28 suite: the route lays dry and off
+villages, the shaft is air inside and rock beside, camp 1 stamps and
+its page marks camp 2, camp 8 has bones, the rope, the leader's chest
+at the bottom, and the survey marks the mouth; it all saves) and in
+screenshots.
+
+### Someone was here before you
+- **Eight camps walk out from where you spawn**, a day apart along a
+  route that bends as it goes, each snapped to dry, gentle, open land
+  away from villages and rivers. Camp 1 is marked from the start as
+  an ABANDONED CAMP; the rest you find by reading.
+- **A camp** is a tent (a new prop, canvas on a ridge pole), a fire, a
+  sign with the survey's name and the day, and a chest holding that
+  day's page of the surveyor's journal and what they left: cooked meat
+  and coal early, coal and rope later, less and less. From the fourth
+  camp on, bones. Camps appear as you come within 140 m, once, like
+  villages.
+- **The journal.** Eight pages in the leader's hand, right click to
+  read. The council of the nearest city sent a survey to find what
+  makes the sound under the hills; a second, two porters, eleven days
+  of food. Something follows them; they ford a river; they find bones
+  laid out with care below a hole the porters will not go near; a
+  porter leaves with the good rope, the other simply goes; the second
+  is hurt; the leader goes on alone to a shaft "with the scrape coming
+  up out of it like breath". Reading a page marks the next camp.
+- **The mouth.** Beside the last camp a sheer shaft, carved into the
+  world at birth, 26 m down, with the long rope left hanging in it. At
+  the bottom, the leader's chest: the survey, 150 coins, two diamonds,
+  three rope, and one more set of bones. The survey marks every camp on
+  your map and THE MOUTH in red, and points at THE DEEP, the next thing
+  on the roadmap. The last page says do not go down.
+- Names are the world's own: the leader and the second from the
+  villager name-maker, the city the nearest one to spawn, and the
+  river the route crosses gets a name -- rivers have names now, twelve
+  of them, by the cell they rise in (the stream, if no river is near).
+
+### Also
+- A readable-page overlay (E closes), a bones decor variant, a placeable
+  tent for anyone who wants one.
+
+## Build 27 — RIVERS (2026-09-07)
+
+Roadmap item 5, mine, and the one I kept circling. Water that starts in
+the mountains and reaches the sea. Verified headlessly (CORE 352 with
+eleven river proofs: rivers exist, every channel column is wet under
+its own surface, a second generator agrees on every one, banks rise,
+shoulders are dry, the surface never rises downstream, and 30k height
+calls cost 50 ms; a build-27 browser suite for the near mesh, the far
+skin, swimming, the current, the map, the cells; plus the water, boat,
+seasons, skin, trowel, crew and LOD suites) and in screenshots.
+
+### How a river is made
+- **One source per 768 m cell**: the highest of a dozen candidate
+  points, if it is high enough and not a volcano. From there the river
+  walks downhill 22 m at a time, taking the lowest of eight ways
+  forward within a fan of its heading, its surface following the ground
+  down and never rising (through a rise it cuts a gorge), widening as
+  it goes -- until it reaches the sea, sinks too deep, or leaves its
+  neighbourhood, where it ends in a tarn.
+- **Tributaries join.** A river that walks into a neighbour's channel
+  no higher than itself ends there, and the lowest water wins inside a
+  channel, so a confluence is a step down, sometimes a small fall. The
+  raw walks are pure functions of the cell, so the decision is the same
+  on every worker without a message.
+- **The valley** is carved from the river: shoulders pulled down to a
+  rim over the water, a channel carved below the surface, sand in the
+  bed and on the banks, no trees or tufts in it, and a levee where the
+  land beside the channel would sit below the water, so a river never
+  spills and, crossing a low place, runs on a raised bank.
+- The old rivers (a noise zero-line carved to sea level, canals rather
+  than rivers) are gone. Terrain near them has changed.
+
+### Every kind of water now has a height
+- `waterYAt(x, z)` is the one question: the sea and the lakes answer
+  sea level, a river answers its own surface, dry ground answers null.
+  The still-water mesh per chunk emits quads at each column's height in
+  whatever vertical band holds it; the far skin carries a water height
+  per vertex (a new attribute; the flat sea uniform is retired);
+  `inWater`, `waterTopAt`, the water cells, the map and the chunk-skip
+  logic all read it. The seams between the near mesh and the skin are
+  handled the way the sea's were.
+- **The cells hold their slope.** A river column is sources up to its
+  surface and sealed just above it, so the Minecraft rules do not try
+  to level a sloped river into a cascade (the first version did, and it
+  spread 800 chunks in a minute). A pit dug through the bed floods from
+  the river; the flow then goes quiet.
+- **The current.** Swimming in a river carries you downstream at up to
+  1.6 m/s mid-channel; wading, it pushes at your legs; a boat drifts
+  with it.
+
+### The surface moves
+- Every water quad, near mesh, cell mesh and far skin alike, carries a
+  flow vector: a river's direction scaled by how far from the bank it
+  is, zero on still water. The water texture drifts along it on one
+  shared clock, so a river visibly runs and a lake does not.
+
+### Not yet
+- Fords and waterfalls as features, riverside villages and cities on
+  the banks; ice on rivers in winter reads the surface but the freeze
+  logic was written for lakes.
+
+## Build 26 — THE PALISADE (2026-09-07)
+
+Roadmap item 4, Austin's two with my bell. Verified headlessly (a
+build-26 suite: items end to end, the claymore fires for a husk in
+front and not for one behind, a grazer, or you, and leaves the edit
+list alone; spikes bleed and slow a husk and not a grazer; the bell
+rings and an armed crew member runs 28 m to it and fights) and in a
+screenshot.
+
+### Defenses that know whose side they are on
+Every one asks the same question of whatever comes near: is that an
+enemy? You, your crew and the animals are never an answer. Enemies are
+what the turrets and the crew already count as enemies: the night
+shift, raiders, sieges, angels, bosses.
+- **Claymore** (2 for 3 iron ingots + 6 rounds, at the table). Place it
+  and it faces the way you face; a red eye blinks on its front. It
+  fires once, for an enemy within 5.5 m in a fan out its front (or
+  within 1.4 m anywhere), and hits everything hostile in a 7.5 m fan:
+  70 damage at the muzzle, falling off to nothing at the edge, with a
+  shove. It never touches the ground: the blast is on the entities,
+  not the field. Then it is spent.
+- **One-way spikes** (2 for 4 iron ingots + 2 sticks). A 2 m strip of
+  iron points on a plank. An enemy on it moves at a third of its speed
+  and takes 7 every half second. Nothing else on it feels a thing, and
+  it has no collision, so you walk over it as if it were grass.
+- **Tripwire bell** (2 iron ingots + 3 sticks). Rings for an enemy
+  within 10 m, once every 8 s at most: three notes, a swing, and the
+  message says which side. Your armed crew on STAY or ROAM within 45 m
+  drop their post and hold the bell for thirty seconds, fighting
+  anything within 34 m of it, then go back.
+
+### Small
+- A hurt crew member wears a health bar over the head (green, amber,
+  red) until they mend; a whole one shows nothing.
+- The wider regression set (inventory, worker pool, night enemies,
+  seasons, sieges, water, boats, plane, guns, explosives, cars,
+  highways, the LOD harness, and the day's five suites) ran clean on
+  the final file.
+
+### Not yet
+- The oil trench, the portcullis on a lever and the flame jet from the
+  roadmap. The bell does not yet wake the turrets (they scan 24 m on
+  their own and do not need it much).
+
+## Build 25 — THE CREW, slice B (2026-09-07)
+
+The rest of what Austin drew, minus the posts. Verified headlessly (a
+build-25 suite: a husk hunts the crew and kills one, a dispenser and a
+stack build the next shape along your aim, a saved blueprint goes up in
+their material, out-of-material stops and more resumes; plus the crew A,
+mirror and smoke suites).
+
+### The night hunts your crew too
+- Lurkers, stalkers and husks now go for the **nearest of you and your
+  crew**, not you alone. A crew member takes real damage, mends slowly
+  when nothing is hitting them, and **dies when their hp is gone**: their
+  tool, their material and their pack fall where they fell, the house
+  takes in someone new with a new name and no goodwill, and the old name
+  is gone. Sieges still go for the walls first.
+- Your own hits on your crew still do nothing.
+
+### They build what you build
+- **GIVE now takes a dispenser and a stack of material** (the stack sits
+  on their belt; same material merges, another swaps back). Following,
+  with both, every shape you place queues the next shape along your
+  aim, with your brush's rotation, in the material they carry, at their
+  dispenser's pace (stone every 0.9 s, diamond every 0.2 s). Lay a wall
+  and it goes twice as far.
+- **BUILD a blueprint.** The panel lists your saved blueprints (PICK
+  cycles them); BUILD raises the chosen one where you are looking,
+  facing the way you face, one edit at a time in the material they
+  carry -- one material per build, whatever the blueprint was drawn in.
+  Cuts in the blueprint are cut for free. Out of material, they stop and
+  say so and keep their place in the plan; hand them more and they pick
+  it up. Props in a blueprint (torches, doors) are not placed.
+
+### Left for a later slice
+- Assign to a stove, a turret, a table. A bed and a chest to call home;
+  eating from your stores. "Left alone long enough they start on
+  blueprints of their own" -- the crew build yours now, which is most
+  of it; their own designs need a house generator I would want to write
+  properly. City folk for hire.
+
+## Build 24 — THE CREW (2026-09-07)
+
+Roadmap item 3, Austin's, first slice. Verified headlessly (a build-24
+suite that hires, follows, catches up, mines alongside, digs a quarry,
+fights a husk, saves and respawns, dismisses; CORE 341; smoke, mirror
+and Build 21 suites) and in a screenshot.
+
+### Hiring
+- **A villager at 10 goodwill will join you for 60 coins.** The row
+  sits under the mission in their trade screen (greyed with the
+  goodwill it needs until you have it). Villages only for now; city folk
+  are bound to their city.
+- They wear your colour on the hat and carry what you give them, so you
+  can tell your crew from the neighbours across a square.
+
+### Orders (right click a crew member)
+- **FOLLOW**: they track you anywhere at your walking pace, faster when
+  you pull ahead, and if you lose them (a cliff, a cave, a car) they
+  turn up beside you within ten seconds in a puff of your colour. No
+  pathfinding was built; the world is a carved field, so "catch up by
+  any means" is the honest version and it never leaves them stuck.
+- **STAY** here, or **ROAM** around the point you look at, 6, 15 or
+  40 m (click again to cycle) -- Austin's boundary disc.
+- **GIVE / TAKE**: hand over the drill, sword or gun in your hotbar
+  slot; take it back any time. **COLLECT** empties their pack into
+  yours. **DISMISS** sends them home with their tool and pack handed
+  back.
+
+### Work
+- **A drill and they mine what you mine.** Following, every cut you
+  make queues the next cut along your aim for them; they walk up and
+  take it at their drill's pace (a stone drill every 1.4 s, diamond
+  every 0.4 s). Dig a tunnel and it goes twice as fast; stand still and
+  hold the button and they bore ahead of you. Yields go into your pack
+  when you are within 12 m, else into theirs.
+- **QUARRY**: point at the ground and they dig a pit, 10 m across and
+  6 m deep, top down, then stay at the rim. In the test one crew member
+  with a ruby drill filled a pack with 3 682 units while I was away.
+- **A sword or a gun and they fight beside you** (following) or
+  defend their post (staying, roaming). Swords swing at arm's reach for
+  8 to 26 by tier; guns hold a distance and fire on a clear line for
+  80% of the gun's damage, no ammo needed -- the hire was the price.
+  A tier-2 sword took a husk down in the test.
+
+### How it persists
+- The crew record lives on the villager's house (mode, tool, pack,
+  post, job, last position), so it saves with the village. On load, or
+  whenever a crew member is missing, they respawn where they were --
+  beside you if they were following. The village never respawns a
+  hired villager at the house, and the 70 m leash does not reap them.
+- Your own hits on your crew do nothing (no offense, no harm). Nothing
+  else damages villagers yet, so the roadmap's "a crew member who dies
+  is gone" waits for the slice where enemies fight back at them.
+
+### Left for slice B
+- A dispenser and they build what you build; left alone, blueprints of
+  their own. Assign to a stove, a turret, a table. A bed and a chest to
+  call home; eating from your stores. City folk for hire.
+
+## Build 23 — MIRROR (2026-09-06)
+
+SCULPT's last piece, small and mine. Verified headlessly (CORE 341 with
+a reflection proof over rotated, stretched cubes and cylinders; a
+build-23 suite that mines, places, strokes and turns across the plane,
+turns and clears it, and saves it) and in a screenshot: a gatehouse of
+two turned towers, a wall and an arch, every edit made once.
+
+### The mirror
+- **Tap K** with a drill, dispenser, trowel, bore or lathe in hand and a
+  plane stands through the ghost, running the way you face, so what you
+  do on one side happens on the other. **Shift + K** turns it a quarter
+  around the same point; **K** again clears it. It is tool state, so it
+  saves with the world.
+- **Every tool repeats across it.** A drill cut and its twin, a
+  dispenser shape and its twin (rotations reflected: the yaw flips, and
+  the roll or the pitch with it, so a tilted slab leans the other way on
+  the far side), a trowel stroke and its twin (the disc shows its twin
+  too), and a bore or lathe job with each cut followed by its
+  reflection, at twice the pace so the job takes the same time. Undo
+  takes both halves; the yields and the costs are both counted.
+- **You can see it.** A faint sheet with a grid slides along the plane
+  to stay beside you, and the ghost has a paler twin on the far side, so
+  you know where the copy lands before you click. The tool panel says
+  which plane and where.
+- CORE gained `mirrorEdit`: the reflection conjugates the rotation, and
+  the test proves the reflected shape's distance field matches the
+  original's at a thousand points.
+
+### Not mirrored, on purpose
+- The wrench's move, resize, delete and paint, and every prop (torches,
+  doors, machines). The mirror is for shaping the world; props are
+  placed by hand.
+
+## Build 22 — MASS (2026-09-06)
+
+Austin's second playtest of the tools: "very fun", and one ask -- make
+the trowel's disc huge, mountains in thirty seconds, with the middle
+button swapping what the wheel does between the disc and the depth.
+Built that, then the third SCULPT piece I had queued. Verified headlessly
+(CORE 337, a build-22 suite that times a 48 m stroke, toggles the mode,
+measures the plateau and probes the turned tower inside and out, plus
+smoke, bore and Build 21 suites) and in screenshots.
+
+### The trowel at mountain scale
+- **Disc from 1 m to 48 m.** The wheel scales it by 15% a notch. The
+  stroke rate slows as the disc grows (a 48 m stroke every 0.7 s in
+  creative) so the mesher keeps up; one 48 m stroke costs about 30 ms
+  of main-thread work, and five held strokes raise a 66 m mountain.
+  48 m is where I stopped because a stroke's blend radius pads its box
+  to twice the disc, and at 96 m across it is 2 000 chunks re-meshed a
+  stroke; the workers absorb that, but not more of it every 0.7 s.
+- **Middle click swaps what the wheel does:** the disc's size, or the
+  stroke's depth (15%-140% of the radius). The panel says which.
+- **You ride your mountain up.** A raise that would swallow you lifts
+  you to the new surface instead of burying you, so you can stand on
+  the disc, hold the button, and go up with the ground. (First 48 m
+  stroke in the test buried the player 24 m; now it carries them.)
+- **Shift + left flattens.** A plateau at the disc's height: a smooth
+  carve of everything above the plane over the disc, a smooth fill of
+  everything below in the ground's own material, undone as one. The
+  blend is 8% of the disc (a soft rim, a floor flat to 0.4 m over a
+  20 m disc -- at 25% the floor domed a metre, so it came down).
+- Costing samples a big shape in metre steps instead of 15 cm ones
+  (a twelfth of the shape, capped at 4 m), so a mountain's cost is a
+  few ms, not seconds.
+
+### The lathe
+- A gadget (6 iron ingots, a ruby ingot at the table) that turns a
+  drawn profile. Lay the axis point, then an outline out from it, any
+  side, any height; the outline's distance from the axis and its
+  height make a profile, and the preview shows it revolved. Right click
+  turns it solid in the ground's material -- a tower, a dome, a bowl,
+  a chimney -- and shift + right turns it hollow. A stack of blended
+  cylinders through the bore's progressive job, so it undoes as one and
+  you can watch it grow. Rings follow the radius as well as the height,
+  so a flared lip keeps its flare.
+
+### Small
+- The trowel's and lathe's panels no longer carry the drill's shape,
+  size and scroll-mode lines under their own.
+
+### Known
+- The trowel at 48 m over water raises the seabed too; that is the SDF
+  being honest and I like it, but the lake does not drain into the
+  new hill. RIVERS is where water learns about terrain changes.
+
 ## Build 21 — SHAPE (2026-09-07)
 
 Austin's first playtest of HORIZON came back: no lines, "a million times
