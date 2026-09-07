@@ -52,10 +52,16 @@ seasons, skin, trowel, crew and LOD suites) and in screenshots.
   1.6 m/s mid-channel; wading, it pushes at your legs; a boat drifts
   with it.
 
+### The surface moves
+- Every water quad, near mesh, cell mesh and far skin alike, carries a
+  flow vector: a river's direction scaled by how far from the bank it
+  is, zero on still water. The water texture drifts along it on one
+  shared clock, so a river visibly runs and a lake does not.
+
 ### Not yet
-- The water surface does not visibly move; fords, waterfalls as a
-  feature, riverside villages and cities on the banks; ice on rivers in
-  winter reads the surface but the freeze logic was written for lakes.
+- Fords and waterfalls as features, riverside villages and cities on
+  the banks; ice on rivers in winter reads the surface but the freeze
+  logic was written for lakes.
 
 ## Build 26 — THE PALISADE (2026-09-07)
 

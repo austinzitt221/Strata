@@ -3190,7 +3190,7 @@ function editProfile(e, x, z){
 }
 function heightGrid(J, gen){
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
-  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1);
+  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1), fl = new Float32Array(N1 * N1 * 2);
   const sea = J.sea != null ? J.sea : -1e9;
   const edits = J.edits || [];
   const CELL = 32;
@@ -3291,11 +3291,12 @@ function heightGrid(J, gen){
       let wv = gen.waterYAt ? gen.waterYAt(x, z, hh) : (hh < sea && (!gen.wetAt || gen.wetAt(x, z, hh)) ? sea : null);
       if (wv != null && hh >= wv) wv = null;
       wet[kk] = wv != null ? 1 : 0;
-      const R = wv == null && gen.riverAt ? gen.riverAt(x, z) : null;
+      const R = gen.riverAt ? gen.riverAt(x, z) : null;
       wy[kk] = wv != null ? wv : R ? Math.max(sea, R.y) : sea;
+      if (R && wv != null && wv > sea + 1e-6){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fl[kk * 2] = R.tx * f; fl[kk * 2 + 1] = R.tz * f; }
     }
   }
-  return { h, m, wet, wy };
+  return { h, m, wet, wy, fl };
 }
 // The whole skin level, worker-side: heights, the height the next-coarser
 // level reads at every vertex (its grid is this one at every other line,
@@ -3359,7 +3360,7 @@ function skinGrid(J, gen){
       widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
     }
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, idx, widx: widx.slice(0, ww) };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -3999,7 +4000,7 @@ const meshPool = {
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
-        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.idx.buffer, g.widx.buffer]);\n' +
+        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.fl.buffer, g.idx.buffer, g.widx.buffer]);\n' +
         '    return;\n' +
         '  }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
@@ -4433,14 +4434,16 @@ class Terrain {
     // meshed. Beyond the cell-mesh radius the still lake is the truth again
     if (waterSys.cells.has(CK(cx, cy, cz)) && waterSys.inMeshRange(cx, cz)) return;
     const x0 = cx * M, z0 = cz * M;
-    const pos = [], uv = [], dep = [];
-    const quad = (xa, za, xb, zb, wy, d) => {
+    const pos = [], uv = [], dep = [], flow = [];
+    const quad = (xa, za, xb, zb, wy, d, fx, fz) => {
       pos.push(xa, wy, za, xa, wy, zb, xb, wy, zb,
                xa, wy, za, xb, wy, zb, xb, wy, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
               xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       const dd = d == null ? 0.8 : d;
       dep.push(dd, dd, dd, dd, dd, dd);
+      fx = fx || 0; fz = fz || 0;
+      for (let q = 0; q < 6; q++) flow.push(fx, fz);
     };
     const W = this.waterInfo(cx, cz);
     if (W.bands.has(cy)){
@@ -4449,7 +4452,12 @@ class Terrain {
           const w = W.wy[i + j * M];
           if (w !== w || Math.floor(w / M) !== cy) continue;     // NaN: dry, or another band's
           const hm = Math.min(W.hs[i + j * (M + 1)], W.hs[i + 1 + j * (M + 1)], W.hs[i + (j + 1) * (M + 1)], W.hs[i + 1 + (j + 1) * (M + 1)]);
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm);
+          let fx = 0, fz = 0;
+          if (w > sea + 1e-6 && this.gen.riverAt){
+            const R = this.gen.riverAt(x0 + i + 0.5, z0 + j + 0.5);
+            if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
+          }
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm, fx, fz);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -4479,6 +4487,7 @@ class Terrain {
     g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
     g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
     g.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(dep), 1));
+    g.setAttribute('aFlow', new THREE.BufferAttribute(new Float32Array(flow), 2));
     g.computeBoundingSphere();
     const mesh = new THREE.Mesh(g, game.waterMat);
     mesh.userData.noShadow = true;
@@ -4835,16 +4844,19 @@ const waterSys = {
     // the cells are the water here: the still surface must not double it
     const chS = game.terrain && game.terrain.chunks.get(key);
     if (chS && chS.water){ game.scene.remove(chS.water); chS.water.geometry.dispose(); chS.water = null; }
-    const pos = [], uv = [], dep = [];
-    const quadH = (xa, za, xb, zb, y, d) => {
+    const pos = [], uv = [], dep = [], flow = [];
+    const quadH = (xa, za, xb, zb, y, d, fx, fz) => {
       pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4, xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       dep.push(d, d, d, d, d, d);
+      fx = fx || 0; fz = fz || 0;
+      for (let q = 0; q < 6; q++) flow.push(fx, fz);
     };
     const quadV = (xa, za, xb, zb, y0, y1) => {
       pos.push(xa, y0, za, xb, y0, zb, xb, y1, zb, xa, y0, za, xb, y1, zb, xa, y1, za);
       uv.push(xa / 4, y0 / 4, xb / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y0 / 4, xb / 4, y1 / 4, xa / 4, y1 / 4);
       dep.push(1, 1, 1, 1, 1, 1);
+      for (let q = 0; q < 6; q++) flow.push(0, 0);
     };
     const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isW(v) ? gy - 0.5 + v / 8 : null; };
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
@@ -4852,15 +4864,19 @@ const waterSys = {
       if (!this.isW(v)) continue;
       const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
       const bottom = gy - 0.5;
-      let top = bottom + v / 8;
+      let top = bottom + v / 8, fx = 0, fz = 0;
       if (v === W_SRC && game.gen.waterYAt && !this.isW(this.lv(gx, gy + 1, gz))){
         const wyc = game.gen.waterYAt(gx + 0.5, gz + 0.5);
-        if (wyc != null && wyc > game.gen.seaLevel + 1e-6 && wyc > top - 1 && wyc < top + 1) top = wyc;
+        if (wyc != null && wyc > game.gen.seaLevel + 1e-6){
+          if (wyc > top - 1 && wyc < top + 1) top = wyc;
+          const R = game.gen.riverAt(gx + 0.5, gz + 0.5);
+          if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
+        }
       }
       if (!this.isW(this.lv(gx, gy + 1, gz))){
         let d = 0.5;
         for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
-        quadH(gx, gz, gx + 1, gz + 1, top, d);
+        quadH(gx, gz, gx + 1, gz + 1, top, d, fx, fz);
       }
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
         const nn = this.lv(gx + dx, gy, gz + dz);
@@ -4879,6 +4895,7 @@ const waterSys = {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
     geo.setAttribute('aDep', new THREE.Float32BufferAttribute(dep, 1));
+    geo.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 2));
     const m = new THREE.Mesh(geo, game.waterMat);
     m.renderOrder = 3; m.userData.noShadow = true; m.frustumCulled = false;
     game.scene.add(m);
@@ -5137,22 +5154,24 @@ function buildScene(){
     // depth-aware, like the LOD water: translucent over a visible shallow
     // bed, deepening to an opaque ocean blue -- WG3's seas are too deep for
     // a fixed 62% wash to read as anything but grey
+    game.uTime = game.uTime || { value: 0 };
     game.waterMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTex: { value: wt } },
+      uniforms: { uTex: { value: wt }, uTime: game.uTime },
       vertexShader: `
-        attribute float aDep;
-        varying vec2 vUv; varying float vDep;
+        attribute float aDep; attribute vec2 aFlow;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
         void main(){
-          vUv = uv; vDep = aDep;
+          vUv = uv; vDep = aDep; vFlow = aFlow;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
       fragmentShader: `
         precision highp float;
-        uniform sampler2D uTex;
-        varying vec2 vUv; varying float vDep;
+        uniform sampler2D uTex; uniform float uTime;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
         void main(){
-          vec3 col = texture2D(uTex, vUv).rgb * vec3(0.737, 0.831, 0.910);
+          // a river's surface drifts downstream; still water stays put
+          vec3 col = texture2D(uTex, vUv + vFlow * uTime * 0.12).rgb * vec3(0.737, 0.831, 0.910);
           float deep = smoothstep(0.6, 7.5, vDep);
           col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
           gl_FragColor = vec4(col, mix(0.68, 0.96, deep));
@@ -22751,20 +22770,20 @@ void main(){
   gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
 }`;
 const SKIN_WATER_VERT = `
-attribute float aDep; attribute float aWY;
+attribute float aDep; attribute float aWY; attribute vec2 aFlow;
 uniform float uSeaY;
-varying vec3 vW; varying float vDep;
+varying vec3 vW; varying float vDep; varying vec2 vFlow;
 void main(){
   vec3 p = vec3(position.x, aWY - 0.02, position.z);
-  vW = p; vDep = aDep;
+  vW = p; vDep = aDep; vFlow = aFlow;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }`;
 const SKIN_WATER_FRAG = `
 precision highp float;
 uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar;
 uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
-uniform vec4 uHole;
-varying vec3 vW; varying float vDep;
+uniform vec4 uHole; uniform float uTime;
+varying vec3 vW; varying float vDep; varying vec2 vFlow;
 void main(){
   if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
   if (uMaskOn > 0.5){
@@ -22772,7 +22791,7 @@ void main(){
     if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0 &&
         texture2D(uMask, mi).r > 0.75) discard;
   }
-  vec3 col = texture2D(uWaterTex, vW.xz / 4.0).rgb * vec3(0.737, 0.831, 0.910);
+  vec3 col = texture2D(uWaterTex, vW.xz / 4.0 + vFlow * uTime * 0.12).rgb * vec3(0.737, 0.831, 0.910);
   float deep = smoothstep(0.6, 7.5, vDep);
   col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
   float dist = gl_FragCoord.z / gl_FragCoord.w;
@@ -22817,6 +22836,7 @@ const farTerrain = {
         uMaskOn: { value: k === 0 ? 1 : 0 },
         uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
         uSeaY: { value: game.gen && game.gen.seaLevel != null ? game.gen.seaLevel - 0.02 : 0 },
+        uTime: (game.uTime = game.uTime || { value: 0 }),
       }, maskU()),
       vertexShader: SKIN_WATER_VERT,
       fragmentShader: SKIN_WATER_FRAG,
@@ -22921,6 +22941,7 @@ const farTerrain = {
         wg.setAttribute('position', posAttr);
         wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
         wg.setAttribute('aWY', new THREE.BufferAttribute(g.wy, 1));
+        wg.setAttribute('aFlow', new THREE.BufferAttribute(g.fl, 2));
         wg.setIndex(new THREE.BufferAttribute(widx, 1));
         wg.boundingSphere = geo.boundingSphere;
         this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
@@ -23819,6 +23840,7 @@ function frame(now){
   hearthSys.tick(dt);
   boreSys.tick(dt);
   mirrorSys.tick(dt);
+  if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
   siegeSys.tick(dt);
   roadSys.tick(dt);
   bossSys.tick(dt);
