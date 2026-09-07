@@ -4,6 +4,24 @@ A running list, newest build first. Claude adds to it every build; Austin
 plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here.
 
+## Build 26 — THE PALISADE
+Craft them at the table (WEAPONS tab): claymores, one-way spikes, a
+tripwire bell. Place them like any prop; they face the way you face.
+- [ ] Claymore: set one at a cave mouth or on the path to your door and
+      stand behind it at night. It should fire once for an enemy in its
+      front fan, never for you, your crew or a sheep, and leave no hole.
+      Is 70 damage at the muzzle (a husk has 95) right?
+- [ ] Spikes: a strip across a doorway. Enemies should crawl across it
+      bleeding; you should walk over it without noticing. Does it read
+      as dangerous enough? Should it ever wear out?
+- [ ] Bell: post an armed crew member on STAY 30 m from a bell, then
+      lure something to the bell. Three notes, the message says which
+      side, and the crew member should arrive and fight, then go back
+      after half a minute.
+- Feedback I want: which of the three would you build first, and which
+  never? What is missing from a base's defenses that these do not
+  cover (the roadmap still has the oil trench, portcullis, flame jet)?
+
 ## Build 25 — THE CREW (slice B)
 - [ ] Stay out at night with a crew member who has no weapon. Enemies
       should go for whichever of you is nearer. Do they die too fast, too

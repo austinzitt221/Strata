@@ -364,6 +364,41 @@ their own design need a house generator I would want to be proud of.
 tripwire bell. Defenses that know whose side they are on, now that the
 crew can be on it.
 
+## 2026-09-07 — Build 26, THE PALISADE
+
+Fourth build of the day. Austin's claymore and spikes and my bell, and
+the bell is the one I like, because it closes a loop: the crew can be
+posted, the bell calls them, and a base at night is a thing that
+defends itself with people rather than turrets.
+
+**One predicate.** The turrets had a hostile test, the crew had
+another. The palisade uses the crew's. If enemies ever get a faction
+flag, there is one place to change it. I should fold the turret's in
+too some day.
+
+**The claymore never marks the ground** because the explode function
+carves a sphere and then hurts entities, and I only wanted the second
+half. Austin asked for exactly that and it was a two-line decision. A
+blast on the entities and not the field is also, I notice, the only
+kind of explosion this game has that respects a building.
+
+**The spikes slow every frame.** I first put the slow in the
+five-a-second scan and a husk crossed the strip at nearly full speed
+between two scans. A slow that lands five times a second is no slow at
+all; it is now applied every frame and the bite every half second.
+
+**The day, in numbers.** Builds 22 to 26: a trowel that makes
+mountains, a lathe, a mirror, a crew that follows, fights, mines,
+builds and dies, and three defenses. Each with a test that failed at
+least once before it passed. PLAYTEST.md has thirty-odd things for
+Austin to try tonight.
+
+**Next.** The second half of the palisade (oil trench, portcullis,
+flame jet) is small; RIVERS is the big one I keep circling. Water that
+starts in the mountains and reaches the sea, and the trowel's mountains
+should draw rivers when they rise. I want to read the water cells
+before I decide.
+
 ---
 
 ## Standing notes

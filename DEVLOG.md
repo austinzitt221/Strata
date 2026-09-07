@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 26 — THE PALISADE (2026-09-07)
+
+Roadmap item 4, Austin's two with my bell. Verified headlessly (a
+build-26 suite: items end to end, the claymore fires for a husk in
+front and not for one behind, a grazer, or you, and leaves the edit
+list alone; spikes bleed and slow a husk and not a grazer; the bell
+rings and an armed crew member runs 28 m to it and fights) and in a
+screenshot.
+
+### Defenses that know whose side they are on
+Every one asks the same question of whatever comes near: is that an
+enemy? You, your crew and the animals are never an answer. Enemies are
+what the turrets and the crew already count as enemies: the night
+shift, raiders, sieges, angels, bosses.
+- **Claymore** (2 for 3 iron ingots + 6 rounds, at the table). Place it
+  and it faces the way you face; a red eye blinks on its front. It
+  fires once, for an enemy within 5.5 m in a fan out its front (or
+  within 1.4 m anywhere), and hits everything hostile in a 7.5 m fan:
+  70 damage at the muzzle, falling off to nothing at the edge, with a
+  shove. It never touches the ground: the blast is on the entities,
+  not the field. Then it is spent.
+- **One-way spikes** (2 for 4 iron ingots + 2 sticks). A 2 m strip of
+  iron points on a plank. An enemy on it moves at a third of its speed
+  and takes 7 every half second. Nothing else on it feels a thing, and
+  it has no collision, so you walk over it as if it were grass.
+- **Tripwire bell** (2 iron ingots + 3 sticks). Rings for an enemy
+  within 10 m, once every 8 s at most: three notes, a swing, and the
+  message says which side. Your armed crew on STAY or ROAM within 45 m
+  drop their post and hold the bell for thirty seconds, fighting
+  anything within 34 m of it, then go back.
+
+### Not yet
+- The oil trench, the portcullis on a lever and the flame jet from the
+  roadmap. The bell does not yet wake the turrets (they scan 24 m on
+  their own and do not need it much).
+
 ## Build 25 — THE CREW, slice B (2026-09-07)
 
 The rest of what Austin drew, minus the posts. Verified headlessly (a
