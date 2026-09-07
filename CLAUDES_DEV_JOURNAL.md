@@ -529,6 +529,112 @@ camps, a shaft and a survey; two defenses. Every one with a test that
 failed at least once first. Austin plays tonight with thirteen builds
 of notes in PLAYTEST.md.
 
+## 2026-09-07 — a brainstorm, nothing built
+
+Austin has thirteen builds to play and asked me to think instead of
+build. So: where I want to take this, in the order I would take it,
+and the ideas behind each.
+
+### The stance
+Carving is the identity. Every system should either give you a reason
+to carve, or answer what you carved. Rivers answer terrain; the crew
+answers the tools; the expedition answers the question "why go down".
+The next builds should keep to that: no system that sits beside the
+carving without touching it.
+
+### 1. THE DEEP (the door is open)
+The last page says do not go down. So the next big build is down.
+- **The dark is the mechanic.** Underground light comes from what you
+  bring and what grows: torches, glow fungus, lava. Beyond it, black.
+  The terrain shader already knows torch light; the Deep turns the
+  ambient off below the mouth's depth.
+- **They hunt by sound.** A noise meter: drilling, explosions, a
+  dropped tool, the bell. Loud work draws "them" from the second hall.
+  A stone drill is quiet and slow; a diamond drill is loud and fast.
+  For the first time the tool tiers are a choice, not a ladder.
+- **Halls, not caves.** The survey names a first hall and a second. The
+  cave network already has chambers; the Deep makes a few of them
+  built: pillars, a floor, something that was a door. Bones laid out
+  with care, as in page four. Someone lived down here.
+- **The answer to the pages.** Not a boss fight first. The first thing
+  you find under the mouth is the leader's last camp, and the leader.
+  What the sound is, I want to decide when I have written the second
+  hall; the pages promise a place, not a monster, and I will keep that
+  promise.
+- **The way back up matters.** Ropes, the elevator, the grapple. A
+  return trip with a full pack and a noise meter climbing is the
+  tension I want.
+
+### 2. RIVERS II (the river should do things)
+- **Seasons on the water.** Winter freezes rivers to walk across
+  (the ice code reads the surface already). Spring raises every river a
+  metre: fords vanish, low banks flood. Summer drops it: fords appear.
+  The per-column water height makes this a number per season.
+- **Waterfalls.** Where a segment drops more than three metres, mist,
+  sound, and a pool cut at the foot. The tributary mouths are already
+  falls; they should look and sound like it.
+- **The mill.** A water wheel prop that sits in a river and gives
+  watts from the current: free, placed, quiet power. The grid already
+  exists; this is the best generator in the game and it costs a river.
+- **Villages on the banks.** Village placement prefers a river within
+  60 m; those villages get a plank bridge and a jetty. The bridge is a
+  prop the player can craft too.
+- **River fish and a ford marker.** Trout, pike; the fishing rod knows
+  the difference. Boats that drift to the sea while you sleep.
+- **Sound.** Running water within 30 m, louder at a fall.
+
+### 3. THE CREW C (a day with a shape)
+- **Tents are beds.** A crew member sleeps in a tent at night and
+  works by day; give them no tent and they sleep on the ground and
+  grumble. The expedition's tent is now a prop; it earns its keep.
+- **Posts.** Stove (they smelt what is in the hopper), table (they
+  craft a standing order), turret (they man it: it fires without the
+  grid, at 24 m, because a person is aiming it). Each post is a hook
+  into a system that assumed the player; that is why it is a session.
+- **Meals.** A crew member eats from a chest you mark as the larder.
+  No food, slower work; three days, they go home.
+- **The rescue.** The second was left hurt at camp 7 and the page says
+  it. If you find him within N days of world start he is alive, and
+  bringing him home makes him crew: the only one who has been down.
+  His lines are different. This is the expedition's second story and
+  it costs one entity and twenty lines.
+- **Skill.** Work makes them better at it: a miner's rate improves by
+  a tenth per hundred cuts, capped. Losing a veteran should hurt.
+
+### 4. SCULPT II (the last strokes)
+- **The smoothing stroke.** Trowel with shift + right: a local blur of
+  the field, no add, no take. The one SCULPT piece I never built.
+- **Radial symmetry.** The mirror with N planes through a point: a
+  tower with six faces, a temple with eight. The mirror code takes an
+  axis; radial takes a count.
+- **Brushes from blueprints.** Save a carved shape as a brush and
+  stamp it with the drill. Ornament at scale.
+- **The path.** Walk with the trowel held and shift: the ground under
+  you flattens a metre wide and paints to stone. Roads by walking.
+
+### 5. THE GARRISON, then the Space Arc (Austin's)
+- Both are big and both are built on things that now exist: the crew
+  for soldiers, the palisade for base defenses, the flame jet and the
+  turret for the walls. The radar dish I want to sabotage is a powered
+  prop, so the grid is the stealth route. I would do the garrison
+  after THE DEEP and RIVERS II, because a base worth taking should sit
+  on a river and have a reason to be there.
+
+### Small things I want, whenever a session has room
+- Shadow cascades (still).
+- Place names on the map: a region's name in its archetype's voice,
+  the river names already there, "the Harrow hills".
+- A moving sky of birds along rivers; fish visible in shallow water.
+- The portcullis, built on the door system.
+- Footsteps that know the material (sand, snow, planks).
+- The claymore's red eye reflected on the ground at night.
+
+### What I would not do
+- Another vehicle. There are eight.
+- Another boss before the Deep has its own.
+- Any far-renderer work until Austin has played HORIZON and RIVERS
+  together and told me what he sees.
+
 ---
 
 ## Standing notes

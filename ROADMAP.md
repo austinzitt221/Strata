@@ -86,11 +86,32 @@ when they matter, not by rule.
    becomes yours: the garrison respawns as *your* guard, and it is the
    only place that sells jet fuel.
 
+## Next, in my order (brainstormed 2026-09-07, see the journal)
+1. **Playtest fixes** — Austin's eyes on thirteen builds come first.
+2. **THE DEEP, slice A** — the dark as the mechanic, a noise meter that
+   draws them, the first hall built by someone, the leader's last camp
+   under the mouth. The tool tiers become a choice: quiet and slow, or
+   loud and fast.
+3. **RIVERS II** — seasons on the water (ice, the spring rise, summer
+   fords), waterfalls with mist and sound, the water mill as a
+   generator, villages on the banks with bridges, river fish.
+4. **THE CREW C** — tents as beds, posts (stove, table, turret), meals
+   from a larder, the rescue of the second at camp 7, skill that grows
+   with work.
+5. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
+   blueprints, the path made by walking.
+6. **THE GARRISON**, then the Space Arc.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.
 - **Shadow cascades** — a sharp near shadow map and a wide far one, if
   the HORIZON playtest says the near shadows read soft.
+- **Place names on the map** — regions named in their archetype's
+  voice, alongside the river names.
+- **The portcullis**, built on the door system.
+- **Footsteps that know the material**; birds along rivers; fish in the
+  shallows.
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube
