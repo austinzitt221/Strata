@@ -714,6 +714,40 @@ What I did not do: beds and chests of their own, eating, their own
 houses. Those are a later slice; THE BREACH is next and it is what the
 palisade has been waiting for.
 
+## 2026-09-08 — Build 32 played, Build 33 the breach
+
+Austin played Build 32 and had no notes on the list: eight slots is
+right, torches right, the mayor's price right, the flood's thirty
+metres right, spikes right because they stack. One change and it was a
+better rule than mine: what a crew member holds is whatever they used
+last. I had them swap back to the job's tool on a timer; he said the
+drill should come out when you start drilling. That is the same rule
+for every case and needs no timer, so the timer went.
+
+Two things to keep from his report. Frame rate: 60 to 70 standing, 40
+flying in creative or on a city's first load. And the lighting line:
+it sits wherever the real field ends, so it moves with you, and things
+around it flicker between shaded and unshaded as they load. That is
+the near/far shading disagreement I already had on the list; his
+description makes it a coverage-edge problem (the flicker is chunks
+promoting), not just a tone mismatch. Both are on the roadmap's small
+list now.
+
+THE BREACH went in as one system, breachSys: a strength per thing, a
+blow per enemy, a scan for what is in reach, a mender that undoes it
+for charge. The rule Austin gave (defenses and generators, never
+material or furniture) turned out to be the cleanest rule in the game:
+the breakable set is exactly the set of things that act on enemies,
+plus generators, which power the things that act on enemies. Nothing
+else needed deciding. The one surprise in testing was a husk sliding
+off a turret on a slope while "standing still": the pushout moved it
+without velocity, so now a wrecker leans back in when it drifts.
+
+Raiders going for the generator was my addition and I think it is the
+best part: the raid has always been "your grid hums too loud", and now
+the raid answers the hum. THE DEEP A is next in my order; but first,
+some creative time.
+
 ---
 
 ## Standing notes

@@ -2,6 +2,51 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 33 — THE BREACH (2026-09-08)
+
+Enemies tear down what defends you, and nothing else. Verified headlessly
+(a build-33 suite stands a husk beside a turret and watches it go over in
+six blows, sends the same husk through a door with you behind it and a
+chest beside it, raises and lowers a 4 m gate on a lever and bends it
+with blows, watches a raider with nobody in reach walk to a generator
+and break it, mends all three with the mender and refuses when charge is
+short, charges the mender from a battery, and round-trips gates and
+breaks through the save; plus the palisade, crew and smoke suites).
+
+- **What breaks.** Doors and gates, spikes, claymores, bells, oil
+  trenches, turrets, flame jets, and generators (the real blow). Never
+  material, real geometry, beds, beacons, chests, tables or stoves.
+  Each has a strength: a door 40, a gate 120, a turret 80, a generator
+  70, a mk2 120. A husk's fist is 14, a raider's 12, a lurker's 8, a
+  stalker's 4, a warlord's 30.
+- **How they come at it.** A hostile that passes within reach of a
+  defense or a generator stops and hammers it, one blow a second, and
+  leans back in if a slope slides it off. A door or gate is only in the
+  way while they are hunting you or your crew. A raider with nobody in
+  reach goes for the hum that called it: the nearest live generator
+  within seventy metres.
+- **Broken things stay broken.** A prop is knocked over and smokes if
+  it is a machine; a door hangs open off its hinge; a gate bends and
+  stays open. Broken turrets and jets draw nothing and fire nothing,
+  broken generators give no watts, a broken bell is silent, a broken
+  claymore sleeps, a smashed trench will not light, worn spikes lie
+  flat. Right click on a broken door says so.
+- **The mender.** A battery-fed repair gun (six iron, four wire, a ruby
+  ingot). Hold left click on a broken or battered thing for two and a
+  half seconds and it is whole; charge pays for it and nothing else: a
+  door 8 %, a gate 15 %, a turret 20 %, a generator 20 or 30 %. Battered
+  but standing costs a share. Click a battery onto it to charge, the way
+  a jetpack charges. A whole base is a few batteries.
+- **The gate.** A portcullis on the door system: iron bars sized to any
+  opening (scroll, up to 7 m wide, 1.15 tall per wide), placed like a
+  door with the same grid and side alignment. It rises straight up into
+  the wall above rather than swinging. A lever within nine metres raises
+  every gate around it when on and lowers them when off; right click
+  works it by hand too. Six iron and four sticks.
+- **Crew hands (from the Build 32 playtest).** A crew member keeps
+  whatever they used last; the drill comes back out when you start
+  drilling, not on a timer.
+
 ## Build 32 — THE CREW C: a person, not a prop (2026-09-08)
 
 The crew get a pack of their own and the sense to use it. Verified
