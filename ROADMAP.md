@@ -89,14 +89,15 @@ when they matter, not by rule.
 ## Next, in my order (re-planned 2026-09-07 after Austin's first playtest)
 Austin's ideas from the playtest are folded in below with mine; the
 order is mine. Big items are split so each build is one session.
-1. **THE CREW C — a person, not a prop** (Austin's, mostly) — their own
-   inventory panel you drag into (dispensers, drills, guns, material,
-   torches), an armor slot, and they pick what fits the moment: the
-   drill when you dig, the gun when something comes; torches in their
-   pack get planted as they follow you through a cave. Hire in cities
-   too, mayors included; a trades tab stays open after hiring; pick a
-   hireable villager up over your head. Tents are beds. No fall damage
-   ever (they take none now); the catch-up teleport stays.
+1. **THE CREW C — a person, not a prop** (Austin's, mostly) — DONE
+   (Build 32): their own pack and armor slots you click or drag into,
+   they pick the tool for the moment (the gun when something comes, the
+   drill when you dig, the dispenser when you place), torches in their
+   pack get planted through the dark, hire in cities and the mayor, a
+   TRADES tab that keeps their shop open, carry a hireable villager over
+   your head, tents are beds. No fall damage ever (they take none); the
+   catch-up teleport stays. Left for a later crew slice: a bed and a
+   chest of their own, eating from your stores, houses of their own.
 2. **THE BREACH** (Austin's) — enemies tear down what defends you and
    nothing else: gates, doors, spikes, trenches, bells, turrets, flame
    jets, and generators (the real blow). Never material, real geometry,
