@@ -2,6 +2,36 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 33.1 — THE LINE (creative time, 2026-09-08)
+
+The lighting line between the near field and the far skin, reported
+three playtests running, measured and fixed. Method: a headless
+screenshot with the skin on and off gives a mask of skin pixels; along
+the boundary the skin averaged 124 luminance against the near field's
+110, a 12 % step. Flattening the ambient-occlusion attribute on either
+side moved nothing, which was misleading until the per-cell check: at
+the same 2 m cells the near mesh's normals and the skin's agree to half
+a percent, but the near field's occlusion averaged 0.72 on open ground
+and the skin's 0.99, and the shader's own terms put the skin 29 %
+brighter from that alone.
+
+The cause: the near field's occlusion taps read the terrain SDF, which
+returns 0.65 of the true vertical distance (a Lipschitz safety in
+`sdfTerrain`). So open flat ground reads 35 % occluded and sits at 0.70,
+gentle slopes at 0.79, steep ground at 1.0 (the taps lean out off a
+slope). That bias depends only on the normal's y, so the skin's AO now
+carries the same curve (`1 - 0.85 * max(0, 1 - 0.65 / ny)`) under its
+curvature term. After: the per-cell lit ratio is 1.009 and the
+screenshot step is 108 against 109. The near field is untouched; what
+Austin sees close up is exactly what he saw before.
+
+The flicker he described at the edge (patches switching between shaded
+and unshaded as chunks load) was this step made visible by promotion;
+with the tone matched the switch should be invisible. Playtest will say.
+The bias itself (flat ground 30 % occluded) is a separate question for
+another day: fixing it at the source would brighten the whole near
+world and change the look.
+
 ## Build 33 — THE BREACH (2026-09-08)
 
 Enemies tear down what defends you, and nothing else. Verified headlessly

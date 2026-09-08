@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 33.1 — THE LINE
+- [ ] Walk and fly over open country by day and look for the line where
+      the real field ends. It should be gone on open ground and gentle
+      slopes; tell me if it survives anywhere (steep cliffs, snow, sand,
+      forest floor) and whether the flicker at the edge went with it.
+- Feedback I want: does the far country look any different from before
+  (it should be a touch darker, the same as the near ground always was)?
+
 ## Build 33 — THE BREACH
 - [ ] Build a small base at night: a door, a turret on a generator, a
       bell, spikes. Let the night come. Enemies should stop at what

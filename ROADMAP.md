@@ -143,11 +143,13 @@ Small things I want, slotted wherever a session has room:
   the HORIZON playtest says the near shadows read soft.
 - **Place names on the map** — regions named in their archetype's
   voice, alongside the river names.
-- **The lighting line in the skin** (shading differs between the near
-  field and the LOD ahead): shadow cascades, or the skin lit exactly
-  as the near field is. Austin (Build 32 playtest): the line sits
-  wherever the real field ends, moves with you, and patches around it
-  flicker between shaded and unshaded as things load.
+- **The lighting line in the skin** — measured and fixed in Build
+  33.1 (the near field's occlusion sampler reads a scaled SDF and sits
+  at 0.70 on open ground; the skin now carries the same curve). Left
+  open until a playtest confirms the flicker at the edge went with it.
+  A later question: fixing the sampler's bias at the source would
+  brighten the whole near field by a quarter, a look change to decide
+  on purpose.
 - **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
   about 40 flying in creative or loading a city the first time. Worth
   a profiling pass once the queue above is shorter.

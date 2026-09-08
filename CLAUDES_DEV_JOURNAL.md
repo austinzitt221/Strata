@@ -748,6 +748,31 @@ best part: the raid has always been "your grid hums too loud", and now
 the raid answers the hum. THE DEEP A is next in my order; but first,
 some creative time.
 
+## 2026-09-08 — creative time: the line, measured
+
+I have wanted to do this properly for a while and never had the
+afternoon. The trick was to stop looking and start measuring: a
+screenshot with the skin on, one with it off, and the pixels that
+change are the skin. Along that boundary the skin was 12 % brighter
+than the ground it meets. Flattening AO on both sides changed nothing,
+which nearly sent me down the wrong road (normals, textures) until I
+compared the shader's terms per cell instead of per pixel: the normals
+agree, the occlusion does not. The near field's occlusion taps read a
+terrain SDF that returns 0.65 of the true distance, so open flat ground
+has been 30 % "occluded" since Build 5.5, and the skin, honest about
+its flat ground, was the one that looked wrong.
+
+Two fixes were possible. Fix the sampler and the whole near world gets
+a quarter brighter: a look change Austin has not asked for. Or give the
+skin the same bias, which is one line and depends only on the normal's
+y. I took the second. The line is gone in measurement; his eyes will
+say if it is gone in play. The first fix is on the roadmap as a
+question, not a task.
+
+A lesson for the standing notes: when a rendering complaint comes back
+three times, build the instrument. The instrument took an hour and
+found in ten minutes what three playtests could only describe.
+
 ---
 
 ## Standing notes
@@ -762,6 +787,11 @@ pacing or flicker can be judged here. Inside
 `page.evaluate` the game is `window.__game` and the systems are on
 `window.__api`. Suites for every build live in the scratchpad and take
 about 25 minutes together.
+
+**Instruments.** `lineshot.js` (scratchpad) masks the skin by
+screenshot difference and reports the luminance step at the coverage
+edge; `linecheck.js` compares the near mesh's lighting terms to the
+skin's per 2 m cell. Use them before touching the skin's shading.
 
 **How I play.** I can stand somewhere, look, walk, fly, build, mine,
 open screens and take screenshots. I cannot feel frame pacing or see

@@ -3357,7 +3357,14 @@ function skinGrid(J, gen){
     const hl = h[r * N1 + Math.max(0, i - 1)], hr = h[r * N1 + Math.min(n, i + 1)];
     const hd = h[Math.max(0, r - 1) * N1 + i], hu = h[Math.min(n, r + 1) * N1 + i];
     const cc = (hl + hr + hd + hu) * 0.25 - h[kk];
-    ao[kk] = Math.round(255 * Math.max(0.35, Math.min(1, 1 - cc / (s * 1.6))));
+    // the near field's occlusion taps read the terrain SDF, which is 0.65 of
+    // the true distance: open flat ground there sits at 0.70 and steep ground
+    // at 1.0 (the taps lean out off a slope). That bias depends only on the
+    // normal's y, so the skin carries the same one and the join has no tone
+    // step (Build 33 creative time; measured, not guessed)
+    const nyv = Math.max(0.2, nrm[o3 + 1] / 127);
+    const base = 1 - 0.85 * Math.max(0, 1 - 0.65 / nyv);
+    ao[kk] = Math.round(255 * base * Math.max(0.35, Math.min(1, 1 - cc / (s * 1.6))));
     dep[kk] = Math.max(0, G.wy[kk] - h[kk]);
   }
   const mt = new Uint8Array(n * n);
