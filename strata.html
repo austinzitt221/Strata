@@ -283,6 +283,12 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div id="tradelist" style="max-height:300px; overflow:auto;"></div>
   </div>
   <div class="panel">
+    <div id="crewbag" class="hidden">
+      <div class="invlabel">THEIR HANDS &nbsp;·&nbsp; ARMOR</div>
+      <div class="invgrid" style="grid-template-columns:52px 52px 52px 52px;" id="crewhand"></div>
+      <div class="invlabel">THEIR PACK</div>
+      <div class="invgrid" id="crewpack"></div>
+    </div>
     <div class="invlabel">INVENTORY</div>
     <div class="invgrid" id="trademain"></div>
     <div class="invlabel">HOTBAR</div>
@@ -4658,13 +4664,13 @@ function inWater(x, y, z){
 // cell spreads sideways one level lower per metre; two sources beside a
 // supported cell make a third; unsupported flow drains away. Cells the
 // flow reaches in untouched chunks materialize on demand. 8 Hz.
-const W_SOLID = 255, W_SRC = 8;
+const W_SOLID = 255, W_SRC = 8, W_REACH = 32;   // cells of travel a flood gets from a true source
 const waterSys = {
-  cells: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
+  cells: new Map(), dist: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
   accT: 0, maintT: 0, MAX_ACTIVE: 48,
   idx(i, j, k){ return (j * 8 + k) * 8 + i; },
   keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
-  reset(){ this.cells = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
+  reset(){ this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
     for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
     this.meshes = new Map(); },
   // what an untouched cell holds: rock, still water, or air
@@ -4726,11 +4732,25 @@ const waterSys = {
       // an edit under running water: rock is rock, but water already there stays
       a[q] = (old && v !== W_SOLID && old[q] !== W_SOLID && old[q] !== 0) ? old[q] : v;
     }
+    // how far each cell's water has travelled from a true source: the sea,
+    // a lake, a river are 0; flow counts up and stops at W_REACH
+    const oldD = keep ? this.dist.get(key) : null;
+    const d = new Uint8Array(512);
+    for (let q = 0; q < 512; q++) d[q] = a[q] === W_SRC ? (oldD && oldD[q] < 255 ? oldD[q] : 0) : (oldD && this.isW(a[q]) ? oldD[q] : 255);
+    this.dist.set(key, d);
     this.cells.set(key, a);
     this.active.add(key); this.dirtyMesh.add(key);
     const ch = game.terrain.chunks.get(key);
     if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     return a;
+  },
+  // distance from a true source, for a cell's water; untouched chunks are
+  // all true sources (0) or dry
+  dv(gx, gy, gz){
+    const key = CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8));
+    const d = this.dist.get(key);
+    if (d) return d[this.idx(gx & 7, gy & 7, gz & 7)];
+    return this.lv(gx, gy, gz) === W_SRC ? 0 : 255;
   },
   lv(gx, gy, gz){
     const cx = Math.floor(gx / 8), cy = Math.floor(gy / 8), cz = Math.floor(gz / 8);
@@ -4788,7 +4808,8 @@ const waterSys = {
         const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
         if (gy <= CORE.BEDROCK_Y + 1) continue;
         const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
-        let nv = this.isW(above) ? 7 : 0, srcN = 0;
+        let nv = 0, srcN = 0, nd = 255;
+        if (this.isW(above)){ nv = 7; nd = this.dv(gx, gy + 1, gz) + 1; }
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
           const nn = this.lv(gx + dx, gy, gz + dz);
           if (!this.isW(nn)) continue;
@@ -4796,20 +4817,29 @@ const waterSys = {
           // a neighbour spreads sideways when it is a source or stands on
           // something (falling water only falls)
           const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
-          if (nb === W_SOLID || nb === W_SRC) nv = Math.max(nv, nn - 1);
+          if (nb === W_SOLID || nb === W_SRC){
+            if (nn - 1 > nv || (nn - 1 === nv && nv > 0)) nd = Math.min(nd, this.dv(gx + dx, gy, gz + dz) + 1);
+            nv = Math.max(nv, nn - 1);
+          }
         }
-        // sources are born three ways on a supported cell: Minecraft's two
-        // sources beside it; a full cell with water above it (a column fed
-        // from a lake is the lake); or a full cell beside a source (the
-        // lake's level creeps along every floor it can reach — it is infinite)
+        // a flood only travels so far from a true source: past W_REACH cells
+        // of falling and spreading it trails off and stops, so a river cut
+        // open on a mountainside cannot drown the valley below
+        if (nv > 0 && nd >= W_REACH) nv = 0;
+        // sources are born on a supported cell: Minecraft's two sources
+        // beside it; a full cell with a SOURCE directly above it (a column
+        // under a lake is the lake); or a full cell beside a source (the
+        // lake's level creeps along every floor it can reach). Falling water
+        // never breeds sources, and a born source keeps its distance
         const supported = below === W_SOLID || below === W_SRC;
-        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (this.isW(above) || srcN >= 1)))) nv = W_SRC;
-        if (nv !== v) writes.push(key, q, nv, gx, gy, gz);
+        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (above === W_SRC || srcN >= 1)))) nv = W_SRC;
+        if (nv !== v) writes.push(key, q, nv, gx, gy, gz, nv > 0 ? Math.min(254, nd) : 255);
       }
     }
-    for (let w = 0; w < writes.length; w += 6){
+    for (let w = 0; w < writes.length; w += 7){
       const key = writes[w], q = writes[w + 1], nv = writes[w + 2];
       this.cells.get(key)[q] = nv;
+      const dd = this.dist.get(key); if (dd) dd[q] = writes[w + 6];
       next.add(key); this.dirtyMesh.add(key);
       // a change on a chunk face wakes the neighbour (and grows it cells if water is arriving)
       const gx = writes[w + 3], gy = writes[w + 4], gz = writes[w + 5];
@@ -4936,6 +4966,10 @@ const waterSys = {
       let q = 0;
       for (let t = 0; t + 1 < r.length; t += 2){ for (let c = 0; c < r[t + 1] && q < 512; c++) a[q++] = r[t]; }
       this.cells.set(key, a);
+      // saved flow has no distance; give it a little room and let it settle
+      const d = new Uint8Array(512);
+      for (let q2 = 0; q2 < 512; q2++) d[q2] = a[q2] === W_SRC ? 0 : (this.isW(a[q2]) ? W_REACH - 6 : 255);
+      this.dist.set(key, d);
       this.active.add(key); this.dirtyMesh.add(key);
     }
   },
@@ -10691,6 +10725,13 @@ function entMesh(type, ent){
       else if (t.kind === 'sword') box(0.06, 0.9, 0.1, 0xd8dde4, 0.34, 1.0, -0.15);
       else if (t.kind === 'fw') box(0.1, 0.12, 0.62, 0x2c2c31, 0.34, 0.86, -0.3);
     }
+    if (ent && ent.crew && ent.crew.arm){
+      // and wear what you gave them, in the tier's colour
+      const A = ent.crew.arm, tc = q => parseInt((TIER_COL[q.tier | 0] || '#8a8a92').slice(1), 16);
+      if (A.head) box(0.54, 0.22, 0.54, tc(A.head), 0, 1.62, 0);
+      if (A.chest) box(0.5, 0.48, 0.32, tc(A.chest), 0, 0.96, 0);
+      if (A.feet) for (const sx of [-0.1, 0.1]) box(0.2, 0.16, 0.24, tc(A.feet), sx, 0.08, 0);
+    }
     g.userData = { legs, phase: Math.random() * 6, hpbar };
     return g;
   }
@@ -11770,7 +11811,16 @@ const crewSys = {
     if (!P.ent){ damagePlayer(dmg, kx, kz); return; }
     this.hurt(P.ent, dmg, kx, kz);
   },
+  // the armor you gave them takes the edge off, exactly as yours does for you
+  armorRed(C){
+    const A = C && C.arm || {};
+    let r = 0;
+    for (const p of [A.head, A.chest, A.feet]) if (p) r += [0.06, 0.09, 0.12, 0.16, 0.2][p.tier | 0] || 0;
+    return Math.min(0.6, r);
+  },
   hurt(e, dmg, kx, kz){
+    const ar = this.armorRed(e.crew);
+    if (ar && dmg > 0) dmg = Math.max(1, Math.round(dmg * (1 - ar)));
     e.hp -= dmg; e.flash = 0.2;
     e.vx += (kx || 0) * 0.6; e.vz += (kz || 0) * 0.6; e.vy += 1.5;
     if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('hurt');
@@ -11782,11 +11832,7 @@ const crewSys = {
     const hrec = villageSys.villagerRec(e), C = e.crew;
     const name = this.nameOf(e);
     const at = { x: e.x, y: e.y + 0.8, z: e.z };
-    if (C){
-      if (C.tool) dropItem(C.tool, at);
-      if (C.mat && C.mat.count > 0) dropItem(C.mat, at);
-      for (const k in C.pack){ const v = C.pack[k]; if (!(v > 0)) continue; dropItem(isNaN(+k) ? { kind: k, count: v } : { kind: 'mat', mat: +k, count: v }, at); }
-    }
+    if (C){ for (const it of this.everything(C)) dropItem(it, at); this.empty(C); }
     if (hrec){
       hrec.crew = null;
       hrec.vname = villageSys.nameFor((Math.random() * 4294967295) >>> 0);
@@ -11798,10 +11844,25 @@ const crewSys = {
     markSave();
   },
   hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel'); },
+  // what it costs to hire them: villagers 60, city folk 120, the mayor 400
+  // -- and the mayor only leaves the office for someone the city knows
+  hireCost(e, hrec){ return hrec.role === 'mayor' ? 400 : e.ckey ? 120 : this.HIRE_COST; },
+  hireLock(e, hrec){
+    if ((hrec.rep || 0) < this.HIRE_REP) return hrec.vname + ' would join your crew at ' + this.HIRE_REP + ' goodwill';
+    if (hrec.role === 'mayor'){
+      const crec = e.ckey ? game.cities[e.ckey] : null;
+      if (!crec || (crec.rep || 0) < 25) return 'the mayor would leave the office for you at standing 25' + (crec ? ' in ' + crec.name : '');
+    }
+    return null;
+  },
   hire(e, hrec){
-    if (CORE.countItem(game.slots, 'coin') < this.HIRE_COST){ toast('need ' + this.HIRE_COST + ' coins to hire ' + hrec.vname); AudioSys.sfx('deny'); return; }
-    CORE.consumeItem(game.slots, 'coin', this.HIRE_COST);
-    hrec.crew = { mode: 'follow', tool: null, mat: null, pack: {}, pos: [e.x, e.y, e.z], home: null, r: 12, tasks: [], job: null, bp: 0, hired: game.day || 0 };
+    const lock = this.hireLock(e, hrec);
+    if (lock){ toast(lock); AudioSys.sfx('deny'); return; }
+    const cost = this.hireCost(e, hrec);
+    if (CORE.countItem(game.slots, 'coin') < cost){ toast('need ' + cost + ' coins to hire ' + hrec.vname); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', cost);
+    hrec.crew = { mode: 'follow', tool: null, mat: null, pack: {}, bag: new Array(8).fill(null), arm: { head: null, chest: null, feet: null },
+                  pos: [e.x, e.y, e.z], home: null, r: 12, tasks: [], job: null, bp: 0, hired: game.day || 0 };
     e.crew = hrec.crew;
     this.remesh(e);
     toast(hrec.vname + ' joins your crew · right click them to give orders');
@@ -11830,6 +11891,10 @@ const crewSys = {
       take: ['all yours.', 'fair enough.', 'was getting heavy anyway.'],
       collect: ['it\'s all there.', 'mind, some of it\'s sharp.', 'that\'s the lot.'],
       dismiss: ['been good working with you.', 'the house will want airing.', 'find me if you need me.'],
+      armor: ['fits. mostly.', 'heavy, but I\'ll take heavy.', 'now I look the part.'],
+      torches: ['I\'ll light the way, then.', 'good. I hate the dark.', 'one every few steps, I know.'],
+      torch: ['there, some light.', 'can\'t see a thing down here.', 'one for the road.'],
+      thanks: ['I\'ll keep it safe.', 'in the pack it goes.', 'ta.'],
       done: ['that\'s the hole dug.', 'done. my arms know it.', 'quarry\'s finished.'],
       lost: ['there you are.', 'nearly lost you.', 'keep up, you said. ha.'],
     }[what];
@@ -11842,33 +11907,154 @@ const crewSys = {
     this.accT += dt;
     if (this.accT < 1) return;
     this.accT = 0;
-    for (const key in game.villages){
-      const rec = game.villages[key];
+    for (const [store, city] of [[game.villages, false], [game.cities || {}, true]]) for (const key in store){
+      const rec = store[key];
       for (let i = 0; i < rec.houses.length; i++){
         const hrec = rec.houses[i];
         const C = hrec.crew;
         if (!C) continue;
-        const e = game.entities.find(o => o.type === 'villager' && o.vkey === key && o.vi === i);
+        if (!C.bag) this.fix(C);
+        const e = game.entities.find(o => o.type === 'villager' && (city ? o.ckey : o.vkey) === key && o.vi === i);
         if (e){ C.pos = [+e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2)]; if (!e.crew) e.crew = C; continue; }
         let x, y, z;
         if (C.mode === 'follow' || !C.pos){ x = game.pos.x + 2; z = game.pos.z + 2; y = Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7; if (Math.abs(game.pos.y - y) < 12) y = game.pos.y + 0.2; }
         else { x = C.pos[0]; y = C.pos[1] + 0.3; z = C.pos[2]; }
         const ne = spawnEntity('villager', x, y, z);
-        ne.role = hrec.role; ne.vkey = key; ne.vi = i; ne.crew = C;
+        ne.role = hrec.role; if (city) ne.ckey = key; else ne.vkey = key; ne.vi = i; ne.crew = C;
         ne.home = { x: hrec.x, y, z: hrec.z };
       }
     }
+  },
+  // ---- what they carry ----
+  // a crew record from before they had a pack: give it one, and move the
+  // old material stack into it
+  fix(C){
+    if (!C.bag) C.bag = new Array(8).fill(null);
+    while (C.bag.length < 8) C.bag.push(null);
+    if (!C.arm) C.arm = { head: null, chest: null, feet: null };
+    if (!C.pack) C.pack = {};
+    if (C.mat){
+      if (C.mat.count > 0 && !this.bagAdd(C, C.mat)) C.pack[String(C.mat.mat)] = (C.pack[String(C.mat.mat)] || 0) + C.mat.count;
+      C.mat = null;
+    }
+  },
+  bagAdd(C, it){
+    const B = C.bag;
+    if (it.count != null) for (const s of B) if (s && CORE.stackableWith(it, s)){ s.count += it.count; return true; }
+    for (let i = 0; i < B.length; i++) if (!B[i]){ B[i] = it; return true; }
+    return false;
+  },
+  bagDrop(C, it){ const i = C.bag.indexOf(it); if (i >= 0) C.bag[i] = null; },
+  // the material a builder lays: the first stack of it in their pack
+  matOf(C){ if (C.mat || !C.bag) this.fix(C); for (const s of C.bag) if (s && s.kind === 'mat' && s.count > 0) return s; return null; },
+  isWeapon(t){ return !!t && (t.kind === 'sword' || t.kind === 'fw'); },
+  kindOf(t, kind){ return !!t && (kind === 'weapon' ? this.isWeapon(t) : t.kind === kind); },
+  score(t){ return t.kind === 'fw' ? 10 + ((CORE.GUNS[t.g | 0] || CORE.GUNS[0]).dmg || 0) / 10 : (t.tier | 0) + 1; },
+  has(C, kind){ return this.kindOf(C.tool, kind) || (C.bag || []).some(s => this.kindOf(s, kind)); },
+  // what fits the moment goes into their hands: the best drill, dispenser
+  // or weapon they carry; what they held goes back into the pack
+  equip(e, kind){
+    const C = e.crew;
+    if (!C.bag) this.fix(C);
+    if (this.kindOf(C.tool, kind)) return true;
+    let bi = -1, bs = -1;
+    C.bag.forEach((s, i) => { if (this.kindOf(s, kind) && this.score(s) > bs){ bs = this.score(s); bi = i; } });
+    if (bi < 0) return false;
+    const was = C.tool;
+    C.tool = C.bag[bi]; C.bag[bi] = was || null;
+    this.remesh(e);
+    if (game.activeCrew === e) this.refresh();
+    return true;
+  },
+  // everything on them, for a death or a dismissal
+  everything(C){
+    this.fix(C);
+    const out = [];
+    if (C.tool) out.push(C.tool);
+    for (const s of C.bag) if (s) out.push(s);
+    for (const k of ['head', 'chest', 'feet']) if (C.arm[k]) out.push(C.arm[k]);
+    for (const k in C.pack){ const v = C.pack[k]; if (v > 0) out.push(isNaN(+k) ? { kind: k, count: v } : { kind: 'mat', mat: +k, count: v }); }
+    return out;
+  },
+  empty(C){ C.tool = null; C.bag = new Array(8).fill(null); C.arm = { head: null, chest: null, feet: null }; C.pack = {}; C.mat = null; },
+  // the panel's slots: kh their hands, kah/kac/kaf armor, k0..k7 the pack
+  slotGet(k){
+    const e = game.activeCrew, C = e && e.crew;
+    if (!C) return null;
+    if (!C.bag) this.fix(C);
+    return k === 'kh' ? C.tool : k === 'kah' ? C.arm.head : k === 'kac' ? C.arm.chest : k === 'kaf' ? C.arm.feet : C.bag[+k.slice(1)] || null;
+  },
+  slotSet(k, v){
+    const e = game.activeCrew, C = e && e.crew;
+    if (!C) return;
+    if (!C.bag) this.fix(C);
+    v = v || null;
+    if (k === 'kh'){ C.tool = v; this.onHands(e); }
+    else if (k === 'kah'){ C.arm.head = v; this.remesh(e); }
+    else if (k === 'kac'){ C.arm.chest = v; this.remesh(e); }
+    else if (k === 'kaf'){ C.arm.feet = v; this.remesh(e); }
+    else C.bag[+k.slice(1)] = v;
+    if (C.job && C.job.kind === 'build' && C.mode !== 'build' && this.has(C, 'disp') && this.matOf(C)) C.mode = 'build';   // out of material mid-build: this resumes it
+    markSave();
+  },
+  // their hands changed: a job that needs what is gone stops
+  onHands(e){
+    const C = e.crew;
+    if (C.mode === 'quarry' && !this.has(C, 'drill')){ C.mode = 'stay'; C.job = null; }
+    if (C.mode === 'build' && !this.has(C, 'disp')) C.mode = 'stay';
+    C.tasks = [];
+    this.remesh(e);
+  },
+  // an item into their keeping: armor goes on, a tool into empty hands,
+  // the rest into the pack; false when the pack is full
+  take(e, it){
+    const C = e.crew;
+    if (!C.bag) this.fix(C);
+    if (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots'){
+      const slot = it.kind === 'helm' ? 'head' : it.kind === 'plate' ? 'chest' : 'feet';
+      if (!C.arm[slot]){ C.arm[slot] = it; this.remesh(e); this.say(e, 'armor'); return true; }
+    }
+    if (!this.bagAdd(C, it)) return false;
+    if (!C.tool && (it.kind === 'drill' || it.kind === 'disp' || this.isWeapon(it))) this.equip(e, this.isWeapon(it) ? 'weapon' : it.kind);
+    if (C.job && C.job.kind === 'build' && C.mode !== 'build' && this.has(C, 'disp') && this.matOf(C)) C.mode = 'build';   // out of material mid-build: this resumes it
+    this.say(e, it.kind === 'torch' ? 'torches' : ['drill', 'disp', 'mat', 'sword', 'fw'].includes(it.kind) ? it.kind : 'thanks');
+    return true;
+  },
+  // torches in their pack get planted as they follow you through the dark:
+  // one wherever no light reaches, on the ground under their feet
+  plantTorch(e){
+    const C = e.crew;
+    const ti = C.bag.findIndex(q => q && q.kind === 'torch' && q.count > 0);
+    if (ti < 0) return false;
+    const under = e.y < game.gen.height(e.x, e.z) - 2.5;
+    if (!under && game.dayF > 0.3) return false;
+    if (nearestLightDist(e.x, e.y + 0.5, e.z) < 7) return false;
+    const ed = nearEdits([e.x - 1, e.y - 2, e.z - 1, e.x + 1, e.y + 1, e.z + 1]);
+    let y = e.y + 0.3, found = false;
+    for (let k = 0; k < 12; k++){ if (sdfWorld(e.x, y, e.z, ed) < 0.05){ found = true; break; } y -= 0.2; }
+    if (!found) return false;
+    torchSys.add(+e.x.toFixed(2), +(y + 0.12).toFixed(2), +e.z.toFixed(2));
+    if (--C.bag[ti].count <= 0) C.bag[ti] = null;
+    if (Math.random() < 0.25) this.say(e, 'torch');
+    if (game.activeCrew === e) this.refresh();
+    return true;
   },
   // ---- orders ----
   open(e){
     const hrec = villageSys.villagerRec(e);
     if (!hrec || !hrec.crew) return;
+    this.fix(hrec.crew);
     game.activeCrew = e;
+    game.activeTrade = { e, hrec };          // their TRADES tab is the trade screen's own rows
     game.ui = 'trade';
-    const main = $('trademain'), hot = $('tradehot');
-    main.innerHTML = ''; hot.innerHTML = '';
+    this.tab = 'orders';
+    const main = $('trademain'), hot = $('tradehot'), hand = $('crewhand'), pack = $('crewpack');
+    main.innerHTML = ''; hot.innerHTML = ''; hand.innerHTML = ''; pack.innerHTML = '';
     for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
     for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    for (const [k, lab] of [['kh', 'HAND'], ['kah', 'HEAD'], ['kac', 'BODY'], ['kaf', 'FEET']]) hand.appendChild(slotEl(k, lab));
+    for (let i = 0; i < 8; i++) pack.appendChild(slotEl('k' + i));
+    $('crewbag').classList.remove('hidden');
     this.refresh();
     show('tradescreen');
     document.exitPointerLock();
@@ -11881,7 +12067,7 @@ const crewSys = {
   },
   toolText(t){ return !t ? 'empty hands' : t.kind === 'drill' ? CORE.TIER_NAME[t.tier] + ' drill' : t.kind === 'disp' ? CORE.TIER_NAME[t.tier] + ' dispenser' : t.kind === 'sword' ? CORE.TIER_NAME[t.tier] + ' sword' : t.kind === 'fw' ? CORE.GUNS[t.g | 0].name : itemLabel(t); },
   matText(m){ return m && m.count > 0 ? m.count + ' ' + CORE.MAT_NAME[m.mat] : 'no material'; },
-  giveable(it){ return !!it && (it.kind === 'drill' || it.kind === 'sword' || it.kind === 'fw' || it.kind === 'disp' || it.kind === 'mat'); },
+  giveable(it){ return !!it && it.kind !== 'coin'; },     // coins only by drag, so a click on the TRADES tab never hands them over
   DISP_RATE: [0.9, 0.7, 0.5, 0.35, 0.2],
   bpList(){ return loadBlueprints().filter(b => b.rows && b.rows.length); },
   refresh(){
@@ -11889,13 +12075,29 @@ const crewSys = {
     if (!e || game.ui !== 'trade') return;
     const hrec = villageSys.villagerRec(e), C = e.crew;
     if (!hrec || !C) return;
-    $('tradetitle').textContent = (hrec.vname + ' · your crew').toUpperCase();
+    this.fix(C);
+    const R = VROLE[hrec.role];
+    $('tradetitle').textContent = (hrec.vname + ' · your crew' + (R && hrec.role !== 'walker' ? ' · ' + R.name : '')).toUpperCase();
     const MODE = { follow: 'following you', stay: 'staying put', roam: 'roaming ' + C.r + ' m around their post', quarry: 'digging a quarry' + (C.job && C.job.cuts ? ' · ' + (C.job.cuts.length - C.job.i) + ' cuts to go' : ''),
                    build: 'building ' + (C.job && C.job.edits ? '“' + C.job.name + '” · ' + (C.job.edits.length - C.job.i) + ' to go' : '') };
-    $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · hp ' + Math.max(0, Math.round(e.hp)) + ' · carrying: <b>' + this.toolText(C.tool) + '</b> · material: <b>' + this.matText(C.mat) + '</b> · pack: ' + this.packText(C);
-    document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
+    const M = this.matOf(C), ar = this.armorRed(C);
+    const over = Object.keys(C.pack).some(k => C.pack[k] > 0);
+    $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · hp ' + Math.max(0, Math.round(e.hp)) + (ar ? ' · armor ' + Math.round(ar * 100) + '%' : '') +
+      ' · in hand: <b>' + this.toolText(C.tool) + '</b> · material: <b>' + this.matText(M) + '</b>' + (over ? ' · overflow: ' + this.packText(C) : '');
+    document.querySelectorAll('#trademain .slot, #tradehot .slot, #crewhand .slot, #crewpack .slot').forEach(paintSlot);
     const list = $('tradelist');
     list.innerHTML = '';
+    const tabs = document.createElement('div');
+    tabs.style.cssText = 'display:flex; gap:6px; margin-bottom:8px;';
+    for (const [id, label] of [['orders', 'ORDERS'], ['trades', 'TRADES']]){
+      const b = document.createElement('button');
+      b.className = 'btn small'; b.textContent = label;
+      if (this.tab === id){ b.style.borderColor = '#4fc3f7'; b.style.color = '#fff'; }
+      b.addEventListener('click', () => { this.tab = id; this.refresh(); });
+      tabs.appendChild(b);
+    }
+    list.appendChild(tabs);
+    if (this.tab === 'trades'){ tradeSys.rows(list, { e, hrec }); return; }
     const row = (label, act, colour, fn, dim) => {
       const r = document.createElement('div');
       r.className = 'craftrow';
@@ -11907,27 +12109,24 @@ const crewSys = {
       list.appendChild(r);
     };
     const held = game.slots[game.hotSel];
-    const giveable = this.giveable(held);
-    const disp = C.tool && C.tool.kind === 'disp';
-    row('follow you everywhere' + (C.tool && C.tool.kind === 'drill' ? ' and mine the next cut along your aim' : disp ? ' and place the next shape along your aim' : C.tool ? ' and fight beside you' : ''), C.mode === 'follow' ? 'FOLLOWING' : 'FOLLOW', '#4fc3f7', () => this.order(e, 'follow'));
-    row('stay right here' + (C.tool && C.tool.kind !== 'drill' ? ', fighting what comes near' : ''), C.mode === 'stay' ? 'STAYING' : 'STAY', '#4fc3f7', () => this.order(e, 'stay'));
+    const drill = this.has(C, 'drill'), disp = this.has(C, 'disp'), armed = this.has(C, 'weapon');
+    const torches = C.bag.some(q => q && q.kind === 'torch' && q.count > 0);
+    row('follow you everywhere' + (drill ? ', mining the next cut along your aim' : '') + (disp && M ? ', laying the next shape along your aim' : '') + (armed ? ', fighting what comes' : '') + (torches ? ', lighting the dark' : ''),
+        C.mode === 'follow' ? 'FOLLOWING' : 'FOLLOW', '#4fc3f7', () => this.order(e, 'follow'));
+    row('stay right here' + (armed ? ', fighting what comes near' : ''), C.mode === 'stay' ? 'STAYING' : 'STAY', '#4fc3f7', () => this.order(e, 'stay'));
     row('roam around here · ' + C.r + ' m (click again for ' + this.nextR(C.r) + ' m)', C.mode === 'roam' ? 'ROAMING' : 'ROAM', '#4fc3f7', () => this.order(e, 'roam'));
-    const drill = C.tool && C.tool.kind === 'drill';
     row('dig a quarry where you are looking · 10 m across, 6 m down' + (drill ? '' : ' (needs a drill)'), C.mode === 'quarry' ? 'DIGGING' : 'QUARRY', '#ffb44d', () => this.order(e, 'quarry'), !drill);
     const bps = this.bpList();
     if (bps.length){
       const cur = bps[Math.min(C.bp || 0, bps.length - 1)];
       row('blueprint: “' + cur.name + '” · ' + cur.rows.length + ' edits' + (bps.length > 1 ? ' (click to pick the next)' : ''), 'PICK', '#ffb44d', () => { C.bp = ((C.bp || 0) + 1) % bps.length; this.refresh(); });
-      row('build “' + cur.name + '” where you are looking, in the material they carry' + (disp ? '' : ' (needs a dispenser)') + (C.mat && C.mat.count > 0 ? '' : ' (needs material)'), C.mode === 'build' ? 'BUILDING' : 'BUILD', '#ffb44d', () => this.order(e, 'build'), !disp || !(C.mat && C.mat.count > 0));
+      row('build “' + cur.name + '” where you are looking, in the material they carry' + (disp ? '' : ' (needs a dispenser)') + (M ? '' : ' (needs material)'), C.mode === 'build' ? 'BUILDING' : 'BUILD', '#ffb44d', () => this.order(e, 'build'), !disp || !M);
     } else {
       row('no saved blueprints yet — copy something with the wrench (Ctrl+C) and save it (N)', 'BUILD', '#ffb44d', null, true);
     }
-    row('hand something over: click a drill, dispenser, sword, gun or stack of material in your bags below' + (giveable ? ' (or GIVE your ' + (held.kind === 'mat' ? this.matText(held) : this.toolText(held)) + ')' : ''), 'GIVE', '#9fe8a0', () => this.give(e), !giveable);
-    row(C.tool ? 'take back the ' + this.toolText(C.tool) : 'they carry no tool', 'TAKE', '#9fe8a0', () => this.takeTool(e), !C.tool);
-    row(C.mat && C.mat.count > 0 ? 'take back the ' + this.matText(C.mat) : 'they carry no material', 'TAKE', '#9fe8a0', () => this.takeMat(e), !(C.mat && C.mat.count > 0));
-    const hasPack = Object.keys(C.pack).some(k => C.pack[k] > 0);
-    row('collect their pack: ' + this.packText(C), 'COLLECT', '#9fe8a0', () => this.collect(e), !hasPack);
-    row('let ' + hrec.vname + ' go home (their tool and pack come to you)', 'DISMISS', '#e07070', () => this.dismiss(e));
+    row('hand things over: click anything in your bags below (right click lifts it, to drop it into a slot yourself) · armor goes on, a tool into empty hands, the rest into their pack' + (held ? ' (or GIVE your ' + itemLabel(held) + ')' : ''), 'GIVE', '#9fe8a0', () => this.give(e), !held);
+    if (over) row('collect what their pack could not hold: ' + this.packText(C), 'COLLECT', '#9fe8a0', () => this.collect(e));
+    row('let ' + hrec.vname + ' go home (everything they carry comes to you)', 'DISMISS', '#e07070', () => this.dismiss(e));
   },
   nextR(r){ return r >= 40 ? 6 : r >= 15 ? 40 : 15; },
   order(e, mode){
@@ -11939,7 +12138,7 @@ const crewSys = {
     } else if (mode === 'stay'){
       C.home = { x: e.x, z: e.z }; C.r = 3;
     } else if (mode === 'quarry'){
-      if (!C.tool || C.tool.kind !== 'drill'){ toast('give them a drill first'); AudioSys.sfx('deny'); return; }
+      if (!this.equip(e, 'drill')){ toast('give them a drill first'); AudioSys.sfx('deny'); return; }
       const h = surfaceHit();
       if (!h){ toast('look at the ground where the quarry should go'); AudioSys.sfx('deny'); return; }
       const tier = C.tool.tier | 0, eff = this.DRILL_EFF[tier];
@@ -11947,8 +12146,8 @@ const crewSys = {
       C.home = { x: h[0], z: h[2] }; C.r = 6;
       toast(this.nameOf(e) + ' starts on the quarry · ' + C.job.cuts.length + ' cuts', 1);
     } else if (mode === 'build'){
-      if (!C.tool || C.tool.kind !== 'disp'){ toast('give them a dispenser first'); AudioSys.sfx('deny'); return; }
-      if (!C.mat || !(C.mat.count > 0)){ toast('give them a stack of material first'); AudioSys.sfx('deny'); return; }
+      if (!this.equip(e, 'disp')){ toast('give them a dispenser first'); AudioSys.sfx('deny'); return; }
+      if (!this.matOf(C)){ toast('give them a stack of material first'); AudioSys.sfx('deny'); return; }
       const bps = this.bpList(), bp = bps[Math.min(C.bp || 0, bps.length - 1)];
       if (!bp){ toast('no blueprint to build'); AudioSys.sfx('deny'); return; }
       const h = surfaceHit();
@@ -11977,53 +12176,13 @@ const crewSys = {
   give(e, idx){
     if (idx == null) idx = game.hotSel;
     const held = game.slots[idx];
-    if (!this.giveable(held)){ toast('click a drill, dispenser, sword, gun or material in your bags to hand it over'); AudioSys.sfx('deny'); return; }
-    const C = e.crew;
-    if (held.kind === 'mat'){
-      // a stack of material for the dispenser: same kind merges, another swaps back
-      if (C.mat && C.mat.count > 0 && C.mat.mat === held.mat) C.mat.count += held.count;
-      else { if (C.mat && C.mat.count > 0) CORE.addMat(game.slots, C.mat.mat, C.mat.count); C.mat = { kind: 'mat', mat: held.mat, count: held.count }; }
-      game.slots[idx] = null;
-      // out of material mid-build: this resumes it
-      if (C.job && C.job.kind === 'build' && C.mode !== 'build' && C.tool && C.tool.kind === 'disp') C.mode = 'build';
-      this.say(e, 'mat');
-      AudioSys.sfx('craft');
-      refreshHotbar(); this.refresh(); markSave();
-      return;
-    }
-    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
-    C.tool = held; game.slots[idx] = null;
-    if (C.mode === 'quarry' && held.kind !== 'drill'){ C.mode = 'stay'; C.job = null; }
-    if (C.mode === 'build' && held.kind !== 'disp'){ C.mode = 'stay'; }
-    this.remesh(e);
-    this.say(e, held.kind);
+    if (!held) return;
+    if (!this.take(e, held)){ toast(this.nameOf(e) + ' cannot carry any more'); AudioSys.sfx('deny'); return; }
+    game.slots[idx] = null;
     AudioSys.sfx('craft');
     refreshHotbar(); this.refresh(); markSave();
   },
-  takeTool(e){
-    const C = e.crew;
-    if (!C.tool) return;
-    if (!giveItem(C.tool, 1)){ toast('no room in your pack'); AudioSys.sfx('deny'); return; }
-    C.tool = null;
-    if (C.mode === 'quarry'){ C.mode = 'stay'; C.job = null; }
-    if (C.mode === 'build') C.mode = 'stay';
-    C.tasks = [];
-    this.remesh(e);
-    this.say(e, 'take');
-    AudioSys.sfx('select');
-    refreshHotbar(); this.refresh(); markSave();
-  },
-  takeMat(e){
-    const C = e.crew;
-    if (!C.mat || !(C.mat.count > 0)) return;
-    CORE.addMat(game.slots, C.mat.mat, C.mat.count);
-    C.mat = null;
-    if (C.mode === 'build') C.mode = 'stay';
-    C.tasks = C.tasks.filter(t => !t.place);
-    this.say(e, 'take');
-    AudioSys.sfx('select');
-    refreshHotbar(); this.refresh(); markSave();
-  },
+  // the overflow: what their pack could not hold (yield from a far quarry)
   collect(e){
     const C = e.crew;
     let n = 0;
@@ -12039,15 +12198,17 @@ const crewSys = {
   },
   dismiss(e){
     const hrec = villageSys.villagerRec(e), C = e.crew;
-    if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
-    if (C.mat && C.mat.count > 0){ CORE.addMat(game.slots, C.mat.mat, C.mat.count); C.mat = null; }
-    this.collect(e);
+    const at = { x: e.x, y: e.y + 1, z: e.z };
+    for (const it of this.everything(C)) if (!giveItem(it, it.count || 1)) dropItem(it, at);
+    this.empty(C);
     hrec.crew = null; e.crew = null; e.tt = 0;
     const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
-    e.home = { x: hrec.x + hrec.face[0] * (villageSys.faceHalf(hrec) + 1.8), y: hy, z: hrec.z + hrec.face[1] * (villageSys.faceHalf(hrec) + 1.8) };
+    const f = hrec.face || [0, 1];
+    e.home = { x: hrec.x + f[0] * (villageSys.faceHalf(hrec) + 1.8), y: hy, z: hrec.z + f[1] * (villageSys.faceHalf(hrec) + 1.8) };
     this.remesh(e);
     this.say(e, 'dismiss');
     closeOverlay();
+    refreshHotbar();
     markSave();
   },
   // ---- work ----
@@ -12060,7 +12221,7 @@ const crewSys = {
     let k = 0;
     for (const e of crew){
       const C = e.crew;
-      if (C.mode !== 'follow' || !C.tool || C.tool.kind !== 'drill') continue;
+      if (C.mode !== 'follow' || !this.has(C, 'drill')) continue;
       if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 30) continue;
       k++;
       const t = { x: +(p.x + dir.x * step * k).toFixed(2), y: +(p.y + dir.y * step * k).toFixed(2), z: +(p.z + dir.z * step * k).toFixed(2), shape, eff };
@@ -12078,7 +12239,7 @@ const crewSys = {
     let k = 0;
     for (const e of crew){
       const C = e.crew;
-      if (C.mode !== 'follow' || !C.tool || C.tool.kind !== 'disp' || !C.mat || !(C.mat.count > 0)) continue;
+      if (C.mode !== 'follow' || !this.has(C, 'disp') || !this.matOf(C)) continue;
       if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 30) continue;
       k++;
       const t = { place: 1, x: +(p.x + dir.x * step * k).toFixed(2), y: +(p.y + dir.y * step * k).toFixed(2), z: +(p.z + dir.z * step * k).toFixed(2), shape, eff,
@@ -12091,18 +12252,20 @@ const crewSys = {
   // when they cannot (nothing to fill, or out of material -- they say so)
   place(e, ed){
     const C = e.crew;
-    if (!C.mat || !(C.mat.count > 0)){ this.say(e, 'out'); return false; }
-    ed.mat = C.mat.mat;
+    const M = this.matOf(C);
+    if (!M){ this.say(e, 'out'); return false; }
+    ed.mat = M.mat;
     const cost = CORE.placeCost(game.edits, ed, game.gen);
     if (cost === 0) return true;                        // already solid: nothing to do, carry on
     if (game.mode !== 'creative'){
-      if (C.mat.count < cost){ this.say(e, 'out'); return false; }
-      C.mat.count -= cost;
+      if (M.count < cost){ this.say(e, 'out'); return false; }
+      M.count -= cost;
     }
     applyEdit(ed);
     Particles.burst(ed.x, ed.y, ed.z, (ed.size || 1) * 0.5, [MAT_COLOR[ed.mat]], Math.min(30, 8 + cost / 6), 1.6);
     if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) AudioSys.sfx('place');
-    if (C.mat.count <= 0){ C.mat = null; this.say(e, 'out'); }
+    if (M.count <= 0){ this.bagDrop(C, M); if (!this.matOf(C)) this.say(e, 'out'); }
+    if (game.activeCrew === e) this.refresh();
     return true;
   },
   // one cut by a crew member's drill: yields to you if you are near, else
@@ -12116,10 +12279,11 @@ const crewSys = {
     applyEdit(ed);
     const near = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z) < 12;
     const C = e.crew;
+    if (!C.bag) this.fix(C);
     for (const m in got){
       const ok = CORE.ORE_ITEM[+m];
       if (near){ if (ok) addStackItem(ok, got[m]); else CORE.addMat(game.slots, +m, got[m]); }
-      else { const key = ok || String(m); C.pack[key] = (C.pack[key] || 0) + got[m]; }
+      else if (!this.bagAdd(C, ok ? { kind: ok, count: got[m] } : { kind: 'mat', mat: +m, count: got[m] })){ const key = ok || String(m); C.pack[key] = (C.pack[key] || 0) + got[m]; }
     }
     collapseSys.note({ x, y, z }, eff);
     Particles.burst(x, y, z, eff * 0.5, yieldColors(got), Math.min(30, 8 + units / 6), 2.2);
@@ -12171,17 +12335,26 @@ const crewSys = {
   // where a crew member walks this frame: [sx, sz, speed]
   steer(e, dt, now, pd){
     const C = e.crew;
-    const armed = C.tool && (C.tool.kind === 'sword' || C.tool.kind === 'fw');
+    if (!C.bag) this.fix(C);
     if (e.hp < 60 && e.flash <= 0) e.hp = Math.min(60, e.hp + dt * 0.4);     // they mend, slowly
     const alarm = C.alarm && C.alarm.until > performance.now() ? C.alarm : null;
     if (C.alarm && !alarm) C.alarm = null;
-    if (armed){
+    // the gun comes out when something comes; when it has been quiet a
+    // while, the tool of the job goes back into their hands
+    if (this.has(C, 'weapon')){
       const f = this.foe(e, C.mode === 'follow' ? 24 : alarm ? 34 : Math.max(18, (C.r || 3) + 12));
       const post = alarm || C.home;
-      if (f && (C.mode === 'follow' || !post || Math.hypot(f[0].x - post.x, f[0].z - post.z) < (alarm ? 30 : (C.r || 3) + 16))) return this.fight(e, f[0], f[1], now);
+      if (f && (C.mode === 'follow' || !post || Math.hypot(f[0].x - post.x, f[0].z - post.z) < (alarm ? 30 : (C.r || 3) + 16))){
+        e.calmT = 0;
+        if (this.equip(e, 'weapon')) return this.fight(e, f[0], f[1], now);
+      }
+      e.calmT = (e.calmT || 0) + dt;
+      const want = C.mode === 'quarry' ? 'drill' : C.mode === 'build' ? 'disp' : C.want;
+      if (e.calmT > 2.5 && want && this.isWeapon(C.tool)) this.equip(e, want);
     }
     if (C.mode === 'build' && C.job && C.job.kind === 'build'){
       const J = C.job;
+      if (!this.equip(e, 'disp')){ C.mode = 'stay'; C.home = { x: e.x, z: e.z }; return [0, 0, 0]; }
       if (J.i >= J.edits.length){
         C.job = null; C.mode = 'stay'; C.home = { x: e.x, z: e.z };
         this.say(e, 'built'); markSave();
@@ -12208,6 +12381,7 @@ const crewSys = {
     }
     if (C.mode === 'quarry' && C.job){
       const J = C.job;
+      if (!this.equip(e, 'drill')){ C.mode = 'stay'; C.job = null; C.home = { x: e.x, z: e.z }; return [0, 0, 0]; }
       if (J.i >= J.cuts.length){
         C.job = null; C.mode = 'stay'; C.home = { x: e.x, z: e.z };
         this.say(e, 'done'); markSave();
@@ -12229,8 +12403,10 @@ const crewSys = {
     }
     if (C.mode === 'follow'){
       // a following miner works the cuts you left it; a builder, the shapes
-      if (C.tasks.length && C.tool && (C.tool.kind === 'drill' || C.tool.kind === 'disp')){
+      if (C.tasks.length && !this.equip(e, C.tasks[0].place ? 'disp' : 'drill')) C.tasks = [];
+      if (C.tasks.length){
         const t = C.tasks[0];
+        C.want = t.place ? 'disp' : 'drill';
         const d = Math.hypot(t.x - e.x, t.z - e.z);
         if (d < 4.5 && Math.abs(t.y - e.y) < 4){
           e.workT = (e.workT || 0) - dt;
@@ -12252,6 +12428,8 @@ const crewSys = {
         if (d < 14) return [t.x - e.x, t.z - e.z, 4.6];
         C.tasks.shift();
       }
+      // torches in their pack get planted as they follow you through the dark
+      if ((e.torchT = (e.torchT || 0) + dt) > 0.6){ e.torchT = 0; this.plantTorch(e); }
       // lost you: catch up by any means
       if (pd > 60 || (pd > 12 && (e.lostT = (e.lostT || 0) + dt) > 9)){
         e.lostT = 0;
@@ -12761,7 +12939,9 @@ const tradeSys = {
     const hrec = villageSys.villagerRec(e);
     if (!hrec) return;
     game.activeTrade = { e, hrec };
+    game.activeCrew = null;
     game.ui = 'trade';
+    $('crewbag').classList.add('hidden');
     const main = $('trademain'), hot = $('tradehot');
     main.innerHTML = ''; hot.innerHTML = '';
     for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
@@ -12772,6 +12952,7 @@ const tradeSys = {
     AudioSys.sfx('toggle');
   },
   refresh(){
+    if (game.activeCrew) return crewSys.refresh();     // a crew member's panel, with its TRADES tab
     const T = game.activeTrade;
     if (!T || game.ui !== 'trade') return;
     const hrec = T.hrec;
@@ -12828,24 +13009,30 @@ const tradeSys = {
       mrow.appendChild(txt); mrow.appendChild(act);
       list.appendChild(mrow);
     }
-    if (!T.e.ckey && !hrec.crew){
-      // ---- hire: a villager you have earned joins your crew ----
+    if (!hrec.crew && !T.e.walker){
+      // ---- hire: anyone you have earned joins your crew, city folk and the mayor too ----
+      const lock = crewSys.hireLock(T.e, hrec), cost = crewSys.hireCost(T.e, hrec);
       const hrow = document.createElement('div');
       hrow.className = 'craftrow';
-      hrow.style.borderLeft = '3px solid ' + (hrec.rep >= crewSys.HIRE_REP ? '#4fc3f7' : '#555');
+      hrow.style.borderLeft = '3px solid ' + (!lock ? '#4fc3f7' : '#555');
       const txt = document.createElement('div'); txt.className = 'cname';
       const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = '#4fc3f7';
-      if ((hrec.rep || 0) >= crewSys.HIRE_REP){
-        txt.textContent = 'hire ' + hrec.vname + ' onto your crew — follows you, fights and works with what you give them';
-        act.textContent = 'HIRE ' + crewSys.HIRE_COST + 'c';
+      if (!lock){
+        txt.textContent = 'hire ' + hrec.vname + ' onto your crew — follows you, fights and works with what you give them' + (hrec.role === 'mayor' ? ' (the office stays open through them)' : '');
+        act.textContent = 'HIRE ' + cost + 'c';
         hrow.addEventListener('click', () => { crewSys.hire(T.e, hrec); });
       } else {
-        txt.textContent = hrec.vname + ' would join your crew at ' + crewSys.HIRE_REP + ' goodwill';
+        txt.textContent = lock;
         act.textContent = 'HIRE'; act.style.color = '#666'; hrow.style.opacity = 0.6;
       }
       hrow.appendChild(txt); hrow.appendChild(act);
       list.appendChild(hrow);
     }
+    this.rows(list, T);
+  },
+  // the offers themselves: a trader's, or a crew member's on their TRADES tab
+  rows(list, T){
+    const hrec = T.hrec, crec = T.e.ckey ? game.cities[T.e.ckey] : null;
     const coins = CORE.countItem(game.slots, 'coin');
     this.offers(T.e.role).filter(o => !o.crep || crec).forEach((o, idx) => {
       const cityLocked = !!(o.crep && (!crec || (crec.rep || 0) < o.crep));
@@ -15910,7 +16097,7 @@ const citySys = {
       // shopkeepers man their doors
       (rec.houses || []).forEach((hrec, i) => {
         const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
-        if (alive) return;
+        if (alive || hrec.crew) return;
         const e = spawnEntity('villager', hrec.x, (hrec.gy || 0) + 0.7, hrec.z);
         e.role = hrec.role; e.ckey = key; e.vi = i;
         e.home = { x: hrec.x, y: (hrec.gy || 0) + 0.7, z: hrec.z };
@@ -16690,6 +16877,7 @@ function bindInput(){
       if (stv){ openStove(stv); AudioSys.sfx('toggle'); return; }
       const pn = pnodeSys.onRay(3.2);
       if (pn){
+        if (pn.t === 'tent'){ bedSys.sleep([pn.x, pn.y + 0.3, pn.z]); return; }     // a tent is a bed
         if (pn.t === 'lever'){
           pn.on = !pn.on;
           pnodeSys.rebuild();
@@ -19529,12 +19717,16 @@ function tryAction(dt, now){
       const ent = entityOnRay(2.6);
       if (ent){
         if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
-        if (ent.type === 'villager'){ toast('they would rather walk, thanks'); return; }
+        if (ent.type === 'villager'){
+          // your crew, and anyone who would join it, let you carry them
+          const hr = villageSys.villagerRec(ent);
+          if (!ent.crew && !(hr && (hr.rep || 0) >= crewSys.HIRE_REP)){ toast('they would rather walk, thanks'); return; }
+        }
         ent.carried = true;
         ent.grabFrom = [ent.x, ent.y, ent.z];    // lift starts from where it stood
         game.carried = ent;
         game.grabT = now;
-        toast('picked up the ' + ent.type + ' — left click to throw');
+        toast('picked up ' + (ent.type === 'villager' ? crewSys.nameOf(ent) : 'the ' + ent.type) + ' — left click to throw');
         AudioSys.sfx('toggle');
       }
     }
@@ -20937,10 +21129,13 @@ function slotItem(key){
   if (key === 'vbat') return game.driving && game.driving.bat;
   if (typeof key === 'string' && /^c\d+$/.test(key))
     return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
+  if (CREW_KEY.test(String(key))) return game.activeCrew ? crewSys.slotGet(key) : null;
   return game.slots[+key];
 }
+// a crew member's slots: kh their hands, kah/kac/kaf their armor, k0..k7 their pack
+const CREW_KEY = /^k(h|ah|ac|af|\d)$/;
 function isPseudoKey(k){
-  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k);
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k) || CREW_KEY.test(String(k));
 }
 function slotKeyOf(el){
   const k = el.dataset.slot;
@@ -21558,6 +21753,7 @@ function uiMove(from, to){
     : k === 'dcin' ? (game.activeDecraft && game.activeDecraft.inv[0])
     : k === 'vbat' ? (game.driving && game.driving.bat)
     : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
+    : CREW_KEY.test(String(k)) ? (game.activeCrew ? crewSys.slotGet(k) : null)
     : game.slots[k];
   const set = (k, v) => {
     if (k === 'disp') game.dispSlot = v;
@@ -21572,10 +21768,12 @@ function uiMove(from, to){
     else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
     else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
     else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
+    else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
     else game.slots[k] = v;
   };
   const A = get(from), B = get(to);
   if (!A) return 'none';
+  if (CREW_KEY.test(String(to))){ const why = slotRefuses(to, A); if (why){ toast(why); return 'none'; } }
   if (to === 'disp' && A.kind !== 'disp'){ toast('only a dispenser fits in the dispenser slot'); return 'none'; }
   if (from === 'disp' && B && B.kind !== 'disp'){ toast('that slot is taken'); return 'none'; }
   if (to === 'sout'){ toast('the output slot only gives'); return 'none'; }
@@ -21644,8 +21842,13 @@ function quickMove(key, n){
       else if (key === 'disp') game.dispSlot = null;
       else if (key === 'dcin') game.activeDecraft.inv[0] = null;
       else if (key === 'vbat') game.driving.bat = null;
+      else if (CREW_KEY.test(String(key))) crewSys.slotSet(key, null);
       done = true;
     }
+  } else if (game.ui === 'trade' && game.activeCrew){
+    // shift-click in a crew member's panel: into their keeping
+    done = crewSys.take(game.activeCrew, it);
+    if (done) game.slots[key] = null; else toast(crewSys.nameOf(game.activeCrew) + ' cannot carry any more');
   } else if (game.ui === 'inv' && game.driving && it.kind === 'battery' && !game.driving.bat){
     game.driving.bat = it; game.slots[key] = null; done = true;   // shift-click a battery into the car
   } else if (game.ui === 'decraft' && game.activeDecraft){
@@ -21737,6 +21940,7 @@ function slotSet(k, v){
   else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
   else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
   else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
+  else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
   else game.slots[k] = v;
 }
 // why an item may not go into a slot (null = fine)
@@ -21756,6 +21960,10 @@ function slotRefuses(to, A){
   if (to === 'c0' && game.activeCont && game.activeCont.t === 'repair' && !VEH[A.kind]) return 'the left slot takes a vehicle kit';
   if (to === 'c1' && game.activeCont && game.activeCont.t === 'repair' && A.kind !== 'ironingot') return 'the right slot takes iron ingots';
   if (to === 'vbat' && A.kind !== 'battery') return 'that slot wants a battery';
+  if (to === 'kh' && !(A.kind === 'drill' || A.kind === 'disp' || A.kind === 'sword' || A.kind === 'fw')) return 'their hands take a drill, a dispenser, a sword or a gun';
+  if (to === 'kah' && A.kind !== 'helm') return 'that slot wants a helmet';
+  if (to === 'kac' && A.kind !== 'plate') return 'that slot wants a chestplate';
+  if (to === 'kaf' && A.kind !== 'boots') return 'that slot wants boots';
   return null;
 }
 const invCursor = {
@@ -21811,7 +22019,7 @@ const invCursor = {
     const { part, rest } = this.take(A, n);
     if (!B){ slotSet(key, part); this.it = rest; }
     else if (CORE.stackableWith(part, B)){ B.count += part.count; this.it = rest; }
-    else if (rest || isPseudoKey(key) && key !== 'disp' && !/^c\d+$/.test(String(key))){
+    else if (rest || isPseudoKey(key) && key !== 'disp' && !/^c\d+$/.test(String(key)) && !CREW_KEY.test(String(key))){
       // a partial put or a one-item machine slot can't swap
       if (rest){ rest.count += part.count; }
       toast('that slot is taken'); AudioSys.sfx('deny'); return;
@@ -22009,7 +22217,7 @@ function itemInfoHTML(it, tool){
   } else if (it.kind === 'survey'){
     html = '<div class="t1">the survey</div><div class="t2">the expedition\'s own map, every camp marked and the mouth at the end — right click to read it</div>';
   } else if (it.kind === 'tent'){
-    html = '<div class="t1">tent</div><div class="t2">a canvas tent on a ridge pole; place it anywhere</div>';
+    html = '<div class="t1">tent</div><div class="t2">a canvas tent on a ridge pole; place it anywhere — right click it to sleep through the night and wake there</div>';
   } else if (it.kind === 'claymore'){
     html = '<div class="t1">claymore</div><div class="t2">a set charge that faces the way you face. It fires once, for an enemy and only an enemy, in a fan out its front — never for you, your crew or an animal — and it never marks the ground</div>';
   } else if (it.kind === 'spikes'){

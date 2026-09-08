@@ -666,6 +666,54 @@ build; they are on the list in the order I think they earn.
 **A rule I am keeping.** Balance numbers he gives are taken as given:
 20 W for the jet, one burn kills, spikes wear. He is the one playing.
 
+## 2026-09-07 — Build 31, the flood
+
+Austin: rivers fixed, walls fixed, the tent is a tent, and a river he
+cut open on a mountain drowned the valley. My river test carved into a
+bank on gentle ground and watched the flood go quiet. His was on a
+slope. The rule that broke it was one I wrote for lakes: water with
+water above it becomes a source. On a slope that is a source factory.
+
+The fix is Minecraft's own restraint (falling water breeds nothing)
+plus a budget he asked for in his own words: water only goes so far
+from a true source before trailing off. Thirty-two cells. A breached
+bank now runs fifty metres out and thirty down and stops. The test
+finds the steepest river on the seed and blows a nine-metre hole
+through its bank, which is what I should have written the first time.
+
+His creature-spawner idea is on the list as THE MENAGERIE. The part I
+like is "the same one that went in": the mayor comes back with his
+trades. The record can travel inside the item, so it is cheaper than it
+sounds. THE CREW C is still next.
+
+## 2026-09-08 — Build 32, the crew get pockets
+
+Austin's list, mostly, and I agreed with all of it. The interesting
+part was that the whole build fell out of one decision: hands versus
+pack. Hands are what they hold; the pack is what they could hold. Once
+that was true, "they pick the right tool" is one function (equip: the
+best of a kind in the pack, swap with the hands), "give them anything"
+is one function (armor on, a tool to empty hands, the rest to the
+pack), and the old TAKE rows simply disappear because a slot you can
+lift from is the taking. The slot plumbing already handled stoves and
+chests through pseudo-keys, so the crew's slots are three regexes and a
+getter and a setter; every cursor rule (half stacks, shift-taps, swaps,
+refusals) came for free.
+
+Torch planting is the thing I most want to watch someone use. It is
+tiny -- a crew member with torches lights the dark wherever no light
+reaches -- but it makes a cave walk with company feel different from
+one alone, which is what a crew should do.
+
+The mayor for hire was Austin's idea and I nearly cut it (the office
+runs the deeds and the blueprint market). The TRADES tab solved it:
+the office comes with them. It costs 400 and standing 25, so it is a
+late-game flourish rather than a day-two exploit.
+
+What I did not do: beds and chests of their own, eating, their own
+houses. Those are a later slice; THE BREACH is next and it is what the
+palisade has been waiting for.
+
 ---
 
 ## Standing notes

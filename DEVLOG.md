@@ -2,6 +2,88 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 32 — THE CREW C: a person, not a prop (2026-09-08)
+
+The crew get a pack of their own and the sense to use it. Verified
+headlessly (a build-32 suite hires a villager and a city toolsmith and
+mayor, hands over a drill, sword, helmet, torches and stone by click and
+by drag, watches the sword come out for a husk and the drill come back
+for a cut, plants a torch in the dark and refuses one by day or beside a
+burning one, sleeps in a tent, carries a hireable villager, and
+dismisses a crew member to get everything back; plus the crew, palisade
+and smoke suites).
+
+- **Their own inventory.** A crew member's panel now shows THEIR HANDS,
+  three ARMOR slots (head, body, feet) and an eight-slot PACK above your
+  own bags. Click anything of yours and it goes to them: armor goes on,
+  a tool into empty hands, everything else into the pack. Right click
+  lifts an item so you can drop it into a particular slot yourself;
+  shift-click sends it over; everything in their slots lifts, swaps and
+  shift-clicks back like any other slot. The old TAKE rows are gone
+  because the slots are the taking. COLLECT remains only for overflow
+  (yield from a far quarry the pack could not hold).
+- **They pick what fits the moment.** Hands are what they hold; the
+  pack is what they could hold. When something hostile comes within
+  reach the best weapon in the pack comes out (a gun over a sword, a
+  higher tier over a lower); when you mine, the drill; when you place,
+  the dispenser; a quarry or a build calls for its tool. After a fight
+  they go back to the tool of the job once it has been quiet for a few
+  seconds. A weapon in the pack is enough to make them a fighter, a
+  drill in the pack enough to make them a miner.
+- **Torches.** A follower with torches in their pack plants one wherever
+  no light reaches, on the ground under their feet, at night or
+  underground (below the surface by 2.5 m). Not by day in the open, not
+  within seven metres of a burning one. One per bit of dark, so a cave
+  walk with a crew member behind you lights itself.
+- **Armor on them.** Helmet, chestplate, boots in the three slots; they
+  wear it in the tier's colour and it reduces what hits them by the same
+  table as yours (up to 60 %).
+- **Hire in cities.** Any shopkeeper at 10 goodwill for 120 coins; the
+  mayor for 400, and only once the city knows you (standing 25). A hired
+  city person keeps their shop's offers on their **TRADES tab** in the
+  crew panel (the mayor's deeds and blueprint market included), so the
+  office travels with them. The city stops manning a hired
+  shopkeeper's door. Village hires stay at 60 and every crew member
+  has the TRADES tab.
+- **Pick them up.** Fists down, a crew member or anyone who would join
+  your crew lets you carry them over your head like an animal. Throw
+  them; they take no harm and no offence.
+- **Tents are beds.** Right click a tent (the expedition's or one you
+  placed) to sleep the night through and wake there.
+- **Under the hood.** The crew record gains `bag` (8) and `arm`
+  ({head, chest, feet}); the old `mat` stack migrates into the bag on
+  load. Crew slots are pseudo-keys (`kh`, `kah/kac/kaf`, `k0..k7`)
+  through the same slot plumbing as stoves and chests, so every cursor
+  rule applies. The crew tick now walks city records as well as
+  villages, so city hires persist and respawn.
+
+## Build 31 — WATER RANGE (2026-09-07)
+
+Austin cut a hole through a river on a mountainside and the water
+walked down the mountain forever, breeding sources as it went, a
+towering wall that would have made the whole world below it an ocean.
+Two rules were to blame, and both are fixed. Verified headlessly (a
+build-31 suite blows a 9 m hole through the bank of the steepest river
+on seed 7: the flood stops at 53 chunks with nothing active by 25
+seconds, reaching 50 m out and 34 m down the slope and no further; a
+pit under a lake still fills; plus the water, rivers, weather, smoke and
+playtest-fix suites).
+
+- **Falling water never breeds sources any more.** The old rule said a
+  full cell with any water above it becomes a source ("a column fed
+  from a lake is the lake"). On a slope that made every step of a
+  waterfall a new infinite source. Now only a cell with a SOURCE
+  directly above it becomes one, which is the lake case and nothing
+  else.
+- **A flood has a range.** Every cell of water carries how far it has
+  travelled from a true source (the sea, a lake, a river: zero). Each
+  fall and each sideways step adds one, and at 32 the water trails off
+  and stops. A born source keeps its distance, so it cannot restart the
+  count. Saved worlds' flowing water loads with a little room left and
+  settles.
+- A carve into a lake or river bank still floods, about thirty metres
+  at most, and then goes quiet.
+
 ## Build 30 — PLAYTEST FIXES (2026-09-07)
 
 Austin's first playtest of builds 21 to 29 came back: "very fun", the
