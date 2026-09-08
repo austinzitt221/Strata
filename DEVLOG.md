@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 31 — WATER RANGE (2026-09-07)
+
+Austin cut a hole through a river on a mountainside and the water
+walked down the mountain forever, breeding sources as it went, a
+towering wall that would have made the whole world below it an ocean.
+Two rules were to blame, and both are fixed. Verified headlessly (a
+build-31 suite blows a 9 m hole through the bank of the steepest river
+on seed 7: the flood stops at 53 chunks with nothing active by 25
+seconds, reaching 50 m out and 34 m down the slope and no further; a
+pit under a lake still fills; plus the water, rivers, weather, smoke and
+playtest-fix suites).
+
+- **Falling water never breeds sources any more.** The old rule said a
+  full cell with any water above it becomes a source ("a column fed
+  from a lake is the lake"). On a slope that made every step of a
+  waterfall a new infinite source. Now only a cell with a SOURCE
+  directly above it becomes one, which is the lake case and nothing
+  else.
+- **A flood has a range.** Every cell of water carries how far it has
+  travelled from a true source (the sea, a lake, a river: zero). Each
+  fall and each sideways step adds one, and at 32 the water trails off
+  and stops. A born source keeps its distance, so it cannot restart the
+  count. Saved worlds' flowing water loads with a little room left and
+  settles.
+- A carve into a lake or river bank still floods, about thirty metres
+  at most, and then goes quiet.
+
 ## Build 30 — PLAYTEST FIXES (2026-09-07)
 
 Austin's first playtest of builds 21 to 29 came back: "very fun", the

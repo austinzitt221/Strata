@@ -4658,13 +4658,13 @@ function inWater(x, y, z){
 // cell spreads sideways one level lower per metre; two sources beside a
 // supported cell make a third; unsupported flow drains away. Cells the
 // flow reaches in untouched chunks materialize on demand. 8 Hz.
-const W_SOLID = 255, W_SRC = 8;
+const W_SOLID = 255, W_SRC = 8, W_REACH = 32;   // cells of travel a flood gets from a true source
 const waterSys = {
-  cells: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
+  cells: new Map(), dist: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
   accT: 0, maintT: 0, MAX_ACTIVE: 48,
   idx(i, j, k){ return (j * 8 + k) * 8 + i; },
   keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
-  reset(){ this.cells = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
+  reset(){ this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
     for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
     this.meshes = new Map(); },
   // what an untouched cell holds: rock, still water, or air
@@ -4726,11 +4726,25 @@ const waterSys = {
       // an edit under running water: rock is rock, but water already there stays
       a[q] = (old && v !== W_SOLID && old[q] !== W_SOLID && old[q] !== 0) ? old[q] : v;
     }
+    // how far each cell's water has travelled from a true source: the sea,
+    // a lake, a river are 0; flow counts up and stops at W_REACH
+    const oldD = keep ? this.dist.get(key) : null;
+    const d = new Uint8Array(512);
+    for (let q = 0; q < 512; q++) d[q] = a[q] === W_SRC ? (oldD && oldD[q] < 255 ? oldD[q] : 0) : (oldD && this.isW(a[q]) ? oldD[q] : 255);
+    this.dist.set(key, d);
     this.cells.set(key, a);
     this.active.add(key); this.dirtyMesh.add(key);
     const ch = game.terrain.chunks.get(key);
     if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
     return a;
+  },
+  // distance from a true source, for a cell's water; untouched chunks are
+  // all true sources (0) or dry
+  dv(gx, gy, gz){
+    const key = CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8));
+    const d = this.dist.get(key);
+    if (d) return d[this.idx(gx & 7, gy & 7, gz & 7)];
+    return this.lv(gx, gy, gz) === W_SRC ? 0 : 255;
   },
   lv(gx, gy, gz){
     const cx = Math.floor(gx / 8), cy = Math.floor(gy / 8), cz = Math.floor(gz / 8);
@@ -4788,7 +4802,8 @@ const waterSys = {
         const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
         if (gy <= CORE.BEDROCK_Y + 1) continue;
         const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
-        let nv = this.isW(above) ? 7 : 0, srcN = 0;
+        let nv = 0, srcN = 0, nd = 255;
+        if (this.isW(above)){ nv = 7; nd = this.dv(gx, gy + 1, gz) + 1; }
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
           const nn = this.lv(gx + dx, gy, gz + dz);
           if (!this.isW(nn)) continue;
@@ -4796,20 +4811,29 @@ const waterSys = {
           // a neighbour spreads sideways when it is a source or stands on
           // something (falling water only falls)
           const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
-          if (nb === W_SOLID || nb === W_SRC) nv = Math.max(nv, nn - 1);
+          if (nb === W_SOLID || nb === W_SRC){
+            if (nn - 1 > nv || (nn - 1 === nv && nv > 0)) nd = Math.min(nd, this.dv(gx + dx, gy, gz + dz) + 1);
+            nv = Math.max(nv, nn - 1);
+          }
         }
-        // sources are born three ways on a supported cell: Minecraft's two
-        // sources beside it; a full cell with water above it (a column fed
-        // from a lake is the lake); or a full cell beside a source (the
-        // lake's level creeps along every floor it can reach — it is infinite)
+        // a flood only travels so far from a true source: past W_REACH cells
+        // of falling and spreading it trails off and stops, so a river cut
+        // open on a mountainside cannot drown the valley below
+        if (nv > 0 && nd >= W_REACH) nv = 0;
+        // sources are born on a supported cell: Minecraft's two sources
+        // beside it; a full cell with a SOURCE directly above it (a column
+        // under a lake is the lake); or a full cell beside a source (the
+        // lake's level creeps along every floor it can reach). Falling water
+        // never breeds sources, and a born source keeps its distance
         const supported = below === W_SOLID || below === W_SRC;
-        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (this.isW(above) || srcN >= 1)))) nv = W_SRC;
-        if (nv !== v) writes.push(key, q, nv, gx, gy, gz);
+        if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (above === W_SRC || srcN >= 1)))) nv = W_SRC;
+        if (nv !== v) writes.push(key, q, nv, gx, gy, gz, nv > 0 ? Math.min(254, nd) : 255);
       }
     }
-    for (let w = 0; w < writes.length; w += 6){
+    for (let w = 0; w < writes.length; w += 7){
       const key = writes[w], q = writes[w + 1], nv = writes[w + 2];
       this.cells.get(key)[q] = nv;
+      const dd = this.dist.get(key); if (dd) dd[q] = writes[w + 6];
       next.add(key); this.dirtyMesh.add(key);
       // a change on a chunk face wakes the neighbour (and grows it cells if water is arriving)
       const gx = writes[w + 3], gy = writes[w + 4], gz = writes[w + 5];
@@ -4936,6 +4960,10 @@ const waterSys = {
       let q = 0;
       for (let t = 0; t + 1 < r.length; t += 2){ for (let c = 0; c < r[t + 1] && q < 512; c++) a[q++] = r[t]; }
       this.cells.set(key, a);
+      // saved flow has no distance; give it a little room and let it settle
+      const d = new Uint8Array(512);
+      for (let q2 = 0; q2 < 512; q2++) d[q2] = a[q2] === W_SRC ? 0 : (this.isW(a[q2]) ? W_REACH - 6 : 255);
+      this.dist.set(key, d);
       this.active.add(key); this.dirtyMesh.add(key);
     }
   },

@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 31 — WATER RANGE
+- [ ] Do the mountain thing again: cut a river open on a slope. The
+      water should run out and down about thirty metres, then trail off
+      and stop. Nothing should keep growing.
+- [ ] Dig a pit in a lake bed: it should still fill.
+- Feedback I want: is thirty metres of run-out too little to be fun, or
+  about right? (It is one number.)
+
 ## Build 30 — PLAYTEST FIXES (from your report)
 - [ ] Rivers up close: one continuous sloped sheet now, no stairs, no
       gaps. Look at the same stretch that stepped before.

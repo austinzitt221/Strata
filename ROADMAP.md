@@ -123,6 +123,16 @@ order is mine. Big items are split so each build is one session.
 7. **THE CREW D** — crew in vehicles: a follower takes the passenger
    seat of your car, boat or plane; give them a vehicle and they drive
    their own behind you; other crew ride with them. A squad on the road.
+7b. **THE MENAGERIE** (Austin's) — creature spawners. In creative,
+   craft a "<creature> spawner" for any living thing and set it down. In
+   survival, a creature grabber gun: right click any living thing and
+   it becomes a spawner in your pack -- animals in a moment, enemies
+   over a few seconds of holding the beam, bosses over a long and
+   dangerous while, villagers only once you have the goodwill to hire
+   them. What comes back out is the same one that went in: the mayor
+   keeps his goodwill, his trades and his pockets; a crew member keeps
+   their bag. (The record travels inside the spawner item: house key,
+   crew record, entity fields.)
 8. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
    blueprints, the path made by walking.
 9. **THE GARRISON**, then the Space Arc.
