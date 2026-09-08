@@ -2,6 +2,62 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 30 — PLAYTEST FIXES (2026-09-07)
+
+Austin's first playtest of builds 21 to 29 came back: "very fun", the
+mirror got shown to a friend, and a list. This build is the list.
+Verified headlessly (a build-30 suite: the river's near surface has no
+corner gaps and slopes 52 m across a chunk set; the tent's walls end at
+the ground; the skin carries its rise attribute; the burrower stays
+eight metres under and gives up when you get away; a husk that crosses
+a trench dies three seconds later and the tray is gone; spikes wear
+flat at forty bites; the fists take a torch back; camp 5 holds a
+sidearm; the mouth has its rim and its marker; a click in the crew
+panel hands a drill over; plus smoke, palisade, rivers, expedition,
+crew, skin, siege and boss suites).
+
+### Bugs
+- **Rivers were a stair of flat squares up close.** Each near-mesh quad
+  sat at its own column's water height, so a sloped river stepped. Each
+  quad's four corners now sit at the river's height at that corner, so
+  the surface is one sheet. The far skin was already per-vertex.
+- **City walls doubled at the edge of the near field.** At the two seam
+  columns where real chunks take over from the skin, the skin sinks
+  0.12 and 0.45 m under the ground so the join is backed. A baked city
+  tower or a placed block in that seam sank 0.45 m and stood there
+  beside the real one. The skin now carries, per vertex, what stands
+  above the natural ground, and in the seam it drops by that too.
+- **The tent's walls went the wrong way.** A sign. They meet at the
+  ridge now. Camp chests floated 0.4 m; they sit.
+- **The mouth was hard to find.** It has a rim of eight stonebrick
+  blocks now, a well-head, and it is marked as THE MOUTH as soon as you
+  find camp 8 rather than only after reading the survey.
+- **The burrower** never comes within eight metres of the surface any
+  more, so it is an underground problem only, and if you get 40 m from
+  it (or up out of its reach) for eight seconds it gives up and goes:
+  "the ground goes quiet". You can outrun it.
+
+### Balance, from the report
+- **Oil trench:** one burn kills. An enemy that so much as crosses it
+  carries the fire for seven seconds (8 every half second on top of 12
+  in the oil); a husk that steps through dies in about three. When it
+  burns out the tray is gone.
+- **Flame jet:** 2 W idle, 20 W firing. Defense should be cheap.
+- **Spikes wear:** each bite costs one of forty; then they bend flat
+  and stop until the repair tool exists (the wrench takes them back).
+- **Camp loot ramps:** meat and coal at camp 1, coins and iron by 3, a
+  sidearm and rounds at 5, ruby at 6, a diamond at 7, and the leader's
+  chest holds 200 coins, four diamonds, two aether ingots and rope.
+
+### Quality of life, from the report
+- **Handing things to your crew:** in their panel, click a drill,
+  dispenser, sword, gun or stack of material in your bags and it goes
+  to them. GIVE still works on the selected hotbar slot.
+- **Fists take anything back.** With fists down, left click on a torch,
+  table, bed, stove, bulb, beacon, door, chest (contents spill), tent,
+  defense or wire picks it up, with the wrench's refunds. The wrench is
+  for editing; the hands are for picking up.
+
 ## Build 29 — THE PALISADE II (2026-09-07)
 
 The second half of roadmap item 4, minus the portcullis. Verified

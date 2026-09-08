@@ -3199,7 +3199,7 @@ function editProfile(e, x, z){
 }
 function heightGrid(J, gen){
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
-  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1), fl = new Float32Array(N1 * N1 * 2);
+  const h = new Float32Array(N1 * N1), m = new Uint8Array(N1 * N1), wet = new Uint8Array(N1 * N1), wy = new Float32Array(N1 * N1), fl = new Float32Array(N1 * N1 * 2), rs = new Float32Array(N1 * N1);
   const sea = J.sea != null ? J.sea : -1e9;
   const edits = J.edits || [];
   const CELL = 32;
@@ -3262,6 +3262,7 @@ function heightGrid(J, gen){
     for (let i = 0; i <= n; i++){
       const x = x0 + i * s, kk = r * N1 + i;
       let hh = gen.height(x, z);
+      const ground = hh;
       const rise = riseOf(x, z);
       if (rise > hh + 1){ const t = marchTop(x, z, rise + 1, hh); if (t > hh + 0.2) hh = t; }
       else if (gen.sdf && gen.sdf(x, hh - 0.7, z) > 0.15){
@@ -3293,6 +3294,7 @@ function heightGrid(J, gen){
         }
       }
       h[kk] = hh;
+      rs[kk] = Math.max(0, hh - ground);            // what stands above the natural ground here
       m[kk] = mm || (gen.mat(x, hh - 0.1, z) || 1);
       // the water over this column: the sea, a lake, or a river at its own
       // height; a dry vertex in a wet quad still carries the nearest
@@ -3305,7 +3307,7 @@ function heightGrid(J, gen){
       if (R && wv != null && wv > sea + 1e-6){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fl[kk * 2] = R.tx * f; fl[kk * 2 + 1] = R.tz * f; }
     }
   }
-  return { h, m, wet, wy, fl };
+  return { h, m, wet, wy, fl, rs };
 }
 // The whole skin level, worker-side: heights, the height the next-coarser
 // level reads at every vertex (its grid is this one at every other line,
@@ -3369,7 +3371,7 @@ function skinGrid(J, gen){
       widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
     }
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, rs: G.rs, idx, widx: widx.slice(0, ww) };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -4009,7 +4011,7 @@ const meshPool = {
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
-        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.fl.buffer, g.idx.buffer, g.widx.buffer]);\n' +
+        '    postMessage({ id: m.id, g }, [g.pos.buffer, g.hc.buffer, g.nrm.buffer, g.nrc.buffer, g.ao.buffer, g.dep.buffer, g.mt.buffer, g.wet.buffer, g.wy.buffer, g.fl.buffer, g.rs.buffer, g.idx.buffer, g.widx.buffer]);\n' +
         '    return;\n' +
         '  }\n' +
         '  const edits = CORE.deserializeEdits(m.edits);\n' +
@@ -4444,9 +4446,12 @@ class Terrain {
     if (waterSys.cells.has(CK(cx, cy, cz)) && waterSys.inMeshRange(cx, cz)) return;
     const x0 = cx * M, z0 = cz * M;
     const pos = [], uv = [], dep = [], flow = [];
-    const quad = (xa, za, xb, zb, wy, d, fx, fz) => {
-      pos.push(xa, wy, za, xa, wy, zb, xb, wy, zb,
-               xa, wy, za, xb, wy, zb, xb, wy, za);
+    // a quad's corners each sit at the water's height there, so a sloped
+    // river is one surface and not a stair of flat squares
+    const quad = (xa, za, xb, zb, wy, d, fx, fz, ya, yb, yc, yd) => {
+      if (ya == null){ ya = yb = yc = yd = wy; }
+      pos.push(xa, ya, za, xa, yb, zb, xb, yc, zb,
+               xa, ya, za, xb, yc, zb, xb, yd, za);
       uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
               xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       const dd = d == null ? 0.8 : d;
@@ -4461,12 +4466,14 @@ class Terrain {
           const w = W.wy[i + j * M];
           if (w !== w || Math.floor(w / M) !== cy) continue;     // NaN: dry, or another band's
           const hm = Math.min(W.hs[i + j * (M + 1)], W.hs[i + 1 + j * (M + 1)], W.hs[i + (j + 1) * (M + 1)], W.hs[i + 1 + (j + 1) * (M + 1)]);
-          let fx = 0, fz = 0;
+          let fx = 0, fz = 0, ya = w, yb = w, yc = w, yd = w;
           if (w > sea + 1e-6 && this.gen.riverAt){
             const R = this.gen.riverAt(x0 + i + 0.5, z0 + j + 0.5);
             if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
+            const cy = (x, z) => { const Q = this.gen.riverAt(x, z); return Q ? Math.max(sea, Q.y) : w; };
+            ya = cy(x0 + i, z0 + j); yb = cy(x0 + i, z0 + j + 1); yc = cy(x0 + i + 1, z0 + j + 1); yd = cy(x0 + i + 1, z0 + j);
           }
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm, fx, fz);
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm, fx, fz, ya, yb, yc, yd);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -8122,7 +8129,7 @@ const pnodeSys = {
       const cloth = new THREE.MeshBasicMaterial({ color: 0xb8a27a }), inner = new THREE.MeshBasicMaterial({ color: 0x8a7a58 });
       for (const sx of [-1, 1]){
         const side = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.06, 2.0), cloth);
-        side.position.set(sx * 0.62, 0.72, 0); side.rotation.z = sx * 1.02; g.add(side);
+        side.position.set(sx * 0.62, 0.72, 0); side.rotation.z = -sx * 1.02; g.add(side);
       }
       const back = new THREE.Mesh(new THREE.BoxGeometry(2.3, 1.5, 0.05), inner); back.position.set(0, 0.7, 0.98);
       const ridge = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.1), M.bark); ridge.position.y = 1.46;
@@ -8447,6 +8454,7 @@ const pnodeSys = {
       if (n.t === 'claymore' && ud.eye) ud.eye.material.color.setHex((performance.now() % 1400) < 100 ? 0xff9999 : 0xff3333);
       if (n.t === 'flamejet' && ud.pilot) ud.pilot.material.color.setHex(n.firing ? 0xffdd66 : (powerSys.jetMap && powerSys.jetMap.get(n.id) > 0 ? 0xff8830 : 0x442211));
       if (n.t === 'trench' && ud.oil) ud.oil.material.color.setHex(n.lit ? 0x3a2410 : n.spent ? 0x2a2a2e : 0x14141c);
+      if (n.t === 'spikes') it.g.scale.y = n.broken ? 0.3 : 1;
       if (n.t === 'cannon' && ud.pivot){
         // the barrel follows whoever stands near it
         const dd = Math.hypot(n.x - game.pos.x, n.z - game.pos.z);
@@ -8717,7 +8725,7 @@ const powerSys = {
           else if (n.t === 'wtable'){ c.d += 8; (c.wtabs = c.wtabs || []).push(n); }
           else if (n.t === 'pad'){ if (this.padWants(n)) c.d += 20; c.pads.push(n); }
           else if (n.t === 'turret'){ c.d += n.aim ? 30 : 4; c.turrets.push(n); }
-          else if (n.t === 'flamejet'){ c.d += n.firing ? 40 : 3; (c.jets = c.jets || []).push(n); }
+          else if (n.t === 'flamejet'){ c.d += n.firing ? 20 : 2; (c.jets = c.jets || []).push(n); }
           else if (n.t === 'charger'){ if (this.chargerWants(n)) c.d += 40; (c.chargers = c.chargers || []).push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
@@ -11407,6 +11415,13 @@ const expeditionSys = {
     e.sx = e.sz = 3.2; e.sy = 26;
     game.edits.push(e);
     if (game.terrain) game.terrain.invalidate(e);
+    // a rim of stone blocks around the mouth: the survey built a well-head
+    for (let k = 0; k < 8; k++){
+      const a = k / 8 * Math.PI * 2, rx = shx + Math.cos(a) * 2.3, rz = shz + Math.sin(a) * 2.3;
+      const b = CORE.makeEdit(1, 1, +rx.toFixed(2), +(g.height(rx, rz) + 0.35).toFixed(2), +rz.toFixed(2), 1.1, CORE.MAT.STONEBRICK, +a.toFixed(2));
+      game.edits.push(b);
+      if (game.terrain) game.terrain.invalidate(b);
+    }
     let river = null;
     for (const c of camps){ river = riverNameAt(c.x, c.z); if (river) break; }
     game.expedition = { L, S, C, R: river || 'the stream', camps, shaft: { x: shx, z: shz, y: +shy.toFixed(2), bottom: +(shy - 25).toFixed(2) }, read: 0, deep: false };
@@ -11447,12 +11462,21 @@ const expeditionSys = {
     const t = at(0, 0), f = at(2.4, 1.3), ch = at(-2.0, 1.5), sg = at(1.6, -2.3);
     pnodeSys.addQuiet('tent', t.x, gy(t.x, t.z), t.z, c.yaw + Math.PI);
     (game.torches = game.torches || []).push([+f.x.toFixed(2), +(gy(f.x, f.z) + 0.1).toFixed(2), +f.z.toFixed(2)]);
-    const chest = pnodeSys.addQuiet('chest', ch.x, gy(ch.x, ch.z) + 0.4, ch.z, c.yaw, { sc: 0.6 });
+    const chest = pnodeSys.addQuiet('chest', ch.x, gy(ch.x, ch.z) + 0.02, ch.z, c.yaw, { sc: 0.6 });
     chest.inv = new Array(chestSlots(0.6)).fill(null);
     chest.inv[0] = { kind: 'page', page: c.i };
-    if (c.i <= 3){ chest.inv[1] = { kind: 'cookedmeat', count: 2 }; chest.inv[2] = { kind: 'coal', count: 4 }; }
-    else if (c.i <= 6){ chest.inv[1] = { kind: 'coal', count: 3 }; if (c.i === 5) chest.inv[2] = { kind: 'rope', count: 2 }; }
-    else if (c.i === 7){ chest.inv[1] = { kind: 'rope', count: 1 }; }
+    // what they left, and it gets better the further they got
+    const LOOT = [
+      [{ kind: 'cookedmeat', count: 3 }, { kind: 'coal', count: 6 }],
+      [{ kind: 'cookedmeat', count: 2 }, { kind: 'coin', count: 12 }, { kind: 'coal', count: 4 }],
+      [{ kind: 'coin', count: 20 }, { kind: 'ironingot', count: 3 }, { kind: 'rope', count: 1 }],
+      [{ kind: 'coin', count: 30 }, { kind: 'ironingot', count: 4 }, { kind: 'rounds', count: 12 }],
+      [{ kind: 'fw', g: 0 }, { kind: 'rounds', count: 24 }, { kind: 'coin', count: 35 }],
+      [{ kind: 'rubyingot', count: 2 }, { kind: 'coin', count: 45 }, { kind: 'cells', count: 8 }],
+      [{ kind: 'diamond', count: 1 }, { kind: 'coin', count: 60 }, { kind: 'rope', count: 2 }],
+      [{ kind: 'coin', count: 80 }, { kind: 'diamond', count: 1 }, { kind: 'rubyingot', count: 2 }],
+    ][c.i - 1];
+    LOOT.forEach((it, k) => { chest.inv[k + 1] = it; });
     pnodeSys.addQuiet('sign', sg.x, gy(sg.x, sg.z), sg.z, c.yaw + Math.PI, { text: E.L.toUpperCase() + ' SURVEY\nCAMP ' + c.i + '\nDAY ' + this.DAYS[c.i - 1] });
     if (c.i >= 4){
       for (let k = 0; k < (c.i >= 6 ? 3 : 2); k++){
@@ -11466,12 +11490,13 @@ const expeditionSys = {
       const sh = E.shaft;
       const rx = +(sh.x + 1.35).toFixed(2), rz = +sh.z.toFixed(2);
       (game.ropes = game.ropes || []).push([rx, +(sh.y + 0.15).toFixed(2), rz, +(sh.y - sh.bottom - 0.8).toFixed(1)]);
-      const last = pnodeSys.addQuiet('chest', sh.x - 0.9, sh.bottom + 0.35, sh.z, 0, { sc: 0.6 });
+      const last = pnodeSys.addQuiet('chest', sh.x - 0.9, sh.bottom + 0.05, sh.z, 0, { sc: 0.6 });
       last.inv = new Array(chestSlots(0.6)).fill(null);
       last.inv[0] = { kind: 'survey' };
-      last.inv[1] = { kind: 'coin', count: 150 };
-      last.inv[2] = { kind: 'diamond', count: 2 };
+      last.inv[1] = { kind: 'coin', count: 200 };
+      last.inv[2] = { kind: 'diamond', count: 4 };
       last.inv[3] = { kind: 'rope', count: 3 };
+      last.inv[4] = { kind: 'aetheringot', count: 2 };
       game.torches.push([+(sh.x + 0.9).toFixed(2), +(sh.bottom + 0.1).toFixed(2), +(sh.z + 0.9).toFixed(2)]);
       game.decorPlaced.push({ x: +(sh.x + 0.4).toFixed(2), z: +(sh.z - 0.9).toFixed(2), y: +sh.bottom.toFixed(2), type: 'bones', s: 1, vc: 0, dry: false, yaw: 1.2, key: 'x8_b', placed: true });
       decorSys.dirty = true;
@@ -11506,7 +11531,7 @@ const expeditionSys = {
       if (c.found || !c.known) continue;
       out.push({ id: 'camp' + c.i, x: c.x, z: c.z, label: c.i === 1 ? 'ABANDONED CAMP' : 'CAMP ' + c.i + ' · THE SURVEY', rec: { name: 'camp' } });
     }
-    if (E.deep && !E.deepFound) out.push({ id: 'themouth', x: E.shaft.x, z: E.shaft.z, y: E.shaft.y + 2, label: 'THE MOUTH', rec: { name: 'the mouth' } });
+    if ((E.deep || E.camps[7].found) && !E.deepFound) out.push({ id: 'themouth', x: E.shaft.x, z: E.shaft.z, y: E.shaft.y + 2, label: 'THE MOUTH', rec: { name: 'the mouth' } });
   },
   // reading a page
   read(it){
@@ -11549,9 +11574,10 @@ const palisadeSys = {
     const now = performance.now();
     // spikes bite every frame they are stood in (a slow that only lands
     // five times a second is no slow at all)
+    this.afireTick(dt);
     for (const n of game.pnodes){
       if (n.t === 'trench'){ this.trenchTick(n, dt, now); continue; }
-      if (n.t !== 'spikes') continue;
+      if (n.t !== 'spikes' || n.broken) continue;
       const c = Math.cos(n.yaw || 0), sn = Math.sin(n.yaw || 0);
       for (const en of game.entities){
         if (!crewSys.hostile(en)) continue;
@@ -11566,6 +11592,9 @@ const palisadeSys = {
           hurtEntity(en, 7, 0, 0, true);
           Particles.burst(en.x, en.y + 0.4, en.z, 0.25, [0x8a1c1c, 0xc8ccd4], 4, 1.0);
           if (Math.hypot(en.x - game.pos.x, en.z - game.pos.z) < 30) AudioSys.sfx('hit');
+          // every bite blunts them; forty and they are bent flat until repaired
+          n.wear = (n.wear == null ? 40 : n.wear) - 1;
+          if (n.wear <= 0){ n.broken = 1; toast('a spike strip is worn flat'); markSave(); }
         }
       }
     }
@@ -11602,15 +11631,26 @@ const palisadeSys = {
       if (dy < -1.2 || dy > 1.6) continue;
       const lx = dx * c - dz * sn, lz = dx * sn + dz * c;
       if (Math.abs(lx) > 1.7 || Math.abs(lz) > 0.8) continue;
+      en.afire = 7;                                  // it carries the fire away with it
       en.burnT2 = (en.burnT2 || 0) + dt;
       if (en.burnT2 >= 0.5){
         en.burnT2 = 0;
-        hurtEntity(en, 9, dx * 0.5, dz * 0.5, true);
+        hurtEntity(en, 12, dx * 0.5, dz * 0.5, true);
         Particles.burst(en.x, en.y + 0.6, en.z, 0.3, [0xff8830, 0xffdd66], 5, 1.4);
         if (Math.hypot(en.x - game.pos.x, en.z - game.pos.z) < 30) AudioSys.sfx('hit');
       }
     }
-    if (n.burnT <= 0){ n.lit = 0; n.spent = 1; toast('the trench burns out'); markSave(); pnodeSys.rebuild(); }
+    if (n.burnT <= 0){ toast('the trench burns out'); pnodeSys.removeNode(n); }
+  },
+  // an enemy that has been in the oil burns on: enough to finish a husk
+  afireTick(dt){
+    for (const en of [...game.entities]){
+      if (!(en.afire > 0)) continue;
+      en.afire -= dt;
+      if (Math.random() < dt * 8) Embers.burst(en.x, en.y + 0.8, en.z, 0.25, [0xffb347, 0xff8830], 2, 1.0);
+      en.afireT = (en.afireT || 0) + dt;
+      if (en.afireT >= 0.5){ en.afireT = 0; hurtEntity(en, 8, 0, 0, true); }
+    }
   },
   // the flame jet: on the grid, it throws a fan of fire five metres out
   // its front at any enemy in it
@@ -11882,7 +11922,7 @@ const crewSys = {
     } else {
       row('no saved blueprints yet — copy something with the wrench (Ctrl+C) and save it (N)', 'BUILD', '#ffb44d', null, true);
     }
-    row(giveable ? 'hand over your ' + (held.kind === 'mat' ? this.matText(held) : this.toolText(held)) : 'select a drill, dispenser, sword, gun or a stack of material in your hotbar to hand it over', 'GIVE', '#9fe8a0', () => this.give(e), !giveable);
+    row('hand something over: click a drill, dispenser, sword, gun or stack of material in your bags below' + (giveable ? ' (or GIVE your ' + (held.kind === 'mat' ? this.matText(held) : this.toolText(held)) + ')' : ''), 'GIVE', '#9fe8a0', () => this.give(e), !giveable);
     row(C.tool ? 'take back the ' + this.toolText(C.tool) : 'they carry no tool', 'TAKE', '#9fe8a0', () => this.takeTool(e), !C.tool);
     row(C.mat && C.mat.count > 0 ? 'take back the ' + this.matText(C.mat) : 'they carry no material', 'TAKE', '#9fe8a0', () => this.takeMat(e), !(C.mat && C.mat.count > 0));
     const hasPack = Object.keys(C.pack).some(k => C.pack[k] > 0);
@@ -11934,15 +11974,16 @@ const crewSys = {
           if (Math.hypot(x - cx, z - cz) <= R - eff * 0.2) cuts.push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2)]);
     return cuts.slice(0, 320);
   },
-  give(e){
-    const held = game.slots[game.hotSel];
-    if (!this.giveable(held)){ toast('select a drill, dispenser, sword, gun or material first'); AudioSys.sfx('deny'); return; }
+  give(e, idx){
+    if (idx == null) idx = game.hotSel;
+    const held = game.slots[idx];
+    if (!this.giveable(held)){ toast('click a drill, dispenser, sword, gun or material in your bags to hand it over'); AudioSys.sfx('deny'); return; }
     const C = e.crew;
     if (held.kind === 'mat'){
       // a stack of material for the dispenser: same kind merges, another swaps back
       if (C.mat && C.mat.count > 0 && C.mat.mat === held.mat) C.mat.count += held.count;
       else { if (C.mat && C.mat.count > 0) CORE.addMat(game.slots, C.mat.mat, C.mat.count); C.mat = { kind: 'mat', mat: held.mat, count: held.count }; }
-      game.slots[game.hotSel] = null;
+      game.slots[idx] = null;
       // out of material mid-build: this resumes it
       if (C.job && C.job.kind === 'build' && C.mode !== 'build' && C.tool && C.tool.kind === 'disp') C.mode = 'build';
       this.say(e, 'mat');
@@ -11951,7 +11992,7 @@ const crewSys = {
       return;
     }
     if (C.tool){ if (!giveItem(C.tool, 1)) dropItem(C.tool, { x: e.x, y: e.y + 1, z: e.z }); }
-    C.tool = held; game.slots[game.hotSel] = null;
+    C.tool = held; game.slots[idx] = null;
     if (C.mode === 'quarry' && held.kind !== 'drill'){ C.mode = 'stay'; C.job = null; }
     if (C.mode === 'build' && held.kind !== 'disp'){ C.mode = 'stay'; }
     this.remesh(e);
@@ -13100,12 +13141,20 @@ const bossSys = {
       ty = py - 12;
       if (e.stateT > 2.4){ e.state = 'burrow'; e.stateT = 0; }
     }
+    // it never comes near the surface: eight metres under the ground is
+    // its ceiling, so it is an underground problem and nothing else
+    const ceil = game.gen.height(e.x, e.z) - 8;
+    if (ty > ceil) ty = ceil;
     let dx = tx - e.x, dy = ty - e.y, dz = tz - e.z;
     const L = Math.hypot(dx, dy, dz) || 1;
     e.x += (dx / L) * sp * dt;
     e.y += (dy / L) * sp * dt;
     e.z += (dz / L) * sp * dt;
     e.y = Math.max(e.y, CORE.BEDROCK_Y + 3);
+    if (e.y > ceil) e.y = ceil;
+    // and you can lose it: out of its reach for eight seconds and it goes
+    if (d3 > 40 || py > ceil + 6){ e.loseT = (e.loseT || 0) + dt; if (e.loseT > 8){ toast('the ground goes quiet'); killEntity(e, false); return; } }
+    else e.loseT = 0;
     // carve where it swims -- spaced, so the edit list stays sane
     const c = e.carveAt;
     if (!c || Math.hypot(e.x - c[0], e.y - c[1], e.z - c[2]) > 3.4){
@@ -19451,6 +19500,20 @@ function tryAction(dt, now){
         refreshHotbar(); refreshToolHUD();
         return;
       }
+      // anything placed comes up in your hands: a torch, a table, a machine,
+      // a chest (its contents spill), a door, a wire, a defense -- the same
+      // refunds the wrench gives, without the wrench
+      const pr = wrenchProps.rayPick(3.4);
+      if (pr){
+        const touched = new Set(), parts = [];
+        wrenchProps.del(pr, touched, parts);
+        wrenchProps.rebuildFor(touched);
+        game.gatherT = now;
+        toast(parts.length ? parts.join('  ·  ') : 'picked up');
+        AudioSys.sfx('place');
+        refreshHotbar(); refreshToolHUD(); markSave();
+        return;
+      }
       const d = decorSys.pickOnRay(3.4);
       if (d){
         const kind = d.type === 'flower' ? 'flower' : d.type === 'shrub' ? 'shrub' : 'tuft';
@@ -21808,6 +21871,11 @@ function bindInvDnD(){
     const right = e.button === 2;
     const half = x => Math.max(1, Math.ceil((x.count || 1) / 2));
     const el = e.target.closest && e.target.closest('.slot');
+    // in a crew member's panel a click on one of your items hands it over
+    if (el && !right && game.ui === 'trade' && game.activeCrew && !invCursor.it){
+      const key = slotKeyOf(el);
+      if (typeof key === 'number' && crewSys.giveable(game.slots[key])){ crewSys.give(game.activeCrew, key); return; }
+    }
     if (el && el.parentElement.id !== 'hotbar'){
       const key = slotKeyOf(el);
       const it = slotItem(key);
@@ -21856,7 +21924,7 @@ function itemInfoHTML(it, tool){
         ? '<div class="t2">carrying a ' + game.carried.type + ' — left click to throw</div>'
         : game.fistsUp
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
-          : '<div class="t2">left click gathers plants / picks up animals · right click raises fists</div>');
+          : '<div class="t2">left click gathers plants, picks up animals, and takes back anything you placed · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
     const name = tool.lathe ? 'lathe' : tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
@@ -21933,9 +22001,9 @@ function itemInfoHTML(it, tool){
   } else if (it.kind === 'lscale'){
     html = '<div class="t1">LEVIATHAN SCALE</div><div class="t2">proof you met the thing under the boat and came back</div>';
   } else if (it.kind === 'trench'){
-    html = '<div class="t1">oil trench</div><div class="t2">a 3 m tray of oil. Right click it to strike it alight: it burns for half a minute, and enemies in it burn with it. One use</div>';
+    html = '<div class="t1">oil trench</div><div class="t2">a 3 m tray of oil. Right click it to strike it alight: it burns for half a minute, and an enemy that so much as crosses it burns until it dies. One use; the tray goes with the fire</div>';
   } else if (it.kind === 'flamejet'){
-    html = '<div class="t1">flame jet</div><div class="t2">a wall nozzle on the grid (3 W idle, 40 W firing) that throws a fan of fire five metres out its front at any enemy that comes near — never at you, your crew or an animal</div>';
+    html = '<div class="t1">flame jet</div><div class="t2">a wall nozzle on the grid (2 W idle, 20 W firing) that throws a fan of fire five metres out its front at any enemy that comes near — never at you, your crew or an animal</div>';
   } else if (it.kind === 'page'){
     html = '<div class="t1">journal page ' + (it.page || 1) + '</div><div class="t2">a page torn from a surveyor\'s journal — right click to read it</div>';
   } else if (it.kind === 'survey'){
@@ -21945,7 +22013,7 @@ function itemInfoHTML(it, tool){
   } else if (it.kind === 'claymore'){
     html = '<div class="t1">claymore</div><div class="t2">a set charge that faces the way you face. It fires once, for an enemy and only an enemy, in a fan out its front — never for you, your crew or an animal — and it never marks the ground</div>';
   } else if (it.kind === 'spikes'){
-    html = '<div class="t1">one-way spikes</div><div class="t2">a 2 m strip. Enemies that cross it bleed and slow; you, your crew and your animals walk over it</div>';
+    html = '<div class="t1">one-way spikes</div><div class="t2">a 2 m strip. Enemies that cross it bleed and slow; you, your crew and your animals walk over it. Forty bites wear it flat</div>';
   } else if (it.kind === 'bell'){
     html = '<div class="t1">tripwire bell</div><div class="t2">rings when an enemy comes within 10 m, and your armed crew within 45 m come running to it</div>';
   } else if (it.kind === 'turret'){
@@ -23050,7 +23118,7 @@ let lastChunk = null;
 const SKIN_VERT = `
 attribute float aHc;
 attribute vec3 aNc;
-attribute float aAO;
+attribute float aAO; attribute float aRise;
 uniform mat4 uShadowMatrix;
 uniform vec2 uPlayer; uniform vec2 uMorph;
 uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
@@ -23068,8 +23136,10 @@ void main(){
     vec2 mi = (p.xz - uMaskOrigin) / uMaskSpan;
     if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){
       float r = texture2D(uMask, mi).r;
-      if ((r > 0.38 && r < 0.41) || (r > 0.77 && r < 0.80)) p.y -= 0.12;
-      else if ((r > 0.42 && r < 0.45) || (r > 0.81 && r < 0.84)) p.y -= 0.45;
+      // and anything standing above the ground in the seam -- a baked city
+      // tower, a placed block -- drops to the ground: the real one is there
+      if ((r > 0.38 && r < 0.41) || (r > 0.77 && r < 0.80)) p.y -= 0.12 + aRise;
+      else if ((r > 0.42 && r < 0.45) || (r > 0.81 && r < 0.84)) p.y -= 0.45 + aRise;
     }
   }
   vPos = p; vNrm = n; vMat = 0.0; vSky = 1.0; vAO = aAO; vAxis = vec3(0.0);
@@ -23259,6 +23329,7 @@ const farTerrain = {
     geo.setAttribute('normal', new THREE.BufferAttribute(g.nrm, 3, true));
     geo.setAttribute('aNc', new THREE.BufferAttribute(g.nrc, 3, true));
     geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1, true));
+    geo.setAttribute('aRise', new THREE.BufferAttribute(g.rs, 1));
     geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), Lk.E * 1.5 + 600);
     const tex = new THREE.DataTexture(g.mt, n, n, THREE.RedFormat, THREE.UnsignedByteType);
@@ -24404,7 +24475,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, mapCellColor, expeditionSys, riverNameAt,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
