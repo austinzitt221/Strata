@@ -104,10 +104,13 @@ order is mine. Big items are split so each build is one session.
    broken things stay broken, the mender puts them back for battery
    charge alone, and the gate: a portcullis sized to any opening on a
    lever. Left for later: enemies that climb, the mender on city walls.
-3. **THE DEEP, slice A** — the dark, the noise meter, the first hall,
-   the leader's last camp under the mouth. And Austin's ramp for the
-   expedition: camps first, then a hut, a house with a little power, a
-   mining facility at the end, and a boss fight there.
+3. **THE DEEP, slice A** — DONE (Build 34): the dark, the noise meter,
+   the first hall, the leader's last camp and last note, the door on,
+   Austin's ramp (hut, lit house, the works), the knock. **Slice B**
+   (later in the queue, after RIVERS II and THE LINE): the second hall
+   behind the fall, what lives there and what the sound is, the boss at
+   the end of the works, ropes and elevators for the way back up with a
+   full pack, glow fungus as the deep's own light.
 4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
    on the banks with bridges, river fish.
 5. **THE LINE** (Austin's) — real trains: their own track (not the

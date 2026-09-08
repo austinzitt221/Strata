@@ -13,6 +13,29 @@ their lists are retired; what came of them is Build 30.
 - Feedback I want: does the far country look any different from before
   (it should be a touch darker, the same as the near ground always was)?
 
+## Build 34 — THE DEEP A
+- [ ] A new world: walk the survey. Camp 4 is a hut now, camp 6 a
+      house with a lamp (the generator has coal; it lights when the
+      grid draws), camp 8 has the works beside the mouth.
+- [ ] Anywhere within two hundred metres of the mouth: a slow double
+      knock now and then. Does it read as "from below"? Too often, too
+      rare?
+- [ ] Go down the rope. At the bottom the dark should close in: the
+      headlamp reaches a few metres, the black is at twenty-five. Plant
+      torches. A NOISE bar appears.
+- [ ] Follow the tunnel to the first hall. The leader's camp is inside
+      by the entrance; read the last note in the chest. Bones by the
+      door, the doorway, the tunnel on, the fall.
+- [ ] Work in the hall with a stone drill, then a diamond drill: watch
+      the meter. Fire a gun. Let it top out. Something should come out
+      of the door. Fight in the dark.
+- [ ] Old world: load one from before. The hall should be there under
+      the mouth the first time you go down.
+- Feedback I want: is the dark too dark to enjoy, or right? Is the meter
+  readable at a glance (its colour goes amber past 40, red past 70)?
+  Does "they come from the door" land, and are three big lurkers in
+  the dark the right first wave?
+
 ## Build 33 — THE BREACH
 - [ ] Build a small base at night: a door, a turret on a generator, a
       bell, spikes. Let the night come. Enemies should stop at what

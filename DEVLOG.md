@@ -2,6 +2,54 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 34 — THE DEEP A: the descent (2026-09-08)
+
+The pages said do not go down. This is down. Verified headlessly (a
+build-34 suite lays a world and probes the hall's tunnel, room, floor,
+pillars, dais, lintel, doorway, second tunnel and rubble through the
+distance field; stands in the hall and watches the dark come in and the
+camp appear; reads the last note; counts a stone cut and a diamond cut
+into the meter, watches it decay, and tops it out to bring three of
+them from the door; checks the surface hears nothing; stamps camps 4, 6
+and 8 and probes the hut, the lit house's generator, bulb and wire, and
+the works' shed, chest, stove and sign; and round-trips the hall
+through the save; plus the expedition and smoke suites).
+
+- **The first hall.** Laid with the route when a world is born: from
+  the foot of the shaft a tunnel runs thirty metres to a built room,
+  22 m across and 7 high, floored in stonebrick, six pillars, a dais at
+  the far end. Across the dais a lintel and posts frame a doorway on to
+  a second tunnel, fifteen metres, that ends in fallen rock. The second
+  hall is behind it, for a later build. Old worlds get the hall the
+  first time they load.
+- **The leader's last camp** is just inside: the tent, one torch, bones
+  by the door laid out with care, a sign, and the chest with the last
+  note (page 9, day 12), the leader's stone drill ("it is the quiet
+  one"), coins, torches and rope. Reading the note marks the survey
+  read to 9; a THE FIRST HALL marker stands from the moment you reach
+  the bottom of the mouth until you stand in the hall.
+- **The dark.** Under the mouth the headlamp reaches less than half as
+  far and the black comes in at twenty-five metres instead of eighty,
+  eased in over a second so it reads as a place and not a switch. Light
+  is what you bring: torches keep their reach.
+- **They hunt by sound.** A noise meter in the HUD, only in the deep.
+  Every cut adds by drill tier (stone 2, iron 3.2, ruby 4.4, obsidian
+  5.6, diamond 6.8), a placement 1, a shot 10, a laser 5, a blast 45,
+  a bell 40, sprinting a little per second; it decays three a second.
+  At the top something turns over in the second hall and they come out
+  of its tunnel: two plus the wave count, wave by wave, big lurkers
+  that do not burn. The meter drops back to thirty. On the surface
+  nobody is listening.
+- **Austin's ramp.** Camp 4 is a stone hut with a doorway; camp 6 a
+  stone house with a generator and four coal wired to a lamp on the
+  back wall; camp 8 has the works beside the mouth, a stone shed with
+  a chest of two iron drills, rails, coal, iron and torches, a stove,
+  and a sign. Tents, chests and bones moved to fit.
+- **The knock** (creative time). The pages promised a slow knock from
+  below. Within two hundred metres of the mouth, now and then, a
+  double thud you feel more than hear, fainter with distance; in the
+  deep every ten to twenty-five seconds. The first one says so.
+
 ## Build 33.1 — THE LINE (creative time, 2026-09-08)
 
 The lighting line between the near field and the far skin, reported

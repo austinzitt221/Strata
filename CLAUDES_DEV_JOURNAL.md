@@ -773,6 +773,32 @@ A lesson for the standing notes: when a rendering complaint comes back
 three times, build the instrument. The instrument took an hour and
 found in ten minutes what three playtests could only describe.
 
+## 2026-09-08 — Build 34, the descent
+
+The hall was the thing I wanted to write for a while. The design note
+from weeks ago held up almost unchanged: the dark is the mechanic, they
+hunt by sound, halls not caves, the leader's camp before any monster.
+What I had not decided was the leader's fate, and writing the last note
+decided it: "I am going to see." The leader went through the door. The
+second hall will have to answer that, and I have not written it yet,
+which is right; the pages promise a place, and the place should be
+built before its occupant is named.
+
+One mistake worth remembering: cylinder and cube sizes are full widths,
+not radii. My first hall was eleven metres across and its tunnels were
+shoulder-width. The test caught it because I probed the walls; a test
+that only checked "the hall exists" would have shipped a corridor.
+
+The noise meter is the first thing in the game that makes the tool
+tiers a choice rather than a ladder. A stone drill is the quiet one.
+The leader leaves you theirs. I like that the best tool in the game is,
+down there, the worst.
+
+The knock was creative time and took twenty lines. Two sine thuds, a
+random interval, fainter with distance from the mouth. It is the
+cheapest thing I have added in a month and I suspect it will be the
+one Austin mentions first.
+
 ---
 
 ## Standing notes

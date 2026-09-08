@@ -153,6 +153,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 /* ---------- fatal ---------- */
 #fatal{z-index:100; background:#14060a;}
 .statfill.breath{background:#4aa3e8;}
+.statfill.noise{background:#c8b04a;}
 #uwater{position:fixed;inset:0;background:rgba(18,58,98,0.38);pointer-events:none;z-index:3;}
 #sleepfade{position:fixed;inset:0;background:#000;opacity:0.92;pointer-events:none;z-index:4;transition:opacity 0.8s;}
 #fatal .panel{border-color:#a33;}
@@ -169,6 +170,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div id="statbars" class="hidden">
     <div class="statbar"><div id="hpfill" class="statfill hp"></div></div>
     <div class="statbar hidden" id="breathbar"><div id="breathfill" class="statfill breath"></div></div>
+    <div class="statbar hidden" id="noisebar" title="noise — they hunt by sound"><div id="noisefill" class="statfill noise"></div></div>
   </div>
   <div id="uwater" class="hidden"></div>
   <div id="sleepfade" class="hidden"></div>
@@ -3872,6 +3874,7 @@ uniform float uFogNear;
 uniform float uFogFar;
 uniform vec3 uPlayerPos;
 uniform float uLampR;
+uniform float uDeep;
 uniform float uLampSky;
 uniform vec4 uTorch[16];
 uniform float uTorchN;
@@ -3963,7 +3966,7 @@ void main(){
                     uSunCol * diff * (0.55 + 0.45 * ao) * sunVis, vec3(1.05));
   // headlamp: its own warm light, strongest where the day light isn't
   float lampD = length(vPos - uPlayerPos);
-  float lamp = clamp(1.0 - lampD / uLampR, 0.0, 1.0);
+  float lamp = clamp(1.0 - lampD / (uLampR * mix(1.0, 0.42, uDeep)), 0.0, 1.0);   // the deep eats light
   lamp = lamp * lamp * (3.0 - 2.0 * lamp);
   float aoP = 0.85 + 0.15 * ao;          // placed light fills dark creases
   vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky)) * aoP;
@@ -3995,7 +3998,7 @@ void main(){
   // fog range scales with skylight: the surface sees kilometres, caves fade
   // to black within ~80m so depth still feels enclosed. Underwater overrides
   // with short murk.
-  float ff = mix(80.0, uFogFar, clamp(vSky * 1.2, 0.0, 1.0));
+  float ff = mix(mix(80.0, 24.0, uDeep), uFogFar, clamp(vSky * 1.2, 0.0, 1.0));
   float fn = ff * 0.42;
   if (uUnderwater > 0.5){ ff = 30.0; fn = 4.0; }
   float fog = smoothstep(fn, ff, dist);
@@ -5113,6 +5116,7 @@ function buildScene(){
       uFogFar: { value: fogFar },
       uPlayerPos: { value: new THREE.Vector3() },
       uLampR: { value: 13 },
+      uDeep: { value: 0 },
       uLampSky: { value: 0.85 },
       uTorch: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, -9999, 0, 1)) },
       uTorchN: { value: 0 },
@@ -11462,6 +11466,8 @@ const EXPEDITION_PAGES = [
   `Day {D}. {S} is hurt, a fall, the leg. He cannot walk the last of it. I have left him what food there is and the short rope and I am going up alone to the mouth we found: a shaft, sheer, and the scrape coming up out of it like breath. I will go down at first light. If I find what makes the sound I will know what to tell them.`,
   // 8 — the last camp, at the shaft
   `Day {D}. It is not one thing. It is a place. I have been down twice on the long rope and I have seen the first hall and I have heard them moving in the second. I have left the rope. I have left the survey. Whoever comes after: the council was wrong to want to know, and I was wrong to want to tell them. Do not go down. I am going down.`,
+  // 9 — the last note, in the first hall
+  `Day {D}. The first hall. Someone built this: a floor, pillars, a doorway at the far end with a lintel I could not have lifted. The bones by the door were laid out the way the ones on the hill were. They do not come to light. I sat a whole day with the torch burning and nothing came. They come to sound. I struck the wall once with the pick to hear the echo and heard them turn over in the second hall, all of them, like one thing. Whoever you are: work quietly, or do not work. Take the drill; it is the quiet one. The way on is the door. I am going to see.`,
 ];
 const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
 function riverNameAt(x, z){
@@ -11470,7 +11476,7 @@ function riverNameAt(x, z){
   return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + R.c) % RIVER_NAMES.length];
 }
 const expeditionSys = {
-  DAYS: [1, 2, 4, 5, 7, 8, 10, 11],
+  DAYS: [1, 2, 4, 5, 7, 8, 10, 11, 12],
   // lay the route once, when a world is born
   create(sx, sz){
     const g = game.gen, seed = game.seed >>> 0;
@@ -11511,6 +11517,7 @@ const expeditionSys = {
     let river = null;
     for (const c of camps){ river = riverNameAt(c.x, c.z); if (river) break; }
     game.expedition = { L, S, C, R: river || 'the stream', camps, shaft: { x: shx, z: shz, y: +shy.toFixed(2), bottom: +(shy - 25).toFixed(2) }, read: 0, deep: false };
+    deepSys.lay(game.expedition, rnd);
     markSave();
     return game.expedition;
   },
@@ -11545,10 +11552,34 @@ const expeditionSys = {
     const gy = (x, z) => g.height(x, z);
     const cs = Math.cos(c.yaw), sn = Math.sin(c.yaw);
     const at = (dx, dz) => ({ x: c.x + dx * cs - dz * sn, z: c.z + dx * sn + dz * cs });
-    const t = at(0, 0), f = at(2.4, 1.3), ch = at(-2.0, 1.5), sg = at(1.6, -2.3);
-    pnodeSys.addQuiet('tent', t.x, gy(t.x, t.z), t.z, c.yaw + Math.PI);
+    // the survey dug in as it went: a stone hut on day 5, a house with a
+    // lamp on day 8, and a works beside the mouth
+    const built = c.i === 4 ? 4.2 : c.i === 6 ? 6.0 : 0;
+    let gh = gy(c.x, c.z);
+    const EB = (op, x, y, z, sx, sy, sz, mat, rot) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, rot || 0); e.sy = sy; e.sz = sz; applyEdit(e); };
+    if (built){
+      const w = built, hh = c.i === 4 ? 2.6 : 3.2;
+      for (const [ax, az] of [[-w / 2, -w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [w / 2, w / 2]]){ const q = at(ax, az); gh = Math.max(gh, gy(q.x, q.z)); }
+      gh = +gh.toFixed(2); c.gy = gh;
+      EB(1, c.x, gh + hh / 2 - 0.6, c.z, w, hh + 1.2, w, CORE.MAT.STONEBRICK, c.yaw);
+      EB(0, c.x, gh + hh / 2 - 0.1, c.z, w - 0.8, hh - 0.8, w - 0.8, 0, c.yaw);      // a roof half a metre thick
+      const d = at(w / 2, 0);
+      EB(0, d.x, gh + 1.2, d.z, 1.0, 2.2, 1.3, 0, c.yaw);
+      if (c.i === 6){
+        // a generator with a little coal, wired to a lamp on the back wall
+        const gp = at(-(w / 2 - 1.1), -(w / 2 - 1.1)), bp = at(-(w / 2 - 0.45), (w / 2 - 1.3));
+        const gen = pnodeSys.addQuiet('gen', gp.x, gh + 0.02, gp.z, c.yaw, {}); gen.fuel = { kind: 'coal', count: 4 }; gen.burn = 0;
+        game.bulbs.push([+bp.x.toFixed(2), +(gh + 2.3).toFixed(2), +bp.z.toFixed(2), +cs.toFixed(3), 0, +sn.toFixed(3), game.pSeq++]);
+        const bulbId = game.bulbs[game.bulbs.length - 1][6];
+        game.wires.push({ a: 'n' + gen.id, b: 'b' + bulbId, pa: [+gp.x.toFixed(2), +(gh + 0.8).toFixed(2), +gp.z.toFixed(2)], pb: [+bp.x.toFixed(2), +(gh + 2.3).toFixed(2), +bp.z.toFixed(2)] });
+        bulbSys.rebuild(); wireSys.rebuild();
+      }
+    }
+    const gyb = (x, z) => built ? gh : gy(x, z);
+    const t = at(0, 0), f = built ? at(built / 2 + 1.3, 1.3) : at(2.4, 1.3), ch = c.i === 4 ? at(-1.1, 0.9) : at(-2.0, 1.5), sg = built ? at(built / 2 + 1.5, -1.5) : at(1.6, -2.3);
+    pnodeSys.addQuiet('tent', t.x, gyb(t.x, t.z), t.z, c.yaw + Math.PI);
     (game.torches = game.torches || []).push([+f.x.toFixed(2), +(gy(f.x, f.z) + 0.1).toFixed(2), +f.z.toFixed(2)]);
-    const chest = pnodeSys.addQuiet('chest', ch.x, gy(ch.x, ch.z) + 0.02, ch.z, c.yaw, { sc: 0.6 });
+    const chest = pnodeSys.addQuiet('chest', ch.x, gyb(ch.x, ch.z) + 0.02, ch.z, c.yaw, { sc: 0.6 });
     chest.inv = new Array(chestSlots(0.6)).fill(null);
     chest.inv[0] = { kind: 'page', page: c.i };
     // what they left, and it gets better the further they got
@@ -11566,12 +11597,25 @@ const expeditionSys = {
     pnodeSys.addQuiet('sign', sg.x, gy(sg.x, sg.z), sg.z, c.yaw + Math.PI, { text: E.L.toUpperCase() + ' SURVEY\nCAMP ' + c.i + '\nDAY ' + this.DAYS[c.i - 1] });
     if (c.i >= 4){
       for (let k = 0; k < (c.i >= 6 ? 3 : 2); k++){
-        const b = at(-3 + k * 2.4, -1.6 - (k % 2) * 1.2);
+        const b = built ? at(built / 2 + 2.6 + k * 1.5, -2.2 + k * 1.4) : at(-3 + k * 2.4, -1.6 - (k % 2) * 1.2);
         game.decorPlaced.push({ x: +b.x.toFixed(2), z: +b.z.toFixed(2), y: +gy(b.x, b.z).toFixed(2), type: 'bones', s: 1, vc: 0, dry: false, yaw: c.yaw + k, key: 'x' + c.i + '_' + k, placed: true });
       }
       decorSys.dirty = true;
     }
     if (c.i === 8){
+      // the works: a stone shed beside the mouth with what the survey dug with
+      const wk = at(-1.0, -6.0), wy = gy(wk.x, wk.z);
+      EB(1, wk.x, wy + 1.0, wk.z, 5.0, 3.8, 4.0, CORE.MAT.STONEBRICK, c.yaw);
+      EB(0, wk.x, wy + 1.5, wk.z, 4.2, 2.0, 3.2, 0, c.yaw);
+      const wd = at(-1.0, -4.0);
+      EB(0, wd.x, wy + 1.2, wd.z, 1.4, 2.2, 1.2, 0, c.yaw);
+      const wc = at(-2.3, -6.6), ws = at(1.2, -6.6), wsg = at(1.6, -3.6);
+      const works = pnodeSys.addQuiet('chest', wc.x, wy + 0.02, wc.z, c.yaw + Math.PI / 2, { sc: 0.8 });
+      works.inv = new Array(chestSlots(0.8)).fill(null);
+      works.inv[0] = { kind: 'drill', tier: 1 }; works.inv[1] = { kind: 'drill', tier: 1 }; works.inv[2] = { kind: 'rail', count: 24 }; works.inv[3] = { kind: 'coal', count: 10 }; works.inv[4] = { kind: 'ironingot', count: 6 }; works.inv[5] = { kind: 'torch', count: 16 };
+      (game.stoves = game.stoves || []).push({ id: game.pSeq++, x: +ws.x.toFixed(2), y: +wy.toFixed(2), z: +ws.z.toFixed(2), yaw: c.yaw + Math.PI / 2, in: null, fuel: null, out: null, burn: 0, prog: 0 });
+      pnodeSys.addQuiet('sign', wsg.x, wy, wsg.z, c.yaw + Math.PI / 2, { text: E.L.toUpperCase() + ' SURVEY\nTHE WORKS\nDAY ' + this.DAYS[7] });
+      stoveSys.rebuild();
       // the rope down the shaft, and the leader's last chest at the bottom
       const sh = E.shaft;
       const rx = +(sh.x + 1.35).toFixed(2), rz = +sh.z.toFixed(2);
@@ -11618,13 +11662,14 @@ const expeditionSys = {
       out.push({ id: 'camp' + c.i, x: c.x, z: c.z, label: c.i === 1 ? 'ABANDONED CAMP' : 'CAMP ' + c.i + ' · THE SURVEY', rec: { name: 'camp' } });
     }
     if ((E.deep || E.camps[7].found) && !E.deepFound) out.push({ id: 'themouth', x: E.shaft.x, z: E.shaft.z, y: E.shaft.y + 2, label: 'THE MOUTH', rec: { name: 'the mouth' } });
+    if (E.deepFound && E.hall && !E.hall.found) out.push({ id: 'firsthall', x: E.hall.x, z: E.hall.z, y: E.hall.y + 2, label: 'THE FIRST HALL', rec: { name: 'the first hall' } });
   },
   // reading a page
   read(it){
     const E = game.expedition; if (!E) return;
     if (it.kind === 'page'){
-      const i = Math.max(1, Math.min(8, it.page | 0));
-      $('pagetitle').textContent = ('the ' + E.L + ' survey — day ' + this.DAYS[i - 1] + ' — page ' + i + ' of 8').toUpperCase();
+      const i = Math.max(1, Math.min(9, it.page | 0));
+      $('pagetitle').textContent = ('the ' + E.L + ' survey — day ' + this.DAYS[i - 1] + (i === 9 ? ' — the last note' : ' — page ' + i + ' of 8')).toUpperCase();
       $('pagebody').textContent = this.text(i);
       if (i < 8 && !E.camps[i].known){ E.camps[i].known = true; $('pagesub').textContent = 'the next camp is marked · E to close'; }
       else $('pagesub').textContent = 'E to close';
@@ -11644,6 +11689,147 @@ const expeditionSys = {
     document.exitPointerLock();
     AudioSys.sfx('toggle');
     markSave();
+  },
+};
+// ---------- THE DEEP: the descent ----------
+// Under the mouth the dark is the mechanic: the headlamp reaches less than
+// half as far and the black comes in at twenty-five metres, so light is
+// what you bring. They hunt by sound: a noise meter climbs with every cut
+// (a stone drill is quiet, a diamond drill is not), every shot, every
+// blast, and at the top they come from the second hall. The first hall is
+// laid with the route: a built room under the mouth, the leader's last
+// camp inside it, and the door on.
+const deepSys = {
+  noise: 0, level: 0, inDeep: false, wave: 0,
+  NOISE: { cut: [2, 3.2, 4.4, 5.6, 6.8], place: 1, shot: 10, blast: 45, bell: 40, sprint: 0.7 },
+  zone(){
+    const E = game.expedition; if (!E || !E.shaft) return false;
+    return game.pos.y < E.shaft.bottom + 3 && Math.hypot(game.pos.x - E.shaft.x, game.pos.z - E.shaft.z) < 240;
+  },
+  hall(){ const E = game.expedition; return E && E.hall || null; },
+  // a noise, in the deep; elsewhere nobody is listening
+  loud(v){
+    if (!this.inDeep || !(v > 0)) return;
+    this.noise = Math.min(100, this.noise + v);
+    if (this.noise >= 100) this.theyCome();
+  },
+  // the hall is laid with the world: a tunnel out from the foot of the
+  // shaft, a built room, and a doorway on to a second tunnel that ends in
+  // fallen rock (the second hall is behind it, for a later build)
+  lay(E, rnd){
+    const sh = E.shaft;
+    const dir = +(E.camps[7].yaw + Math.PI / 2 + (rnd() - 0.5)).toFixed(3);
+    const cs = Math.cos(dir), sn = Math.sin(dir);
+    const y0 = sh.bottom;
+    const put = e => { game.edits.push(e); if (game.terrain) game.terrain.invalidate(e); return e; };
+    // a tunnel along a heading: a cylinder laid on its side (rx) and turned (rot = heading - 90°)
+    const T = (op, x, y, z, r, len, ang, mat) => { const e = CORE.makeEdit(op, 2, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r, mat || 0, +(ang - Math.PI / 2).toFixed(3)); e.sx = e.sz = r; e.sy = len; e.rx = +(Math.PI / 2).toFixed(4); return put(e); };
+    const B = (op, x, y, z, sx, sy, sz, mat, rot) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, +(rot || 0).toFixed(3)); e.sy = sy; e.sz = sz; return put(e); };
+    const Cy = (op, x, y, z, r, h, mat) => { const e = CORE.makeEdit(op, 2, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r, mat || 0, 0); e.sx = e.sz = r; e.sy = h; return put(e); };
+    // the way in: a tunnel from the foot of the shaft
+    T(0, sh.x + cs * 11, y0 + 1.6, sh.z + sn * 11, 3.4, 24, dir);            // (sizes are full widths: a 3.4 m bore)
+    const hx = sh.x + cs * 30, hz = sh.z + sn * 30, hy = y0 - 0.8;
+    // the hall: a round room 22 m across and 7 high, floored in stonebrick, six pillars, a dais at the far end
+    Cy(0, hx, hy + 3.5, hz, 22, 7);
+    Cy(1, hx, hy - 0.3, hz, 23.2, 0.6, CORE.MAT.STONEBRICK);
+    for (let k = 0; k < 6; k++){ const a = dir + k / 6 * Math.PI * 2 + Math.PI / 6; Cy(1, hx + Math.cos(a) * 7.2, hy + 3.5, hz + Math.sin(a) * 7.2, 1.4, 7.2, CORE.MAT.STONEBRICK); }
+    B(1, hx + cs * 7.6, hy + 0.3, hz + sn * 7.6, 7, 0.6, 3.2, CORE.MAT.STONEBRICK, dir + Math.PI / 2);
+    // the door on: a lintel and posts of stonebrick, and 15 m of tunnel that ends in fallen rock
+    const dx = hx + cs * 11.2, dz = hz + sn * 11.2;
+    B(1, dx, hy + 2.1, dz, 4.4, 4.6, 1.3, CORE.MAT.STONEBRICK, dir + Math.PI / 2);
+    B(0, dx, hy + 1.6, dz, 2.2, 3.4, 1.8, 0, dir + Math.PI / 2);
+    T(0, dx + cs * 7.8, hy + 1.6, dz + sn * 7.8, 3.2, 15, dir);
+    B(1, dx + cs * 15.6, hy + 1.3, dz + sn * 15.6, 3.8, 3.6, 2.6, CORE.MAT.ROCK, dir + Math.PI / 2);
+    E.hall = { x: +hx.toFixed(2), y: +hy.toFixed(2), z: +hz.toFixed(2), dir, dx: +(dx + cs * 4.5).toFixed(2), dy: +(hy + 0.9).toFixed(2), dz: +(dz + sn * 4.5).toFixed(2), stamped: false, found: false };
+    return E.hall;
+  },
+  // the leader's last camp, just inside the hall: the tent, one torch, the
+  // chest with the last note, and bones laid out with care by the door
+  stampHall(H){
+    const E = game.expedition, cs = Math.cos(H.dir), sn = Math.sin(H.dir), y = H.y;
+    const at = (f, s) => ({ x: +(H.x + cs * f - sn * s).toFixed(2), z: +(H.z + sn * f + cs * s).toFixed(2) });
+    const t = at(-5.5, 4.2), tc = at(-4.6, 1.0), ch = at(-6.8, -1.8);
+    pnodeSys.addQuiet('tent', t.x, y, t.z, H.dir + Math.PI / 2);
+    (game.torches = game.torches || []).push([tc.x, +(y + 0.1).toFixed(2), tc.z]);
+    const chest = pnodeSys.addQuiet('chest', ch.x, y + 0.02, ch.z, H.dir, { sc: 0.6 });
+    chest.inv = new Array(chestSlots(0.6)).fill(null);
+    chest.inv[0] = { kind: 'page', page: 9 };
+    chest.inv[1] = { kind: 'drill', tier: 0 };
+    chest.inv[2] = { kind: 'coin', count: 90 };
+    chest.inv[3] = { kind: 'torch', count: 12 };
+    chest.inv[4] = { kind: 'rope', count: 2 };
+    for (let k = 0; k < 5; k++){
+      const b = at(3 + (k % 3) * 2.2, -6.5 + Math.floor(k / 3) * 2.4);
+      game.decorPlaced.push({ x: b.x, z: b.z, y: +y.toFixed(2), type: 'bones', s: 1, vc: 0, dry: false, yaw: H.dir + Math.PI / 2, key: 'hall_' + k, placed: true });
+    }
+    const sg = at(8.6, 2.8);
+    pnodeSys.addQuiet('sign', sg.x, y, sg.z, H.dir + Math.PI, { text: 'THE SECOND HALL\nWORK QUIETLY\nOR DO NOT WORK' });
+    decorSys.dirty = true;
+    pnodeSys.rebuild(); torchSys.rebuild(); decorSys.refresh();
+    H.stamped = true; markSave();
+  },
+  // at the top of the meter: they come out of the second hall's tunnel
+  theyCome(){
+    this.noise = 30;
+    this.wave = Math.min(4, (this.wave || 0) + 1);
+    const H = this.hall();
+    const src = H && H.stamped ? { x: H.dx, y: H.dy, z: H.dz } : null;
+    let made = 0;
+    for (let k = 0; k < 2 + this.wave; k++){
+      let x, y, z;
+      if (src){ x = src.x + (Math.random() - 0.5) * 1.6; y = src.y + 0.4; z = src.z + (Math.random() - 0.5) * 1.6; }
+      else { const a = Math.random() * Math.PI * 2; x = game.pos.x + Math.cos(a) * 14; z = game.pos.z + Math.sin(a) * 14; y = game.pos.y + 0.3; }
+      if (CORE.evalSDF(x, y + 0.5, z, nearEdits([x - 1, y - 1, z - 1, x + 1, y + 2, z + 1]), game.gen) < 0.1) continue;
+      const e = spawnEntity('lurker', x, y, z);
+      e.noburn = true; e.hp = 45; e.deep = true;
+      if (e.mesh) e.mesh.scale.setScalar(1.1);
+      made++;
+    }
+    toast(made ? 'something turns over in the second hall — they heard you' : 'something turns over in the second hall');
+    for (let i = 0; i < 3; i++) setTimeout(() => AudioSys.tone({ freq: 46 + i * 7, dur: 0.9, gain: 0.35, type: 'sawtooth' }), i * 380);
+    AudioSys.sfx('boom');
+    markSave();
+  },
+  // the knock the pages promised: a slow double thud from below, now and
+  // then within two hundred metres of the mouth, oftener and nearer in the deep
+  knock(dt){
+    const E = game.expedition; if (!E || !E.shaft || game.ui !== 'none') return;
+    const d = Math.hypot(game.pos.x - E.shaft.x, game.pos.z - E.shaft.z);
+    if (d > 200 && !this.inDeep) return;
+    this.knockT = (this.knockT == null ? 12 + Math.random() * 20 : this.knockT) - dt;
+    if (this.knockT > 0) return;
+    this.knockT = this.inDeep ? 9 + Math.random() * 18 : 25 + Math.random() * 45;
+    const near = this.inDeep ? 1 : Math.max(0.25, 1 - d / 220);
+    AudioSys.tone({ freq: 38, dur: 0.55, gain: 0.5 * near, type: 'sine' });
+    setTimeout(() => AudioSys.tone({ freq: 34, dur: 0.7, gain: 0.42 * near, type: 'sine' }), 620 + Math.random() * 300);
+    if (!E.knocked){ E.knocked = true; toast('a slow knock, from below. felt more than heard.'); markSave(); }
+  },
+  tick(dt){
+    if (!game.running) return;
+    const was = this.inDeep;
+    this.inDeep = this.zone();
+    this.knock(dt);
+    if (this.inDeep && !was) toast('the dark down here eats light. it is quiet. it is listening.');
+    this.level += ((this.inDeep ? 1 : 0) - this.level) * Math.min(1, dt * 1.5);
+    if (game.terrainMat) game.terrainMat.uniforms.uDeep.value = this.level;
+    if (this.inDeep){
+      if (!game.fly && Math.hypot(game.vel.x, game.vel.z) > 4.5) this.loud(this.NOISE.sprint * dt);
+      this.noise = Math.max(0, this.noise - dt * 3);
+    } else this.noise = Math.max(0, this.noise - dt * 12);
+    const nb = $('noisebar');
+    if (this.inDeep && !game.photo){
+      nb.classList.remove('hidden');
+      const f = $('noisefill');
+      f.style.width = this.noise.toFixed(0) + '%';
+      f.style.background = this.noise > 70 ? '#e05050' : this.noise > 40 ? '#e0a040' : '#c8b04a';
+    } else nb.classList.add('hidden');
+    const H = this.hall();
+    if (H && !H.stamped && Math.hypot(H.x - game.pos.x, H.z - game.pos.z) < 60 && Math.abs(H.y - game.pos.y) < 40) this.stampHall(H);
+    if (H && H.stamped && !H.found && Math.hypot(H.x - game.pos.x, H.z - game.pos.z) < 9.5 && Math.abs(H.y - game.pos.y) < 5){
+      H.found = true;
+      toast('the first hall. someone built this.');
+      AudioSys.sfx('craft'); markSave();
+    }
   },
 };
 // ---------- THE PALISADE: defenses that know whose side they are on ----------
@@ -11808,6 +11994,7 @@ const palisadeSys = {
     }
     if (!foe) return;
     n.rang = now; n.swing = 1;
+    deepSys.loud(deepSys.NOISE.bell);
     const dx = foe.x - n.x, dz = foe.z - n.z;
     const dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'east' : 'west') : (dz > 0 ? 'south' : 'north');
     toast('the bell rings — something at the ' + dir + ' side');
@@ -16793,6 +16980,7 @@ const beamFX = {
 // no yield -- blasting is for holes and hurt, the drill is for ore.
 function explode(x, y, z, r, dmg, opts){
   opts = opts || {};
+  deepSys.loud(deepSys.NOISE.blast);
   const e = CORE.makeEdit(0, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r * 2, 0, 0);
   applyEdit(e);
   // a shaped mining charge computes its yield BEFORE the carve and hands it
@@ -19611,6 +19799,7 @@ function doMine(tool, p, shape, eff, group, mir){
   const got = CORE.mineYield(game.edits, e, game.gen);
   let units = 0, hw = 0;
   for (const m in got){ units += got[m]; hw += got[m] * (CORE.HARDNESS[m] || 1); }
+  if (units > 0) deepSys.loud(deepSys.NOISE.cut[tool.tier | 0] || 3);     // the deep hears every cut
   if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
   game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
@@ -19693,6 +19882,7 @@ function doPlace(tool, p, shape, eff, group, mir){
     return;
   }
   applyEdit(e);
+  deepSys.loud(deepSys.NOISE.place);
   game.undoStack.push({ edit: e, type: paint ? 'paint' : 'place', mat: tool.mat,
                         cost: game.mode === 'creative' ? 0 : cost, group });
   if (game.undoStack.length > 64) game.undoStack.shift();
@@ -20074,6 +20264,7 @@ function tryAction(dt, now){
       return;
     }
     AudioSys.sfx(G.laser ? 'laser' : 'shot');
+    deepSys.loud(G.laser ? 5 : deepSys.NOISE.shot);
     fireHitscan(G);
     return;
   }
@@ -23463,6 +23654,7 @@ function startWorld(id){
   const spawnY = game.gen.height(sp0.x, sp0.z) + 1.5;
   game.pos.set(sp0.x, p.y == null ? spawnY : p.y, sp0.z);
   if (!game.expedition) expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
+  else if (!game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
     game.pos.y += 0.5;
@@ -24682,6 +24874,7 @@ function frame(now){
   villageSys.tick(dt);
   crewSys.tick(dt);
   expeditionSys.tick(dt);
+  deepSys.tick(dt);
   raidSys.tick(dt);
   raidSys.update(dt);
   raidBaseSys.tick(dt);
@@ -24907,7 +25100,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
-  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
+  updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
