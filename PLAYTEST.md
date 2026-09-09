@@ -13,6 +13,23 @@ their lists are retired; what came of them is Build 30.
 - Feedback I want: does the far country look any different from before
   (it should be a touch darker, the same as the near ground always was)?
 
+## Build 35 — HORIZON.2 TRUE SHAPES
+- [ ] Fly toward a city from a few kilometres out. It should stand as
+      rectangular towers with flat roofs the whole way in, no cones, no
+      sloped walls, and the same silhouette after the real field
+      arrives (windows and people appear, the shape does not change).
+- [ ] The same for a highway: a slab of the right width along the
+      road, no cubes, at every distance.
+- [ ] Watch the join as you close in: the box should hand over to the
+      real tower without a double, a gap or a flicker.
+- [ ] A city you have never visited, from the plane: it should be there
+      on the horizon before you arrive.
+- [ ] An old world: load it and fly to a city you have been to. First
+      load re-bakes the skin; the towers should be boxes, not cones.
+- Feedback I want: any shape at range that still reads wrong (village
+  houses, forts, the ziggurat, wrecks). And whether the far towers'
+  tone matches the near ones when they hand over.
+
 ## Build 34 — THE DEEP A
 - [ ] A new world: walk the survey. Camp 4 is a hut now, camp 6 a
       house with a lamp (the generator has coal; it lights when the

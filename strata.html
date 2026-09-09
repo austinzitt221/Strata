@@ -15959,7 +15959,9 @@ const roadSys = {
         const t = (i + 0.5) / L.segs;
         const mx = L.sx + (L.ex - L.sx) * t, mz = L.sz + (L.ez - L.sz) * t;
         if (Math.hypot(mx - game.pos.x, mz - game.pos.z) > 700) continue;
+        const n0 = game.edits.length;
         this.stampSeg(L, i);
+        farShapeSys.tagRange(n0);
         rec.done.push(i); any = true;
       }
       if (any) markSave();
@@ -16414,7 +16416,9 @@ const citySys = {
       }
       if (!rec.stamped){
         rec.stamped = true;
+        const n0 = game.edits.length;
         this.stamp(c, rec);
+        farShapeSys.tagRange(n0);
         markSave();
       } else if (!rec.station && rec.gy != null){
         // a city from before the trains: it gets its station now
@@ -23655,6 +23659,7 @@ function startWorld(id){
   game.pos.set(sp0.x, p.y == null ? spawnY : p.y, sp0.z);
   if (!game.expedition) expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
   else if (!game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
+  farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
     game.pos.y += 0.5;
@@ -23726,6 +23731,146 @@ let lastChunk = null;
 // exactly — including chunks still streaming in. Each coarser ring is sunk
 // slightly deeper and underlaps the finer one, so ring seams are tiny
 // backed steps instead of cracks.
+// ---------- HORIZON.2: true shapes at range ----------
+// The skin is a heightfield: a tower on it is a cone at the coarser levels
+// and a highway laid at an angle bakes as its bounding box. So the things
+// with a shape of their own -- city towers, market halls, smokestacks and
+// boiler houses, the highway's slabs and cuts -- are kept out of the skin
+// (their edits are tagged noLod) and drawn instead as exact boxes: one
+// merged mesh through the terrain shader, yielding to the near field where
+// the real thing stands, and reaching cities and roads not yet laid.
+const farShapeSys = {
+  mesh: null, mat: null, cx: 1e9, cz: 1e9, dirty: true, RANGE: 2600, boxes: 0,
+  // ---- the edits the skin must not bake ----
+  // a city block's tall union edits (towers, roofs, halls, stacks) and the
+  // highway's rotated slab and corridor cuts
+  tagRange(from){
+    const E = game.edits; if (!E) return 0;
+    let k = 0;
+    const blocks = [];
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key];
+      if (rec.stamped && rec.towers && rec.gy != null) for (const t of rec.towers) blocks.push({ x: rec.x + t.bx * 36, z: rec.z + t.bz * 36, g: rec.gy });
+    }
+    for (let i = from || 0; i < E.length; i++){
+      const e = E[i];
+      if (e.noLod) continue;
+      const rot = e.rot || e.rx || e.rz, sx = e.sx || e.size;
+      if (rot && ((e.op === 1 && e.mat === CORE.MAT.BASALT && sx === ROAD_W) || (e.op === 0 && sx === ROAD_CUT_W))){ e.noLod = 1; k++; continue; }
+      if (e.op !== 1 || e.shape === 0) continue;
+      const top = e.y + (e.sy || e.size) * 0.5;
+      for (const b of blocks){ if (Math.abs(e.x - b.x) < 12.5 && Math.abs(e.z - b.z) < 12.5 && top > b.g + 3){ e.noLod = 1; k++; break; } }
+    }
+    if (k){ this.dirty = true; farTerrain.dirty = true; }
+    return k;
+  },
+  // ---- the shapes: every city and every highway link in range ----
+  shapes(){
+    const px = game.pos.x, pz = game.pos.z, M = CORE.MAT, out = [];
+    for (const c of citySys.candidatesNear(px, pz, this.RANGE)){
+      const rec = (game.cities || {})['c' + c.key];
+      const PLAN = citySys.plan(c), span = PLAN.n * 36 + 8;
+      const g = rec && rec.gy != null ? rec.gy : citySys.slabLevel(c);
+      // a city not yet laid has no slab in the skin either: draw it
+      if (!(rec && rec.stamped)) out.push({ x: c.x, y: g - 5.3, z: c.z, sx: span + 6, sy: 10.6, sz: span + 6, yaw: 0, mat: M.STONEBRICK });
+      for (const t of PLAN.blocks){
+        const tx = c.x + t.bx * 36, tz = c.z + t.bz * 36;
+        if (t.kind === 'tower'){
+          const H = t.floors * 4.0 + 1.8;
+          out.push({ x: tx, y: g + H / 2, z: tz, sx: t.w, sy: H, sz: t.w, yaw: 0, mat: t.mat });
+          out.push({ x: tx, y: g + H + 0.2, z: tz, sx: t.w + 1.0, sy: 0.5, sz: t.w + 1.0, yaw: 0, mat: t.mat });
+        } else if (t.kind === 'market'){
+          out.push({ x: tx, y: g + 2.8, z: tz, sx: 20, sy: 5.6, sz: 14, yaw: 0, mat: t.mat });
+          out.push({ x: tx, y: g + 5.8, z: tz, sx: 21, sy: 0.5, sz: 15, yaw: 0, mat: t.mat });
+        } else if (t.kind === 'lot' && t.district === 'industrial'){
+          out.push({ x: tx + 6, y: g + 9, z: tz - 6, sx: 3.2, sy: 18, sz: 3.2, yaw: 0, mat: M.BASALT });
+          out.push({ x: tx - 5, y: g + 2.2, z: tz + 4, sx: 10, sy: 4.4, sz: 8, yaw: 0, mat: M.ROCK });
+        }
+      }
+    }
+    for (const L of roadSys.linksNear(px, pz, this.RANGE)){
+      if (!L.far){
+        // the slabs, once per link: the same grade and depth stampSeg lays
+        L.far = [];
+        for (let i = 0; i < L.segs; i++){
+          const t0 = i / L.segs, t1 = (i + 1) / L.segs;
+          const mx = L.sx + (L.ex - L.sx) * (t0 + t1) / 2, mz = L.sz + (L.ez - L.sz) * (t0 + t1) / 2;
+          const top = (L.prof[i] + L.prof[i + 1]) / 2 + 0.25;
+          const hr = game.gen.heightRange(mx - 15, mz - 15, mx + 15, mz + 15);
+          const bottom = Math.max(top - 90, Math.min(hr[0], top) - 2.5);
+          L.far.push({ x: mx, y: (top + bottom) / 2, z: mz, sx: ROAD_W, sy: top - bottom, sz: L.len / L.segs + 0.6, yaw: -L.yaw, mat: M.BASALT });
+        }
+      }
+      for (const b of L.far) if (Math.hypot(b.x - px, b.z - pz) < this.RANGE) out.push(b);
+    }
+    return out;
+  },
+  // ---- one mesh of boxes with the terrain's own attributes ----
+  ensureMat(){
+    if (this.mat) return;
+    const tu = game.terrainMat.uniforms;
+    const u = Object.assign({}, tu, { uMask: { value: farTerrain.maskTex }, uMaskOrigin: farTerrain.uMaskOrigin, uMaskSpan: { value: farTerrain.maskN * CORE.CHUNK_M } });
+    const frag = TERRAIN_FRAG
+      .replace('varying vec4 vShadowCoord;', 'uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan;\nvarying vec4 vShadowCoord;')
+      .replace('void main(){',
+        'void main(){\n' +
+        '  { vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
+        '    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){ float r = texture2D(uMask, mi).r; if ((r > 0.47 && r < 0.75) || r > 0.95) discard; } }\n');
+    this.mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: TERRAIN_VERT, fragmentShader: frag });
+  },
+  build(){
+    this.ensureMat();
+    const px = game.pos.x, pz = game.pos.z;
+    this.cx = px; this.cz = pz; this.dirty = false;
+    const B = this.shapes();
+    this.boxes = B.length;
+    const nv = B.length * 36;
+    const pos = new Float32Array(nv * 3), nrm = new Float32Array(nv * 3), mat = new Float32Array(nv), sky = new Float32Array(nv).fill(1), ao = new Float32Array(nv), ax = new Float32Array(nv * 3);
+    // six faces, two triangles each, outward normals; the top carries the
+    // near field's own open-ground occlusion (0.70) so it matches the skin
+    const F = [
+      [[1, 0, 0], [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]]],
+      [[-1, 0, 0], [[-1, -1, 1], [-1, 1, 1], [-1, 1, -1], [-1, -1, -1]]],
+      [[0, 1, 0], [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1]]],
+      [[0, -1, 0], [[-1, -1, 1], [-1, -1, -1], [1, -1, -1], [1, -1, 1]]],
+      [[0, 0, 1], [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]]],
+      [[0, 0, -1], [[1, -1, -1], [-1, -1, -1], [-1, 1, -1], [1, 1, -1]]],
+    ];
+    let v = 0;
+    for (const b of B){
+      const c = Math.cos(b.yaw || 0), sn = Math.sin(b.yaw || 0), hx = b.sx / 2, hy = b.sy / 2, hz = b.sz / 2;
+      for (const [nn, q] of F){
+        const wnx = nn[0] * c + nn[2] * sn, wnz = -nn[0] * sn + nn[2] * c;
+        const a = nn[1] > 0 ? 0.70 : 1.0;
+        for (const j of [0, 1, 2, 0, 2, 3]){
+          const p = q[j];
+          const lx = p[0] * hx, ly = p[1] * hy, lz = p[2] * hz;
+          pos[v * 3] = b.x + lx * c + lz * sn; pos[v * 3 + 1] = b.y + ly; pos[v * 3 + 2] = b.z - lx * sn + lz * c;
+          nrm[v * 3] = wnx; nrm[v * 3 + 1] = nn[1]; nrm[v * 3 + 2] = wnz;
+          mat[v] = b.mat - 1; ao[v] = a;
+          v++;
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+    g.setAttribute('aMat', new THREE.BufferAttribute(mat, 1));
+    g.setAttribute('aSky', new THREE.BufferAttribute(sky, 1));
+    g.setAttribute('aAO', new THREE.BufferAttribute(ao, 1));
+    g.setAttribute('aAxis', new THREE.BufferAttribute(ax, 3));
+    if (this.mesh){ if (this.mesh.parent) this.mesh.parent.remove(this.mesh); this.mesh.geometry.dispose(); }
+    this.mesh = new THREE.Mesh(g, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.userData.noShadow = true;
+    game.scene.add(this.mesh);
+  },
+  update(){
+    if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat) return;
+    if (this.mesh && this.mesh.parent !== game.scene){ game.scene.add(this.mesh); }
+    if (this.dirty || Math.hypot(game.pos.x - this.cx, game.pos.z - this.cz) > 400) this.build();
+  },
+};
 // ---------- HORIZON: the far skin, a geomorphed heightfield clipmap ----------
 // Five nested levels of one heightfield, 2 m cells near to 32 m at the
 // horizon. Every vertex carries its own height AND the height the next
@@ -24867,6 +25012,7 @@ function frame(now){
   skySys.update(dt);
   updateSunShadow(dt);
   farTerrain.update();
+  farShapeSys.update();
   if (game.ui === 'none') updateEntities(dt, now);
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
@@ -25107,7 +25253,7 @@ window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHot
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,
   wrenchProps, chestSlots, beaconSys, bedSys, ropeSys, playerBody, openSign, closeSign, armorRed,
   updateSurvival, tryEat, grappleCast, openInventory,
-  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, waterSys, inWater, waterTopAt, wreckSys, bossSys, fishingTick, endFishing, drivePlane, driveHover, meshPool, lodTerrain, farTerrain, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
+  itemCat, recipeCat, ITEM_CATS, poseFist, carryLift, punchShove, punchPose, sealReach, AudioSys, citySys, enterCar, exitCar, driveCar, railSys, unscope, enterPhoto, exitPhoto, drawCarGauge, vehicleCamera, wireSys, roadSys, VEH, itemLabel, waterSys, inWater, waterTopAt, wreckSys, bossSys, fishingTick, endFishing, drivePlane, driveHover, meshPool, lodTerrain, farTerrain, farShapeSys, farTreeSys, openCraft, buildCraftUI, sortInventory, giveItem, craftAmount, updateGhostDist, invCursor, slotItem, slotSet, dropItem, openDecrafter, doUncraft, openInventory, refreshAllUI,
   fireHitscan, explode, updateProjectiles, beamFX, openWeaponTable, wtabOffers, chargeSys, raidSys, raidBaseSys, bossSys, ENT_DEF,
   villageSys, tradeSys, missionSys, boardSys, objectiveSys };
 </script>

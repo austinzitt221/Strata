@@ -111,6 +111,18 @@ order is mine. Big items are split so each build is one session.
    behind the fall, what lives there and what the sound is, the boss at
    the end of the works, ropes and elevators for the way back up with a
    full pack, glow fungus as the deep's own light.
+3b. **HORIZON.2 — TRUE SHAPES** — DONE (Build 35): city towers, halls,
+   stacks and highway slabs drawn as exact boxes at range, reaching
+   cities and roads not yet laid; the skin keeps the ground. Mountains
+   rounding as you approach is the skin's 2 m grid against the real
+   field and stays.
+3c. **THE LEDGER** (Austin's) — the missions tab gets TRACK/UNTRACK
+   (hide or show a marker, keep the mission) and REMOVE (drop the
+   mission; a villager's can be asked for again). The map: right-drag
+   to pan anywhere you have been, scroll to zoom, left click a spot for
+   a menu: set your own marker there (or move one of yours), or remove
+   it. Your markers live in the missions tab like any other, with the
+   same two buttons.
 4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
    on the banks with bridges, river fish.
 5. **THE LINE** (Austin's) — real trains: their own track (not the

@@ -799,6 +799,28 @@ random interval, fainter with distance from the mouth. It is the
 cheapest thing I have added in a month and I suspect it will be the
 one Austin mentions first.
 
+## 2026-09-09 — Build 35, true shapes
+
+Austin confirmed the line is gone, and I let myself enjoy that for a
+minute before reading the rest: highways as cubes, towers as cones. He
+said "I want the real shape from far, not the windows", which is
+exactly the right ask, and it named the fix. A heightfield cannot hold a
+vertical wall; it can hold the ground. So the ground stays in the skin
+and the things with walls become boxes drawn on top, from the plan
+rather than from the edits, which means they reach further than the
+edits ever did: a city on the horizon before it exists.
+
+Two ideas of his went on the roadmap as THE LEDGER: track and remove
+on the missions tab, and a map you can pan and zoom and drop your own
+marker on. They are good and they are next after this, ahead of
+RIVERS II, because they touch every objective the game already has.
+
+What I keep from this one: the noLod tag turned out to be the right
+lever again. It was made for interior hollows in coarse meshes; now it
+also means "the skin does not bake this", and the same flag serves
+both because both are the same statement: this edit is detail the far
+view should not try to draw.
+
 ---
 
 ## Standing notes
