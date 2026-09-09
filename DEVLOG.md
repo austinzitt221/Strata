@@ -2,6 +2,49 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 35 — HORIZON.2: TRUE SHAPES (2026-09-09)
+
+Austin's third playtest: the lighting line is gone, and what is left of
+the far view is its shapes. Highways at range showed as bounding cubes
+lined up along the road; city towers as cones with sloped walls; both
+only right once the real field reached them. Verified headlessly (a
+build-35 suite builds the far mesh two kilometres from a city and checks
+its slab, its towers at floors × 4 + 1.8 with their roofs, and the
+highway slabs along eight links; renders a frame from 500 m without a
+shader error; stamps the city and checks the tower shell and roof leave
+the skin while the slab and avenues stay and the skin over the block
+reads the slab height; lays a highway segment and checks its slab and
+cuts leave the skin; and clears and re-tags an old world's towers; plus
+the city, highway, skin and smoke suites).
+
+- **Why the skin got it wrong.** The skin is a heightfield. It baked
+  every edit top-down by its footprint: a rotated box (a highway
+  segment) has a bounding box far wider than itself, so that is what
+  baked; and a tower, exact at 2 m cells, becomes a pyramid at 8 m
+  cells and a cone at 32 m, because a heightfield can only slope from a
+  peak to its neighbours.
+- **True shapes.** The things with a shape of their own are now kept
+  out of the skin (their edits carry the noLod tag the coarse meshes
+  already honour) and drawn as exact boxes instead: one merged mesh
+  through the terrain shader (same tiles, sun, shadows, fog), yielding
+  to the near field by the same coverage mask the skin uses. Towers
+  with their roofs, market halls, smokestacks and boiler houses, and
+  every highway slab at its own grade. Rebuilt when you have moved four
+  hundred metres or a city stamps. A city in view ~1500 boxes, a
+  frame's worth of nothing.
+- **Further than before.** The boxes come from the city plan and the
+  road link, not from stamped edits, so a city or a highway not yet
+  laid stands at range too: a skyline at 2.6 km, roads before they are
+  built. A city not yet laid draws its slab as well; once laid the skin
+  has the slab and the box drops.
+- **Old worlds** are tagged on load by signature (a rotated basalt slab
+  8 m wide, a rotated cut 14 m wide, any tall union edit inside a
+  stamped city block above its slab), so their skin re-bakes without
+  the towers the first time.
+- **Left as is.** Mountains rounding a corner as you close in is the
+  skin's 2 m grid against the real field; true at every LOD boundary
+  in any game of this kind, and small.
+
 ## Build 34 — THE DEEP A: the descent (2026-09-08)
 
 The pages said do not go down. This is down. Verified headlessly (a
