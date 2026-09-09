@@ -146,6 +146,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   padding:7px 10px; margin-bottom:7px; max-width:300px;}
 .mrow .t1{font-size:12px; color:#ffe9a8; letter-spacing:1px; margin-bottom:3px;}
 .mrow .t2{font-size:11px; color:var(--ui-hi); line-height:1.45;}
+.mrow .mbtns{margin-top:5px; display:flex; gap:5px;}
+.mrow.off{opacity:0.5;}
+.mrow.pin .t1{color:#7dff9b;}
+#mapwrap{position:relative; display:inline-block; line-height:0;}
+#mapmenu{position:absolute; z-index:3; background:var(--ui-bg); border:2px solid var(--ui-border); padding:4px; box-shadow:0 0 0 2px #111, 0 8px 24px rgba(0,0,0,.6); line-height:normal; min-width:150px;}
+#mapmenu .btn{display:block; width:100%; margin:0 0 3px 0; text-align:left; font-size:11px; padding:5px 8px;}
+#mapmenu .mlabel{font-size:10px; color:var(--ui-hi); padding:2px 6px 5px; letter-spacing:1px;}
 
 /* ---------- toast ---------- */
 #toast{position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:rgba(10,9,16,0.85); border:2px solid var(--ui-border); padding:6px 14px; letter-spacing:1px; z-index:60; transition:opacity .3s; opacity:0; pointer-events:none;}
@@ -251,7 +258,11 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="panel">
     <h2>MAP</h2>
     <div class="sub" style="margin-bottom:8px;">surface survey — explored on foot · caves stay unmapped · M to close</div>
-    <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
+    <div id="mapwrap">
+      <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
+      <div id="mapmenu" class="hidden"></div>
+    </div>
+    <div class="sub" style="margin-top:8px; max-width:640px;">right-drag pans · scroll zooms · left-click sets, moves or removes your own marks</div>
   </div>
 </div>
 <div id="wtabscreen" class="screen hidden dim">
@@ -12857,7 +12868,7 @@ const objectiveSys = {
       });
       (rec.board || []).forEach((c, ci) => {
         if (c.type === 'explore' && c.on && !c.done)
-          out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec });
+          out.push({ id: key + ':x' + ci, x: c.x, z: c.z, label: 'REACH', rec, contract: c });
       });
     }
     // city missions project markers just like village ones
@@ -12883,14 +12894,16 @@ const objectiveSys = {
     // shows even before it's stamped
     {
       let best = null, bd = 1e9;
+      const struck = ledgerSys.L().removed;
       for (const key in (game.cities || {})){
         const rec = game.cities[key];
-        if (!rec.stamped) continue;
+        if (!rec.stamped || struck['city' + key]) continue;
         const d = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
         if (d >= 70 && d < bd){ bd = d; best = { id: 'city' + key, x: rec.x, z: rec.z,
           y: (rec.gy != null ? rec.gy : 0) + 22, label: rec.name || 'CITY', city: true, rec: { name: rec.name || 'city' } }; }
       }
       if (!best) for (const c of citySys.known){
+        if (struck['cityc' + c.key]) continue;
         const d = Math.hypot(c.x - game.pos.x, c.z - game.pos.z);
         if (d >= 70 && d < bd){ bd = d; best = { id: 'cityc' + c.key, x: c.x, z: c.z,
           y: c.y + 22, label: citySys.nameFor(c.seed), rec: { name: 'city' } }; }
@@ -12924,7 +12937,10 @@ const objectiveSys = {
       out.push({ id: 'spire' + key, x: rec.x, z: rec.z, y: rec.top + 20, spire: true,
                  label: rec.bossDead ? 'TREASURY' : 'SKY SPIRE', rec: { name: 'sky spire' } });
     }
-    return out;
+    // your own marks, then everything the ledger has struck off
+    ledgerSys.list(out);
+    const struck = ledgerSys.L().removed;
+    return out.filter(o => !struck[o.id]);
   },
   frame(){
     const host = $('objlayer');
@@ -12934,7 +12950,7 @@ const objectiveSys = {
     const tNow = performance.now();
     if (show && (!this._objsT || tNow - this._objsT > 250)){
       this._objsT = tNow;
-      this._objs = this.list().slice(0, 8);
+      this._objs = this.list().filter(o => !ledgerSys.hidden(o.id)).slice(0, 8);
     }
     const objs = show ? (this._objs || []) : [];
     const seen = new Set();
@@ -12969,6 +12985,53 @@ const objectiveSys = {
     }
     for (const [id, el] of this.els)
       if (!seen.has(id)){ el.remove(); this.els.delete(id); }
+  },
+};
+
+// ---------- the ledger ----------
+// What you have done with the world's work: markers hidden from the HUD,
+// missions struck off, and marks of your own set on the map. Saved with
+// the world.
+const ledgerSys = {
+  L(){ return game.ledger || (game.ledger = { hidden: {}, removed: {}, pins: [], seq: 0 }); },
+  fresh(){ return { hidden: {}, removed: {}, pins: [], seq: 0 }; },
+  hidden(id){ return !!this.L().hidden[id]; },
+  track(id, on){
+    const L = this.L();
+    if (on) delete L.hidden[id]; else L.hidden[id] = 1;
+    objectiveSys._objsT = 0; markSave();
+  },
+  toggle(id){ this.track(id, this.hidden(id)); },
+  // strike an objective off: a mark of yours vanishes, a villager's work is
+  // shelved (ask the same villager again to take it back up), a board
+  // contract is handed back, anything else is simply struck from the list
+  remove(o){
+    const L = this.L();
+    if (o.pin) L.pins = L.pins.filter(p => p.id !== o.id);
+    else if (o.hrec){ o.hrec.shelved = o.hrec.mission; o.hrec.mission = null; missionSys.sync(); }
+    else if (o.contract) o.contract.on = false;
+    else L.removed[o.id] = 1;
+    delete L.hidden[o.id];
+    objectiveSys._objsT = 0; markSave();
+  },
+  pin(x, z){
+    const L = this.L();
+    L.seq = (L.seq || 0) + 1;
+    const p = { id: 'pin' + L.seq, n: L.seq, x: Math.round(x), z: Math.round(z) };
+    L.pins.push(p);
+    objectiveSys._objsT = 0; markSave();
+    return p;
+  },
+  move(p, x, z){ p.x = Math.round(x); p.z = Math.round(z); objectiveSys._objsT = 0; markSave(); },
+  // the nearest of your marks within r metres
+  pinAt(x, z, r){
+    let best = null, bd = r;
+    for (const p of this.L().pins){ const d = Math.hypot(p.x - x, p.z - z); if (d < bd){ bd = d; best = p; } }
+    return best;
+  },
+  list(out){
+    for (const p of this.L().pins)
+      out.push({ id: p.id, x: p.x, z: p.z, label: 'MARK ' + p.n, pin: true, p, rec: { name: 'your mark' } });
   },
 };
 
@@ -13083,6 +13146,13 @@ const missionSys = {
   },
   // rotate job types as a villager comes to trust you
   offer(rec, hrec, vi){
+    // work you struck off the ledger comes back as it was
+    if (hrec.shelved){
+      hrec.mission = hrec.shelved; hrec.shelved = null;
+      if (hrec.mission.type === 'expand') this.sync();
+      objectiveSys._objsT = 0; markSave();
+      return;
+    }
     const n = hrec.mdone || 0;
     const type = ['hunt', 'expand', 'steal'][n % 3];
     if (type === 'hunt'){
@@ -13341,7 +13411,7 @@ const tradeSys = {
       act.style.color = '#ffb44d';
       const m = hrec.mission;
       if (!m){
-        txt.textContent = 'ask for work';
+        txt.textContent = hrec.shelved ? 'take the work back up' : 'ask for work';
         act.textContent = 'MISSION';
         mrow.addEventListener('click', () => { missionSys.offer(rec, hrec, vi); this.refresh(); });
       } else if (m.type === 'hunt'){
@@ -21599,11 +21669,12 @@ function buildMissionsUI(){
   const objs = objectiveSys.list();
   for (const o of objs){
     const row = document.createElement('div');
-    row.className = 'mrow';
+    row.className = 'mrow' + (o.pin ? ' pin' : '') + (ledgerSys.hidden(o.id) ? ' off' : '');
     const d = Math.round(Math.hypot(o.x - game.pos.x, o.z - game.pos.z));
     const t1 = document.createElement('div');
     t1.className = 't1';
-    t1.textContent = o.fort ? 'raid fort'
+    t1.textContent = o.pin ? o.label + ' — your mark'
+                   : o.fort ? 'raid fort'
                    : o.spire ? 'sky spire'
                    : o.zig ? 'ziggurat'
                    : o.siege ? o.rec.name + ' — UNDER SIEGE'
@@ -21612,13 +21683,30 @@ function buildMissionsUI(){
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
     t2.className = 't2';
-    t2.textContent = (o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
+    t2.textContent = (o.pin ? 'set on the map at ' + o.x + ', ' + o.z
+                    : o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
                     : o.siege ? 'raiders are breaking the walls — kill your share for coin and standing'
                     : o.city ? 'shops, a mayor with deeds, work — standing ' + ((game.cities[o.id.slice(4)] || {}).rep || 0)
                     : o.hrec ? missionSys.describe(o.rec, o.hrec)
                              : 'reach the marked spot')
                    + ' · ' + o.label + ' ' + d + 'm';
     row.appendChild(t1); row.appendChild(t2);
+    // the ledger: hide the marker, or strike the work off
+    const bt = document.createElement('div');
+    bt.className = 'mbtns';
+    const hid = ledgerSys.hidden(o.id);
+    const b1 = document.createElement('button');
+    b1.className = 'btn small'; b1.textContent = hid ? 'TRACK' : 'UNTRACK';
+    b1.title = hid ? 'show the marker in the world again' : 'hide the marker in the world (the work stays)';
+    b1.onmousedown = ev => ev.stopPropagation();
+    b1.onclick = () => { ledgerSys.toggle(o.id); AudioSys.sfx('toggle'); buildMissionsUI(); };
+    const b2 = document.createElement('button');
+    b2.className = 'btn small'; b2.textContent = 'REMOVE';
+    b2.title = o.pin ? 'take the mark off the map' : o.hrec ? 'strike it off — ask ' + o.hrec.vname + ' again to take it back up' : o.contract ? 'hand the contract back to the board' : 'strike it off the ledger';
+    b2.onmousedown = ev => ev.stopPropagation();
+    b2.onclick = () => { ledgerSys.remove(o); AudioSys.sfx('toggle'); buildMissionsUI(); };
+    bt.appendChild(b1); bt.appendChild(b2);
+    row.appendChild(bt);
     host.appendChild(row);
   }
   if (!objs.length){
@@ -23226,11 +23314,26 @@ function mapCellColor(cx, cz){
   cache.set(key, col);
   return col;
 }
+// the map view: an offset from the player (right-drag) and a zoom (scroll).
+// The offset resets every time the map opens; the zoom is remembered.
+function mapView(){ return game.mapView || (game.mapView = { ox: 0, oz: 0, zoom: 1 }); }
+const MAP_ZOOM_MIN = 0.5, MAP_ZOOM_MAX = 6;
+// canvas pixel <-> world metre, through the current view
+function mapToWorld(sx, sy){
+  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom;
+  return { x: game.pos.x + V.ox + (sx - cv.width / 2) / px * MAP_CELL, z: game.pos.z + V.oz + (sy - cv.height / 2) / px * MAP_CELL };
+}
+function mapToScreen(x, z){
+  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom;
+  return { sx: cv.width / 2 + (x - game.pos.x - V.ox) / MAP_CELL * px, sy: cv.height / 2 + (z - game.pos.z - V.oz) / MAP_CELL * px };
+}
 function drawMap(){
   const cv = $('mapcanvas'), c = cv.getContext('2d');
-  const W = cv.width, H = cv.height, px = 5;   // 5px per 16m cell -> ~2km span
+  const V = mapView();
+  const W = cv.width, H = cv.height, px = 5 * V.zoom;   // 5px per 16m cell at zoom 1 -> ~2km span
+  const cell = Math.max(1, Math.ceil(px));
   c.fillStyle = '#0a0910'; c.fillRect(0, 0, W, H);
-  const pcx = game.pos.x / MAP_CELL, pcz = game.pos.z / MAP_CELL;
+  const pcx = (game.pos.x + V.ox) / MAP_CELL, pcz = (game.pos.z + V.oz) / MAP_CELL;
   const toSX = cx => Math.round(W / 2 + (cx + 0.5 - pcx) * px);
   const toSY = cz => Math.round(H / 2 + (cz + 0.5 - pcz) * px);
   const half = Math.ceil(W / 2 / px) + 1;
@@ -23239,13 +23342,30 @@ function drawMap(){
     const cx = +key.slice(0, i), cz = +key.slice(i + 1);
     if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
     c.fillStyle = mapCellColor(cx, cz);
-    c.fillRect(toSX(cx) - (px >> 1) - 1, toSY(cz) - (px >> 1) - 1, px, px);
+    c.fillRect(toSX(cx) - (cell >> 1) - 1, toSY(cz) - (cell >> 1) - 1, cell, cell);
   }
   const mark = (x, z, col, s) => {
     const sx = W / 2 + (x / MAP_CELL - pcx) * px, sy = H / 2 + (z / MAP_CELL - pcz) * px;
     if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) return;
     c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
   };
+  // objectives as diamonds, your own marks in green with their number;
+  // untracked ones fade
+  const dia = (x, z, col, s, txt) => {
+    const sx = W / 2 + (x / MAP_CELL - pcx) * px, sy = H / 2 + (z / MAP_CELL - pcz) * px;
+    if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) return;
+    c.fillStyle = col;
+    c.beginPath(); c.moveTo(sx, sy - s); c.lineTo(sx + s, sy); c.lineTo(sx, sy + s); c.lineTo(sx - s, sy); c.closePath(); c.fill();
+    if (txt){ c.font = '11px monospace'; c.fillText(txt, sx + s + 2, sy + 4); }
+  };
+  c.font = '11px monospace';
+  for (const o of objectiveSys.list()){
+    const hid = ledgerSys.hidden(o.id);
+    c.globalAlpha = hid ? 0.4 : 1;
+    if (o.pin) dia(o.x, o.z, '#7dff9b', 6, String(o.p.n));
+    else dia(o.x, o.z, '#ffd75e', 5, V.zoom >= 2 ? o.label : '');
+  }
+  c.globalAlpha = 1;
   for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
   for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
   for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
@@ -23255,7 +23375,7 @@ function drawMap(){
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
   c.save();
-  c.translate(W / 2, H / 2);
+  c.translate(W / 2 - V.ox / MAP_CELL * px, H / 2 - V.oz / MAP_CELL * px);
   c.rotate(-game.yaw);
   c.fillStyle = '#ffd76a';
   c.beginPath(); c.moveTo(0, -8); c.lineTo(5, 6); c.lineTo(-5, 6); c.closePath(); c.fill();
@@ -23263,10 +23383,98 @@ function drawMap(){
   c.fillStyle = 'rgba(232,240,248,0.85)';
   c.font = '14px monospace';
   c.fillText('N', W / 2 - 4, 18);
-  c.fillText(Math.round(W / px * MAP_CELL / 1000 * 10) / 10 + 'km across', W - 110, H - 10);
+  c.fillText(V.zoom.toFixed(1) + 'x · ' + Math.round(W / px * MAP_CELL / 1000 * 10) / 10 + 'km across', W - 160, H - 10);
 }
 function openMap(){
+  const V = mapView(); V.ox = 0; V.oz = 0;
+  mapMenu.close();
+  wireMapInput();
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
+}
+// the left-click menu on the map: set a mark here, move one of yours here,
+// or (clicking on one) remove it / hide it
+const mapMenu = {
+  open(sx, sy){
+    const el = $('mapmenu'); el.innerHTML = '';
+    const w = mapToWorld(sx, sy);
+    const V = mapView();
+    const near = ledgerSys.pinAt(w.x, w.z, 10 / (5 * V.zoom) * MAP_CELL);
+    const lab = document.createElement('div');
+    lab.className = 'mlabel';
+    lab.textContent = near ? 'MARK ' + near.n + ' · ' + near.x + ', ' + near.z : Math.round(w.x) + ', ' + Math.round(w.z);
+    el.appendChild(lab);
+    const add = (txt, fn) => {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.textContent = txt;
+      b.onmousedown = ev => ev.stopPropagation();
+      b.onclick = ev => { ev.stopPropagation(); fn(); AudioSys.sfx('toggle'); mapMenu.close(); drawMap(); };
+      el.appendChild(b);
+    };
+    if (near){
+      add('REMOVE MARK ' + near.n, () => ledgerSys.remove({ id: near.id, pin: true }));
+      add((ledgerSys.hidden(near.id) ? 'TRACK' : 'UNTRACK') + ' MARK ' + near.n, () => ledgerSys.toggle(near.id));
+    } else {
+      add('SET A MARK HERE', () => { const p = ledgerSys.pin(w.x, w.z); toast('MARK ' + p.n + ' set — it is in your missions tab'); });
+      for (const p of ledgerSys.L().pins) add('MOVE MARK ' + p.n + ' HERE', () => ledgerSys.move(p, w.x, w.z));
+    }
+    add('CANCEL', () => {});
+    // keep the menu inside the canvas
+    const cv = $('mapcanvas');
+    el.classList.remove('hidden');
+    el.style.left = Math.min(sx, cv.width - el.offsetWidth - 4) + 'px';
+    el.style.top = Math.min(sy, cv.height - el.offsetHeight - 4) + 'px';
+    this.isOpen = true;
+  },
+  close(){ const el = $('mapmenu'); if (el){ el.classList.add('hidden'); el.innerHTML = ''; } this.isOpen = false; },
+  isOpen: false,
+};
+function wireMapInput(){
+  if (wireMapInput.done) return;
+  wireMapInput.done = true;
+  const cv = $('mapcanvas');
+  const local = e => {
+    const r = cv.getBoundingClientRect();
+    return { sx: (e.clientX - r.left) * cv.width / r.width, sy: (e.clientY - r.top) * cv.height / r.height };
+  };
+  let pan = null, press = null;
+  cv.addEventListener('mousedown', e => {
+    if (game.ui !== 'map') return;
+    e.preventDefault();
+    const p = local(e);
+    if (e.button === 2){ const V = mapView(); pan = { sx: p.sx, sy: p.sy, ox: V.ox, oz: V.oz, moved: false }; }
+    else if (e.button === 0){ press = p; if (mapMenu.isOpen) mapMenu.close(); }
+  });
+  window.addEventListener('mousemove', e => {
+    if (!pan || game.ui !== 'map') return;
+    const p = local(e), V = mapView(), px = 5 * V.zoom;
+    if (Math.hypot(p.sx - pan.sx, p.sy - pan.sy) > 2) pan.moved = true;
+    V.ox = pan.ox - (p.sx - pan.sx) / px * MAP_CELL;
+    V.oz = pan.oz - (p.sy - pan.sy) / px * MAP_CELL;
+    drawMap();
+  });
+  window.addEventListener('mouseup', e => {
+    if (game.ui !== 'map') return;
+    if (e.button === 2 && pan){ pan = null; return; }
+    if (e.button === 0 && press){
+      const p = local(e), q = press;
+      press = null;
+      // a click on the canvas, not a drag: the menu
+      if (e.target === cv && Math.hypot(p.sx - q.sx, p.sy - q.sy) < 4) mapMenu.open(p.sx, p.sy);
+    }
+  });
+  cv.addEventListener('wheel', e => {
+    if (game.ui !== 'map') return;
+    e.preventDefault();
+    const p = local(e), V = mapView();
+    const before = mapToWorld(p.sx, p.sy);
+    V.zoom = Math.min(MAP_ZOOM_MAX, Math.max(MAP_ZOOM_MIN, V.zoom * (e.deltaY < 0 ? 1.25 : 0.8)));
+    // keep the metre under the cursor where it is
+    const px = 5 * V.zoom;
+    V.ox = before.x - game.pos.x - (p.sx - cv.width / 2) / px * MAP_CELL;
+    V.oz = before.z - game.pos.z - (p.sy - cv.height / 2) / px * MAP_CELL;
+    mapMenu.close();
+    drawMap();
+  }, { passive: false });
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
@@ -23513,6 +23721,7 @@ function saveNow(){
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
     armor: game.armor,
     villages: game.villages,
+    ledger: game.ledger || null,
     forts: game.forts || {},
     spires: game.spires || {},
     expedition: game.expedition || null,
@@ -23571,6 +23780,8 @@ function startWorld(id){
   game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
+  game.ledger = data.ledger || ledgerSys.fresh();
+  game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
   game.spires = data.spires || {};
   game.zigs = data.zigs || {};
@@ -25245,7 +25456,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

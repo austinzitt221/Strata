@@ -823,6 +823,33 @@ view should not try to draw.
 
 ---
 
+## 2026-09-09, later — the ledger
+
+Austin's third playtest came back on Build 35: he cannot find the line
+between the real field and the far shapes any more, and he is at 120
+FPS. That closes HORIZON. Three sessions, one principle each: shapes,
+shadows, then exact shapes at range. Nothing on the rendering list now.
+
+THE LEDGER was his idea and I built it first because it is the kind of
+thing that makes every later build better: missions, marks, a map you
+can move. The interesting decision was what REMOVE means. A mark is
+yours, it just goes. A villager's mission is theirs: I shelve it on the
+house record and give it back unchanged when you ask again, so the
+strongbox that a steal mission already planted is still the one you are
+sent to. A board contract is a paper on a board, so it goes back to
+ACCEPT. Everything else (forts, cities, spires) is an advert; struck
+means struck, and the city advert moves to the next nearest.
+
+The map now has a view (offset and zoom) separate from the player, and
+the drawing is all through one pair of functions (canvas to world and
+back), so anything I add to the map later (rivers by name, the train
+line, farms) gets pan and zoom for free. The zoom is remembered, the
+offset is not: opening the map should always show you where you are.
+
+Next in my order: RIVERS II. I want waterfalls, the mill, and villages
+on the banks, and I want the river names Build 28 gave them to be on
+the map.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -855,5 +882,6 @@ visible from the plane.
 **Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
 yaw pi toward +z, yaw -pi/2 toward +x.
 
-**Queue, in my order:** HORIZON (this), SCULPT, RIVERS, THE EXPEDITION,
-then THE DEEP and the Space Arc as Austin wrote them.
+**Queue, in my order:** RIVERS II, THE LINE, FARMING, CREW D, MENAGERIE,
+SCULPT II, then GARRISON and the Space Arc as Austin wrote them. DEEP B
+when the first hall has been played.
