@@ -98,18 +98,19 @@ order is mine. Big items are split so each build is one session.
    your head, tents are beds. No fall damage ever (they take none); the
    catch-up teleport stays. Left for a later crew slice: a bed and a
    chest of their own, eating from your stores, houses of their own.
-2. **THE BREACH** (Austin's) — enemies tear down what defends you and
-   nothing else: gates, doors, spikes, trenches, bells, turrets, flame
-   jets, and generators (the real blow). Never material, real geometry,
-   beds, beacons, chests, tables or stoves. Broken things stay as
-   broken things. A **repair tool**, battery-charged, mends them for
-   power alone; a whole base is a few batteries. Spikes' wear joins the
-   list. The **gate**: a door you can size to any opening, raised and
-   lowered on a lever, built on the door system.
-3. **THE DEEP, slice A** — the dark, the noise meter, the first hall,
-   the leader's last camp under the mouth. And Austin's ramp for the
-   expedition: camps first, then a hut, a house with a little power, a
-   mining facility at the end, and a boss fight there.
+2. **THE BREACH** (Austin's) — DONE (Build 33): enemies tear down what
+   defends you and nothing else (gates, doors, spikes, trenches, bells,
+   turrets, flame jets, generators), raiders go for the generator's hum,
+   broken things stay broken, the mender puts them back for battery
+   charge alone, and the gate: a portcullis sized to any opening on a
+   lever. Left for later: enemies that climb, the mender on city walls.
+3. **THE DEEP, slice A** — DONE (Build 34): the dark, the noise meter,
+   the first hall, the leader's last camp and last note, the door on,
+   Austin's ramp (hut, lit house, the works), the knock. **Slice B**
+   (later in the queue, after RIVERS II and THE LINE): the second hall
+   behind the fall, what lives there and what the sound is, the boss at
+   the end of the works, ropes and elevators for the way back up with a
+   full pack, glow fungus as the deep's own light.
 4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
    on the banks with bridges, river fish.
 5. **THE LINE** (Austin's) — real trains: their own track (not the
@@ -145,9 +146,16 @@ Small things I want, slotted wherever a session has room:
   the HORIZON playtest says the near shadows read soft.
 - **Place names on the map** — regions named in their archetype's
   voice, alongside the river names.
-- **The lighting line in the skin** (shading differs between the near
-  field and the LOD ahead): shadow cascades, or the skin lit exactly
-  as the near field is.
+- **The lighting line in the skin** — measured and fixed in Build
+  33.1 (the near field's occlusion sampler reads a scaled SDF and sits
+  at 0.70 on open ground; the skin now carries the same curve). Left
+  open until a playtest confirms the flicker at the edge went with it.
+  A later question: fixing the sampler's bias at the source would
+  brighten the whole near field by a quarter, a look change to decide
+  on purpose.
+- **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
+  about 40 flying in creative or loading a city the first time. Worth
+  a profiling pass once the queue above is shorter.
 - **Footsteps that know the material**; birds along rivers; fish in the
   shallows.
 

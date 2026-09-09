@@ -714,6 +714,91 @@ What I did not do: beds and chests of their own, eating, their own
 houses. Those are a later slice; THE BREACH is next and it is what the
 palisade has been waiting for.
 
+## 2026-09-08 — Build 32 played, Build 33 the breach
+
+Austin played Build 32 and had no notes on the list: eight slots is
+right, torches right, the mayor's price right, the flood's thirty
+metres right, spikes right because they stack. One change and it was a
+better rule than mine: what a crew member holds is whatever they used
+last. I had them swap back to the job's tool on a timer; he said the
+drill should come out when you start drilling. That is the same rule
+for every case and needs no timer, so the timer went.
+
+Two things to keep from his report. Frame rate: 60 to 70 standing, 40
+flying in creative or on a city's first load. And the lighting line:
+it sits wherever the real field ends, so it moves with you, and things
+around it flicker between shaded and unshaded as they load. That is
+the near/far shading disagreement I already had on the list; his
+description makes it a coverage-edge problem (the flicker is chunks
+promoting), not just a tone mismatch. Both are on the roadmap's small
+list now.
+
+THE BREACH went in as one system, breachSys: a strength per thing, a
+blow per enemy, a scan for what is in reach, a mender that undoes it
+for charge. The rule Austin gave (defenses and generators, never
+material or furniture) turned out to be the cleanest rule in the game:
+the breakable set is exactly the set of things that act on enemies,
+plus generators, which power the things that act on enemies. Nothing
+else needed deciding. The one surprise in testing was a husk sliding
+off a turret on a slope while "standing still": the pushout moved it
+without velocity, so now a wrecker leans back in when it drifts.
+
+Raiders going for the generator was my addition and I think it is the
+best part: the raid has always been "your grid hums too loud", and now
+the raid answers the hum. THE DEEP A is next in my order; but first,
+some creative time.
+
+## 2026-09-08 — creative time: the line, measured
+
+I have wanted to do this properly for a while and never had the
+afternoon. The trick was to stop looking and start measuring: a
+screenshot with the skin on, one with it off, and the pixels that
+change are the skin. Along that boundary the skin was 12 % brighter
+than the ground it meets. Flattening AO on both sides changed nothing,
+which nearly sent me down the wrong road (normals, textures) until I
+compared the shader's terms per cell instead of per pixel: the normals
+agree, the occlusion does not. The near field's occlusion taps read a
+terrain SDF that returns 0.65 of the true distance, so open flat ground
+has been 30 % "occluded" since Build 5.5, and the skin, honest about
+its flat ground, was the one that looked wrong.
+
+Two fixes were possible. Fix the sampler and the whole near world gets
+a quarter brighter: a look change Austin has not asked for. Or give the
+skin the same bias, which is one line and depends only on the normal's
+y. I took the second. The line is gone in measurement; his eyes will
+say if it is gone in play. The first fix is on the roadmap as a
+question, not a task.
+
+A lesson for the standing notes: when a rendering complaint comes back
+three times, build the instrument. The instrument took an hour and
+found in ten minutes what three playtests could only describe.
+
+## 2026-09-08 — Build 34, the descent
+
+The hall was the thing I wanted to write for a while. The design note
+from weeks ago held up almost unchanged: the dark is the mechanic, they
+hunt by sound, halls not caves, the leader's camp before any monster.
+What I had not decided was the leader's fate, and writing the last note
+decided it: "I am going to see." The leader went through the door. The
+second hall will have to answer that, and I have not written it yet,
+which is right; the pages promise a place, and the place should be
+built before its occupant is named.
+
+One mistake worth remembering: cylinder and cube sizes are full widths,
+not radii. My first hall was eleven metres across and its tunnels were
+shoulder-width. The test caught it because I probed the walls; a test
+that only checked "the hall exists" would have shipped a corridor.
+
+The noise meter is the first thing in the game that makes the tool
+tiers a choice rather than a ladder. A stone drill is the quiet one.
+The leader leaves you theirs. I like that the best tool in the game is,
+down there, the worst.
+
+The knock was creative time and took twenty lines. Two sine thuds, a
+random interval, fainter with distance from the mouth. It is the
+cheapest thing I have added in a month and I suspect it will be the
+one Austin mentions first.
+
 ---
 
 ## Standing notes
@@ -728,6 +813,11 @@ pacing or flicker can be judged here. Inside
 `page.evaluate` the game is `window.__game` and the systems are on
 `window.__api`. Suites for every build live in the scratchpad and take
 about 25 minutes together.
+
+**Instruments.** `lineshot.js` (scratchpad) masks the skin by
+screenshot difference and reports the luminance step at the coverage
+edge; `linecheck.js` compares the near mesh's lighting terms to the
+skin's per 2 m cell. Use them before touching the skin's shading.
 
 **How I play.** I can stand somewhere, look, walk, fly, build, mine,
 open screens and take screenshots. I cannot feel frame pacing or see

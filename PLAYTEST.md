@@ -5,7 +5,63 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
-## Build 32 — THE CREW C
+## Build 33.1 — THE LINE
+- [ ] Walk and fly over open country by day and look for the line where
+      the real field ends. It should be gone on open ground and gentle
+      slopes; tell me if it survives anywhere (steep cliffs, snow, sand,
+      forest floor) and whether the flicker at the edge went with it.
+- Feedback I want: does the far country look any different from before
+  (it should be a touch darker, the same as the near ground always was)?
+
+## Build 34 — THE DEEP A
+- [ ] A new world: walk the survey. Camp 4 is a hut now, camp 6 a
+      house with a lamp (the generator has coal; it lights when the
+      grid draws), camp 8 has the works beside the mouth.
+- [ ] Anywhere within two hundred metres of the mouth: a slow double
+      knock now and then. Does it read as "from below"? Too often, too
+      rare?
+- [ ] Go down the rope. At the bottom the dark should close in: the
+      headlamp reaches a few metres, the black is at twenty-five. Plant
+      torches. A NOISE bar appears.
+- [ ] Follow the tunnel to the first hall. The leader's camp is inside
+      by the entrance; read the last note in the chest. Bones by the
+      door, the doorway, the tunnel on, the fall.
+- [ ] Work in the hall with a stone drill, then a diamond drill: watch
+      the meter. Fire a gun. Let it top out. Something should come out
+      of the door. Fight in the dark.
+- [ ] Old world: load one from before. The hall should be there under
+      the mouth the first time you go down.
+- Feedback I want: is the dark too dark to enjoy, or right? Is the meter
+  readable at a glance (its colour goes amber past 40, red past 70)?
+  Does "they come from the door" land, and are three big lurkers in
+  the dark the right first wave?
+
+## Build 33 — THE BREACH
+- [ ] Build a small base at night: a door, a turret on a generator, a
+      bell, spikes. Let the night come. Enemies should stop at what
+      defends you and hammer it (a blow a second), and go for the
+      generator when nobody is in reach. Doors only while they are
+      hunting you.
+- [ ] Broken things: the turret knocked over and smoking, the door
+      hanging open, the generator dead (watts gone), the bell silent.
+      Nothing else touched: chests, beds, tables, stoves, the walls.
+- [ ] Craft the mender (six iron, four wire, a ruby ingot). Click a
+      battery onto it. Hold left click on each broken thing: two and a
+      half seconds and it is whole, and the charge drops by its cost.
+      Try it with too little charge.
+- [ ] Craft a gate (six iron, four sticks). Scroll it wide (it goes to
+      7 m), place it in a wall opening, put a lever within nine metres,
+      pull it. It should rise straight up into the wall and come down
+      again; right click on the gate works it too. Let a husk at it.
+- [ ] Crew: they keep whatever they used last after a fight; start
+      drilling and the drill comes back out.
+- Feedback I want: are the strengths right (a door goes in three husk
+  blows, a gate in nine, a generator in six raider blows)? Does "raiders
+  go for the generator" read, or does it look like they wandered off?
+  Is the mender's cost per thing fair against battery supply?
+
+## Build 32 — THE CREW C (played 2026-09-08: everything on the list
+## worked; notes folded into Build 33)
 - [ ] Hire someone (village: 10 goodwill, 60c). Their panel has THEIR
       HANDS, three armor slots and an eight-slot PACK above your bags.
       Click a drill, a sword, a helmet, a stack of torches and a stack

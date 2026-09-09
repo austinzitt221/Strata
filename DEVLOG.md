@@ -2,6 +2,129 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 34 — THE DEEP A: the descent (2026-09-08)
+
+The pages said do not go down. This is down. Verified headlessly (a
+build-34 suite lays a world and probes the hall's tunnel, room, floor,
+pillars, dais, lintel, doorway, second tunnel and rubble through the
+distance field; stands in the hall and watches the dark come in and the
+camp appear; reads the last note; counts a stone cut and a diamond cut
+into the meter, watches it decay, and tops it out to bring three of
+them from the door; checks the surface hears nothing; stamps camps 4, 6
+and 8 and probes the hut, the lit house's generator, bulb and wire, and
+the works' shed, chest, stove and sign; and round-trips the hall
+through the save; plus the expedition and smoke suites).
+
+- **The first hall.** Laid with the route when a world is born: from
+  the foot of the shaft a tunnel runs thirty metres to a built room,
+  22 m across and 7 high, floored in stonebrick, six pillars, a dais at
+  the far end. Across the dais a lintel and posts frame a doorway on to
+  a second tunnel, fifteen metres, that ends in fallen rock. The second
+  hall is behind it, for a later build. Old worlds get the hall the
+  first time they load.
+- **The leader's last camp** is just inside: the tent, one torch, bones
+  by the door laid out with care, a sign, and the chest with the last
+  note (page 9, day 12), the leader's stone drill ("it is the quiet
+  one"), coins, torches and rope. Reading the note marks the survey
+  read to 9; a THE FIRST HALL marker stands from the moment you reach
+  the bottom of the mouth until you stand in the hall.
+- **The dark.** Under the mouth the headlamp reaches less than half as
+  far and the black comes in at twenty-five metres instead of eighty,
+  eased in over a second so it reads as a place and not a switch. Light
+  is what you bring: torches keep their reach.
+- **They hunt by sound.** A noise meter in the HUD, only in the deep.
+  Every cut adds by drill tier (stone 2, iron 3.2, ruby 4.4, obsidian
+  5.6, diamond 6.8), a placement 1, a shot 10, a laser 5, a blast 45,
+  a bell 40, sprinting a little per second; it decays three a second.
+  At the top something turns over in the second hall and they come out
+  of its tunnel: two plus the wave count, wave by wave, big lurkers
+  that do not burn. The meter drops back to thirty. On the surface
+  nobody is listening.
+- **Austin's ramp.** Camp 4 is a stone hut with a doorway; camp 6 a
+  stone house with a generator and four coal wired to a lamp on the
+  back wall; camp 8 has the works beside the mouth, a stone shed with
+  a chest of two iron drills, rails, coal, iron and torches, a stove,
+  and a sign. Tents, chests and bones moved to fit.
+- **The knock** (creative time). The pages promised a slow knock from
+  below. Within two hundred metres of the mouth, now and then, a
+  double thud you feel more than hear, fainter with distance; in the
+  deep every ten to twenty-five seconds. The first one says so.
+
+## Build 33.1 — THE LINE (creative time, 2026-09-08)
+
+The lighting line between the near field and the far skin, reported
+three playtests running, measured and fixed. Method: a headless
+screenshot with the skin on and off gives a mask of skin pixels; along
+the boundary the skin averaged 124 luminance against the near field's
+110, a 12 % step. Flattening the ambient-occlusion attribute on either
+side moved nothing, which was misleading until the per-cell check: at
+the same 2 m cells the near mesh's normals and the skin's agree to half
+a percent, but the near field's occlusion averaged 0.72 on open ground
+and the skin's 0.99, and the shader's own terms put the skin 29 %
+brighter from that alone.
+
+The cause: the near field's occlusion taps read the terrain SDF, which
+returns 0.65 of the true vertical distance (a Lipschitz safety in
+`sdfTerrain`). So open flat ground reads 35 % occluded and sits at 0.70,
+gentle slopes at 0.79, steep ground at 1.0 (the taps lean out off a
+slope). That bias depends only on the normal's y, so the skin's AO now
+carries the same curve (`1 - 0.85 * max(0, 1 - 0.65 / ny)`) under its
+curvature term. After: the per-cell lit ratio is 1.009 and the
+screenshot step is 108 against 109. The near field is untouched; what
+Austin sees close up is exactly what he saw before.
+
+The flicker he described at the edge (patches switching between shaded
+and unshaded as chunks load) was this step made visible by promotion;
+with the tone matched the switch should be invisible. Playtest will say.
+The bias itself (flat ground 30 % occluded) is a separate question for
+another day: fixing it at the source would brighten the whole near
+world and change the look.
+
+## Build 33 — THE BREACH (2026-09-08)
+
+Enemies tear down what defends you, and nothing else. Verified headlessly
+(a build-33 suite stands a husk beside a turret and watches it go over in
+six blows, sends the same husk through a door with you behind it and a
+chest beside it, raises and lowers a 4 m gate on a lever and bends it
+with blows, watches a raider with nobody in reach walk to a generator
+and break it, mends all three with the mender and refuses when charge is
+short, charges the mender from a battery, and round-trips gates and
+breaks through the save; plus the palisade, crew and smoke suites).
+
+- **What breaks.** Doors and gates, spikes, claymores, bells, oil
+  trenches, turrets, flame jets, and generators (the real blow). Never
+  material, real geometry, beds, beacons, chests, tables or stoves.
+  Each has a strength: a door 40, a gate 120, a turret 80, a generator
+  70, a mk2 120. A husk's fist is 14, a raider's 12, a lurker's 8, a
+  stalker's 4, a warlord's 30.
+- **How they come at it.** A hostile that passes within reach of a
+  defense or a generator stops and hammers it, one blow a second, and
+  leans back in if a slope slides it off. A door or gate is only in the
+  way while they are hunting you or your crew. A raider with nobody in
+  reach goes for the hum that called it: the nearest live generator
+  within seventy metres.
+- **Broken things stay broken.** A prop is knocked over and smokes if
+  it is a machine; a door hangs open off its hinge; a gate bends and
+  stays open. Broken turrets and jets draw nothing and fire nothing,
+  broken generators give no watts, a broken bell is silent, a broken
+  claymore sleeps, a smashed trench will not light, worn spikes lie
+  flat. Right click on a broken door says so.
+- **The mender.** A battery-fed repair gun (six iron, four wire, a ruby
+  ingot). Hold left click on a broken or battered thing for two and a
+  half seconds and it is whole; charge pays for it and nothing else: a
+  door 8 %, a gate 15 %, a turret 20 %, a generator 20 or 30 %. Battered
+  but standing costs a share. Click a battery onto it to charge, the way
+  a jetpack charges. A whole base is a few batteries.
+- **The gate.** A portcullis on the door system: iron bars sized to any
+  opening (scroll, up to 7 m wide, 1.15 tall per wide), placed like a
+  door with the same grid and side alignment. It rises straight up into
+  the wall above rather than swinging. A lever within nine metres raises
+  every gate around it when on and lowers them when off; right click
+  works it by hand too. Six iron and four sticks.
+- **Crew hands (from the Build 32 playtest).** A crew member keeps
+  whatever they used last; the drill comes back out when you start
+  drilling, not on a timer.
+
 ## Build 32 — THE CREW C: a person, not a prop (2026-09-08)
 
 The crew get a pack of their own and the sense to use it. Verified
