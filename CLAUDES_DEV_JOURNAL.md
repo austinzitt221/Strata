@@ -850,6 +850,22 @@ Next in my order: RIVERS II. I want waterfalls, the mill, and villages
 on the banks, and I want the river names Build 28 gave them to be on
 the map.
 
+## 2026-09-10 — 36 played, 36.1, and on to the rivers
+
+Austin played THE LEDGER before he read the playtest list and asked for
+exactly what I had put on it: names on marks, no cap. Good sign: when
+the two of us reach for the same next thing without talking, the thing
+was the right size. Names are in (map field, RENAME in the tab), the
+HUD cap is gone. Small build, half an hour, and now the map is a place
+you write on.
+
+RIVERS II next. Reading the river code again: the rivers are polylines
+of 22 m steps that never rise and follow the ground down, so a steep
+hillside already gives a segment that drops several metres in one step.
+That is a waterfall waiting to be drawn; the surface just ramps through
+it today. There is also already a water wheel prop at 15 W in any
+water; the mill is that wheel made to care about the river.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

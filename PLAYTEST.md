@@ -23,9 +23,9 @@ their lists are retired; what came of them is Build 30.
       ACCEPT.
 - [ ] Save and quit, load: your marks, hidden markers and struck-off
       adverts should all be as you left them.
-- Feedback I want: is the click menu on the map enough, or do you want
-  a name on a mark (typed) and a colour? Should the HUD show more than
-  eight markers now that you can hide the ones you do not want?
+- Played 2026-09-10: everything worked. Names and no cap asked for and
+  shipped as 36.1: type a name in the map menu's field, RENAME in the
+  tab, every tracked objective on the HUD.
 
 ## Build 33.1 — THE LINE
 - [ ] Walk and fly over open country by day and look for the line where

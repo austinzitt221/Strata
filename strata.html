@@ -153,6 +153,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #mapmenu{position:absolute; z-index:3; background:var(--ui-bg); border:2px solid var(--ui-border); padding:4px; box-shadow:0 0 0 2px #111, 0 8px 24px rgba(0,0,0,.6); line-height:normal; min-width:150px;}
 #mapmenu .btn{display:block; width:100%; margin:0 0 3px 0; text-align:left; font-size:11px; padding:5px 8px;}
 #mapmenu .mlabel{font-size:10px; color:var(--ui-hi); padding:2px 6px 5px; letter-spacing:1px;}
+.mapname{display:block; width:100%; box-sizing:border-box; margin:0 0 4px 0; padding:4px 6px; font:11px monospace; background:#0a0910; color:#7dff9b; border:2px solid rgba(74,68,88,0.8); outline:none;}
+.mapname:focus{border-color:#7dff9b;}
 
 /* ---------- toast ---------- */
 #toast{position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:rgba(10,9,16,0.85); border:2px solid var(--ui-border); padding:6px 14px; letter-spacing:1px; z-index:60; transition:opacity .3s; opacity:0; pointer-events:none;}
@@ -12950,7 +12952,7 @@ const objectiveSys = {
     const tNow = performance.now();
     if (show && (!this._objsT || tNow - this._objsT > 250)){
       this._objsT = tNow;
-      this._objs = this.list().filter(o => !ledgerSys.hidden(o.id)).slice(0, 8);
+      this._objs = this.list().filter(o => !ledgerSys.hidden(o.id));
     }
     const objs = show ? (this._objs || []) : [];
     const seen = new Set();
@@ -13014,13 +13016,21 @@ const ledgerSys = {
     delete L.hidden[o.id];
     objectiveSys._objsT = 0; markSave();
   },
-  pin(x, z){
+  pin(x, z, name){
     const L = this.L();
     L.seq = (L.seq || 0) + 1;
     const p = { id: 'pin' + L.seq, n: L.seq, x: Math.round(x), z: Math.round(z) };
+    if (name && name.trim()) p.name = name.trim().slice(0, 24);
     L.pins.push(p);
     objectiveSys._objsT = 0; markSave();
     return p;
+  },
+  // a mark's name, or its number
+  label(p){ return p.name ? p.name.toUpperCase() : 'MARK ' + p.n; },
+  rename(p, name){
+    name = (name || '').trim().slice(0, 24);
+    if (name) p.name = name; else delete p.name;
+    objectiveSys._objsT = 0; markSave();
   },
   move(p, x, z){ p.x = Math.round(x); p.z = Math.round(z); objectiveSys._objsT = 0; markSave(); },
   // the nearest of your marks within r metres
@@ -13031,7 +13041,7 @@ const ledgerSys = {
   },
   list(out){
     for (const p of this.L().pins)
-      out.push({ id: p.id, x: p.x, z: p.z, label: 'MARK ' + p.n, pin: true, p, rec: { name: 'your mark' } });
+      out.push({ id: p.id, x: p.x, z: p.z, label: this.label(p), pin: true, p, rec: { name: 'your mark' } });
   },
 };
 
@@ -21700,6 +21710,23 @@ function buildMissionsUI(){
     b1.title = hid ? 'show the marker in the world again' : 'hide the marker in the world (the work stays)';
     b1.onmousedown = ev => ev.stopPropagation();
     b1.onclick = () => { ledgerSys.toggle(o.id); AudioSys.sfx('toggle'); buildMissionsUI(); };
+    if (o.pin){
+      const b3 = document.createElement('button');
+      b3.className = 'btn small'; b3.textContent = 'RENAME';
+      b3.onmousedown = ev => ev.stopPropagation();
+      b3.onclick = () => {
+        // the title becomes a field; enter or a click away keeps it
+        const inp = document.createElement('input');
+        inp.className = 'mapname'; inp.maxLength = 24; inp.value = o.p.name || ''; inp.placeholder = 'name it';
+        inp.onmousedown = ev => ev.stopPropagation();
+        let done = false;
+        const keep = () => { if (done) return; done = true; ledgerSys.rename(o.p, inp.value); buildMissionsUI(); };
+        inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') keep(); if (ev.key === 'Escape'){ done = true; buildMissionsUI(); } };
+        inp.onblur = keep;
+        t1.replaceWith(inp); inp.focus(); inp.select();
+      };
+      bt.appendChild(b3);
+    }
     const b2 = document.createElement('button');
     b2.className = 'btn small'; b2.textContent = 'REMOVE';
     b2.title = o.pin ? 'take the mark off the map' : o.hrec ? 'strike it off — ask ' + o.hrec.vname + ' again to take it back up' : o.contract ? 'hand the contract back to the board' : 'strike it off the ledger';
@@ -23362,7 +23389,7 @@ function drawMap(){
   for (const o of objectiveSys.list()){
     const hid = ledgerSys.hidden(o.id);
     c.globalAlpha = hid ? 0.4 : 1;
-    if (o.pin) dia(o.x, o.z, '#7dff9b', 6, String(o.p.n));
+    if (o.pin) dia(o.x, o.z, '#7dff9b', 6, o.p.name ? o.label : String(o.p.n));
     else dia(o.x, o.z, '#ffd75e', 5, V.zoom >= 2 ? o.label : '');
   }
   c.globalAlpha = 1;
@@ -23401,23 +23428,35 @@ const mapMenu = {
     const near = ledgerSys.pinAt(w.x, w.z, 10 / (5 * V.zoom) * MAP_CELL);
     const lab = document.createElement('div');
     lab.className = 'mlabel';
-    lab.textContent = near ? 'MARK ' + near.n + ' · ' + near.x + ', ' + near.z : Math.round(w.x) + ', ' + Math.round(w.z);
+    lab.textContent = near ? ledgerSys.label(near) + ' · ' + near.x + ', ' + near.z : Math.round(w.x) + ', ' + Math.round(w.z);
     el.appendChild(lab);
+    // a name for the mark (or a new name for this one)
+    const inp = document.createElement('input');
+    inp.className = 'mapname'; inp.maxLength = 24; inp.placeholder = near ? 'rename it' : 'name it (optional)';
+    if (near && near.name) inp.value = near.name;
+    inp.onmousedown = ev => ev.stopPropagation();
+    el.appendChild(inp);
     const add = (txt, fn) => {
       const b = document.createElement('button');
       b.className = 'btn'; b.textContent = txt;
       b.onmousedown = ev => ev.stopPropagation();
       b.onclick = ev => { ev.stopPropagation(); fn(); AudioSys.sfx('toggle'); mapMenu.close(); drawMap(); };
       el.appendChild(b);
+      return b;
     };
+    let first;
     if (near){
-      add('REMOVE MARK ' + near.n, () => ledgerSys.remove({ id: near.id, pin: true }));
-      add((ledgerSys.hidden(near.id) ? 'TRACK' : 'UNTRACK') + ' MARK ' + near.n, () => ledgerSys.toggle(near.id));
+      const nm = ledgerSys.label(near);
+      first = add('RENAME', () => ledgerSys.rename(near, inp.value));
+      add('REMOVE ' + nm, () => ledgerSys.remove({ id: near.id, pin: true }));
+      add((ledgerSys.hidden(near.id) ? 'TRACK ' : 'UNTRACK ') + nm, () => ledgerSys.toggle(near.id));
     } else {
-      add('SET A MARK HERE', () => { const p = ledgerSys.pin(w.x, w.z); toast('MARK ' + p.n + ' set — it is in your missions tab'); });
-      for (const p of ledgerSys.L().pins) add('MOVE MARK ' + p.n + ' HERE', () => ledgerSys.move(p, w.x, w.z));
+      first = add('SET A MARK HERE', () => { const p = ledgerSys.pin(w.x, w.z, inp.value); toast(ledgerSys.label(p) + ' set — it is in your missions tab'); });
+      for (const p of ledgerSys.L().pins) add('MOVE ' + ledgerSys.label(p) + ' HERE', () => ledgerSys.move(p, w.x, w.z));
     }
+    inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') first.click(); if (ev.key === 'Escape') mapMenu.close(); };
     add('CANCEL', () => {});
+    setTimeout(() => inp.focus(), 30);
     // keep the menu inside the canvas
     const cv = $('mapcanvas');
     el.classList.remove('hidden');

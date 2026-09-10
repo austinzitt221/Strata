@@ -2,6 +2,23 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 36.1 — NAMED MARKS (2026-09-10)
+
+Austin played Build 36 before reading the list and asked for the same
+thing I had on it: names on marks, and no limit on them. Verified
+headlessly (marks named through the ledger and through the map menu's
+field with enter, renamed from the tab's RENAME with the title turned
+into a field, the label falling back to MARK n when a name is cleared,
+and sixteen tracked objectives all on the HUD at once).
+
+- **Names.** The map menu has a field above its buttons: type a name
+  and SET A MARK HERE (or enter) names it; click a mark and the same
+  field renames it. The missions tab has RENAME on every mark. A name
+  is up to 24 characters and shows in capitals on the map, in the world
+  and in the tab; a mark without one is MARK n as before.
+- **No cap.** The HUD used to show the nearest eight objectives. Now it
+  shows every tracked one; hide what you do not want with UNTRACK.
+
 ## Build 36 — THE LEDGER (2026-09-09)
 
 Austin's two ideas from the third playtest, built as one: what you do with
