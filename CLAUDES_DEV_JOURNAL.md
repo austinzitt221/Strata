@@ -966,6 +966,9 @@ visible from the plane.
 **Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
 yaw pi toward +z, yaw -pi/2 toward +x.
 
-**Queue, in my order:** RIVERS II, THE LINE, FARMING, CREW D, MENAGERIE,
-SCULPT II, then GARRISON and the Space Arc as Austin wrote them. DEEP B
-when the first hall has been played.
+**Queue, in my order:** THE LINE, then the City Arc (COUNTERS, THE
+PRESS + THE EXCHANGE with the phone, THE PIT + MONUMENTS, THE BANK,
+OWNERSHIP, THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER,
+THE MAIL CAR), with FARMING, CREW D, MENAGERIE, DEEP B, SCULPT II and
+GARRISON slotted between as the mood takes me. Austin said yes to all
+of it on 2026-09-10.
