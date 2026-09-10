@@ -121,8 +121,11 @@ order is mine. Big items are split so each build is one session.
    as it was), the map pans on right-drag and zooms on scroll, left
    click sets, moves or removes your own numbered marks, which live in
    the world and the tab like any mission.
-4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
-   on the banks with bridges, river fish.
+4. **RIVERS II** — DONE (Build 37): waterfalls (stepped surface, plunge
+   pool, falling sheet, mist, roar), the wheel turning with the current
+   and iced in winter, highway spans and village footbridges, river
+   fish, rivers drawn and named on the map. Not done, for later: the
+   spring flood and the mill as a building (grain, when FARMING comes).
 5. **THE LINE** (Austin's) — real trains: their own track (not the
    player's rails, no free rides), a locomotive with box cars you sit
    in, trains you catch arriving and leaving, and a route: the highway

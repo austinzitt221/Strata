@@ -5,6 +5,32 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 37 — RIVERS II
+- [ ] Open the map (M): the rivers you have walked should be blue lines
+      now, each with a name once along its length. Pan out along one.
+- [ ] Follow a river into hills until it drops. The fall: a ledge across
+      the gorge, a white sheet down it, mist off the pool, a roar that
+      grows as you come near and fades behind you. Swim the pool (it is
+      deeper). Is the sheet convincing from below and from the top? Is
+      the roar too loud, too quiet, too early?
+- [ ] Craft a water wheel (8 planks, 4 iron) and set it in the river:
+      at the bank, mid-channel, then in the pool under a fall. The
+      tooltip should read 15 W, more, and more again; the wheel spins
+      faster with its watts. Wire it to a bulb.
+- [ ] Fish in a river: trout, grayling, pike. Then in a lake: the old
+      species.
+- [ ] Find a village near a river: a plank footbridge with rails over
+      the nearest reach. Walk it.
+- [ ] Drive a highway that crosses a river: the road should run on over
+      an opening, water passing beneath, no dam. Look at it from the
+      water.
+- [ ] Set the season to winter (creative slider in the inventory): the
+      fall goes quiet, the wheel says "iced in", the river holds you.
+- Feedback I want: does a fall read as a place worth building beside?
+  Is 60 W mid-river the right ceiling for a wheel (a generator burning
+  coal is 40)? Any river valley where the ledge looks wrong (a cliff
+  across a flat bit)?
+
 ## Build 36 — THE LEDGER
 - [ ] Open the map (M). Right-drag it around; scroll to zoom in on a
       village and out to the whole survey. Is the drag speed right (the

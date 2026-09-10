@@ -2,6 +2,55 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 37 — RIVERS II (2026-09-10)
+
+The rivers of Build 27 get the things a river has. Verified headlessly
+(a build-37 suite finds the falls near spawn and checks the surface
+holds the upper height to the lip and steps to the lower one past it,
+that the pool under the lip is carved deeper than the bed downstream;
+stands below a fall and counts the upright sheet quads in the water
+mesh and the roar level; drops a wheel mid-channel below the fall and
+reads its watts, its spin and its winter silence; rolls river fish and
+draws their icons; lays a village footbridge and probes the deck, the
+air over it and the bank end; finds a highway crossing a river and
+probes the air under the deck, the deck and the air above it; and draws
+the map with a river's name on its explored reach; plus the CORE suite,
+smoke and the Build 27 river suite).
+
+- **Waterfalls.** The river walk already dropped several metres in one
+  step wherever the ground was steep; the surface just ramped through
+  it. A step of three metres or more is now a fall: the surface holds
+  the upper height to the segment's midpoint and drops there, the
+  channel carves a plunge pool below the lip, and the valley shoulders
+  step with it, so a fall has a ledge across the whole gorge. The water
+  mesh draws the quads across the lip as an upright sheet, white water
+  in streaks running down it; mist rises off the pool; a low roar grows
+  as you come within a hundred metres and fades when you leave. In
+  winter the fall is quiet and still like the rest of the river.
+- **The mill.** The water wheel used to be 15 W in any water. In a
+  river it turns with the current: 15 W at the bank, up to 60 W in the
+  middle of a wide river, half again in the pool under a fall; the wheel
+  spins as fast as it earns, its tooltip says what it makes, and in
+  winter it is iced in and makes nothing.
+- **Bridges.** A highway used to dam a river valley with its
+  embankment. Where a river runs under the road the slab now opens for
+  it: a clear span from the bed to a metre under the deck, as wide as
+  the channel and a little more, run with the river's own direction
+  through the embankment. A village with a river within eighty metres
+  gets a plank footbridge over the nearest reach, deck and rails, bank
+  to bank (never over a fall).
+- **River fish.** Casting into a river (above sea level, in the
+  channel) catches river fish: trout mostly, grayling, the odd pike.
+  Two new species with their own icons, in the creative list too.
+- **Winter.** The toast says so now: the rivers freeze with the lakes
+  (they always did, through the same water top). The current no longer
+  pushes a wader, a swimmer or a boat while the river is ice.
+- **The map.** Rivers narrower than a map cell hardly showed, because
+  a cell was painted water only when its centre lay in the channel. A
+  cell the river runs through is painted river blue now, so every river
+  you have walked is a line on the map, and each carries its name once
+  along the middle of its explored reach.
+
 ## Build 36.1 — NAMED MARKS (2026-09-10)
 
 Austin played Build 36 before reading the list and asked for the same

@@ -866,6 +866,34 @@ That is a waterfall waiting to be drawn; the surface just ramps through
 it today. There is also already a water wheel prop at 15 W in any
 water; the mill is that wheel made to care about the river.
 
+## 2026-09-10, later — Build 37, the rivers again
+
+The waterfall cost almost nothing to make and is the best-looking
+thing I have added in a while. All I changed in the river code is one
+line: a segment that drops three metres is held flat to its midpoint
+and stepped there. Everything else followed from the fact that the
+whole world reads the river through one function: the bed carved a
+pool because the surface stepped, the valley shoulders made a ledge
+because they follow the surface, and the water mesh made the sheet on
+its own because a quad whose corners are six metres apart stands up.
+I only had to notice the upright quad and paint it white. That is the
+reward for Build 27's discipline (one riverAt for every consumer).
+
+The map was the surprise. Rivers narrower than sixteen metres barely
+showed, because a cell was water only if its centre was in the
+channel. Nobody said so in three playtests, which tells me the map is
+not looked at much; THE LEDGER may change that, which is why I found
+it now.
+
+Not done: the spring flood (a season-driven change to river height
+means the skin and every mesh re-bake, and I do not want that on a
+timer yet) and the mill as a building. The mill belongs with FARMING:
+grain in, flour out, on a wheel by a fall. Wrote that on the roadmap.
+
+Next in my order: THE LINE. Real trains. That one is Austin's and it
+is big; I want to think about the route first (the highway corridor
+already exists, and the tunnel through the rise is already cut).
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
