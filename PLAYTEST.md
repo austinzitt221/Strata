@@ -5,6 +5,28 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 36 — THE LEDGER
+- [ ] Open the map (M). Right-drag it around; scroll to zoom in on a
+      village and out to the whole survey. Is the drag speed right (the
+      map follows the mouse one to one)? Does the zoom feel anchored
+      under the cursor?
+- [ ] Left click an empty spot: SET A MARK HERE. Close the map: MARK 1
+      stands in the world with its distance. Open the missions tab (E):
+      the mark is a row with TRACK and REMOVE.
+- [ ] Set a second mark, then click a third spot and MOVE MARK 1 HERE.
+      Click on a mark: REMOVE and UNTRACK are there.
+- [ ] UNTRACK a villager's mission in the tab: the marker goes, the row
+      dims, the work is still theirs. TRACK it back.
+- [ ] REMOVE a villager's mission, then talk to the same villager: the
+      panel should read "take the work back up" and give the same
+      mission back. REMOVE a board contract: it is back on the board as
+      ACCEPT.
+- [ ] Save and quit, load: your marks, hidden markers and struck-off
+      adverts should all be as you left them.
+- Feedback I want: is the click menu on the map enough, or do you want
+  a name on a mark (typed) and a colour? Should the HUD show more than
+  eight markers now that you can hide the ones you do not want?
+
 ## Build 33.1 — THE LINE
 - [ ] Walk and fly over open country by day and look for the line where
       the real field ends. It should be gone on open ground and gentle

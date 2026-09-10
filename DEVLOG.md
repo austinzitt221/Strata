@@ -2,6 +2,46 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 36 — THE LEDGER (2026-09-09)
+
+Austin's two ideas from the third playtest, built as one: what you do with
+the world's work, and a map you can move around in. Verified headlessly
+(a build-36 suite sets a mark and finds it in the objective list, on the
+HUD and in the missions tab; hides it and checks the HUD drops it while
+the tab keeps it dimmed; tracks and removes it through the tab's own
+buttons; strikes a villager's hunt off and asks for it back, checks a
+real completion still rolls fresh work, hands a board contract back and
+strikes a fort; right-drags the map and checks the offset, scroll-zooms
+about a point off centre and checks the metre under the cursor does not
+drift, checks both zoom clamps; sets a mark from the click menu at the
+clicked metre, opens the menu on the mark for remove/untrack, moves a
+mark with the menu, untracks and removes from the map; and round-trips
+the ledger through a save; plus the smoke suite).
+
+- **The ledger.** Every row in the missions tab has two buttons. TRACK /
+  UNTRACK hides the marker in the world and keeps the work: the row
+  stays, dimmed, and the marker comes back when you track it again.
+  REMOVE strikes it off: a mark of yours vanishes; a villager's mission
+  is shelved on the villager (their panel reads "take the work back up"
+  and asking gives the same mission back, not a new roll); a board
+  contract goes back to the board unaccepted; a fort, city, ziggurat or
+  spire advert is simply struck from the list. Hidden and struck ids and
+  your marks are saved with the world.
+- **Your own marks.** Left click on the map opens a small menu at the
+  spot: set a mark there, or move any of your marks there; click on a
+  mark for remove and track/untrack. Marks are numbered in the order
+  they were set (MARK 1, 2, ...), show green on the map with their
+  number, in the world like any objective (a diamond with MARK n and
+  the distance), and in the missions tab like any mission with the same
+  two buttons.
+- **The map moves.** Right-drag pans. Scroll zooms 0.5x to 6x about the
+  metre under the cursor. The offset resets each time the map opens, the
+  zoom is remembered. The player arrow stays at the player, objectives
+  show as gold diamonds (labelled from 2x), untracked ones faded.
+- **What I left alone.** The HUD still shows the nearest eight; hiding
+  one frees its slot. The city advert picks the nearest city you have
+  not struck, so striking one shows the next.
+
 ## Build 35 — HORIZON.2: TRUE SHAPES (2026-09-09)
 
 Austin's third playtest: the lighting line is gone, and what is left of

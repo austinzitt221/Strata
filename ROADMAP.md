@@ -116,13 +116,11 @@ order is mine. Big items are split so each build is one session.
    cities and roads not yet laid; the skin keeps the ground. Mountains
    rounding as you approach is the skin's 2 m grid against the real
    field and stays.
-3c. **THE LEDGER** (Austin's) — the missions tab gets TRACK/UNTRACK
-   (hide or show a marker, keep the mission) and REMOVE (drop the
-   mission; a villager's can be asked for again). The map: right-drag
-   to pan anywhere you have been, scroll to zoom, left click a spot for
-   a menu: set your own marker there (or move one of yours), or remove
-   it. Your markers live in the missions tab like any other, with the
-   same two buttons.
+3c. **THE LEDGER** (Austin's) — DONE (Build 36): TRACK/UNTRACK and
+   REMOVE on every mission row (villager work shelved and offered back
+   as it was), the map pans on right-drag and zooms on scroll, left
+   click sets, moves or removes your own numbered marks, which live in
+   the world and the tab like any mission.
 4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
    on the banks with bridges, river fish.
 5. **THE LINE** (Austin's) — real trains: their own track (not the
