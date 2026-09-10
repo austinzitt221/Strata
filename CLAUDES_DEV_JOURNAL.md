@@ -894,6 +894,46 @@ Next in my order: THE LINE. Real trains. That one is Austin's and it
 is big; I want to think about the route first (the highway corridor
 already exists, and the tunnel through the rise is already cut).
 
+## 2026-09-10, evening — a brainstorm with Austin (nothing built)
+
+Austin could not play, so we brainstormed. His list, all cities: a
+stock exchange (companies to invest in, a stock sheet with graphs, a
+question of whether prices should be random or typed), a newspaper
+shop whose paper hints at tomorrow's moves, a casino (poker,
+blackjack, an item wheel with a sports car jackpot), a race track (race
+for coin or bet from the stands), a gladiator pit with a champion
+title and city rep, traders behind counters in real shops with
+pedestrians as filler, a mayor's office and a ticket counter, buying
+shops (income at the till, supplies and wages out, sell once a day to
+a buyer who haggles), and a phone that is the manager for all of it
+(stocks, news, call the crew, call a cab).
+
+What I told him, in short: yes to nearly all of it, with three
+changes. (1) Counters first: every one of these is a building with a
+desk in it, so "traders in shops" is the foundation, not a feature.
+(2) The exchange should not be random. Companies typed by risk (steady
+risers, volatile movers, a dividend dog), moved by events the paper
+prints the day before, and moved by the world: a siege hits the city's
+companies, your wattage lifts the power company, cars you buy lift the
+dealership. A market that reacts to what you do is the version worth
+building. (3) Poker is its own build; blackjack, the wheel and dice
+first.
+
+Mine: THE CONTRACTOR (cities post carve-to-spec jobs: a foundation pit,
+a canal, a road cut, scored by volume against the SDF, the one job
+only this game can offer), THE BANK (deposits that survive death,
+loans to buy shops, collectors who come as raiders when you default),
+THE CARTOGRAPHER (buy maps of country you have not walked, sell your
+survey), MONUMENTS (the city raises a statue to your deeds, the paper
+reports it), and THE MAIL CAR (a coin car on THE LINE's trains: guard
+it for pay or rob it). And one spine under all of it: a per-city
+economy index that prices, shop income and stocks all read.
+
+Order I proposed: THE LINE (already next), COUNTERS, THE PRESS + THE
+EXCHANGE with the phone, THE PIT with monuments, THE BANK, OWNERSHIP,
+THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER, THE MAIL CAR.
+Roadmap gets written when he has read it.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
