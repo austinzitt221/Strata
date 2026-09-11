@@ -121,33 +121,103 @@ order is mine. Big items are split so each build is one session.
    as it was), the map pans on right-drag and zooms on scroll, left
    click sets, moves or removes your own numbered marks, which live in
    the world and the tab like any mission.
-4. **RIVERS II** — seasons on the water, waterfalls, the mill, villages
-   on the banks with bridges, river fish.
+4. **RIVERS II** — DONE (Build 37): waterfalls (stepped surface, plunge
+   pool, falling sheet, mist, roar), the wheel turning with the current
+   and iced in winter, highway spans and village footbridges, river
+   fish, rivers drawn and named on the map. Not done, for later: the
+   spring flood and the mill as a building (grain, when FARMING comes).
 5. **THE LINE** (Austin's) — real trains: their own track (not the
    player's rails, no free rides), a locomotive with box cars you sit
    in, trains you catch arriving and leaving, and a route: the highway
    corridor widened to carry the line, dropping into a tunnel between
    cities and surfacing at the station.
-6. **FARMING** (Austin's) — a hoe, seeds, water you can carry and set
-   down, crops (tomatoes, wheat, lettuce), and meals that are the potion
-   system: a burger or a plate of spaghetti gives speed, dig speed,
-   jump, invisibility, for a while.
-7. **THE CREW D** — crew in vehicles: a follower takes the passenger
-   seat of your car, boat or plane; give them a vehicle and they drive
-   their own behind you; other crew ride with them. A squad on the road.
-7b. **THE MENAGERIE** (Austin's) — creature spawners. In creative,
-   craft a "<creature> spawner" for any living thing and set it down. In
-   survival, a creature grabber gun: right click any living thing and
-   it becomes a spawner in your pack -- animals in a moment, enemies
-   over a few seconds of holding the beam, bosses over a long and
-   dangerous while, villagers only once you have the goodwill to hire
-   them. What comes back out is the same one that went in: the mayor
-   keeps his goodwill, his trades and his pockets; a crew member keeps
-   their bag. (The record travels inside the spawner item: house key,
-   crew record, entity fields.)
-8. **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
-   blueprints, the path made by walking.
-9. **THE GARRISON**, then the Space Arc.
+## The City Arc (brainstormed with Austin 2026-09-10, in my order)
+
+Every one of these is a building with a desk in it, so the first one
+is the foundation for the rest. One spine under all of them: a per-city
+economy index (sieges, your businesses, what you buy and sell, the
+region's wattage) that prices, shop income and the exchange all read,
+so the city's economy is one thing that reacts to what you do.
+
+6. **COUNTERS** (Austin's) — traders stop wandering: every trade is a
+   real shop with an interior, a counter and a named keeper behind it
+   (the electrics shop with its wares on display, the arms dealer, the
+   tool shop), the mayor gets an office, the station gets a ticket
+   booth with a clerk. Pedestrians keep wandering as filler, between
+   shops and places, and do not trade.
+7. **THE PRESS + THE EXCHANGE, with THE PHONE** (Austin's, with my
+   changes) — a newspaper shop: two coins for today's paper, printed
+   from what the world did (sieges, warlords killed, villages found,
+   your deeds as headlines, the survey of the deep), tomorrow's weather,
+   and stock tips. An exchange building, a busy floor of brokers, and a
+   real market: six to eight companies typed by risk (steady risers with
+   small moves, volatile movers with big swings, one dog that trends
+   down but pays a daily dividend), moved by events the paper prints
+   the day before at about 70% reliability, and moved by the world (the
+   mining company follows the ore you sell, the power company the
+   region's wattage, the dealership jumps when you buy a car, a siege
+   knocks every company in that city). Never random. The stock sheet:
+   prices, today's change, a 30-day line per company, who is on top.
+   The phone: one craftable item with apps -- STOCKS, NEWS, BUSINESS,
+   CALL (a crew member to you, a cab to you) -- and it rings you: a
+   siege starting, crew in trouble, a headline about you.
+8. **THE PIT + MONUMENTS** (Austin's, with mine) — a gladiator arena, a
+   bowl with stands, tiers of opponents from what already exists
+   (lurkers, husks, stalkers, fort minibosses, scaled up), a bookmaker
+   so you can bet on yourself, a champion's belt worth a lot of coin
+   and city rep. Monuments: the city raises a statue to your deeds in
+   the plaza with a plaque (champion, siege breaker, the survey of the
+   deep), and the paper prints it. The show-off for a city completed.
+9. **THE BANK** (mine) — deposits that survive death, interest by the
+   day, loans to buy a shop or a car. Default and the collectors come,
+   as a raid.
+10. **OWNERSHIP** (Austin's) — buy a shop once the keeper's goodwill is
+   high enough: income at the till, supplies and wages out, read from
+   the city economy so a siege hurts your shop too. Sell once a day to
+   a buyer who makes an offer you can raise, lower or decline. Managed
+   from the phone's BUSINESS app.
+11. **THE CASINO** (Austin's) — blackjack, dice, and the item wheel
+   with a sports car jackpot first; poker against AI players as its
+   own later slice, built properly or not at all.
+12. **THE TRACK** (Austin's) — a stamped circuit outside the city with
+   checkpoints, AI drivers that follow it, lap timing and positions.
+   Race for coin, or bet from the stands on a race that runs without
+   you. Classes: sports car, bike, hoverbike.
+13. **THE CONTRACTOR** (mine) — cities post carve-to-spec jobs: a
+   foundation pit, a canal between two points, a road cut through a
+   rise. Scored by volume against the requested shape (the SDF measures
+   it exactly), paid by tier. The job only this game can offer.
+14. **THE CARTOGRAPHER** (mine) — buy maps of country you have not
+   walked, marked with falls, villages and forts; sell your own survey
+   for coin.
+15. **THE MAIL CAR** (mine, on THE LINE) — one car on the train carries
+   coin and ore. Guard it for pay, or rob it and answer for it with the
+   city.
+
+Slotted between the city builds as the mood takes me:
+- **FARMING** (Austin's) — a hoe, seeds, water you can carry and set
+  down, crops (tomatoes, wheat, lettuce), and meals that are the potion
+  system: a burger or a plate of spaghetti gives speed, dig speed,
+  jump, invisibility, for a while. The grain mill (a wheel by a fall)
+  comes with it.
+- **THE CREW D** — crew in vehicles: a follower takes the passenger
+  seat of your car, boat or plane; give them a vehicle and they drive
+  their own behind you; other crew ride with them. A squad on the road.
+- **THE MENAGERIE** (Austin's) — creature spawners. In creative,
+  craft a "<creature> spawner" for any living thing and set it down. In
+  survival, a creature grabber gun: right click any living thing and
+  it becomes a spawner in your pack -- animals in a moment, enemies
+  over a few seconds of holding the beam, bosses over a long and
+  dangerous while, villagers only once you have the goodwill to hire
+  them. What comes back out is the same one that went in: the mayor
+  keeps his goodwill, his trades and his pockets; a crew member keeps
+  their bag. (The record travels inside the spawner item: house key,
+  crew record, entity fields.)
+- **THE DEEP, slice B** — the second hall, once the first has been
+  played.
+- **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
+  blueprints, the path made by walking.
+- **THE GARRISON**, then the Space Arc.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

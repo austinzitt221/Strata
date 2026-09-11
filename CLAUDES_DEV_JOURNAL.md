@@ -850,6 +850,90 @@ Next in my order: RIVERS II. I want waterfalls, the mill, and villages
 on the banks, and I want the river names Build 28 gave them to be on
 the map.
 
+## 2026-09-10 — 36 played, 36.1, and on to the rivers
+
+Austin played THE LEDGER before he read the playtest list and asked for
+exactly what I had put on it: names on marks, no cap. Good sign: when
+the two of us reach for the same next thing without talking, the thing
+was the right size. Names are in (map field, RENAME in the tab), the
+HUD cap is gone. Small build, half an hour, and now the map is a place
+you write on.
+
+RIVERS II next. Reading the river code again: the rivers are polylines
+of 22 m steps that never rise and follow the ground down, so a steep
+hillside already gives a segment that drops several metres in one step.
+That is a waterfall waiting to be drawn; the surface just ramps through
+it today. There is also already a water wheel prop at 15 W in any
+water; the mill is that wheel made to care about the river.
+
+## 2026-09-10, later — Build 37, the rivers again
+
+The waterfall cost almost nothing to make and is the best-looking
+thing I have added in a while. All I changed in the river code is one
+line: a segment that drops three metres is held flat to its midpoint
+and stepped there. Everything else followed from the fact that the
+whole world reads the river through one function: the bed carved a
+pool because the surface stepped, the valley shoulders made a ledge
+because they follow the surface, and the water mesh made the sheet on
+its own because a quad whose corners are six metres apart stands up.
+I only had to notice the upright quad and paint it white. That is the
+reward for Build 27's discipline (one riverAt for every consumer).
+
+The map was the surprise. Rivers narrower than sixteen metres barely
+showed, because a cell was water only if its centre was in the
+channel. Nobody said so in three playtests, which tells me the map is
+not looked at much; THE LEDGER may change that, which is why I found
+it now.
+
+Not done: the spring flood (a season-driven change to river height
+means the skin and every mesh re-bake, and I do not want that on a
+timer yet) and the mill as a building. The mill belongs with FARMING:
+grain in, flour out, on a wheel by a fall. Wrote that on the roadmap.
+
+Next in my order: THE LINE. Real trains. That one is Austin's and it
+is big; I want to think about the route first (the highway corridor
+already exists, and the tunnel through the rise is already cut).
+
+## 2026-09-10, evening — a brainstorm with Austin (nothing built)
+
+Austin could not play, so we brainstormed. His list, all cities: a
+stock exchange (companies to invest in, a stock sheet with graphs, a
+question of whether prices should be random or typed), a newspaper
+shop whose paper hints at tomorrow's moves, a casino (poker,
+blackjack, an item wheel with a sports car jackpot), a race track (race
+for coin or bet from the stands), a gladiator pit with a champion
+title and city rep, traders behind counters in real shops with
+pedestrians as filler, a mayor's office and a ticket counter, buying
+shops (income at the till, supplies and wages out, sell once a day to
+a buyer who haggles), and a phone that is the manager for all of it
+(stocks, news, call the crew, call a cab).
+
+What I told him, in short: yes to nearly all of it, with three
+changes. (1) Counters first: every one of these is a building with a
+desk in it, so "traders in shops" is the foundation, not a feature.
+(2) The exchange should not be random. Companies typed by risk (steady
+risers, volatile movers, a dividend dog), moved by events the paper
+prints the day before, and moved by the world: a siege hits the city's
+companies, your wattage lifts the power company, cars you buy lift the
+dealership. A market that reacts to what you do is the version worth
+building. (3) Poker is its own build; blackjack, the wheel and dice
+first.
+
+Mine: THE CONTRACTOR (cities post carve-to-spec jobs: a foundation pit,
+a canal, a road cut, scored by volume against the SDF, the one job
+only this game can offer), THE BANK (deposits that survive death,
+loans to buy shops, collectors who come as raiders when you default),
+THE CARTOGRAPHER (buy maps of country you have not walked, sell your
+survey), MONUMENTS (the city raises a statue to your deeds, the paper
+reports it), and THE MAIL CAR (a coin car on THE LINE's trains: guard
+it for pay or rob it). And one spine under all of it: a per-city
+economy index that prices, shop income and stocks all read.
+
+Order I proposed: THE LINE (already next), COUNTERS, THE PRESS + THE
+EXCHANGE with the phone, THE PIT with monuments, THE BANK, OWNERSHIP,
+THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER, THE MAIL CAR.
+Roadmap gets written when he has read it.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -882,6 +966,9 @@ visible from the plane.
 **Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
 yaw pi toward +z, yaw -pi/2 toward +x.
 
-**Queue, in my order:** RIVERS II, THE LINE, FARMING, CREW D, MENAGERIE,
-SCULPT II, then GARRISON and the Space Arc as Austin wrote them. DEEP B
-when the first hall has been played.
+**Queue, in my order:** THE LINE, then the City Arc (COUNTERS, THE
+PRESS + THE EXCHANGE with the phone, THE PIT + MONUMENTS, THE BANK,
+OWNERSHIP, THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER,
+THE MAIL CAR), with FARMING, CREW D, MENAGERIE, DEEP B, SCULPT II and
+GARRISON slotted between as the mood takes me. Austin said yes to all
+of it on 2026-09-10.

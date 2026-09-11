@@ -153,6 +153,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #mapmenu{position:absolute; z-index:3; background:var(--ui-bg); border:2px solid var(--ui-border); padding:4px; box-shadow:0 0 0 2px #111, 0 8px 24px rgba(0,0,0,.6); line-height:normal; min-width:150px;}
 #mapmenu .btn{display:block; width:100%; margin:0 0 3px 0; text-align:left; font-size:11px; padding:5px 8px;}
 #mapmenu .mlabel{font-size:10px; color:var(--ui-hi); padding:2px 6px 5px; letter-spacing:1px;}
+.mapname{display:block; width:100%; box-sizing:border-box; margin:0 0 4px 0; padding:4px 6px; font:11px monospace; background:#0a0910; color:#7dff9b; border:2px solid rgba(74,68,88,0.8); outline:none;}
+.mapname:focus{border-color:#7dff9b;}
 
 /* ---------- toast ---------- */
 #toast{position:fixed; left:50%; bottom:86px; transform:translateX(-50%); background:rgba(10,9,16,0.85); border:2px solid var(--ui-border); padding:6px 14px; letter-spacing:1px; z-index:60; transition:opacity .3s; opacity:0; pointer-events:none;}
@@ -919,6 +921,9 @@ function makeGen(seed){
   // lazily and deterministically, so every worker agrees with the main
   // thread without a message.
   const RIV_CELL = 768, RIV_STEP = 22, RIV_BUCKET = 64, RIV_MAX = 130;
+  // a segment that drops this much in one step is a waterfall: the surface
+  // holds the upper height to the segment's midpoint and steps down there
+  const RIV_FALL = 3.0;
   const rivCells = new Map(), rivBuckets = new Map(), rivRawCache = new Map();
   let rivReady = '';
   // the raw walk of a cell's river: a pure function of the cell, so every
@@ -1021,7 +1026,7 @@ function makeGen(seed){
   }
   // the nearest river to a column: its distance, half-width, surface
   // height and direction of flow, or null beyond any valley
-  const RIV_OUT = { d: 0, w: 0, y: 0, tx: 0, tz: 0, c: '' };
+  const RIV_OUT = { d: 0, w: 0, y: 0, tx: 0, tz: 0, c: '', fall: 0, ft: 0 };
   function riverAt(x, z){
     const cx = Math.floor(x / RIV_CELL), cz = Math.floor(z / RIV_CELL);
     const ck = cx + ',' + cz;
@@ -1040,7 +1045,7 @@ function makeGen(seed){
         const dx = s.x1 - s.x0, dz = s.z1 - s.z0, l2 = dx * dx + dz * dz || 1;
         t = ((x - s.x0) * dx + (z - s.z0) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
         d = Math.hypot(x - (s.x0 + dx * t), z - (s.z0 + dz * t)) - (s.w0 + (s.w1 - s.w0) * t);
-        yy = s.y0 + (s.y1 - s.y0) * t;
+        yy = s.y0 - s.y1 >= RIV_FALL ? (t < 0.5 ? s.y0 : s.y1) : s.y0 + (s.y1 - s.y0) * t;
       }
       if (d < 0){                                   // inside this channel: the lowest water wins
         if (!inside || yy < by){ inside = true; bd = d; best = s; bt = t; by = yy; }
@@ -1051,13 +1056,40 @@ function makeGen(seed){
     const d = bd + w;
     if (d > w * 2.6 + 6) return null;
     RIV_OUT.d = d; RIV_OUT.w = w; RIV_OUT.c = best.c;
-    if (best.tarn){ RIV_OUT.y = best.y; RIV_OUT.tx = 0; RIV_OUT.tz = 0; }
+    if (best.tarn){ RIV_OUT.y = best.y; RIV_OUT.tx = 0; RIV_OUT.tz = 0; RIV_OUT.fall = 0; RIV_OUT.ft = 0; }
     else {
-      RIV_OUT.y = best.y0 + (best.y1 - best.y0) * bt;
+      const drop = best.y0 - best.y1;
+      RIV_OUT.fall = drop >= RIV_FALL ? drop : 0; RIV_OUT.ft = bt;
+      RIV_OUT.y = RIV_OUT.fall ? (bt < 0.5 ? best.y0 : best.y1) : best.y0 + (best.y1 - best.y0) * bt;
       const dx = best.x1 - best.x0, dz = best.z1 - best.z0, l = Math.hypot(dx, dz) || 1;
       RIV_OUT.tx = dx / l; RIV_OUT.tz = dz / l;
     }
     return RIV_OUT;
+  }
+  // every waterfall within r of a point: the lip (the segment's midpoint),
+  // the heights above and below, the drop, the width and the direction of flow
+  function fallsNear(x, z, r){
+    riverAt(x, z);                                    // the cells around are built
+    const out = [], seen = new Set();
+    const b0x = Math.floor((x - r) / RIV_BUCKET), b1x = Math.floor((x + r) / RIV_BUCKET);
+    const b0z = Math.floor((z - r) / RIV_BUCKET), b1z = Math.floor((z + r) / RIV_BUCKET);
+    for (let bz = b0z; bz <= b1z; bz++) for (let bx = b0x; bx <= b1x; bx++){
+      const L = rivBuckets.get(bx + ',' + bz);
+      if (!L) continue;
+      for (const sg of L){
+        if (sg.tarn) continue;
+        const drop = sg.y0 - sg.y1;
+        if (drop < RIV_FALL) continue;
+        const key = sg.x0 + ',' + sg.z0;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const mx = (sg.x0 + sg.x1) / 2, mz = (sg.z0 + sg.z1) / 2;
+        if (Math.hypot(mx - x, mz - z) > r) continue;
+        const dx = sg.x1 - sg.x0, dz = sg.z1 - sg.z0, l = Math.hypot(dx, dz) || 1;
+        out.push({ x: mx, z: mz, y0: sg.y0, y1: sg.y1, drop, w: (sg.w0 + sg.w1) / 2, tx: dx / l, tz: dz / l, c: sg.c });
+      }
+    }
+    return out;
   }
   // the water surface over a column, or null where the ground is dry:
   // the sea and the lakes at sea level, a river at its own height
@@ -1096,7 +1128,8 @@ function makeGen(seed){
         const rim = R.y + 3.2 + Math.max(0, h - R.y) * 0.32;
         h += (Math.min(h, rim) - h) * vt;
         const ct = sstep(R.w * 1.1, R.w * 0.5, R.d);         // the channel
-        h += (Math.min(h, R.y - (1.5 + 0.12 * R.w)) - h) * ct;
+        const pool = R.fall && R.ft > 0.5 && R.ft < 0.9 ? 1.6 : 0;   // a plunge pool under a fall
+        h += (Math.min(h, R.y - (1.5 + 0.12 * R.w + pool)) - h) * ct;
         // a levee: ground beside the channel never sits below the water,
         // so the river holds -- where the land falls away on one side it
         // runs on a raised bank instead of spilling
@@ -1909,7 +1942,7 @@ function makeGen(seed){
       }
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
-  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
+  return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, fallsNear, waterYAt,
            caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
@@ -2760,9 +2793,11 @@ const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'co
 // stove: what smelts into what, and what burns (ops per unit of fuel)
 const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat' };
 // what bites where: the fish of each region
-const FISH_NAME = { perch: 'perch', trout: 'trout', catfish: 'catfish', carp: 'carp', snapper: 'snapper', eel: 'ember eel', cod: 'cod' };
-function fishFor(arch, deep){
+const FISH_NAME = { perch: 'perch', trout: 'trout', catfish: 'catfish', carp: 'carp', snapper: 'snapper', eel: 'ember eel', cod: 'cod', grayling: 'grayling', pike: 'pike' };
+function fishFor(arch, deep, river, roll){
   if (deep) return 'cod';
+  // a river runs its own fish: mostly trout, grayling in the pools, the odd pike
+  if (river) return ['trout', 'grayling', 'trout', 'pike'][(Math.min(0.999, Math.max(0, roll == null ? 0 : roll)) * 4) | 0];
   return [ 'perch', 'perch', 'trout', 'carp', 'carp', 'catfish', 'trout', 'eel', 'snapper' ][arch] || 'perch';
 }
 const SMELT_T = 2.0;   // seconds per item
@@ -4505,7 +4540,10 @@ class Terrain {
             const cy = (x, z) => { const Q = this.gen.riverAt(x, z); return Q ? Math.max(sea, Q.y) : w; };
             ya = cy(x0 + i, z0 + j); yb = cy(x0 + i, z0 + j + 1); yc = cy(x0 + i + 1, z0 + j + 1); yd = cy(x0 + i + 1, z0 + j);
           }
-          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, w - hm, fx, fz, ya, yb, yc, yd);
+          // a quad across a fall's lip stands nearly upright: it is drawn as
+          // the falling sheet (a negative depth marks it for the shader)
+          const span = Math.max(ya, yb, yc, yd) - Math.min(ya, yb, yc, yd);
+          quad(x0 + i, z0 + j, x0 + i + 1, z0 + j + 1, w, span > 1.5 ? -1 : w - hm, fx, fz, ya, yb, yc, yd);
         }
     }
     // flooded galleries: still water at each flooded chamber's midline,
@@ -5237,16 +5275,23 @@ function buildScene(){
       uniforms: { uTex: { value: wt }, uTime: game.uTime },
       vertexShader: `
         attribute float aDep; attribute vec2 aFlow;
-        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow; varying vec3 vPos;
         void main(){
-          vUv = uv; vDep = aDep; vFlow = aFlow;
+          vUv = uv; vDep = aDep; vFlow = aFlow; vPos = position;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }`,
       fragmentShader: `
         precision highp float;
         uniform sampler2D uTex; uniform float uTime;
-        varying vec2 vUv; varying float vDep; varying vec2 vFlow;
+        varying vec2 vUv; varying float vDep; varying vec2 vFlow; varying vec3 vPos;
         void main(){
+          if (vDep < -0.5){
+            // a waterfall: white water in streaks running down the sheet
+            float s = fract(vPos.y * 0.45 + uTime * 2.2 + sin(vPos.x * 3.1 + vPos.z * 2.7) * 0.5);
+            vec3 foam = mix(vec3(0.62, 0.78, 0.90), vec3(0.95, 0.98, 1.0), smoothstep(0.35, 0.75, s));
+            gl_FragColor = vec4(foam, 0.9);
+            return;
+          }
           // a river's surface drifts downstream; still water stays put
           vec3 col = texture2D(uTex, vUv + vFlow * uTime * 0.12).rgb * vec3(0.737, 0.831, 0.910);
           float deep = smoothstep(0.6, 7.5, vDep);
@@ -6965,7 +7010,7 @@ const seasonSys = {
   get winter(){ return this.idx === 3; },
   get summer(){ return this.idx === 1; },
   onNewDay(){
-    if ((game.day || 0) % SEASON_DAYS === 0) toast(this.name === 'winter' ? 'winter — the lakes freeze' : this.name === 'summer' ? 'summer — the herds fatten' : this.name + ' comes');
+    if ((game.day || 0) % SEASON_DAYS === 0) toast(this.name === 'winter' ? 'winter — the lakes and rivers freeze' : this.name === 'summer' ? 'summer — the herds fatten' : this.name + ' comes');
     markSave();
   },
   // frozen lakes: in winter the surface of any still water holds you
@@ -6977,6 +7022,67 @@ const seasonSys = {
     if (game.vel.y < 0) game.vel.y = 0;
     game.grounded = true; game.swim = false; game.onIce = true;
     return true;
+  },
+};
+
+// ---------- waterfalls ----------
+// The river code makes a fall wherever a segment drops three metres or
+// more; this gives it mist off the pool and a roar that grows as you come
+// near. One loop of low noise, its gain following the nearest fall.
+const fallsSys = {
+  list: [], scanT: 0, mistT: 0, roar: null, roarGain: null, level: 0,
+  tick(dt){
+    if (!game.running || !game.gen || !game.gen.fallsNear) return;
+    this.scanT -= dt;
+    if (this.scanT <= 0){ this.scanT = 2; this.list = game.gen.fallsNear(game.pos.x, game.pos.z, 140); }
+    let loud = 0;
+    this.mistT -= dt;
+    const puff = this.mistT <= 0 && game.ui === 'none' && !seasonSys.winter;
+    if (puff) this.mistT = 0.18;
+    for (const f of this.list){
+      const d = Math.hypot(f.x - game.pos.x, f.z - game.pos.z);
+      if (!seasonSys.winter) loud = Math.max(loud, Math.max(0, 1 - d / 110) * Math.min(1, f.drop / 6));
+      // mist off the pool, more of it under a bigger fall
+      if (puff && d < 70){
+        const k = Math.min(3, 1 + (f.drop / 4) | 0);
+        for (let i = 0; i < k; i++){
+          const s = (Math.random() - 0.5) * f.w * 1.4, a = 2 + Math.random() * 3;
+          Particles.burst(f.x + f.tx * a - f.tz * s, f.y1 + 0.3, f.z + f.tz * a + f.tx * s, 0.6, [0xe8f2ff, 0xffffff, 0xcfe4ff], 3, 1.6);
+        }
+      }
+    }
+    this.level += (loud - this.level) * Math.min(1, dt * 2);
+    const A = AudioSys;
+    if (!A.ctx) return;
+    if (this.level > 0.01 && !this.roar){
+      const src = A.ctx.createBufferSource(); src.buffer = A.noiseBuf; src.loop = true; src.playbackRate.value = 0.55;
+      const f = A.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 520;
+      const g = A.ctx.createGain(); g.gain.value = 0;
+      src.connect(f); f.connect(g); g.connect(A.master); src.start();
+      this.roar = src; this.roarGain = g;
+    }
+    if (this.roarGain) this.roarGain.gain.setTargetAtTime(this.level * 0.5 * (game.ui === 'none' ? 1 : 0.4), A.ctx.currentTime, 0.1);
+    if (this.level <= 0.01 && this.roar){ try { this.roar.stop(); } catch (err) {} this.roar = null; this.roarGain = null; }
+  },
+};
+// ---------- the mill ----------
+// A water wheel in a river turns with the current: 15 W in still water,
+// up to 60 W mid-channel on a wide river, half again under a fall, and
+// nothing at all when the river is frozen.
+const millSys = {
+  watts(n){
+    const R = game.gen && game.gen.riverAt && game.gen.riverAt(n.x, n.z);
+    if (!R || R.d >= R.w) return 15;
+    let w = 15 + 45 * (1 - R.d / R.w) * Math.min(1, R.w / 7);
+    if (R.fall && R.ft > 0.5 && R.ft < 0.9) w *= 1.5;
+    return Math.round(w);
+  },
+  spin(n){ return 1.4 * Math.sqrt(this.watts(n) / 15); },
+  say(n){
+    if (!inWater(n.x, n.y + 0.6, n.z)) return 'water wheel: dry — place it IN water';
+    if (seasonSys.winter) return 'water wheel: iced in until spring';
+    const w = this.watts(n);
+    return 'water wheel: turning, ~' + w + 'W' + (w > 15 ? ' in the current' : '');
   },
 };
 
@@ -8466,7 +8572,7 @@ const pnodeSys = {
     for (const it of this.items){
       const n = it.n, ud = it.g.userData;
       if (n.t === 'wheel' && ud.wheel && powerSys.activeSrc.has(n.id))
-        ud.wheel.rotation.z -= dt * 1.4;
+        ud.wheel.rotation.z -= dt * millSys.spin(n);
       if (n.t === 'crank' && ud.handle && (n.wound || 0) > 0 && powerSys.activeSrc.has(n.id))
         ud.handle.rotation.y += dt * 5;
       if ((n.t === 'gen' || n.t === 'gen2') && ud.mouth && M){
@@ -8780,7 +8886,7 @@ const powerSys = {
           const n = pnodeSys.byId(+id.slice(1));
           if (!n) continue;
           if (n.t === 'crank' && (n.wound || 0) > 0){ c.w += 20; c.srcs.push(n); }
-          else if (n.t === 'wheel' && inWater(n.x, n.y + 0.6, n.z)){ c.w += 15; c.srcs.push(n); }
+          else if (n.t === 'wheel' && !seasonSys.winter && inWater(n.x, n.y + 0.6, n.z)){ c.w += millSys.watts(n); c.srcs.push(n); }
           else if (n.t === 'gen' && !n.broken && ((n.burn || 0) > 0 || (n.fuel && n.fuel.count > 0))){ c.w += 40; c.srcs.push(n); }
           else if (n.t === 'gen2' && !n.broken && ((n.burn || 0) > 0 || (n.fuel && n.fuel.count > 0))){ c.w += 100; c.srcs.push(n); }
           else if (n.t === 'acrank' && n.animal){ c.w += 10; c.srcs.push(n); }
@@ -11277,6 +11383,29 @@ const villageSys = {
   },
   // half-extent of a house along its door axis (old saves lack w/d)
   faceHalf(hrec){ return ((hrec.face[0] ? hrec.w : hrec.d) || 5.4) / 2; },
+  // a village by a river gets a plank footbridge over the nearest reach
+  footbridge(v, rec){
+    const g = game.gen; if (!g.riverAt) return null;
+    let best = null;
+    for (let a = 0; a < 16; a++) for (let r = 8; r <= 80; r += 3){
+      const x = v.x + Math.cos(a / 16 * Math.PI * 2) * r, z = v.z + Math.sin(a / 16 * Math.PI * 2) * r;
+      const R = g.riverAt(x, z);
+      if (R && R.d < R.w * 0.35 && R.w >= 2 && R.y > g.seaLevel && !R.fall && (!best || r < best.r))
+        best = { x, z, r, w: R.w, y: R.y, tx: R.tx, tz: R.tz };
+    }
+    if (!best) return null;
+    const nx = -best.tz, nz = best.tx, half = best.w * 1.35 + 1.6, rot = +Math.atan2(nz, nx).toFixed(3);
+    const y = best.y + 1.15;
+    const put = (x, yy, z, sx, sy, sz, mat) => {
+      const e = CORE.makeEdit(1, 1, +x.toFixed(2), +yy.toFixed(2), +z.toFixed(2), +sx.toFixed(2), mat, rot);
+      e.sy = +sy.toFixed(2); e.sz = +sz.toFixed(2); e.noLod = true;
+      applyEdit(e);
+    };
+    put(best.x, y, best.z, half * 2, 0.3, 1.9, CORE.MAT.PLANKS);                       // the deck, bank to bank
+    for (const sgn of [-1, 1]) put(best.x + best.tx * sgn * 0.85, y + 0.55, best.z + best.tz * sgn * 0.85, half * 2, 0.8, 0.14, CORE.MAT.PLANKS);   // rails
+    rec.bridge = { x: +best.x.toFixed(2), z: +best.z.toFixed(2), y: +y.toFixed(2) };
+    return rec.bridge;
+  },
   stamp(v, rec){
     const MAT = CORE.MAT;
     const E = (op, x, y, z, size, sy, mat) => {
@@ -11407,6 +11536,7 @@ const villageSys = {
       if (!rec.stamped){
         rec.stamped = true;
         this.stamp(v, rec);
+        this.footbridge(v, rec);
         toast('you found ' + rec.name + ' — a village');
         AudioSys.sfx('craft');
         markSave();
@@ -11481,10 +11611,11 @@ const EXPEDITION_PAGES = [
   `Day {D}. The first hall. Someone built this: a floor, pillars, a doorway at the far end with a lintel I could not have lifted. The bones by the door were laid out the way the ones on the hill were. They do not come to light. I sat a whole day with the torch burning and nothing came. They come to sound. I struck the wall once with the pick to hear the echo and heard them turn over in the second hall, all of them, like one thing. Whoever you are: work quietly, or do not work. Take the drill; it is the quiet one. The way on is the door. I am going to see.`,
 ];
 const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
+function riverNameOf(ck){ return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + ck) % RIVER_NAMES.length]; }
 function riverNameAt(x, z){
   const g = game.gen; if (!g || !g.riverAt) return null;
   const R = g.riverAt(x, z); if (!R || !R.c) return null;
-  return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + R.c) % RIVER_NAMES.length];
+  return riverNameOf(R.c);
 }
 const expeditionSys = {
   DAYS: [1, 2, 4, 5, 7, 8, 10, 11, 12],
@@ -12950,7 +13081,7 @@ const objectiveSys = {
     const tNow = performance.now();
     if (show && (!this._objsT || tNow - this._objsT > 250)){
       this._objsT = tNow;
-      this._objs = this.list().filter(o => !ledgerSys.hidden(o.id)).slice(0, 8);
+      this._objs = this.list().filter(o => !ledgerSys.hidden(o.id));
     }
     const objs = show ? (this._objs || []) : [];
     const seen = new Set();
@@ -13014,13 +13145,21 @@ const ledgerSys = {
     delete L.hidden[o.id];
     objectiveSys._objsT = 0; markSave();
   },
-  pin(x, z){
+  pin(x, z, name){
     const L = this.L();
     L.seq = (L.seq || 0) + 1;
     const p = { id: 'pin' + L.seq, n: L.seq, x: Math.round(x), z: Math.round(z) };
+    if (name && name.trim()) p.name = name.trim().slice(0, 24);
     L.pins.push(p);
     objectiveSys._objsT = 0; markSave();
     return p;
+  },
+  // a mark's name, or its number
+  label(p){ return p.name ? p.name.toUpperCase() : 'MARK ' + p.n; },
+  rename(p, name){
+    name = (name || '').trim().slice(0, 24);
+    if (name) p.name = name; else delete p.name;
+    objectiveSys._objsT = 0; markSave();
   },
   move(p, x, z){ p.x = Math.round(x); p.z = Math.round(z); objectiveSys._objsT = 0; markSave(); },
   // the nearest of your marks within r metres
@@ -13031,7 +13170,7 @@ const ledgerSys = {
   },
   list(out){
     for (const p of this.L().pins)
-      out.push({ id: p.id, x: p.x, z: p.z, label: 'MARK ' + p.n, pin: true, p, rec: { name: 'your mark' } });
+      out.push({ id: p.id, x: p.x, z: p.z, label: this.label(p), pin: true, p, rec: { name: 'your mark' } });
   },
 };
 
@@ -15954,6 +16093,9 @@ const roadSys = {
       EB(0, top + CORE.MINE_EPS + airH / 2, airH, ROAD_CUT_W, a1 - a0, 0, -airH / 2, (a0 + a1) / 2 - (i + 0.5) * seg0);
     }
     EB(1, (top + bottom) / 2, top - bottom, ROAD_W, segLen, MAT.BASALT, (top - bottom) / 2);                              // its top is
+    // a river under the road: the embankment opens for it, a metre of deck
+    // over a clear span, instead of damming the valley
+    this.bridge(L, i, top);
     // at either end: a painted strip along the slab's edge from where the
     // road arrives to the nearest avenue, so the highway joins the grid
     if (i === 0 || i === L.segs - 1) this.connect(L, i === 0 ? L.a : L.b, i === 0 ? [L.ux, L.uz] : [-L.ux, -L.uz]);
@@ -15985,6 +16127,34 @@ const roadSys = {
       pnodeSys.add('sign', px, top, pz, Math.atan2(L.ux, L.uz) + (toB ? 0 : Math.PI), {
         text: citySys.nameFor(dest.seed).slice(0, 16) + '\n' + (rest / 1000).toFixed(1) + ' km' });
     }
+  },
+  // the opening through an embankment where a river crosses under it
+  bridge(L, i, top){
+    const g = game.gen; if (!g.riverAt) return null;
+    const t0 = i / L.segs, t1 = (i + 1) / L.segs;
+    let best = null;
+    for (let k = 0; k <= 8; k++){
+      const tt = t0 + (t1 - t0) * k / 8, qx = L.sx + (L.ex - L.sx) * tt, qz = L.sz + (L.ez - L.sz) * tt;
+      const R = g.riverAt(qx, qz);
+      if (R && R.d < R.w * 1.1 && R.y < top - 1.6 && (!best || R.d < best.d)) best = { d: R.d, w: R.w, y: R.y, tx: R.tx, tz: R.tz, x: qx, z: qz };
+    }
+    if (!best) return null;
+    // walk across the flow to the channel's centre line
+    const nx = -best.tz, nz = best.tx;
+    for (let sgn = -1; sgn <= 1; sgn += 2) for (let m = 1; m <= best.w * 1.2; m += 1){
+      const R = g.riverAt(best.x + nx * sgn * m, best.z + nz * sgn * m);
+      if (R && R.d < best.d){ best = { d: R.d, w: R.w, y: R.y, tx: R.tx, tz: R.tz, x: best.x + nx * sgn * m, z: best.z + nz * sgn * m }; }
+      else break;
+    }
+    const cosA = Math.abs(best.tx * L.ux + best.tz * L.uz);
+    const thru = Math.min(34, (ROAD_W + 4) / Math.max(0.35, Math.sqrt(Math.max(0, 1 - cosA * cosA))));
+    const wide = best.w * 2.4 + 4;
+    const floor = best.y - (1.5 + 0.12 * best.w) - 0.6, ceil = top - 1.0;
+    if (ceil - floor < 2) return null;
+    const e = CORE.makeEdit(0, 1, +best.x.toFixed(2), +((floor + ceil) / 2).toFixed(2), +best.z.toFixed(2), +thru.toFixed(2), 0, +Math.atan2(best.tz, best.tx).toFixed(3));
+    e.sy = +(ceil - floor).toFixed(2); e.sz = +wide.toFixed(2); e.noLod = true;
+    applyEdit(e);
+    return e;
   },
   // the strip that joins a road end to the city's avenue grid (paint only)
   connect(L, c, dir){
@@ -17436,7 +17606,7 @@ function bindInput(){
           return;
         }
         if (pn.t === 'wheel'){
-          toast(inWater(pn.x, pn.y + 0.6, pn.z) ? 'water wheel: turning, ~15W' : 'water wheel: dry — place it IN water');
+          toast(millSys.say(pn));
           return;
         }
       }
@@ -17950,7 +18120,7 @@ function driveCar(dt){
   } else e.vy = (e.vy || 0) - 22 * dt;
   e.x += fx * e.speed * dt;
   e.z += fz * e.speed * dt;
-  if (afloat && game.gen.riverAt){
+  if (afloat && game.gen.riverAt && !seasonSys.winter){
     // a boat drifts with the river it floats on
     const RR = game.gen.riverAt(e.x, e.z);
     if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); e.x += RR.tx * f * dt; e.z += RR.tz * f * dt; }
@@ -18344,7 +18514,7 @@ function updatePlayer(dt){
   // dry caves under normal land stay dry (no blanket world water table)
   game.swim = !game.fly && inWater(game.pos.x, game.pos.y + playerHeight() * 0.45, game.pos.z);
   // wading a river: the current pushes at your legs
-  if (!game.fly && !game.swim && game.gen.riverAt && inWater(game.pos.x, game.pos.y + 0.35, game.pos.z)){
+  if (!game.fly && !game.swim && !seasonSys.winter && game.gen.riverAt && inWater(game.pos.x, game.pos.y + 0.35, game.pos.z)){
     const RR = game.gen.riverAt(game.pos.x, game.pos.z);
     if (RR && RR.d < RR.w){ const f = 0.9 * (1 - RR.d / RR.w); game.pos.x += RR.tx * f * dt; game.pos.z += RR.tz * f * dt; }
   }
@@ -18370,7 +18540,7 @@ function updatePlayer(dt){
     const sp = PLAYER.walk * 0.55;
     // a river carries you: strongest mid-channel, nothing at the banks
     let flx = 0, flz = 0;
-    const RR = game.gen.riverAt && game.gen.riverAt(game.pos.x, game.pos.z);
+    const RR = !seasonSys.winter && game.gen.riverAt && game.gen.riverAt(game.pos.x, game.pos.z);
     if (RR && RR.d < RR.w){ const f = 1.6 * (1 - RR.d / RR.w); flx = RR.tx * f; flz = RR.tz * f; }
     game.vel.x += (mx * sp + flx - game.vel.x) * Math.min(1, 8 * dt);
     game.vel.z += (mz * sp + flz - game.vel.z) * Math.min(1, 8 * dt);
@@ -20250,7 +20420,9 @@ function tryAction(dt, now){
       AudioSys.sfx('toggle');
     } else if (F.bit){
       const deep = game.gen.seaLevel != null && game.gen.height(F.x, F.z) < game.gen.seaLevel - 9;
-      const kind = CORE.fishFor(game.gen.archAt ? game.gen.archAt(F.x, F.z) : 0, deep);
+      const RR = game.gen.riverAt && game.gen.riverAt(F.x, F.z);
+      const river = !!(RR && RR.d < RR.w * 1.1 && game.gen.seaLevel != null && F.y > game.gen.seaLevel + 0.2);
+      const kind = CORE.fishFor(game.gen.archAt ? game.gen.archAt(F.x, F.z) : 0, deep, river, Math.random());
       giveItem({ kind: 'fish', fish: kind, count: 1 }, 1);
       toast('caught a ' + (CORE.FISH_NAME[kind] || 'fish') + '!');
       AudioSys.sfx('craft');
@@ -20933,7 +21105,8 @@ function itemIconURL(it){
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
     const FC = { perch: ['#8ab060', '#5d7f3c'], trout: ['#b08aa0', '#7a5a70'], catfish: ['#6a6a5a', '#44443a'], carp: ['#d8a040', '#a87020'],
-                 snapper: ['#e06050', '#a83a30'], eel: ['#f07030', '#b04010'], cod: ['#8aa0b8', '#5a7088'] };
+                 snapper: ['#e06050', '#a83a30'], eel: ['#f07030', '#b04010'], cod: ['#8aa0b8', '#5a7088'],
+                 grayling: ['#a8b8c8', '#6e7e90'], pike: ['#7a9a50', '#4e6a30'] };
     const cc = it.kind === 'cookedfish' ? ['#c89a5a', '#8a6237'] : (FC[it.fish] || FC.perch);
     c.fillStyle = cc[0]; c.fillRect(3, 6, 8, 4); c.fillRect(2, 7, 1, 2);
     c.fillStyle = cc[1]; c.fillRect(11, 5, 3, 2); c.fillRect(11, 9, 3, 2); c.fillRect(12, 7, 2, 2); c.fillRect(6, 5, 3, 1);
@@ -21700,6 +21873,23 @@ function buildMissionsUI(){
     b1.title = hid ? 'show the marker in the world again' : 'hide the marker in the world (the work stays)';
     b1.onmousedown = ev => ev.stopPropagation();
     b1.onclick = () => { ledgerSys.toggle(o.id); AudioSys.sfx('toggle'); buildMissionsUI(); };
+    if (o.pin){
+      const b3 = document.createElement('button');
+      b3.className = 'btn small'; b3.textContent = 'RENAME';
+      b3.onmousedown = ev => ev.stopPropagation();
+      b3.onclick = () => {
+        // the title becomes a field; enter or a click away keeps it
+        const inp = document.createElement('input');
+        inp.className = 'mapname'; inp.maxLength = 24; inp.value = o.p.name || ''; inp.placeholder = 'name it';
+        inp.onmousedown = ev => ev.stopPropagation();
+        let done = false;
+        const keep = () => { if (done) return; done = true; ledgerSys.rename(o.p, inp.value); buildMissionsUI(); };
+        inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') keep(); if (ev.key === 'Escape'){ done = true; buildMissionsUI(); } };
+        inp.onblur = keep;
+        t1.replaceWith(inp); inp.focus(); inp.select();
+      };
+      bt.appendChild(b3);
+    }
     const b2 = document.createElement('button');
     b2.className = 'btn small'; b2.textContent = 'REMOVE';
     b2.title = o.pin ? 'take the mark off the map' : o.hrec ? 'strike it off — ask ' + o.hrec.vname + ' again to take it back up' : o.contract ? 'hand the contract back to the board' : 'strike it off the ledger';
@@ -21860,7 +22050,7 @@ function catalogEntries(){
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
-  for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod']) out.push({ kind: 'fish', fish: f, count: 8 });
+  for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod', 'grayling', 'pike']) out.push({ kind: 'fish', fish: f, count: 8 });
   out.push({ kind: 'coral', count: 16 }); out.push({ kind: 'kelp', count: 16 });
   return out;
 }
@@ -23294,10 +23484,14 @@ function mapCellColor(cx, cz){
   const g = game.gen;
   const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
   const h = g.height(x, z);
-  const wyM = g.waterYAt ? g.waterYAt(x, z, h) : (g.wetAt ? (g.wetAt(x, z, h) ? g.seaLevel : null) : (g.seaLevel != null && h < g.seaLevel ? g.seaLevel : null));
+  let wyM = g.waterYAt ? g.waterYAt(x, z, h) : (g.wetAt ? (g.wetAt(x, z, h) ? g.seaLevel : null) : (g.seaLevel != null && h < g.seaLevel ? g.seaLevel : null));
+  // a river narrower than a map cell still runs through it: paint the cell
+  let river = false;
+  if (wyM == null && g.riverAt){ const R = g.riverAt(x, z); if (R && R.d < R.w * 1.1 + MAP_CELL * 0.5 && R.y > g.seaLevel){ wyM = R.y; river = true; } }
   const wet = wyM != null;
   let r, gc, b;
-  if (wet){
+  if (river){ r = 52; gc = 108; b = 168; }
+  else if (wet){
     const deep = Math.min(1, (wyM - h) / 12);
     r = 46 - 20 * deep; gc = 96 - 34 * deep; b = 150 - 40 * deep;
   } else {
@@ -23349,6 +23543,33 @@ function drawMap(){
     if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) return;
     c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
   };
+  // the rivers by name, once each, on the middle of their explored reach
+  if (game.gen && game.gen.riverAt){
+    const rc = game.mapRiverCache || (game.mapRiverCache = new Map());
+    const groups = new Map();
+    for (const key of game.explored || []){
+      const i = key.indexOf(',');
+      const cx = +key.slice(0, i), cz = +key.slice(i + 1);
+      if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
+      let ck = rc.get(key);
+      if (ck === undefined){
+        const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
+        const R = game.gen.riverAt(x, z);
+        ck = R && R.d < R.w * 1.1 + MAP_CELL * 0.5 && R.y > game.gen.seaLevel ? R.c : '';
+        rc.set(key, ck);
+      }
+      if (!ck) continue;
+      let G = groups.get(ck); if (!G){ G = []; groups.set(ck, G); }
+      G.push([toSX(cx), toSY(cz)]);
+    }
+    c.font = '11px monospace'; c.fillStyle = '#a9d4ff';
+    for (const [ck, pts] of groups){
+      if (pts.length < 5) continue;
+      pts.sort((a, b) => a[0] - b[0]);
+      const m = pts[pts.length >> 1];
+      c.fillText(riverNameOf(ck), m[0] + 6, m[1] - 4);
+    }
+  }
   // objectives as diamonds, your own marks in green with their number;
   // untracked ones fade
   const dia = (x, z, col, s, txt) => {
@@ -23362,7 +23583,7 @@ function drawMap(){
   for (const o of objectiveSys.list()){
     const hid = ledgerSys.hidden(o.id);
     c.globalAlpha = hid ? 0.4 : 1;
-    if (o.pin) dia(o.x, o.z, '#7dff9b', 6, String(o.p.n));
+    if (o.pin) dia(o.x, o.z, '#7dff9b', 6, o.p.name ? o.label : String(o.p.n));
     else dia(o.x, o.z, '#ffd75e', 5, V.zoom >= 2 ? o.label : '');
   }
   c.globalAlpha = 1;
@@ -23401,23 +23622,35 @@ const mapMenu = {
     const near = ledgerSys.pinAt(w.x, w.z, 10 / (5 * V.zoom) * MAP_CELL);
     const lab = document.createElement('div');
     lab.className = 'mlabel';
-    lab.textContent = near ? 'MARK ' + near.n + ' · ' + near.x + ', ' + near.z : Math.round(w.x) + ', ' + Math.round(w.z);
+    lab.textContent = near ? ledgerSys.label(near) + ' · ' + near.x + ', ' + near.z : Math.round(w.x) + ', ' + Math.round(w.z);
     el.appendChild(lab);
+    // a name for the mark (or a new name for this one)
+    const inp = document.createElement('input');
+    inp.className = 'mapname'; inp.maxLength = 24; inp.placeholder = near ? 'rename it' : 'name it (optional)';
+    if (near && near.name) inp.value = near.name;
+    inp.onmousedown = ev => ev.stopPropagation();
+    el.appendChild(inp);
     const add = (txt, fn) => {
       const b = document.createElement('button');
       b.className = 'btn'; b.textContent = txt;
       b.onmousedown = ev => ev.stopPropagation();
       b.onclick = ev => { ev.stopPropagation(); fn(); AudioSys.sfx('toggle'); mapMenu.close(); drawMap(); };
       el.appendChild(b);
+      return b;
     };
+    let first;
     if (near){
-      add('REMOVE MARK ' + near.n, () => ledgerSys.remove({ id: near.id, pin: true }));
-      add((ledgerSys.hidden(near.id) ? 'TRACK' : 'UNTRACK') + ' MARK ' + near.n, () => ledgerSys.toggle(near.id));
+      const nm = ledgerSys.label(near);
+      first = add('RENAME', () => ledgerSys.rename(near, inp.value));
+      add('REMOVE ' + nm, () => ledgerSys.remove({ id: near.id, pin: true }));
+      add((ledgerSys.hidden(near.id) ? 'TRACK ' : 'UNTRACK ') + nm, () => ledgerSys.toggle(near.id));
     } else {
-      add('SET A MARK HERE', () => { const p = ledgerSys.pin(w.x, w.z); toast('MARK ' + p.n + ' set — it is in your missions tab'); });
-      for (const p of ledgerSys.L().pins) add('MOVE MARK ' + p.n + ' HERE', () => ledgerSys.move(p, w.x, w.z));
+      first = add('SET A MARK HERE', () => { const p = ledgerSys.pin(w.x, w.z, inp.value); toast(ledgerSys.label(p) + ' set — it is in your missions tab'); });
+      for (const p of ledgerSys.L().pins) add('MOVE ' + ledgerSys.label(p) + ' HERE', () => ledgerSys.move(p, w.x, w.z));
     }
+    inp.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Enter') first.click(); if (ev.key === 'Escape') mapMenu.close(); };
     add('CANCEL', () => {});
+    setTimeout(() => inp.focus(), 30);
     // keep the menu inside the canvas
     const cv = $('mapcanvas');
     el.classList.remove('hidden');
@@ -23840,6 +24073,7 @@ function startWorld(id){
   for (const st of game.stoves) if (st.id == null) st.id = game.pSeq++;
   game.explored = new Set(data.explored || []);
   game.mapColCache = new Map();
+  game.mapRiverCache = new Map();
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.decorRemovedSet = new Set(data.removedDecor || []);
   game.decorPlaced = data.placedDecor || [];
@@ -25247,6 +25481,7 @@ function frame(now){
   if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
   siegeSys.tick(dt);
   roadSys.tick(dt);
+  fallsSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
@@ -25456,7 +25691,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
