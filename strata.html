@@ -924,6 +924,15 @@ function makeGen(seed){
   // a segment that drops this much in one step is a waterfall: the surface
   // holds the upper height to the segment's midpoint and steps down there
   const RIV_FALL = 3.0;
+  // a fall's surface along its segment: flat, then a dip over the brink
+  // (up to a metre and a half, a quarter of the drop), then the drop
+  // itself at the midpoint
+  function rivFallY(y0, y1, t){
+    if (t >= 0.5) return y1;
+    if (t < 0.38) return y0;
+    const u = (t - 0.38) / 0.12;
+    return y0 - Math.min(1.5, (y0 - y1) * 0.25) * u * u;
+  }
   const rivCells = new Map(), rivBuckets = new Map(), rivRawCache = new Map();
   let rivReady = '';
   // the raw walk of a cell's river: a pure function of the cell, so every
@@ -1045,7 +1054,7 @@ function makeGen(seed){
         const dx = s.x1 - s.x0, dz = s.z1 - s.z0, l2 = dx * dx + dz * dz || 1;
         t = ((x - s.x0) * dx + (z - s.z0) * dz) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t;
         d = Math.hypot(x - (s.x0 + dx * t), z - (s.z0 + dz * t)) - (s.w0 + (s.w1 - s.w0) * t);
-        yy = s.y0 - s.y1 >= RIV_FALL ? (t < 0.5 ? s.y0 : s.y1) : s.y0 + (s.y1 - s.y0) * t;
+        yy = s.y0 - s.y1 >= RIV_FALL ? rivFallY(s.y0, s.y1, t) : s.y0 + (s.y1 - s.y0) * t;
       }
       if (d < 0){                                   // inside this channel: the lowest water wins
         if (!inside || yy < by){ inside = true; bd = d; best = s; bt = t; by = yy; }
@@ -1060,7 +1069,7 @@ function makeGen(seed){
     else {
       const drop = best.y0 - best.y1;
       RIV_OUT.fall = drop >= RIV_FALL ? drop : 0; RIV_OUT.ft = bt;
-      RIV_OUT.y = RIV_OUT.fall ? (bt < 0.5 ? best.y0 : best.y1) : best.y0 + (best.y1 - best.y0) * bt;
+      RIV_OUT.y = RIV_OUT.fall ? rivFallY(best.y0, best.y1, bt) : best.y0 + (best.y1 - best.y0) * bt;
       const dx = best.x1 - best.x0, dz = best.z1 - best.z0, l = Math.hypot(dx, dz) || 1;
       RIV_OUT.tx = dx / l; RIV_OUT.tz = dz / l;
     }
@@ -4298,6 +4307,7 @@ class Terrain {
       if (!want.has(key)){
         if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
         if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
+      if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
         this.chunks.delete(key);
         this.dirty.delete(key);
       }
@@ -4507,24 +4517,31 @@ class Terrain {
     const sea = this.gen.seaLevel, M = CORE.CHUNK_M;
     const seaCy = sea != null ? Math.floor(sea / M) : null;
     if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
+    if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
     if (!game.waterMat) return;
     // disturbed water draws from its cells -- where the cells are actually
     // meshed. Beyond the cell-mesh radius the still lake is the truth again
     if (waterSys.cells.has(CK(cx, cy, cz)) && waterSys.inMeshRange(cx, cz)) return;
     const x0 = cx * M, z0 = cz * M;
     const pos = [], uv = [], dep = [], flow = [];
+    // a waterfall's sheet goes in a mesh of its own: opaque and writing
+    // depth, so the flat reach behind it never shows through (transparent
+    // quads in one mesh draw in array order, not by distance)
+    const posF = [], uvF = [], depF = [], flowF = [];
     // a quad's corners each sit at the water's height there, so a sloped
     // river is one surface and not a stair of flat squares
     const quad = (xa, za, xb, zb, wy, d, fx, fz, ya, yb, yc, yd) => {
       if (ya == null){ ya = yb = yc = yd = wy; }
-      pos.push(xa, ya, za, xa, yb, zb, xb, yc, zb,
-               xa, ya, za, xb, yc, zb, xb, yd, za);
-      uv.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
-              xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
+      const sheet = d != null && d < -0.5;
+      const P = sheet ? posF : pos, U = sheet ? uvF : uv, D = sheet ? depF : dep, FL = sheet ? flowF : flow;
+      P.push(xa, ya, za, xa, yb, zb, xb, yc, zb,
+             xa, ya, za, xb, yc, zb, xb, yd, za);
+      U.push(xa / 4, za / 4, xa / 4, zb / 4, xb / 4, zb / 4,
+             xa / 4, za / 4, xb / 4, zb / 4, xb / 4, za / 4);
       const dd = d == null ? 0.8 : d;
-      dep.push(dd, dd, dd, dd, dd, dd);
+      D.push(dd, dd, dd, dd, dd, dd);
       fx = fx || 0; fz = fz || 0;
-      for (let q = 0; q < 6; q++) flow.push(fx, fz);
+      for (let q = 0; q < 6; q++) FL.push(fx, fz);
     };
     const W = this.waterInfo(cx, cz);
     if (W.bands.has(cy)){
@@ -4537,7 +4554,12 @@ class Terrain {
           if (w > sea + 1e-6 && this.gen.riverAt){
             const R = this.gen.riverAt(x0 + i + 0.5, z0 + j + 0.5);
             if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
-            const cy = (x, z) => { const Q = this.gen.riverAt(x, z); return Q ? Math.max(sea, Q.y) : w; };
+            // at a fall the water's step is read 0.7 m upstream of each
+            // corner, so the sheet hangs 0.7 m out from the ground's cliff
+            // (which the mesher lays within half a metre of the step) and
+            // rock never pokes through it
+            const sx = R && R.fall ? R.tx * 0.7 : 0, sz = R && R.fall ? R.tz * 0.7 : 0;
+            const cy = (x, z) => { const Q = this.gen.riverAt(x - sx, z - sz); return Q ? Math.max(sea, Q.y) : w; };
             ya = cy(x0 + i, z0 + j); yb = cy(x0 + i, z0 + j + 1); yc = cy(x0 + i + 1, z0 + j + 1); yd = cy(x0 + i + 1, z0 + j);
           }
           // a quad across a fall's lip stands nearly upright: it is drawn as
@@ -4568,24 +4590,29 @@ class Terrain {
         }
       }
     }
-    if (!pos.length) return;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uv), 2));
-    g.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(dep), 1));
-    g.setAttribute('aFlow', new THREE.BufferAttribute(new Float32Array(flow), 2));
-    g.computeBoundingSphere();
-    const mesh = new THREE.Mesh(g, game.waterMat);
-    mesh.userData.noShadow = true;
-    mesh.renderOrder = 3;
-    this.scene.add(mesh);
-    ch.water = mesh;
+    if (!pos.length && !posF.length) return;
+    const build = (P, U, D, FL, mat, order) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(U), 2));
+      g.setAttribute('aDep', new THREE.BufferAttribute(new Float32Array(D), 1));
+      g.setAttribute('aFlow', new THREE.BufferAttribute(new Float32Array(FL), 2));
+      g.computeBoundingSphere();
+      const mesh = new THREE.Mesh(g, mat);
+      mesh.userData.noShadow = true;
+      mesh.renderOrder = order;
+      this.scene.add(mesh);
+      return mesh;
+    };
+    ch.water = build(pos, uv, dep, flow, game.waterMat, 3);
+    if (posF.length) ch.waterFall = build(posF, uvF, depF, flowF, game.waterFallMat || game.waterMat, 2);
   }
 
   disposeAll(){
     for (const [, ch] of this.chunks){
       if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
       if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
+      if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
     }
     this.chunks.clear(); this.dirty.clear();
   }
@@ -4806,6 +4833,7 @@ const waterSys = {
     this.active.add(key); this.dirtyMesh.add(key);
     const ch = game.terrain.chunks.get(key);
     if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
+    if (ch && ch.waterFall){ game.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
     return a;
   },
   // distance from a true source, for a cell's water; untouched chunks are
@@ -4954,6 +4982,7 @@ const waterSys = {
     // the cells are the water here: the still surface must not double it
     const chS = game.terrain && game.terrain.chunks.get(key);
     if (chS && chS.water){ game.scene.remove(chS.water); chS.water.geometry.dispose(); chS.water = null; }
+    if (chS && chS.waterFall){ game.scene.remove(chS.waterFall); chS.waterFall.geometry.dispose(); chS.waterFall = null; }
     const pos = [], uv = [], dep = [], flow = [];
     const quadH = (xa, za, xb, zb, y, d, fx, fz) => {
       pos.push(xa, y, za, xa, y, zb, xb, y, zb, xa, y, za, xb, y, zb, xb, y, za);
@@ -5258,7 +5287,7 @@ function buildScene(){
   // terrain chunks (Terrain.remesh), so water only ever appears where
   // meshed ground actually dips below sea level: no phantom ocean beyond
   // render distance, no blanket table under the whole world
-  game.waterMat = null;
+  game.waterMat = null; game.waterFallMat = null;
   if (game.gen.seaLevel != null){
     const wTex = PixTex.make('water', (c, w, h, rng) => {
       pxSpeckle(c, rng, '#2e6fa3', '#27618f', '#3a80b8', 30);
@@ -5300,6 +5329,11 @@ function buildScene(){
         }`,
     });
     game.waterMat.map = wt;      // farTerrain reads .map for its own surface
+    game.waterFallMat = new THREE.ShaderMaterial({
+      transparent: false, depthWrite: true, side: THREE.DoubleSide,
+      uniforms: { uTex: { value: wt }, uTime: game.uTime },
+      vertexShader: game.waterMat.vertexShader, fragmentShader: game.waterMat.fragmentShader,
+    });
   }
   Particles.init(scene);
   Embers.init(scene);

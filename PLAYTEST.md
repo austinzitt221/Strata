@@ -26,10 +26,12 @@ their lists are retired; what came of them is Build 30.
       water.
 - [ ] Set the season to winter (creative slider in the inventory): the
       fall goes quiet, the wheel says "iced in", the river holds you.
-- Feedback I want: does a fall read as a place worth building beside?
-  Is 60 W mid-river the right ceiling for a wheel (a generator burning
-  coal is 40)? Any river valley where the ledge looks wrong (a cliff
-  across a flat bit)?
+- Played 2026-09-11: a fall is a place worth building beside, 60 W is
+  right, everything else perfect. Three looks wrong with the sheet
+  (the reach showing through up close, a flat wall to the lip, rock
+  poking through) fixed in 37.1. Next time you pass a fall: the brink
+  should round over, nothing should show through the sheet from any
+  distance, and no rock should cut it.
 
 ## Build 36 — THE LEDGER
 - [ ] Open the map (M). Right-drag it around; scroll to zoom in on a

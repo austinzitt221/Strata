@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 37.1 — THE SHEET (2026-09-11)
+
+Austin's playtest of RIVERS II: the falls are right and the mill's
+sixty watts is right; three things wrong with how a fall looked, with
+screenshots. Verified headlessly (the build-37 suite re-run against
+the new sheet mesh, plus a 37.1 suite that reads the surface across
+the brink, counts the sheet quads in their own mesh, probes each for
+rock and for its side of the lip, and screenshots the fall from the
+pool).
+
+- **The reach showed through the sheet up close.** The sheet and the
+  flat reach behind it were quads in one transparent mesh, drawn in
+  array order, so the reach blended over the sheet whenever its quads
+  came later; from far away the chunk order hid it. The sheet is now a
+  mesh of its own, opaque and writing depth, so nothing behind it
+  shows through at any distance.
+- **A flat wall of water to the lip.** The surface ran level to the
+  brink and dropped. It now dips over the last two and a half metres
+  before the drop, up to a metre and a half (a quarter of the drop),
+  and the bed follows, so the brink is rounded and the sheet begins
+  below the reach rather than level with it.
+- **Rock poking through the sheet.** The water's step and the ground's
+  cliff were on the same line, and the mesher lays a cliff within half
+  a metre of it, so the sheet cut through the rock. The step is read
+  0.7 m upstream of each corner at a fall, which hangs the sheet 0.7 m
+  out from the cliff over the pool.
+
 ## Build 37 — RIVERS II (2026-09-10)
 
 The rivers of Build 27 get the things a river has. Verified headlessly
