@@ -338,7 +338,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 <div id="stationscreen" class="screen hidden dim">
   <div class="panel" style="min-width:420px;">
     <h2 id="stationtitle">STATION</h2>
-    <div class="sub" style="margin-bottom:8px;">tickets on the public line · your own rails that reach the platform · E to close</div>
+    <div class="sub" style="margin-bottom:8px;">tickets for the line · board a car while the train stands · your own rails that reach the platform · E to close</div>
     <div id="stationlist"></div>
   </div>
 </div>
@@ -2821,6 +2821,7 @@ function stackableWith(A, B){
   if (!A || !B || A.kind !== B.kind) return false;
   if (A.kind === 'mat') return A.mat === B.mat;
   if (A.kind === 'fish') return A.fish === B.fish;
+  if (A.kind === 'ticket') return A.link === B.link;
   return STACKABLE_KINDS.includes(A.kind);
 }
 
@@ -14465,10 +14466,13 @@ const stationSys = {
     }
     for (const lk of links){
       const row = document.createElement('div'); row.className = 'craftrow';
-      const nm = document.createElement('div'); nm.className = 'cname'; nm.textContent = '→ ' + lk.name + ' · ' + (lk.L.len / 1000).toFixed(1) + ' km';
+      const R = lineSys.route(lk.L), w = lineSys.wait(R, lk.fromA ? 'a' : 'b', lineSys.clock());
+      const have = lineSys.ticketFor(lk.L) >= 0;
+      const nm = document.createElement('div'); nm.className = 'cname';
+      nm.textContent = 'ticket → ' + lk.name + ' · ' + (lk.L.len / 1000).toFixed(1) + ' km · ' + (w <= 0 ? 'train standing now' : 'next train in ' + Math.ceil(w) + 's') + (have ? ' · you hold one' : '');
       const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = lk.fare + 'c'; cost.style.color = coins >= lk.fare ? '#8bff9e' : '#ff7a5c';
       row.appendChild(nm); row.appendChild(cost);
-      row.addEventListener('click', () => this.ride(rec, lk));
+      row.addEventListener('click', () => this.buy(rec, lk));
       list.appendChild(row);
     }
     // your own rails at the platform
@@ -14491,30 +14495,16 @@ const stationSys = {
     }
     show('stationscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
   },
-  ride(rec, lk){
+  // a ticket for the line: board the train while it stands at the platform
+  buy(rec, lk){
     if (CORE.countItem(game.slots, 'coin') < lk.fare){ toast('not enough coins for the fare'); AudioSys.sfx('deny'); return; }
     CORE.consumeItem(game.slots, 'coin', lk.fare);
-    const L = lk.L, from = rec.station || citySys.stationPos(lk.fromA ? L.a : L.b, rec);
-    const orec = (game.cities || {})['c' + lk.other.key];
-    const to = orec && orec.station ? orec.station : citySys.stationPos(lk.other, orec);
-    // the line: platform -> the road's near end -> along its profile -> the far end -> the far platform
-    const pts = [[from.x, from.y, from.z]];
-    const road = [];
-    for (let i = 0; i <= L.segs; i++){
-      const t = i / L.segs;
-      road.push([L.sx + (L.ex - L.sx) * t, L.prof[i] + 0.4, L.sz + (L.ez - L.sz) * t]);
-    }
-    if (!lk.fromA) road.reverse();
-    // a lift up to the road's level at the edge of the slab, then the run
-    pts.push([road[0][0], from.y, road[0][2]]);
-    for (const q of road) pts.push(q);
-    pts.push([road[road.length - 1][0], to.y, road[road.length - 1][2]]);
-    pts.push([to.x, to.y, to.z]);
-    const line = { id: null, pub: true, pts, dest: lk.name };
-    closeOverlay(); game.ui = 'none'; requestLock();
-    railSys.board(line, 0);
-    toast('ticket to ' + lk.name + ' · ' + lk.fare + 'c — the tram rolls');
+    giveItem({ kind: 'ticket', link: lk.L.key, to: lk.name, from: rec.name || 'the city', count: 1 }, 1);
+    const R = lineSys.route(lk.L), w = lineSys.wait(R, lk.fromA ? 'a' : 'b', lineSys.clock());
+    toast('ticket to ' + lk.name + ' · ' + lk.fare + 'c — ' + (w <= 0 ? 'the train is standing: right click a car' : 'next train in ' + Math.ceil(w) + 's'));
+    AudioSys.sfx('craft');
     refreshHotbar(); markSave();
+    this.open(game.activeStation);
   },
 };
 // ---------- city sieges ----------
@@ -16181,7 +16171,7 @@ const roadSys = {
       else break;
     }
     const cosA = Math.abs(best.tx * L.ux + best.tz * L.uz);
-    const thru = Math.min(34, (ROAD_W + 4) / Math.max(0.35, Math.sqrt(Math.max(0, 1 - cosA * cosA))));
+    const thru = Math.min(40, (ROAD_W + 12) / Math.max(0.35, Math.sqrt(Math.max(0, 1 - cosA * cosA))));
     const wide = best.w * 2.4 + 4;
     const floor = best.y - (1.5 + 0.12 * best.w) - 0.6, ceil = top - 1.0;
     if (ceil - floor < 2) return null;
@@ -16236,7 +16226,27 @@ const roadSys = {
         const n0 = game.edits.length;
         this.stampSeg(L, i);
         farShapeSys.tagRange(n0);
-        rec.done.push(i); any = true;
+        rec.done.push(i); done.add(i); any = true;
+      }
+      // the railway beside every laid segment (old worlds catch up here),
+      // between the city approaches
+      const lined = new Set(rec.line || (rec.line = []));
+      const RA = lineSys.approach(L.a, L, true), RB = lineSys.approach(L.b, L, false);
+      for (let i = RA.k; i < L.segs - RB.k; i++){
+        if (!done.has(i) || lined.has(i)) continue;
+        const t = (i + 0.5) / L.segs;
+        const mx = L.sx + (L.ex - L.sx) * t, mz = L.sz + (L.ez - L.sz) * t;
+        if (Math.hypot(mx - game.pos.x, mz - game.pos.z) > 700) continue;
+        lineSys.trackSeg(L, i);
+        rec.line.push(i); any = true;
+      }
+      // the approach at each end, once its city stands
+      for (const atA of [true, false]){
+        const c = atA ? L.a : L.b;
+        const crec = (game.cities || {})['c' + c.key];
+        if (!crec || !crec.stamped || (crec.lineEnds && crec.lineEnds[L.key])) continue;
+        if (Math.hypot(c.x - game.pos.x, c.z - game.pos.z) > 700) continue;
+        if (lineSys.stampApproach(c, L, atA)) any = true;
       }
       if (any) markSave();
     }
@@ -16264,6 +16274,338 @@ const roadSys = {
       if (Math.abs(y - ry) < 3) return true;
     }
     return false;
+  },
+};
+
+// ---------- THE LINE: the public railway ----------
+// Every highway carries a railway on its right-hand shoulder (a to b). At
+// each city the line leaves the road four segments out, drops into a
+// tunnel under the slab and surfaces along the station platform on the
+// south edge. One train per link runs a timetable off the world clock:
+// forty-five seconds standing at each platform, then the run at 24 m/s.
+// Tickets from the kiosk; board a car while the train stands.
+const LINE_OFF = 6.6, LINE_SPD = 24, LINE_DWELL = 45, LINE_CAR = 9.5, LINE_CARS = 3, LINE_DEPTH = 8, LINE_SKIP = 4;
+const lineSys = {
+  routes: new Map(), tracks: new Map(), trains: new Map(), scanT: 9, mats: null,
+  clock(){ return ((game.day || 0) + (game.timeOfDay || 0)) * DAY_CYCLE; },
+  // the track along a station: south of the platform, rails 0.75 under its top
+  platform(c, rec){ const sp = citySys.stationPos(c, rec); return { x: sp.x, y: sp.y - 0.75, z: sp.z + 4.9 }; },
+  // the line's own points at one end, platform to road: the run along the
+  // platform, the drop, the tunnel under the slab, the climb to the road
+  approach(c, L, atA){
+    const rec = (game.cities || {})['c' + c.key];
+    const P = this.platform(c, rec);
+    const S = atA ? [L.sx, L.sz] : [L.ex, L.ez];
+    const u = atA ? [L.ux, L.uz] : [-L.ux, -L.uz];
+    const rx = L.uz, rz = -L.ux;
+    const roadY = atA ? L.prof[0] : L.prof[L.segs];
+    const k = Math.max(1, Math.min(LINE_SKIP, Math.floor(L.segs / 2) - 1));
+    const seg0 = L.len / L.segs;
+    const U = [S[0] + u[0] * seg0 * k + rx * LINE_OFF, (atA ? L.prof[k] : L.prof[L.segs - k]) - 0.05, S[1] + u[1] * seg0 * k + rz * LINE_OFF];
+    const Q = [S[0] + u[0] * 30 + rx * LINE_OFF, roadY - LINE_DEPTH, S[1] + u[1] * 30 + rz * LINE_OFF];
+    const sgn = Q[0] >= P.x ? 1 : -1;
+    const P0 = [P.x - sgn * 22, P.y, P.z], P1 = [P.x + sgn * 22, P.y, P.z];
+    const D1 = [P.x + sgn * 70, P.y - LINE_DEPTH, P.z];
+    return { pts: [P0, P1, D1, Q, U], k, P, sgn };
+  },
+  // the whole line of a link, platform A to platform B, corners eased
+  route(L){
+    let R = this.routes.get(L.key);
+    if (R) return R;
+    const A = this.approach(L.a, L, true), B = this.approach(L.b, L, false);
+    const rx = L.uz, rz = -L.ux;
+    const raw = A.pts.slice();
+    for (let i = A.k + 1; i <= L.segs - B.k - 1; i++){
+      const t = i / L.segs;
+      raw.push([L.sx + (L.ex - L.sx) * t + rx * LINE_OFF, L.prof[i] - 0.05, L.sz + (L.ez - L.sz) * t + rz * LINE_OFF]);
+    }
+    for (const p of B.pts.slice().reverse()) raw.push(p);
+    const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    const lerp = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+    const pts = [raw[0]];
+    for (let i = 1; i + 1 < raw.length; i++){
+      const a = raw[i - 1], b = raw[i], c = raw[i + 1];
+      const la = dist(a, b), lc = dist(b, c);
+      const cut = Math.min(6, la * 0.4, lc * 0.4);
+      if (cut < 0.5){ pts.push(b); continue; }
+      pts.push(lerp(b, a, cut / la)); pts.push(lerp(b, c, cut / lc));
+    }
+    pts.push(raw[raw.length - 1]);
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + dist(pts[i - 1], pts[i]));
+    const total = cum[cum.length - 1];
+    R = { key: L.key, L, pts, cum, total, A, B, sMin: LINE_CARS * LINE_CAR + 2, sMax: total - 2 };
+    this.routes.set(L.key, R);
+    return R;
+  },
+  // a point on the line at distance s from platform A, and the way it runs
+  sample(R, s){
+    const pts = R.pts, cum = R.cum;
+    s = Math.max(0, Math.min(R.total, s));
+    let lo = 0, hi = pts.length - 2;
+    while (lo < hi){ const m = (lo + hi + 1) >> 1; if (cum[m] <= s) lo = m; else hi = m - 1; }
+    const a = pts[lo], b = pts[lo + 1], l = cum[lo + 1] - cum[lo] || 1, f = (s - cum[lo]) / l;
+    return { x: a[0] + (b[0] - a[0]) * f, y: a[1] + (b[1] - a[1]) * f, z: a[2] + (b[2] - a[2]) * f,
+             dx: (b[0] - a[0]) / l, dy: (b[1] - a[1]) / l, dz: (b[2] - a[2]) / l };
+  },
+  // the timetable: where the locomotive is at world second T
+  state(R, T){
+    const travel = (R.sMax - R.sMin) / LINE_SPD, period = 2 * (LINE_DWELL + travel);
+    const phase = ((T % period) + period) % period;
+    if (phase < LINE_DWELL) return { s: R.sMin, dir: 1, stop: 'a', left: LINE_DWELL - phase, period };
+    let p = phase - LINE_DWELL;
+    if (p < travel) return { s: R.sMin + p * LINE_SPD, dir: 1, stop: null, period };
+    p -= travel;
+    if (p < LINE_DWELL) return { s: R.sMax, dir: -1, stop: 'b', left: LINE_DWELL - p, period };
+    p -= LINE_DWELL;
+    return { s: R.sMax - p * LINE_SPD, dir: -1, stop: null, period };
+  },
+  // seconds until a train stands at this end (0 while one does)
+  wait(R, end, T){
+    const st = this.state(R, T);
+    if (st.stop === end) return 0;
+    const travel = (R.sMax - R.sMin) / LINE_SPD, period = st.period;
+    const phase = ((T % period) + period) % period;
+    const at = end === 'a' ? 0 : LINE_DWELL + travel;         // when its dwell begins in the cycle
+    return ((at - phase) % period + period) % period;
+  },
+  // ---- the edits: a cut and a bed along one 3D segment ----
+  cutBed(a, b, wide){
+    const MAT = CORE.MAT;
+    const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+    const lh = Math.hypot(dx, dz) || 0.001, len = Math.hypot(lh, dy);
+    const ux = dx / lh, uz = dz / lh;
+    const yaw = +Math.atan2(-ux, uz).toFixed(4), grade = Math.atan2(dy, lh);
+    const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, mz = (a[2] + b[2]) / 2;
+    const put = (op, cy, sy, sx, mat, faceY) => {
+      const shift = faceY * Math.sin(grade);
+      const e = CORE.makeEdit(op, 1, +(mx + ux * shift).toFixed(2), +cy.toFixed(2), +(mz + uz * shift).toFixed(2), +sx.toFixed(2), mat || 0, yaw);
+      e.sy = +sy.toFixed(2); e.sz = +(len + 0.6).toFixed(2); e.noLod = true;
+      if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);
+      applyEdit(e);
+      return e;
+    };
+    put(0, my - 0.3 + 2.4, 4.8, wide || 4.2, 0, -2.4);          // the bore: its floor 0.3 under the rails
+    put(1, my - 0.3 - 1.5, 3.0, 3.0, MAT.BASALT, 1.5);           // the bed under them
+  },
+  // the track beside one road segment: a cut where the ground rises into
+  // it, and its own embankment down to the road's bottom
+  trackSeg(L, i){
+    const MAT = CORE.MAT;
+    const t0 = i / L.segs, t1 = (i + 1) / L.segs;
+    const mx = L.sx + (L.ex - L.sx) * (t0 + t1) / 2, mz = L.sz + (L.ez - L.sz) * (t0 + t1) / 2;
+    const y0 = L.prof[i], y1 = L.prof[i + 1];
+    const top = (y0 + y1) / 2 + 0.25;
+    const segLen = L.len / L.segs + 0.6;
+    const hr = game.gen.heightRange(mx - 15, mz - 15, mx + 15, mz + 15);
+    const bottom = Math.max(top - 90, Math.min(hr[0], top) - 2.5);
+    const riseNear = hr[1] > top - 1.5;
+    const grade = Math.atan2(y1 - y0, L.len / L.segs);
+    const rx = L.uz, rz = -L.ux;
+    const box = (op, y, sy, sx, mat, faceY) => {
+      const shift = faceY * Math.sin(grade);
+      const e = CORE.makeEdit(op, 1, +(mx + L.ux * shift + rx * LINE_OFF).toFixed(2), +y.toFixed(2), +(mz + L.uz * shift + rz * LINE_OFF).toFixed(2), sx, mat || 0, L.yaw);
+      e.sy = +sy.toFixed(2); e.sz = +segLen.toFixed(2); e.noLod = true;
+      if (Math.abs(grade) > 0.005) e.rx = +(-grade).toFixed(4);
+      applyEdit(e);
+    };
+    if (riseNear) box(0, top - 0.3 + 2.4, 4.8, 4.4, 0, -2.4);
+    box(1, (top - 0.3 + bottom) / 2, top - 0.3 - bottom, 3.2, MAT.BASALT, (top - 0.3 - bottom) / 2);
+  },
+  // the approach at one city, once: bore and bed along every piece, and
+  // torches down the tunnel
+  stampApproach(c, L, atA){
+    const rec = (game.cities || {})['c' + c.key];
+    if (!rec || !rec.stamped) return false;
+    rec.lineEnds = rec.lineEnds || {};
+    if (rec.lineEnds[L.key]) return false;
+    const A = this.approach(c, L, atA), pts = A.pts;
+    for (let i = 0; i + 1 < pts.length; i++) this.cutBed(pts[i], pts[i + 1], i === 0 ? 4.0 : 4.2);
+    // torches along the underground pieces, on the wall to the right
+    game.torches = game.torches || [];
+    for (let i = 1; i + 1 < pts.length; i++){
+      const a = pts[i], b = pts[i + 1];
+      const dx = b[0] - a[0], dz = b[2] - a[2], lh = Math.hypot(dx, dz) || 1;
+      const rx = dz / lh, rz = -dx / lh;
+      for (let d = 8; d < lh - 4; d += 12){
+        const f = d / lh;
+        game.torches.push([+(a[0] + dx * f + rx * 1.7).toFixed(2), +(a[1] + (b[1] - a[1]) * f + 1.9).toFixed(2), +(a[2] + dz * f + rz * 1.7).toFixed(2)]);
+      }
+    }
+    if (typeof torchSys !== 'undefined' && torchSys.rebuild) torchSys.rebuild();
+    rec.lineEnds[L.key] = 1;
+    markSave();
+    return true;
+  },
+  // ---- the track: one merged mesh per link, rails and ties ----
+  boxInto(P, Cc, cx, cy, cz, d, sx, sy, sz, col){
+    const l = Math.hypot(d[0], d[1], d[2]) || 1, fz = [d[0] / l, d[1] / l, d[2] / l];
+    let fx = [fz[2], 0, -fz[0]]; const lx = Math.hypot(fx[0], fx[2]) || 1; fx = [fx[0] / lx, 0, fx[2] / lx];
+    const fy = [fx[1] * fz[2] - fx[2] * fz[1], fx[2] * fz[0] - fx[0] * fz[2], fx[0] * fz[1] - fx[1] * fz[0]];
+    const c = [];
+    for (let i = 0; i < 8; i++){
+      const ax = (i & 1 ? 1 : -1) * sx / 2, ay = (i & 2 ? 1 : -1) * sy / 2, az = (i & 4 ? 1 : -1) * sz / 2;
+      c.push([cx + fx[0] * ax + fy[0] * ay + fz[0] * az, cy + fx[1] * ax + fy[1] * ay + fz[1] * az, cz + fx[2] * ax + fy[2] * ay + fz[2] * az]);
+    }
+    const F = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
+    for (const [a, b, cc, dd] of F){
+      for (const k of [a, b, cc, a, cc, dd]){ P.push(c[k][0], c[k][1], c[k][2]); Cc.push(col[0], col[1], col[2]); }
+    }
+  },
+  buildTrack(R){
+    const P = [], C = [];
+    const steel = [0.58, 0.60, 0.66], wood = [0.36, 0.27, 0.17];
+    for (let i = 0; i + 1 < R.pts.length; i++){
+      const a = R.pts[i], b = R.pts[i + 1];
+      const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len = Math.hypot(d[0], d[1], d[2]);
+      if (len < 0.05) continue;
+      const lh = Math.hypot(d[0], d[2]) || 1, rx = d[2] / lh, rz = -d[0] / lh;
+      const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2 + 0.16, mz = (a[2] + b[2]) / 2;
+      for (const off of [-0.72, 0.72]) this.boxInto(P, C, mx + rx * off, my, mz + rz * off, d, 0.14, 0.12, len + 0.05, steel);
+      for (let t = 1.2; t < len; t += 2.4){
+        const f = t / len;
+        this.boxInto(P, C, a[0] + d[0] * f, a[1] + d[1] * f + 0.06, a[2] + d[2] * f, d, 2.0, 0.1, 0.42, wood);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(P), 3));
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(C), 3));
+    g.computeBoundingSphere();
+    if (!this.mats) this.mats = { track: new THREE.MeshBasicMaterial({ vertexColors: true }) };
+    const m = new THREE.Mesh(g, this.mats.track);
+    m.userData.noShadow = true; m.frustumCulled = false;
+    return m;
+  },
+  // ---- the train: a locomotive and three box cars ----
+  carMesh(loco){
+    // unlit, like every prop: the scene has no lamp for lit materials to see
+    const M = this.carMats || (this.carMats = {
+      loco: new THREE.MeshBasicMaterial({ color: 0x35584a }), car: new THREE.MeshBasicMaterial({ color: 0x9a4a33 }),
+      roof: new THREE.MeshBasicMaterial({ color: 0x2a2a30 }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a1e }),
+      stripe: new THREE.MeshBasicMaterial({ color: 0xe0c060 }), glass: new THREE.MeshBasicMaterial({ color: 0x9fd0ff }) });
+    const g = new THREE.Group();
+    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+    for (const z of [-3.2, 3.2]) for (const x of [-1.1, 1.1]) add(new THREE.BoxGeometry(0.3, 0.9, 0.9), M.dark, x, 0.45, z);
+    add(new THREE.BoxGeometry(2.8, 0.3, 9.2), M.dark, 0, 0.75, 0);
+    if (loco){
+      add(new THREE.BoxGeometry(2.6, 2.0, 6.4), M.loco, 0, 1.9, -1.2);
+      add(new THREE.BoxGeometry(2.9, 2.6, 2.8), M.loco, 0, 2.2, 3.0);
+      add(new THREE.BoxGeometry(2.7, 0.9, 2.5), M.glass, 0, 2.7, 3.05);
+      add(new THREE.BoxGeometry(3.0, 0.2, 9.4), M.roof, 0, 3.55, 0);
+      add(new THREE.BoxGeometry(3.0, 0.25, 9.4), M.stripe, 0, 1.0, 0);
+      add(new THREE.BoxGeometry(0.4, 0.9, 1.6), M.dark, 0, 4.0, 0);
+    } else {
+      add(new THREE.BoxGeometry(2.9, 2.8, 9.0), M.car, 0, 2.3, 0);
+      add(new THREE.BoxGeometry(3.1, 0.2, 9.2), M.roof, 0, 3.8, 0);
+      for (const x of [-1.47, 1.47]) add(new THREE.BoxGeometry(0.06, 2.3, 2.0), M.dark, x, 2.1, 0);
+      add(new THREE.BoxGeometry(3.0, 0.2, 9.2), M.stripe, 0, 1.0, 0);
+    }
+    g.traverse(o => { o.userData.noShadow = true; });
+    return g;
+  },
+  trainFor(R){
+    let T = this.trains.get(R.key);
+    if (T) return T;
+    const group = new THREE.Group();
+    const cars = [];
+    for (let k = 0; k <= LINE_CARS; k++){ const c = this.carMesh(k === 0); group.add(c); cars.push(c); }
+    game.scene.add(group);
+    T = { R, group, cars, wasStop: null };
+    this.trains.set(R.key, T);
+    return T;
+  },
+  // the distance along the line of car k of a train whose locomotive is at s
+  carS(s, k){ return s - k * LINE_CAR; },
+  place(T, st){
+    for (let k = 0; k < T.cars.length; k++){
+      const p = this.sample(T.R, this.carS(st.s, k));
+      const c = T.cars[k];
+      c.position.set(p.x, p.y, p.z);
+      c.rotation.set(0, Math.atan2(p.dx, p.dz), 0);
+      c.rotation.x = -Math.atan2(p.dy, Math.hypot(p.dx, p.dz));
+    }
+  },
+  tick(dt){
+    if (!game.running || !game.gen) return;
+    this.scanT += dt;
+    const links = roadSys.near || [];
+    const px = game.pos.x, pz = game.pos.z;
+    if (this.scanT > 2){
+      this.scanT = 0;
+      const keep = new Set();
+      for (const L of links){
+        const t = Math.max(0, Math.min(1, ((px - L.sx) * (L.ex - L.sx) + (pz - L.sz) * (L.ez - L.sz)) / (L.len * L.len)));
+        const d = Math.hypot(L.sx + (L.ex - L.sx) * t - px, L.sz + (L.ez - L.sz) * t - pz);
+        if (d > 1100) continue;
+        keep.add(L.key);
+        if (!this.tracks.has(L.key)){ const m = this.buildTrack(this.route(L)); game.scene.add(m); this.tracks.set(L.key, m); }
+      }
+      for (const [k, m] of this.tracks) if (!keep.has(k)){ game.scene.remove(m); m.geometry.dispose(); this.tracks.delete(k); }
+      for (const [k, T] of this.trains) if (!keep.has(k)){ game.scene.remove(T.group); this.trains.delete(k); }
+    }
+    const now = this.clock();
+    for (const [k] of this.tracks){
+      const R = this.routes.get(k); if (!R) continue;
+      const T = this.trainFor(R), st = this.state(R, now);
+      this.place(T, st);
+      const loco = T.cars[0].position, d = Math.hypot(loco.x - px, loco.z - pz);
+      T.group.visible = d < 900;
+      // the horn as it pulls out, heard from four hundred metres
+      if (T.wasStop && !st.stop && d < 400){
+        const near = Math.max(0.15, 1 - d / 400);
+        AudioSys.tone({ freq: 196, dur: 0.7, gain: 0.32 * near, type: 'sawtooth' });
+        setTimeout(() => AudioSys.tone({ freq: 196, dur: 1.1, gain: 0.32 * near, type: 'sawtooth' }), 900);
+      }
+      T.wasStop = st.stop;
+    }
+  },
+  ticketFor(L){
+    for (let i = 0; i < game.slots.length; i++){ const it = game.slots[i]; if (it && it.kind === 'ticket' && it.link === L.key) return i; }
+    return -1;
+  },
+  // right click near a standing train: with a ticket for its line, you are aboard
+  tryBoard(){
+    if (!game.running || game.riding || game.driving) return false;
+    const now = this.clock();
+    for (const [k, T] of this.trains){
+      const st = this.state(T.R, now);
+      if (!st.stop) continue;
+      for (let c = 1; c <= LINE_CARS; c++){
+        const p = T.cars[c].position;
+        if (Math.hypot(p.x - game.pos.x, p.z - game.pos.z) > 5.5 || Math.abs(p.y + 1.0 - game.pos.y) > 3.5) continue;
+        const L = T.R.L, si = this.ticketFor(L);
+        if (si < 0){ toast('no ticket for this line — the kiosk on the platform sells them'); AudioSys.sfx('deny'); return true; }
+        const it = game.slots[si];
+        if ((it.count || 1) > 1) it.count--; else game.slots[si] = null;
+        const dest = st.stop === 'a' ? citySys.nameFor(L.b.seed) : citySys.nameFor(L.a.seed);
+        game.riding = { train: true, R: T.R, T, car: c, dest, told: false };
+        game.vel.set(0, 0, 0);
+        toast('aboard — for ' + dest + ' · leaves in ' + Math.ceil(st.left) + 's · space steps off while it stands');
+        AudioSys.sfx('toggle'); refreshHotbar(); markSave();
+        return true;
+      }
+    }
+    return false;
+  },
+  ride(dt){
+    const Rd = game.riding, R = Rd.R;
+    const st = this.state(R, this.clock());
+    const p = this.sample(R, this.carS(st.s, Rd.car));
+    game.pos.set(p.x, p.y + 1.0, p.z);
+    game.vel.set(0, 0, 0); game.grounded = true;
+    const hdg = Math.atan2(-p.dx * st.dir, -p.dz * st.dir);
+    vehicleCamera(p.x, p.y + 1.0, p.z, hdg, dt, { seatX: 0.8, seatY: 1.5, seatZ: 0, back: 10, up: 3.8, look: 1.2 });
+    if (st.stop){
+      const c = st.stop === 'a' ? R.L.a : R.L.b, name = citySys.nameFor(c.seed);
+      if (!Rd.told){ Rd.told = name; toast('standing at ' + name + ' — space to step onto the platform'); }
+      if ((game.keys || {})['Space']){
+        const rec = (game.cities || {})['c' + c.key];
+        const Pl = this.platform(c, rec);
+        game.pos.set(p.x, Pl.y + 0.75 + 0.15, Pl.z - 3.4);
+        railSys.dismount('off at ' + name);
+        game.keys['Space'] = false;
+      }
+    } else Rd.told = false;
   },
 };
 
@@ -17439,6 +17781,7 @@ function bindInput(){
       if (game.photo){ if (game.photo.drone) exitPhoto(); return; }
       // the launch cannon: stand at it, look UP where you want to go, right click
       if (!game.driving && !game.riding){
+        if (lineSys.tryBoard()) return;
         let cn = null;
         for (const n of game.pnodes || []) if (n.t === 'cannon' && Math.hypot(n.x - game.pos.x, n.z - game.pos.z) < 2.6 && Math.abs(n.y - game.pos.y) < 2.5) cn = n;
         const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
@@ -18532,7 +18875,7 @@ function trickName(flips, spins, whips){
   return parts.join(' + ');
 }
 function updatePlayer(dt){
-  if (game.riding){ railSys.ride(dt); return; }
+  if (game.riding){ if (game.riding.train) lineSys.ride(dt); else railSys.ride(dt); return; }
   if (game.driving){ driveCar(dt); return; }
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
@@ -21035,7 +21378,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -21137,6 +21480,12 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'ticket'){
+    // a paper ticket, a punched stub
+    c.fillStyle = '#efe6c8'; c.fillRect(2, 5, 12, 7);
+    c.fillStyle = '#c9b98a'; c.fillRect(2, 5, 12, 1); c.fillRect(2, 11, 12, 1);
+    c.fillStyle = '#2f4f7a'; c.fillRect(4, 7, 5, 1); c.fillRect(4, 9, 7, 1);
+    c.fillStyle = '#101216'; c.fillRect(12, 8, 1, 1);
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
     const FC = { perch: ['#8ab060', '#5d7f3c'], trout: ['#b08aa0', '#7a5a70'], catfish: ['#6a6a5a', '#44443a'], carp: ['#d8a040', '#a87020'],
                  snapper: ['#e06050', '#a83a30'], eel: ['#f07030', '#b04010'], cod: ['#8aa0b8', '#5a7088'],
@@ -21693,6 +22042,7 @@ function itemLabel(it){
   if (it.kind === 'boat') return (it.wrecked ? 'wrecked ' : '') + 'paddle boat';
   if (it.kind === 'fish') return CORE.FISH_NAME[it.fish] || 'fish';
   if (it.kind === 'cookedfish') return 'cooked fish';
+  if (it.kind === 'ticket') return 'ticket to ' + it.to;
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'coral') return 'coral';
@@ -22099,6 +22449,15 @@ function giveItem(it, n){
     const i = game.slots.findIndex(sl => !sl);
     if (i < 0) return false;
     game.slots[i] = { kind: 'fish', fish: it.fish, count: n };
+    return true;
+  }
+  if (it.kind === 'ticket'){
+    // tickets stack by line
+    const have = game.slots.find(sl => sl && sl.kind === 'ticket' && sl.link === it.link);
+    if (have){ have.count = (have.count || 1) + n; return true; }
+    const i = game.slots.findIndex(sl => !sl);
+    if (i < 0) return false;
+    game.slots[i] = Object.assign({}, it, { count: n });
     return true;
   }
   if (CORE.STACKABLE_KINDS.includes(it.kind)) return addStackItem(it.kind, n);
@@ -22909,6 +23268,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
          : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'ticket'){
+    html = '<div class="t1">ticket to ' + it.to + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">from ' + it.from + ' · when the train stands at the platform, right click a car to board · space steps off at a station</div>';
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'divehelm'){
@@ -25516,6 +25877,7 @@ function frame(now){
   siegeSys.tick(dt);
   roadSys.tick(dt);
   fallsSys.tick(dt);
+  lineSys.tick(dt);
   bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
@@ -25725,7 +26087,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

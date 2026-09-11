@@ -126,11 +126,12 @@ order is mine. Big items are split so each build is one session.
    and iced in winter, highway spans and village footbridges, river
    fish, rivers drawn and named on the map. Not done, for later: the
    spring flood and the mill as a building (grain, when FARMING comes).
-5. **THE LINE** (Austin's) — real trains: their own track (not the
-   player's rails, no free rides), a locomotive with box cars you sit
-   in, trains you catch arriving and leaving, and a route: the highway
-   corridor widened to carry the line, dropping into a tunnel between
-   cities and surfacing at the station.
+5. **THE LINE** (Austin's) — DONE (Build 38): a railway on every
+   highway's shoulder, tunnels under the cities to the platforms, one
+   timetabled train per link (loco and three box cars), tickets from
+   the kiosk, board while it stands, ride inside, step off at a
+   station. Not yet: the mail car (queued), a clerk at the booth
+   (COUNTERS), level crossings where your own roads meet it.
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 
 Every one of these is a building with a desk in it, so the first one
