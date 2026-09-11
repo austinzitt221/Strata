@@ -5,6 +5,27 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 38 — THE LINE
+- [ ] Go to a city station (south edge of the slab). The track runs
+      along the platform's far side, into a tunnel at one end. Buy a
+      ticket at the kiosk: it says when the next train stands.
+- [ ] Wait for the train: horn, loco and three box cars. Right click a
+      car while it stands: you are aboard. Watch the tunnel, the climb
+      to the road, the run beside the highway, the far city's tunnel,
+      the platform. Space to step off when it stands.
+- [ ] Try to board without a ticket. Try to board while it moves.
+- [ ] Drive a highway: the railway on the right shoulder, its cut
+      through hills beside the road's, its embankment over dips. Does
+      it read as a line, not a fence? Is 6.6 m from the road enough?
+- [ ] Stand by the line as a train passes at speed.
+- [ ] Old world: load one with a city you have been to. The track
+      should appear beside the road and the approach at the station
+      the first time you are near.
+- Feedback I want: is 45 s at the platform right (long enough to
+  catch, short enough not to wait)? Should the train hurt you if you
+  stand on the track? Ride inside a box car: is the view from the door
+  the right seat, or do you want a passenger car with windows?
+
 ## Build 37 — RIVERS II
 - [ ] Open the map (M): the rivers you have walked should be blue lines
       now, each with a name once along its length. Pan out along one.
@@ -26,10 +47,12 @@ their lists are retired; what came of them is Build 30.
       water.
 - [ ] Set the season to winter (creative slider in the inventory): the
       fall goes quiet, the wheel says "iced in", the river holds you.
-- Feedback I want: does a fall read as a place worth building beside?
-  Is 60 W mid-river the right ceiling for a wheel (a generator burning
-  coal is 40)? Any river valley where the ledge looks wrong (a cliff
-  across a flat bit)?
+- Played 2026-09-11: a fall is a place worth building beside, 60 W is
+  right, everything else perfect. Three looks wrong with the sheet
+  (the reach showing through up close, a flat wall to the lip, rock
+  poking through) fixed in 37.1. Next time you pass a fall: the brink
+  should round over, nothing should show through the sheet from any
+  distance, and no rock should cut it.
 
 ## Build 36 — THE LEDGER
 - [ ] Open the map (M). Right-drag it around; scroll to zoom in on a

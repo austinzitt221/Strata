@@ -2,6 +2,75 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 38 — THE LINE (2026-09-11)
+
+Austin's trains, first of the City Arc queue. Verified headlessly (a
+build-38 suite builds a link's route and checks it starts on the
+platform, drops eight metres, runs 6.6 m off the road's centre at the
+road's height and comes back up to the far platform; stands at the
+station so the city, the road, the track and the approach stamp, then
+probes the SDF for air and a bed in the tunnel, along the platform and
+beside a laid road segment, and counts the tunnel torches; reads the
+timetable at rest, moving, at the far end and on the way back, and the
+wait at each end; stands the train at the platform, is refused without
+a ticket, boards with one, rides on the car and steps off onto the
+platform; rides the run to the far city and steps off there; and buys
+a ticket at the kiosk, which says when the next train comes; plus the
+smoke and Build 35 suites, and screenshots of the train at the
+platform).
+
+- **The line.** Every highway carries a railway on its right-hand
+  shoulder, 6.6 m from the road's centre, on its own embankment and
+  through its own cut where the ground rises. Four segments out from
+  each city the line leaves the road, drops eight metres, runs in a
+  tunnel under the city slab (torches down its wall) and surfaces
+  along the south side of the station platform. Rails and ties are one
+  merged mesh per link, built when you are within a kilometre. Old
+  worlds catch up: every laid road segment near you gets its track,
+  every standing station its approach, once.
+- **The trains.** One per link: a locomotive and three box cars, run
+  off the world clock, so they arrive and leave whether you watch or
+  not. Forty-five seconds standing at each platform, then the run at
+  24 m/s; the horn sounds as it pulls out, heard from four hundred
+  metres. On the way back the locomotive pushes.
+- **Tickets.** The kiosk sells a ticket for each line out (the old
+  fare) and says when the next train stands; the ticket is an item,
+  stacked by line. Board while the train stands: right click a car
+  with a ticket in your pack and you are in it; the tram that used to
+  teleport you down the road is gone, so there are no free rides. You
+  ride inside the car (the camera looks around from it), and space
+  steps you onto the platform whenever it stands at a station. Stay
+  aboard and it takes you back.
+- **The highway's river opening** is longer now, so the track beside
+  the road crosses on the same span.
+
+## Build 37.1 — THE SHEET (2026-09-11)
+
+Austin's playtest of RIVERS II: the falls are right and the mill's
+sixty watts is right; three things wrong with how a fall looked, with
+screenshots. Verified headlessly (the build-37 suite re-run against
+the new sheet mesh, plus a 37.1 suite that reads the surface across
+the brink, counts the sheet quads in their own mesh, probes each for
+rock and for its side of the lip, and screenshots the fall from the
+pool).
+
+- **The reach showed through the sheet up close.** The sheet and the
+  flat reach behind it were quads in one transparent mesh, drawn in
+  array order, so the reach blended over the sheet whenever its quads
+  came later; from far away the chunk order hid it. The sheet is now a
+  mesh of its own, opaque and writing depth, so nothing behind it
+  shows through at any distance.
+- **A flat wall of water to the lip.** The surface ran level to the
+  brink and dropped. It now dips over the last two and a half metres
+  before the drop, up to a metre and a half (a quarter of the drop),
+  and the bed follows, so the brink is rounded and the sheet begins
+  below the reach rather than level with it.
+- **Rock poking through the sheet.** The water's step and the ground's
+  cliff were on the same line, and the mesher lays a cliff within half
+  a metre of it, so the sheet cut through the rock. The step is read
+  0.7 m upstream of each corner at a fall, which hangs the sheet 0.7 m
+  out from the cliff over the pool.
+
 ## Build 37 — RIVERS II (2026-09-10)
 
 The rivers of Build 27 get the things a river has. Verified headlessly

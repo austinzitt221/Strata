@@ -934,6 +934,40 @@ EXCHANGE with the phone, THE PIT with monuments, THE BANK, OWNERSHIP,
 THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER, THE MAIL CAR.
 Roadmap gets written when he has read it.
 
+## 2026-09-11 — 37 played, the sheet fixed, THE LINE next
+
+Austin's screenshots of the fall were exact and the three faults had
+three one-line causes: transparent quads in one mesh draw in array
+order (the reach over the sheet), a surface with no brink (the wall of
+water), and a sheet on the same line as the cliff (rock through it).
+Same lesson as the lighting line: when the shapes are right, the tell
+is in the drawing order and the half-metre.
+
+THE LINE now. Route first.
+
+## 2026-09-11, later — Build 38, THE LINE
+
+The route was the whole problem and it fell out of what was there:
+the road already had a graded profile from slab to slab, so the track
+is that profile shifted 6.6 m to the right; the station was already on
+the south edge, so the approach is a fixed shape (platform run, drop,
+straight tunnel to a point under the road's mouth, climb). Every city
+gets the same approach in different directions, which is how real
+railways look anyway.
+
+Timetables off the world clock rather than simulated trains: the train
+is a pure function of time, so it arrives and leaves while you are
+elsewhere, costs nothing when you are far, and the kiosk can say
+"next train in 122 s" without anything running. I want more systems
+built this way (the exchange's prices should be a function of the day
+and the events, not a simulation ticking in the background).
+
+One trap for next time: MeshLambertMaterial is black in this scene.
+There is no light for it; every prop is MeshBasic and shaded by its
+colours. I put the train in Lambert and got a black wall.
+
+Next: COUNTERS.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
