@@ -49,6 +49,10 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#netstatus{position:fixed; left:12px; top:44px; font-size:11px; color:#a9d4ff; background:rgba(10,9,16,.6); padding:4px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:30; letter-spacing:1px;}
+#padcursor{position:fixed; left:0; top:0; width:18px; height:18px; margin:-9px 0 0 -9px; border:2px solid #ffd76a; border-radius:50%; box-shadow:0 0 0 2px #000, 0 0 8px rgba(0,0,0,.7); pointer-events:none; z-index:200;}
+#padhints{position:fixed; right:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:560px; line-height:1.5; letter-spacing:.5px;}
+body.pad{cursor:none;}
 #statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
 .statbar{width:220px; height:12px; background:rgba(10,9,16,0.75); border:2px solid var(--ui-border);}
 .statfill{height:100%;}
@@ -200,10 +204,22 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="sub">carve the world</div>
     <button class="btn" id="btnWorlds">WORLDS</button>
     <button class="btn" id="btnOptionsMain">OPTIONS</button>
+    <button class="btn" id="btnJoin">JOIN A FRIEND</button>
+    <button class="btn" id="btnFullscreen">FULLSCREEN</button>
     <button class="btn" id="btnQuit">QUIT GAME</button>
   </div>
 </div>
 
+<div id="joinmenu" class="screen hidden">
+  <div class="panel" style="min-width:420px;">
+    <h2>JOIN A FRIEND</h2>
+    <div class="sub" style="margin-bottom:8px;">your friend pauses their game and presses INVITE A FRIEND; type the code they see</div>
+    <div class="row"><input type="text" id="joinCode" placeholder="room code" maxlength="5" style="text-transform:uppercase; letter-spacing:4px;"></div>
+    <div class="sub" id="joinStatus" style="min-height:18px;">&nbsp;</div>
+    <button class="btn" id="btnJoinGo">JOIN</button>
+    <button class="btn" id="btnJoinBack">BACK</button>
+  </div>
+</div>
 <div id="worldsmenu" class="screen hidden">
   <div class="panel" style="min-width:460px;">
     <h2>WORLDS</h2>
@@ -234,6 +250,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="panel" style="min-width:420px;">
     <h2>OPTIONS</h2>
     <div class="optrow"><label>MOUSE SENSITIVITY</label><input type="range" id="optSens" min="20" max="300" step="5"><span class="val" id="optSensV"></span></div>
+    <div class="optrow"><label>STICK SENSITIVITY</label><input type="range" id="optPad" min="20" max="300" step="5"><span class="val" id="optPadV"></span></div>
     <div class="optrow"><label>FOV</label><input type="range" id="optFov" min="60" max="110" step="1"><span class="val" id="optFovV"></span></div>
     <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="32" step="1"><span class="val" id="optRdV"></span></div>
     <div class="optrow"><label>SHADOWS</label><input type="range" id="optShad" min="0" max="1" step="1"><span class="val" id="optShadV"></span></div>
@@ -243,6 +260,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>RENDER SCALE</label><input type="range" id="optRsc" min="50" max="150" step="25"><span class="val" id="optRscV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
+    <button class="btn small" id="btnConsolePreset" title="a console or a small machine: short view, no shadows or rays, 75% render scale, 60 fps">CONSOLE PRESET</button>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
 </div>
@@ -252,6 +270,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <h2>PAUSED</h2>
     <button class="btn" id="btnResume">RESUME</button>
     <button class="btn" id="btnPauseOptions">OPTIONS</button>
+    <button class="btn" id="btnInvite">INVITE A FRIEND</button>
+    <div class="sub hidden" id="inviteBox" style="margin:4px 0 10px; line-height:1.6;"></div>
     <button class="btn" id="btnSaveQuit">SAVE &amp; QUIT TO TITLE</button>
   </div>
 </div>
@@ -323,6 +343,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 </div>
 
 <div id="objlayer"></div>
+<div id="netstatus" class="hidden"></div>
 
 <div id="xhair" class="hidden"></div>
 <div id="scope" class="hidden">
@@ -335,6 +356,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="zl" id="scopezoom">4.0x</div>
 </div>
 <div id="itemtip" class="hidden"></div>
+<div id="padcursor" class="hidden"></div>
+<div id="padhints" class="hidden"></div>
 <div id="stationscreen" class="screen hidden dim">
   <div class="panel" style="min-width:420px;">
     <h2 id="stationtitle">STATION</h2>
@@ -4620,7 +4643,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -11315,6 +11338,11 @@ function killEntity(e, byPlayer){
   markSave();
 }
 function hurtEntity(e, dmg, kx, kz, quiet){
+  if (netSys.guest){
+    if (e.nid) netSys.send({ t: 'hit', nid: e.nid, dmg, kx: kx || 0, kz: kz || 0 });
+    e.flash = 0.15; AudioSys.sfx('hit');
+    return;
+  }
   if (e.type === 'villager'){
     if (e.crew){ e.flash = 0.15; return; }              // yours: no offense taken, no harm done
     // you can't kill the neighbors — but they take offense
@@ -12350,6 +12378,7 @@ const crewSys = {
   },
   playerPrey(pd){ return { x: game.pos.x, y: game.pos.y, z: game.pos.z, d: pd, ent: null }; },
   hitPrey(P, dmg, kx, kz){
+    if (P.guest){ netSys.send({ t: 'hurt', dmg, kx, kz }); return; }
     if (!P.ent){ damagePlayer(dmg, kx, kz); return; }
     this.hurt(P.ent, dmg, kx, kz);
   },
@@ -16256,7 +16285,7 @@ const roadSys = {
     if (this.scanT > 6){ this.scanT = 0; this.near = game.gen ? this.linksNear(game.pos.x, game.pos.z, 900) : []; }
     if (this.accT < 1.5) return;
     this.accT = 0;
-    this.ensure();
+    if (!netSys.guest) this.ensure();             // a guest's roads come from the host
   },
   // is (x,y,z) on a highway's tarmac? (the cruise bonus)
   onRoad(x, y, z){
@@ -17217,7 +17246,12 @@ function updateEntities(dt, now){
       e.mesh.position.set(e.x, e.y + 0.35 + Math.sin(e.spin * 1.4) * 0.05, e.z);
       e.mesh.rotation.y = e.spin;
       e.noGrab = Math.max(0, (e.noGrab || 0) - dt);
-      // walk over it and it's yours
+      // walk over it and it's yours (a friend's pack fills the same way)
+      if (!e.noGrab && netSys.host && netSys.remote && Math.hypot(e.x - netSys.remote.x, e.z - netSys.remote.z) < 1.35 && e.y > netSys.remote.y - 1.2 && e.y < netSys.remote.y + 2.2){
+        netSys.send({ t: 'give', item: e.item });
+        game.scene.remove(e.mesh); game.entities.splice(i, 1); markSave();
+        continue;
+      }
       if (!e.noGrab && game.running && !game.photo &&
           Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 1.35 && e.y > game.pos.y - 1.2 && e.y < game.pos.y + 2.2){
         const it = e.item;
@@ -17233,7 +17267,7 @@ function updateEntities(dt, now){
       }
       continue;
     }
-    const pd = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    const pd = netSys.nearestDist(e.x, e.z);
     if (e.bossType){
       // bosses run their own physics and never despawn by distance
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
@@ -17287,7 +17321,7 @@ function updateEntities(dt, now){
       if (e.raider) sp *= 1.15;
       // a raider with no one in reach goes for the hum that called it
       const P0 = crewSys.prey(e, 15), G = !P0 && e.raider ? breachSys.lure(e, 70) : null;
-      const P = P0 || (G ? { x: G.x, y: G.y, z: G.z, d: 99, ent: null, thing: 1 } : crewSys.playerPrey(pd));
+      const P = P0 || (G ? { x: G.x, y: G.y, z: G.z, d: 99, ent: null, thing: 1 } : netSys.preyFor(e, pd));
       sx = P.x - e.x; sz = P.z - e.z;
       const d3 = Math.hypot(e.x - P.x, e.y - P.y, e.z - P.z);
       if (d3 < 1.6 && e.atkT <= 0 && !P.thing){
@@ -17726,10 +17760,556 @@ function updateProjectiles(dt){
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
-function isLocked(){ return game.debugLock || document.pointerLockElement === game.renderer.domElement; }
+function isLocked(){ return game.debugLock || game.padLock || document.pointerLockElement === game.renderer.domElement; }
 function requestLock(){
+  if (game.padLock) return;                      // a controller needs no pointer lock
   if (!isLocked()) game.renderer.domElement.requestPointerLock({ unadjustedMovement: true }).catch?.(()=>{});
 }
+
+// ---------- TOGETHER: two players in one world ----------
+// The host's game is the world. A guest joins by room code (WebRTC, with
+// PeerJS's free signalling; a BroadcastChannel loopback for tests), gets
+// the whole save, and from then on: edits go both ways as they are made;
+// each player's position and pose go to the other; the host streams its
+// creatures, and the guest's blows go back as hits; the prop tables go
+// to whoever changed them last; the clock and the weather are the host's.
+// The guest runs no world simulation of its own (no stamping, no spawns,
+// no water), and never saves.
+const NET_VER = 1;
+const netSys = {
+  on: false, host: false, guest: false, code: '', peer: null, conn: null, bc: null, applying: false, dirty: false,
+  remote: null, body: null, nid: 1, mirrors: new Map(), lastTables: '', lastTablesIn: '', tv: 0,
+  stateT: 0, entT: 0, clockT: 0, tablesT: 0, hashT: 0, statusT: 0, connected: false, msgs: 0,
+  makeCode(){ const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 5; i++) c += A[(Math.random() * A.length) | 0]; return c; },
+  loopback(){ return !!window.__netLoopback; },
+  lib(){
+    if (window.Peer || this.loopback()) return Promise.resolve(true);
+    return new Promise(res => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js';
+      sc.onload = () => res(!!window.Peer); sc.onerror = () => res(false);
+      document.head.appendChild(sc);
+    });
+  },
+  // ---- transport ----
+  async open(role, code){
+    this.stop();
+    this.code = code; this.host = role === 'host'; this.guest = role === 'guest'; this.on = true; this.connected = false;
+    if (this.loopback()){
+      this.bc = new BroadcastChannel('strata-room-' + code);
+      this.bc.onmessage = ev => { const m = ev.data; if (m && m.from !== role) this.onMsg(m); };
+      if (this.guest) this.send({ t: 'hello', ver: NET_VER });
+      return true;
+    }
+    if (!(await this.lib())){ this.status('could not load the network library'); this.stop(); return false; }
+    const id = 'strata-' + code;
+    try {
+      if (this.host){
+        this.peer = new Peer(id);
+        this.peer.on('connection', c => {
+          if (this.conn && this.conn.open){ c.close(); return; }
+          this.conn = c;
+          c.on('data', m => this.onMsg(m));
+          c.on('close', () => { this.connected = false; this.remote = null; this.status('friend left · code ' + this.code); });
+        });
+        this.peer.on('error', err => this.status('network: ' + (err.type || err.message)));
+      } else {
+        this.peer = new Peer();
+        this.peer.on('open', () => {
+          const c = this.peer.connect(id, { reliable: true });
+          this.conn = c;
+          c.on('open', () => this.send({ t: 'hello', ver: NET_VER }));
+          c.on('data', m => this.onMsg(m));
+          c.on('close', () => { if (game.running) toast('the host closed the room'); this.stop(); if (game.running) quitToTitle(); });
+        });
+        this.peer.on('error', err => { this.status('no room with that code' + (err.type ? ' (' + err.type + ')' : '')); });
+      }
+    } catch (err){ this.status('network: ' + err.message); this.stop(); return false; }
+    return true;
+  },
+  send(m){
+    if (!this.on) return;
+    if (this.bc){ m.from = this.host ? 'host' : 'guest'; try { this.bc.postMessage(m); } catch (err) {} return; }
+    if (this.conn && this.conn.open){ try { this.conn.send(m); } catch (err) {} }
+  },
+  stop(){
+    if (this.bc){ try { this.bc.close(); } catch (err) {} this.bc = null; }
+    if (this.conn){ try { this.conn.close(); } catch (err) {} this.conn = null; }
+    if (this.peer){ try { this.peer.destroy(); } catch (err) {} this.peer = null; }
+    if (this.body && this.body.root){ game.scene && game.scene.remove(this.body.root); this.body = null; }
+    for (const [, e] of this.mirrors){ if (e.mesh && game.scene) game.scene.remove(e.mesh); const i = game.entities ? game.entities.indexOf(e) : -1; if (i >= 0) game.entities.splice(i, 1); }
+    this.mirrors.clear();
+    this.on = false; this.host = false; this.guest = false; this.connected = false; this.remote = null; this.code = '';
+    const el = $('netstatus'); if (el) el.classList.add('hidden');
+  },
+  status(txt){
+    const el = $('netstatus');
+    if (el){ el.textContent = txt; el.classList.toggle('hidden', !txt || !game.running); }
+    const jb = $('joinStatus'); if (jb && this.guest && !game.running) jb.textContent = txt;
+    const ib = $('inviteBox'); if (ib && this.host) ib.textContent = txt;
+  },
+  // ---- the lobby ----
+  async invite(){
+    if (!game.running || this.on) return;
+    const code = this.makeCode();
+    $('inviteBox').classList.remove('hidden');
+    $('inviteBox').textContent = 'opening a room…';
+    if (await this.open('host', code)) this.status('code ' + code + ' · waiting for your friend');
+  },
+  async join(code){
+    code = (code || '').trim().toUpperCase();
+    if (code.length < 4){ $('joinStatus').textContent = 'type the code your friend sees'; return; }
+    $('joinStatus').textContent = 'looking for the room…';
+    await this.open('guest', code);
+  },
+  // ---- messages ----
+  onMsg(m){
+    if (!m || !this.on) return;
+    this.msgs++;
+    switch (m.t){
+      case 'hello':
+        if (!this.host) return;
+        if (m.ver !== NET_VER){ this.send({ t: 'sorry', why: 'different build' }); return; }
+        this.connected = true;
+        this.send({ t: 'world', data: buildSaveData() });
+        this.status('friend joined · code ' + this.code);
+        toast('a friend joined your world');
+        break;
+      case 'sorry': this.status('the host is on a ' + m.why); this.stop(); break;
+      case 'world': {
+        if (!this.guest) return;
+        this.connected = true;
+        $('joinStatus').textContent = 'world received — loading';
+        const data = m.data;
+        hide('joinmenu');
+        startWorldData('guest', data);
+        // stand beside the host
+        const hp = data.player || {};
+        if (hp.x != null){ game.pos.set(hp.x + 1.5, hp.y, hp.z + 1.5); game.fly = !!hp.fly; game.forceStream = true; }
+        this.status('in ' + (data.name || 'a friend\'s world') + ' · code ' + this.code);
+        toast('joined — the world is your friend\'s; carve, build, fight beside them');
+        break;
+      }
+      case 'p':
+        this.remote = m;
+        break;
+      case 'e': {
+        const ed = CORE.deserializeEdits([m.e])[0];
+        this.applying = true; try { applyEdit(ed); } finally { this.applying = false; }
+        break;
+      }
+      case 'undo': {
+        const key = JSON.stringify(m.e);
+        for (let i = game.edits.length - 1; i >= Math.max(0, game.edits.length - 40); i--){
+          if (JSON.stringify(CORE.serializeEdits([game.edits[i]])[0]) === key){ const e = game.edits.splice(i, 1)[0]; game.terrain.invalidate(e); break; }
+        }
+        break;
+      }
+      case 'hash':
+        if (this.host && (m.h !== this.hashEdits())) this.send({ t: 'edits', list: CORE.serializeEdits(game.edits) });
+        break;
+      case 'edits':
+        if (!this.guest) return;
+        this.applying = true;
+        try {
+          game.edits = CORE.deserializeEdits(m.list || []);
+          game.terrain.edits = game.edits;
+          game.terrain.disposeAll();
+          game.forceStream = true;
+          farTerrain.dirty = true;
+        } finally { this.applying = false; }
+        break;
+      case 'tables': this.applyTables(m.data, m.json); break;
+      case 'ent': if (this.guest) this.applyEnts(m.list); break;
+      case 'hit': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e) hurtEntity(e, m.dmg, m.kx, m.kz);
+        break;
+      }
+      case 'hurt': if (this.guest) damagePlayer(m.dmg, m.kx, m.kz); break;
+      case 'give': {
+        if (!this.guest) return;
+        const it = m.item; if (!it) return;
+        const ok = it.kind === 'mat' ? CORE.addMat(game.slots, it.mat, it.count)
+          : it.count != null && CORE.STACKABLE_KINDS.includes(it.kind) ? CORE.addItemN(game.slots, it.kind, it.count)
+          : giveItem(it, 1);
+        if (ok){ toast('+' + (it.count > 1 ? it.count + ' × ' : '') + itemLabel(it)); AudioSys.sfx('toggle'); refreshHotbar(); refreshToolHUD(); }
+        break;
+      }
+      case 'clock':
+        if (!this.guest) return;
+        game.day = m.day; game.timeOfDay = m.tod;
+        if (m.weather && weatherSys.kind !== m.weather && WEATHER[m.weather]) weatherSys.set(m.weather, m.wt || 120);
+        break;
+    }
+  },
+  hashEdits(){
+    let h = game.edits.length * 7919;
+    for (let i = 0; i < game.edits.length; i++){ const e = game.edits[i]; h = (h + Math.round((e.x * 3 + e.y * 5 + e.z * 7 + (e.size || 0) * 11 + (e.op + 1) * 13) * 100) * (i % 97 + 1)) % 2147483647; }
+    return h;
+  },
+  // ---- the tables: everything hand-placed, and the world's records ----
+  TABLE_KEYS: ['torches', 'beacons', 'beds', 'stoves', 'bulbs', 'doors', 'tables', 'ropes', 'rails', 'roads', 'pnodes', 'wires', 'tubes', 'pSeq', 'cities', 'villages', 'forts', 'spires', 'zigs', 'wrecks', 'expedition', 'placedDecor', 'removedTrees', 'removedDecor', 'bossKills'],
+  tables(){
+    const all = buildSaveData(), out = {};
+    for (const k of this.TABLE_KEYS) out[k] = all[k];
+    return out;
+  },
+  applyTables(d, json){
+    if (!d) return;
+    if (json && json === this.lastTablesIn) return;
+    if (INV_UIS.includes(game.ui) || game.ui === 'station' || game.ui === 'board' || game.ui === 'sign'){ this.pendingTables = [d, json]; return; }
+    this.lastTablesIn = json || '';
+    this.lastTables = json || '';                    // what came in is what we hold: no echo
+    game.torches = (d.torches || []).map(t => [t[0], t[1], t[2]]);
+    game.beacons = (d.beacons || []).map(b => [b[0], b[1], b[2]]);
+    game.beds = (d.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
+  game.doors = (d.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
+  game.stoves = (d.stoves || []).map(r => ({ x: r[0], y: r[1], z: r[2], yaw: r[3] || 0,
+    in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0, id: r[9] }));
+  game.bulbs = (d.bulbs || []).map(b => [b[0], b[1], b[2], b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5], b[6]]);
+    game.tables = (d.tables || []).map(t => [t[0], t[1], t[2]]);
+    game.ropes = (d.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
+    game.pSeq = Math.max(game.pSeq || 1, d.pSeq || 1);
+    game.rails = d.rails || [];
+    for (const L of game.rails) if (L.id == null) L.id = game.pSeq++;
+    game.roads = d.roads || {};
+    game.pnodes = (d.pnodes || []).map(n => ({ ...n }));
+    game.wires = (d.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb }));
+    game.tubes = (d.tubes || []).map(t => ({ a: t.a, b: t.b }));
+    for (const k of ['cities', 'villages', 'forts', 'spires', 'zigs', 'wrecks']) game[k] = d[k] || {};
+    game.expedition = d.expedition || game.expedition;
+    game.bossKills = d.bossKills || {};
+    game.decorPlaced = d.placedDecor || [];
+    game.removedTreeSet = new Set(d.removedTrees || []);
+    game.decorRemovedSet = new Set(d.removedDecor || []);
+    for (const b of game.bulbs) if (b[6] == null) b[6] = game.pSeq++;
+    for (const st of game.stoves) if (st.id == null) st.id = game.pSeq++;
+    torchSys.rebuild(); ropeSys.rebuild(); railSys.rebuild(); pnodeSys.rebuild(); beaconSys.rebuild(); bedSys.rebuild();
+    stoveSys.rebuild(); bulbSys.rebuild(); doorSys.rebuild(); tableSys.rebuild();
+    treeSys.lastCell = null; treeSys.refresh(); farTreeSys.lastCell = null; farTreeSys.refresh();
+    decorSys.dirty = true; decorSys.lastCell = null; decorSys.refresh();
+    if (missionSys.group) missionSys.sync();
+    objectiveSys._objsT = 0;
+    farShapeSys.dirty = true;
+    lineSys.routes.clear();
+  },
+  // ---- creatures: the host streams them, the guest mirrors them ----
+  entPack(){
+    const R = this.remote, out = [];
+    for (const e of game.entities){
+      if (e.type === 'villager' && e.crew) { /* crew ride along */ }
+      const near = Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 260 || (R && Math.hypot(e.x - R.x, e.z - R.z) < 260);
+      if (!near) continue;
+      if (!e.nid) e.nid = this.nid++;
+      const ry = e.mesh ? +e.mesh.rotation.y.toFixed(2) : 0;
+      out.push([e.nid, e.type, +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), ry, Math.round(e.hp || 0), e.type === 'drop' ? e.item : (e.crew ? 1 : 0), e.bossType || 0, e.heading != null ? +e.heading.toFixed(2) : 0]);
+    }
+    return out;
+  },
+  applyEnts(list){
+    const seen = new Set();
+    for (const r of list){
+      const [nid, type, x, y, z, ry, hp, extra, boss, heading] = r;
+      seen.add(nid);
+      let e = this.mirrors.get(nid);
+      if (!e){
+        if (!ENT_DEF[type]) continue;
+        e = reviveEntity(type, x, y, z, hp);
+        e.nid = nid; e.remote = true;
+        if (type === 'drop') e.item = extra;
+        if (extra === 1) e.crew = true;
+        if (boss) e.bossType = boss;
+        game.entities.push(e);
+        this.mirrors.set(nid, e);
+      }
+      e.tx = x; e.ty = y; e.tz = z; e.try = ry; e.hp = hp; e.heading = heading; e.seenT = performance.now();
+      if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+    }
+    for (const [nid, e] of this.mirrors){
+      if (seen.has(nid)) continue;
+      if (performance.now() - (e.seenT || 0) < 1500) continue;
+      if (e.mesh) game.scene.remove(e.mesh);
+      const i = game.entities.indexOf(e); if (i >= 0) game.entities.splice(i, 1);
+      this.mirrors.delete(nid);
+    }
+  },
+  // the guest moves its mirrors toward where the host last put them
+  mirrorTick(dt){
+    const k = Math.min(1, dt * 12);
+    for (const [, e] of this.mirrors){
+      if (e.tx == null) continue;
+      e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k;
+      e.flash = Math.max(0, (e.flash || 0) - dt);
+      if (e.mesh){
+        if (e.type === 'drop'){ e.spin = (e.spin || 0) + dt * 2.2; e.mesh.position.set(e.x, e.y + 0.35 + Math.sin(e.spin * 1.4) * 0.05, e.z); e.mesh.rotation.y = e.spin; }
+        else { e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = e.try || 0; }
+      }
+    }
+  },
+  // ---- the other player, in the flesh ----
+  avatar(){
+    if (this.body) return this.body;
+    const b = Object.create(playerBody);
+    b.root = new THREE.Group(); b.icons = new Map(); b.itemKind = null; b.armorSig = null; b.phase = 0;
+    game.scene.add(b.root);
+    b.build(0);
+    b.root.visible = true;
+    this.body = b;
+    return b;
+  },
+  nearestDist(x, z){
+    const d0 = Math.hypot(x - game.pos.x, z - game.pos.z);
+    const R = this.host ? this.remote : null;
+    return R ? Math.min(d0, Math.hypot(x - R.x, z - R.z)) : d0;
+  },
+  // who a creature goes for: the nearer player
+  preyFor(e, pd){
+    const R = this.host ? this.remote : null;
+    if (R){
+      const dr = Math.hypot(R.x - e.x, R.z - e.z);
+      if (dr < pd) return { x: R.x, y: R.y, z: R.z, d: dr, ent: null, guest: true };
+    }
+    return crewSys.playerPrey(pd);
+  },
+  tick(dt){
+    if (!this.on) return;
+    if (this.pendingTables && !INV_UIS.includes(game.ui) && game.ui !== 'station' && game.ui !== 'board' && game.ui !== 'sign'){ const [d, j] = this.pendingTables; this.pendingTables = null; this.applyTables(d, j); }
+    if (!game.running) return;
+    // my pose, fifteen times a second
+    this.stateT += dt;
+    if (this.stateT > 1 / 15){
+      this.stateT = 0;
+      const it = selectedItem();
+      this.send({ t: 'p', x: +game.pos.x.toFixed(2), y: +game.pos.y.toFixed(2), z: +game.pos.z.toFixed(2), yaw: +game.yaw.toFixed(3), pitch: +game.pitch.toFixed(3),
+        fly: game.fly ? 1 : 0, cr: game.crouch ? 1 : 0, mv: +Math.hypot(game.vel.x, game.vel.z).toFixed(1), gr: game.grounded ? 1 : 0, sw: game.swim ? 1 : 0,
+        it: it ? { kind: it.kind, mat: it.mat, tier: it.tier } : null, work: game.mouseL ? 1 : 0, hp: game.hp, dr: game.driving ? 1 : 0 });
+    }
+    // the friend's body
+    const R = this.remote;
+    if (R){
+      const b = this.avatar();
+      b.root.visible = !R.dr;
+      b.root.rotation.order = 'XYZ'; b.root.rotation.set(0, R.yaw, 0);
+      b.root.position.set(R.x, R.y, R.z);
+      b.phase += dt * Math.min(12, R.mv * 2.2);
+      const sw = Math.min(1, R.mv / 4) * 0.9, sn = Math.sin(b.phase);
+      if (R.cr){ b.upper.position.y = -0.42; b.legL.rotation.x = 0.85 + sn * sw * 0.3; b.legR.rotation.x = 0.6 - sn * sw * 0.3; }
+      else if (!R.gr && !R.fly && !R.sw){ b.upper.position.y = 0; b.legL.rotation.x = 0.35; b.legR.rotation.x = -0.2; }
+      else { b.upper.position.y = 0; b.legL.rotation.x = sn * sw; b.legR.rotation.x = -sn * sw; }
+      b.armL.rotation.x = -sn * sw * 0.8; b.armR.rotation.x = R.work ? 0.85 + Math.sin(performance.now() * 0.02) * 0.18 : sn * sw * 0.8;
+      b.head.rotation.x = Math.max(-1.1, Math.min(1.1, R.pitch * 0.85));
+      const key = R.it ? R.it.kind + ':' + (R.it.mat != null ? R.it.mat : R.it.tier != null ? R.it.tier : '') : null;
+      if (key !== b.itemKind && b.handItem){
+        b.itemKind = key;
+        while (b.handItem.children.length) b.handItem.remove(b.handItem.children[0]);
+        if (R.it){ try { const m = fitItemModel(itemModel(R.it), 0.42); m.position.y -= 0.1; b.handItem.add(m); } catch (err) {} }
+      }
+    } else if (this.body) this.body.root.visible = false;
+    if (this.host){
+      this.entT += dt;
+      if (this.entT > 0.1 && this.connected){ this.entT = 0; this.send({ t: 'ent', list: this.entPack() }); }
+      this.clockT += dt;
+      if (this.clockT > 3 && this.connected){ this.clockT = 0; this.send({ t: 'clock', day: game.day || 0, tod: game.timeOfDay, weather: weatherSys.kind, wt: Math.round(weatherSys.t) }); }
+    } else {
+      this.mirrorTick(dt);
+      this.hashT += dt;
+      if (this.hashT > 5){ this.hashT = 0; this.send({ t: 'hash', h: this.hashEdits() }); }
+    }
+    // the tables, from whoever changed them, at most every two seconds
+    this.tablesT += dt;
+    if (this.tablesT > 2 && this.dirty && this.connected){
+      this.tablesT = 0; this.dirty = false;
+      const d = this.tables(), json = JSON.stringify(d);
+      if (json !== this.lastTables){ this.lastTables = json; this.lastTablesIn = json; this.send({ t: 'tables', data: d, json }); }
+    }
+  },
+};
+
+// ---------- controller ----------
+// A gamepad (an Xbox pad in Edge on the console, or any pad on a PC) is
+// read every frame and turned into the events the mouse and keys already
+// send, so nothing downstream knows the difference. In the world: sticks
+// move and look, triggers are the mouse buttons, the face buttons are
+// jump, crouch, inventory and crafting. In any menu: the left stick moves
+// a cursor, the d-pad hops between controls, A clicks, B backs out.
+const PAD_DEAD = 0.18;
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, MENU: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▲ fly · ▼+LB/RB grid · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror, +LB/RB reach) · MENU pause';
+const PAD_HINT_MENU = 'stick: cursor · d-pad: hop · A select · X right-click · Y shift-click · B back · LT/RT scroll · LB/RB hotbar';
+const padSys = {
+  active: false, lastT: 0, lastPoll: 0, prev: [], cx: 0, cy: 0, chord: false, chordUsed: false, held: {}, rep: {}, grid: 0, layer: '',
+  init(){
+    this.cx = innerWidth / 2; this.cy = innerHeight / 2;
+    window.addEventListener('gamepadconnected', () => { this.wake(); toast('controller connected'); });
+    const loop = () => { try { this.poll(); } catch (err){ if (!this.errOnce){ this.errOnce = true; console.error(err); } } requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  },
+  pad(){
+    const gp = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < gp.length; i++) if (gp[i] && gp[i].connected) return gp[i];
+    return null;
+  },
+  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); },
+  sleep(){
+    this.active = false; game.padLock = false; game.padMove = null; this.layer = '';
+    for (const k in this.held) this.hold(k, false);
+    document.body.classList.remove('pad'); $('padcursor').classList.add('hidden'); $('padhints').classList.add('hidden');
+  },
+  // ---- synthetic input: the same events the mouse and keys send ----
+  key(code, down, shift){ document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code, bubbles: true, cancelable: true, shiftKey: !!shift })); },
+  tap(code){ this.key(code, true); this.key(code, false); },
+  hold(code, on){
+    if (on && !this.held[code]){ this.held[code] = true; this.key(code, true); }
+    else if (!on && this.held[code]){ this.held[code] = false; this.key(code, false); }
+  },
+  mouse(type, button, el, shift){
+    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, button, buttons: type === 'mousedown' ? (button === 0 ? 1 : button === 2 ? 2 : 4) : 0, clientX: this.cx, clientY: this.cy, shiftKey: !!shift });
+    (el || document).dispatchEvent(ev);
+  },
+  look(dx, dy){ document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: dx, movementY: dy, clientX: this.cx, clientY: this.cy })); },
+  wheel(dy, el){ (el || document).dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: dy, clientX: this.cx, clientY: this.cy })); },
+  under(){ const c = $('padcursor'); c.style.display = 'none'; const el = document.elementFromPoint(this.cx, this.cy); c.style.display = ''; return el; },
+  // a held button that fires again while held
+  repeat(name, on, first, every, fn){
+    const r = this.rep[name] || (this.rep[name] = { t: 0, on: false });
+    if (!on){ r.on = false; return; }
+    const now = performance.now() / 1000;
+    if (!r.on){ r.on = true; r.t = now + first; fn(); return; }
+    if (now >= r.t){ r.t = now + every; fn(); }
+  },
+  poll(){
+    const p = this.pad();
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - (this.lastPoll || now)) / 1000); this.lastPoll = now;
+    if (!p){ if (this.active && now - this.lastT > 60000) this.sleep(); return; }
+    const ax = i => { const v = p.axes[i] || 0; return Math.abs(v) < PAD_DEAD ? 0 : (v - Math.sign(v) * PAD_DEAD) / (1 - PAD_DEAD); };
+    const cur = []; for (let i = 0; i < 16; i++){ const b = p.buttons[i]; cur[i] = !!(b && (b.pressed || b.value > 0.5)); }
+    const prev = this.prev;
+    const down = i => cur[i] && !prev[i], up = i => !cur[i] && prev[i];
+    const busy = cur.some(Boolean) || Math.abs(ax(0)) + Math.abs(ax(1)) + Math.abs(ax(2)) + Math.abs(ax(3)) > 0;
+    if (busy){ if (!this.active) this.wake(); this.lastT = now; }
+    else if (this.active && now - this.lastT > 60000) this.sleep();
+    if (!this.active){ this.prev = cur; return; }
+    const inWorld = !!(game.running && game.ui === 'none');
+    game.padLock = inWorld;
+    const layer = inWorld ? 'world' : 'menu';
+    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF']) this.hold(k, false); } }
+    if (inWorld) this.world(cur, down, up, ax, dt); else this.menu(cur, down, up, ax, dt);
+    this.prev = cur;
+  },
+  digit(n){ this.tap(n === 9 ? 'Digit0' : 'Digit' + (n + 1)); },
+  world(cur, down, up, ax, dt){
+    // look: the right stick, squared for a fine centre
+    const lx = ax(2), ly = ax(3);
+    if (lx || ly){ const k = ((game.opts.padSens == null ? 100 : game.opts.padSens) / 100) * 1400 * dt; this.look(lx * Math.abs(lx) * k, ly * Math.abs(ly) * k); }
+    // move: the left stick, analog for walking, keys for everything that reads them
+    const mx = ax(0), my = -ax(1);
+    game.padMove = (mx || my) ? { x: mx, y: my } : null;
+    this.hold('KeyW', my > 0.45); this.hold('KeyS', my < -0.45); this.hold('KeyD', mx > 0.45); this.hold('KeyA', mx < -0.45);
+    this.hold('ShiftLeft', cur[PAD.LS]);
+    // triggers: the mouse buttons; R3: the middle button (scroll mode)
+    if (down(PAD.RT)) this.mouse('mousedown', 0); if (up(PAD.RT)) this.mouse('mouseup', 0);
+    if (down(PAD.LT)) this.mouse('mousedown', 2); if (up(PAD.LT)) this.mouse('mouseup', 2);
+    if (down(PAD.RS)){ this.mouse('mousedown', 1); this.mouse('mouseup', 1); }
+    // VIEW held is a chord layer; VIEW alone is the map
+    if (down(PAD.VIEW)){ this.chord = true; this.chordUsed = false; }
+    if (this.chord){
+      this.hold('Space', false); this.hold('KeyC', false);
+      const C = { [PAD.X]: 'KeyN', [PAD.Y]: 'KeyP', [PAD.A]: 'KeyK', [PAD.LB]: 'KeyB', [PAD.RB]: 'KeyV' };
+      for (const b in C) if (down(+b)){ this.tap(C[b]); this.chordUsed = true; }
+      if (up(PAD.VIEW)){ this.chord = false; if (!this.chordUsed) this.tap('KeyM'); }
+      return;
+    }
+    this.hold('Space', cur[PAD.A]); this.hold('KeyC', cur[PAD.B]);
+    if (down(PAD.X)) this.tap('KeyE');
+    if (down(PAD.Y)) this.tap('KeyQ');
+    if (down(PAD.UP)) this.tap('KeyZ');
+    this.hold('KeyF', cur[PAD.DOWN]);
+    // shoulders: the hotbar, or the grid size while ▼ is held
+    if (down(PAD.LB) || down(PAD.RB)){
+      const d = down(PAD.RB) ? 1 : -1;
+      if (cur[PAD.DOWN]){ this.digit(((game.gridIdx || 0) + d + 10) % 10); }
+      else this.digit(((game.hotSel || 0) + d + 10) % 10);
+    }
+    // ◄ ►: the wheel (size), repeating while held
+    this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
+    this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    if (down(PAD.MENU)) openPause();
+  },
+  // ---- menus: a cursor ----
+  menu(cur, down, up, ax, dt){
+    game.padMove = null;
+    const c = $('padcursor');
+    const sx = ax(0) + ax(2), sy = ax(1) + ax(3);
+    if (sx || sy){
+      this.cx = Math.max(4, Math.min(innerWidth - 4, this.cx + sx * Math.abs(sx) * 1100 * dt));
+      this.cy = Math.max(4, Math.min(innerHeight - 4, this.cy + sy * Math.abs(sy) * 1100 * dt));
+      this.moved();
+    }
+    const dirs = [[PAD.UP, 0, -1], [PAD.DOWN, 0, 1], [PAD.LEFT, -1, 0], [PAD.RIGHT, 1, 0]];
+    for (const [b, dx, dy] of dirs) this.repeat('d' + b, cur[b], 0.35, 0.12, () => this.hop(dx, dy));
+    if (down(PAD.A)) this.click(0, false);
+    if (down(PAD.X)) this.click(2, false);
+    if (down(PAD.Y)) this.click(0, true);
+    if (down(PAD.B) || down(PAD.MENU)) this.back();
+    this.repeat('scr-', cur[PAD.LT], 0, 0.1, () => this.wheel(-160, this.under()));
+    this.repeat('scr+', cur[PAD.RT], 0, 0.1, () => this.wheel(160, this.under()));
+    if ((down(PAD.LB) || down(PAD.RB)) && game.running && INV_UIS.includes(game.ui)) this.digit(((game.hotSel || 0) + (down(PAD.RB) ? 1 : -1) + 10) % 10);
+    c.style.transform = 'translate(' + this.cx.toFixed(0) + 'px,' + this.cy.toFixed(0) + 'px)';
+  },
+  moved(){ const el = this.under(); this.mouse('mousemove', 0, el); if (typeof invCursor !== 'undefined'){ invCursor.mx = this.cx; invCursor.my = this.cy; } },
+  click(button, shift){
+    const el = this.under(); if (!el) return;
+    if (el.tagName === 'INPUT' && el.type === 'range') return;    // ◄ ► move a slider
+    this.mouse('mousedown', button, el, shift); this.mouse('mouseup', button, el, shift);
+    if (button === 0) this.mouse('click', 0, el, shift);
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.focus();   // the console's keyboard comes up for a field
+  },
+  visible(el){
+    if (el.disabled) return false;
+    if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  },
+  targets(){ return [...document.querySelectorAll('button, .btn, .slot, .craftrow, .mrow, .worlditem, input, select, textarea, .cattab, .amtbtn, .tab')].filter(el => this.visible(el)); },
+  // the d-pad: the nearest control in that direction; on a slider, its value
+  hop(dx, dy){
+    const under = this.under();
+    if (under && under.tagName === 'INPUT' && under.type === 'range' && dx){
+      const step = +under.step || 1;
+      under.value = Math.max(+under.min, Math.min(+under.max, +under.value + dx * step));
+      under.dispatchEvent(new Event('input', { bubbles: true })); under.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    let best = null, bd = 1e9;
+    for (const el of this.targets()){
+      const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const vx = x - this.cx, vy = y - this.cy, along = vx * dx + vy * dy, across = Math.abs(vx * dy - vy * dx);
+      if (along < 6 || across > along * 1.2 + 24) continue;
+      const d = along + across * 1.5;
+      if (d < bd){ bd = d; best = { x, y }; }
+    }
+    if (!best) return;
+    this.cx = best.x; this.cy = best.y; this.moved();
+    $('padcursor').style.transform = 'translate(' + this.cx.toFixed(0) + 'px,' + this.cy.toFixed(0) + 'px)';
+    AudioSys.sfx('select');
+  },
+  back(){
+    if (game.running){
+      if (game.ui === 'pause'){ resumeGame(); return; }
+      if (game.ui === 'options'){ $('btnOptionsBack').click(); return; }
+      if (game.ui === 'sign'){ closeSign(); return; }
+      if (game.ui !== 'none'){ if (typeof mapMenu !== 'undefined' && mapMenu.isOpen) mapMenu.close(); else closeOverlay(); }
+      return;
+    }
+    for (const b of document.querySelectorAll('button')){
+      if (!this.visible(b)) continue;
+      if (/^(BACK|CLOSE|CANCEL)/.test(b.textContent.trim().toUpperCase())){ b.click(); return; }
+    }
+  },
+};
 
 function bindInput(){
   const cv = () => game.renderer.domElement;
@@ -18886,6 +19466,8 @@ function updatePlayer(dt){
     if (k['KeyS']) fwd -= 1;
     if (k['KeyD']) str += 1;
     if (k['KeyA']) str -= 1;
+    // a stick walks at any speed and angle
+    if (game.padMove && (game.padMove.x || game.padMove.y)){ fwd = game.padMove.y; str = game.padMove.x; }
   }
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
@@ -19301,6 +19883,7 @@ function applyEdit(e){
   game.terrain.invalidate(e);
   waterSys.onEdit(e);
   markSave();
+  if (netSys.on && !netSys.applying) netSys.send({ t: 'e', e: CORE.serializeEdits([e])[0] });
 }
 
 // ---------- wrench prop registry ----------
@@ -20565,6 +21148,7 @@ function undoEdit(){
 function undoOne(){
   const e = game.edits.pop();
   game.terrain.invalidate(e);
+  if (netSys.on && !netSys.applying) netSys.send({ t: 'undo', e: CORE.serializeEdits([e])[0] });
   const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
     ? game.undoStack.pop() : null;
   if (rec){
@@ -24213,6 +24797,7 @@ function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
   $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
+  $('optPad').value = o.padSens == null ? 100 : o.padSens;
   $('optMus').value = o.music == null ? 45 : o.music;
   $('optRsc').value = o.rscale == null ? 100 : o.rscale;
   $('optShad').value = o.shadows; $('optRays').value = o.rays;
@@ -24227,6 +24812,7 @@ function openOptions(from){
 }
 function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
+  $('optPadV').textContent = $('optPad').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = lodTerrain.nearFarFor(+$('optRd').value) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
@@ -24248,6 +24834,7 @@ function applyOptions(){
   game.opts.shadows = +$('optShad').value;
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
+  game.opts.padSens = +$('optPad').value;
   game.opts.skin = +$('optSkin').value;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
@@ -24339,9 +24926,16 @@ function defaultSlots(mode){
 }
 
 // ---------- save / load ----------
-function markSave(){ game.savePending = true; game.saveTimer = performance.now(); }
+function markSave(){ game.savePending = true; game.saveTimer = performance.now(); netSys.dirty = true; }
 function saveNow(){
   if (!game.running || !game.worldId) return;
+  if (netSys.guest) return;                       // a guest's world belongs to the host
+  const data = buildSaveData();
+  try { saveWorldData(game.worldId, data); game.savePending = false; }
+  catch (err) { toast('save failed: ' + err.message); }
+}
+// the whole world as one object: the save, and what a host hands a guest
+function buildSaveData(){
   const data = {
     v: 5, name: game.worldName, seed: game.seedStr, mode: game.mode,
     edits: CORE.serializeEdits(game.edits),
@@ -24390,13 +24984,15 @@ function saveNow(){
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
-  try { saveWorldData(game.worldId, data); game.savePending = false; }
-  catch (err) { toast('save failed: ' + err.message); }
+  return data;
 }
 
 function startWorld(id){
   const data = loadWorldData(id);
   if (!data){ toast('world data missing'); return; }
+  startWorldData(id, data);
+}
+function startWorldData(id, data){
   const ixEntry = worldIndex().find(w => w.id === id);
   game.worldId = id;
   game.worldName = data.name || (ixEntry && ixEntry.name) || 'world';
@@ -24405,7 +25001,7 @@ function startWorld(id){
   game.edits = CORE.deserializeEdits(data.edits || []);
   wrenchSys.clearSelection();
   game.mode = data.mode || 'creative';   // pre-survival saves stay creative
-  game.slots = data.slots ? data.slots.map(reviveItem) : defaultSlots(game.mode);
+  game.slots = data.slots && !netSys.guest ? data.slots.map(reviveItem) : defaultSlots(game.mode);
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
@@ -24425,7 +25021,7 @@ function startWorld(id){
   game.riding = null;
   game.bossKills = data.bossKills || {};
   if (missionSys.group) missionSys.sync();
-  if (data.dispSlot !== undefined){
+  if (data.dispSlot !== undefined && !netSys.guest){
     game.dispSlot = data.dispSlot;
   } else {
     // older save (or fresh world): pull the first dispenser out of the slots
@@ -24437,7 +25033,7 @@ function startWorld(id){
     }
     if (!game.dispSlot && !data.slots) game.dispSlot = CORE.makeDispenser(game.mode === 'creative' ? 4 : 0);
   }
-  game.hp = data.hp == null ? 100 : data.hp;
+  game.hp = data.hp == null || netSys.guest ? 100 : data.hp;
   game.heal = data.heal || 0;
   game.timeOfDay = data.timeOfDay == null ? 0.2 : data.timeOfDay;
   game.day = data.day || 0;
@@ -24542,6 +25138,7 @@ function reviveItem(it){
 }
 function quitToTitle(){
   saveNow();
+  netSys.stop();
   game.photo = null;
   game.scope = 0;
   for (const e of game.entities) e.mesh = null;
@@ -25840,9 +26437,9 @@ function frame(now){
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
-  waterSys.tick(dt);
+  if (!netSys.guest) waterSys.tick(dt);
   fishingTick(dt);
-  wreckSys.tick(dt);
+  if (!netSys.guest) wreckSys.tick(dt);
   lodTerrain.update(game.pos.x, game.pos.y, game.pos.z);
   lodTerrain.frame();
   if (!meshPool.ok) lodTerrain.processSync(2);
@@ -25853,32 +26450,33 @@ function frame(now){
   updateSunShadow(dt);
   farTerrain.update();
   farShapeSys.update();
-  if (game.ui === 'none') updateEntities(dt, now);
+  if (game.ui === 'none' && !netSys.guest) updateEntities(dt, now);
+  netSys.tick(dt);
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
   powerSys.update(dt);
-  villageSys.tick(dt);
-  crewSys.tick(dt);
-  expeditionSys.tick(dt);
-  deepSys.tick(dt);
-  raidSys.tick(dt);
-  raidSys.update(dt);
-  raidBaseSys.tick(dt);
-  spireSys.tick(dt);
-  zigSys.tick(dt);
+  if (!netSys.guest) villageSys.tick(dt);
+  if (!netSys.guest) crewSys.tick(dt);
+  if (!netSys.guest) expeditionSys.tick(dt);
+  if (!netSys.guest) deepSys.tick(dt);
+  if (!netSys.guest) raidSys.tick(dt);
+  if (!netSys.guest) raidSys.update(dt);
+  if (!netSys.guest) raidBaseSys.tick(dt);
+  if (!netSys.guest) spireSys.tick(dt);
+  if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
-  collapseSys.tick(dt);
-  citySys.tick(dt);
+  if (!netSys.guest) collapseSys.tick(dt);
+  if (!netSys.guest) citySys.tick(dt);
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
   mirrorSys.tick(dt);
   if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
-  siegeSys.tick(dt);
+  if (!netSys.guest) siegeSys.tick(dt);
   roadSys.tick(dt);
   fallsSys.tick(dt);
   lineSys.tick(dt);
-  bossSys.tick(dt);
+  if (!netSys.guest) bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
     let bb = null, bd = 90;
@@ -26042,6 +26640,12 @@ function frame(now){
 function bindMenus(){
   $('btnWorlds').addEventListener('click', () => { hide('mainmenu'); refreshWorldList(); show('worldsmenu'); });
   $('btnWorldsBack').addEventListener('click', () => { hide('worldsmenu'); show('mainmenu'); });
+  $('btnJoin').addEventListener('click', () => { hide('mainmenu'); $('joinStatus').textContent = ''; show('joinmenu'); });
+  $('btnJoinBack').addEventListener('click', () => { netSys.stop(); hide('joinmenu'); show('mainmenu'); });
+  $('btnJoinGo').addEventListener('click', () => netSys.join($('joinCode').value));
+  $('joinCode').addEventListener('keydown', ev => { ev.stopPropagation(); if (ev.key === 'Enter') netSys.join($('joinCode').value); });
+  $('joinCode').addEventListener('keyup', ev => ev.stopPropagation());
+  $('btnInvite').addEventListener('click', () => netSys.invite());
   $('btnCreateWorld').addEventListener('click', createWorld);
   $('modeSurvival').addEventListener('click', () => { newWorldMode = 'survival';
     $('modeSurvival').classList.add('sel'); $('modeCreative').classList.remove('sel'); });
@@ -26064,7 +26668,12 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  $('btnConsolePreset').addEventListener('click', () => {
+    $('optRd').value = 3; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 75; $('optFps').value = FPS_STOPS.indexOf(60);
+    syncOptLabels(); toast('console preset — short view, no shadows, 75% scale, 60 fps'); AudioSys.sfx('toggle');
+  });
+  $('btnFullscreen').addEventListener('click', () => { const el = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); });
   $('btnSignSave').addEventListener('click', closeSign);
   $('signtext').addEventListener('keydown', e => {
     if (e.code === 'Enter' && !e.shiftKey){ e.preventDefault(); closeSign(); }
@@ -26076,6 +26685,7 @@ function bindMenus(){
 
 initRenderer();
 bindInput();
+padSys.init();
 wireItemTips();
 bindInvDnD();
 bindMenus();
@@ -26087,7 +26697,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { netSys, buildSaveData, startWorldData, markSave, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

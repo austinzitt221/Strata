@@ -132,6 +132,18 @@ order is mine. Big items are split so each build is one session.
    the kiosk, board while it stands, ride inside, step off at a
    station. Not yet: the mail car (queued), a clerk at the booth
    (COUNTERS), level crossings where your own roads meet it.
+## Austin's console request (2026-09-12), ahead of the City Arc
+
+- **THE PAD** — DONE (Build 39): a gamepad plays the whole game, world
+  and menus, by synthesizing the mouse and key events; fullscreen and a
+  console preset. To be confirmed on the Xbox itself.
+- **TOGETHER** — DONE (Build 40): host and guest by room code over
+  WebRTC (PeerJS's free signalling from a CDN), the host's world is the
+  truth, edits and props go both ways, creatures stream to the guest
+  and its blows come back. Later, as they come up: guests driving,
+  guest packs that persist, a third player, a relay for the
+  connections that need one, the guest's carved water.
+
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 
 Every one of these is a building with a desk in it, so the first one

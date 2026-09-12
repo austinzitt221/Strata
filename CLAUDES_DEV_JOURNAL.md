@@ -968,6 +968,58 @@ colours. I put the train in Lambert and got a black wall.
 
 Next: COUNTERS.
 
+## 2026-09-12 — Austin's console ask: THE PAD, then TOGETHER
+
+Austin wants to play with a friend on two Xbox Series S consoles, in
+the browser. Two builds: a controller, and two players in one world.
+
+The controller went in a morning because I refused to touch the input
+code: the pad is a synthesizer. It reads the Gamepad API and dispatches
+the same mousedown, wheel and keydown events the mouse and keyboard
+send, so every existing handler works unchanged, chords included. The
+only real change in the game is that a pad counts as pointer lock. The
+menus get a cursor and a d-pad that hops to the nearest control; that
+one function makes every screen I have ever built pad-usable.
+
+What I cannot verify here: Edge on the console handing the pad to the
+page, the console keyboard on a field, and the frame rate. Austin's
+first test is the whole question.
+
+TOGETHER next. The design I am going with: the host's world is the
+truth; the guest carves (edits go both ways, applied on receipt), sees
+the host's creatures and props as streamed state, and asks the host to
+do stateful things. Two players only. PeerJS's free signalling for
+room codes, WebRTC between them; a loopback transport so I can test it
+in one browser.
+
+## 2026-09-12, later — TOGETHER, and what I decided not to build
+
+The whole game was written for one player, and I had a day. The
+design that fit: the host's game is the world, the guest is a client
+that carves. Edits are the one thing both sides own equally (they are
+a list of shapes, order rarely matters, and a checksum every five
+seconds heals any drift from the host's copy). Everything else has one
+owner: creatures are the host's and stream down; the prop tables go
+to whoever touched them last; the clock is the host's. The guest runs
+none of the systems that make decisions (stamping, spawning, water,
+sieges, crew), so it cannot diverge; it only draws what it is told and
+sends what it does.
+
+Tested with two pages in one browser over a BroadcastChannel, which
+is the same message stream WebRTC will carry. What I could not test is
+WebRTC itself between two homes, and that is the thing most likely to
+fail first: without a relay some pairs of routers will not connect.
+Austin's first report will say.
+
+The surprising ease: the remote body is Object.create(playerBody)
+with its own root, so the third-person model I built for the camera
+became the friend for free.
+
+Not built, on purpose: guests driving (vehicles are simulated on the
+host; a guest at the wheel would need the host to hand over one
+entity), a persistent guest pack, more than two players. Each is a
+build if the first playtest asks for it.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -1000,7 +1052,12 @@ visible from the plane.
 **Camera yaw.** Forward is (-sin yaw, -cos yaw): yaw 0 looks toward -z,
 yaw pi toward +z, yaw -pi/2 toward +x.
 
-**Queue, in my order:** THE LINE, then the City Arc (COUNTERS, THE
+**Network:** TOGETHER (Build 40) is host-authoritative over WebRTC with
+PeerJS's cloud signalling loaded on demand; `window.__netLoopback`
+switches the transport to a BroadcastChannel for two-page tests.
+The guest never saves and runs no world simulation.
+
+**Queue, in my order:** the City Arc (COUNTERS, THE
 PRESS + THE EXCHANGE with the phone, THE PIT + MONUMENTS, THE BANK,
 OWNERSHIP, THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER,
 THE MAIL CAR), with FARMING, CREW D, MENAGERIE, DEEP B, SCULPT II and
