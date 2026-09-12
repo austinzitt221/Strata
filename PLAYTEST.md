@@ -5,6 +5,31 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 40 — TOGETHER (two machines)
+- [ ] Both open the game from the same URL. One of you plays a world,
+      pauses, INVITE A FRIEND: a five-letter code. The other: JOIN A
+      FRIEND on the title, type it, JOIN. Within a few seconds the
+      guest should be standing beside the host in the host's world.
+      If it says "no room with that code" the two machines could not
+      reach each other: tell me, with both networks (home wifi, phone
+      hotspot).
+- [ ] Carve and build beside each other. Both should see every hole
+      and every block, within a second. Undo something.
+- [ ] Walk apart and back: the friend's body, walk cycle, head turn,
+      the item in their hand, arm working while they mine.
+- [ ] Fight the same lurker at night. The guest's hits should count.
+      Let a creature chase the guest.
+- [ ] Place a torch, a chest, a door on each side; open each other's
+      chest and trade through it.
+- [ ] The host: SAVE & QUIT; reload the world; the guest's building
+      should be in it. The guest: QUIT, JOIN again: fresh kit, same
+      world.
+- [ ] On the Xbox: all of the above with the pad, and the frame rate
+      with two players in view.
+- Feedback I want: how long the join takes, how far behind the other
+  player's movement looks, and everything the guest reaches for that
+  the host has and the guest does not (driving is the known one).
+
 ## Build 39 — THE PAD (on the Xbox, in Edge)
 - [ ] Open the game from a URL in Edge on the console (GitHub Pages of
       this repo, or any host). Press a stick: a cursor should appear and

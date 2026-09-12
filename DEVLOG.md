@@ -2,6 +2,61 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 40 — TOGETHER (2026-09-12)
+
+Two players in one world, Austin's ask. Verified headlessly with two
+pages in one browser over a loopback channel (a build-40 suite: the
+host opens a room from the pause menu and the guest joins by code from
+the title and lands beside the host in the host's world with a fresh
+kit; an edit made by either appears in the other's list and an undo
+takes it back; a guest whose list drifts is put right by the host's
+next check; the host sees the guest's pose and body thirty metres off
+and creatures pick the nearer player; a grazer on the host is mirrored
+on the guest with a mesh and the guest's blow takes its hit points on
+the host; a torch and a chest placed by the host reach the guest and a
+torch placed by the guest reaches the host; the host's day and hour
+flow down; a drop under the guest's feet goes into the guest's pack;
+and the guest never writes a save; plus the smoke, pad and line
+suites).
+
+- **How it works.** The host's game is the world. INVITE A FRIEND in
+  the pause menu opens a room and shows a five-letter code; JOIN A
+  FRIEND on the title takes the code. The connection is WebRTC between
+  the two machines; the meeting point is PeerJS's free signalling
+  server, loaded from a CDN only when a room is opened or joined (the
+  game itself still needs nothing but Three). On joining, the guest
+  receives the whole save and loads it as a world of its own.
+- **What is shared.** Every edit as it is made, both ways, applied on
+  receipt; an undo travels too. Every five seconds the guest sends a
+  checksum of its edit list and the host sends the whole list back if
+  they differ, so the two worlds cannot drift for long. Each player's
+  position, look, pose, held item and work go to the other fifteen
+  times a second and drive a second body model. The host streams its
+  creatures (within 260 m of either player) ten times a second; the
+  guest mirrors them, shows them, and sends its blows back as hits.
+  Everything hand-placed and every world record (props, torches,
+  doors, wires, rails, roads, cities, villages, forts, the survey)
+  travels as one table set from whoever changed it last, at most every
+  two seconds and only when it actually changed. The host's clock and
+  weather flow down every three seconds. A drop a guest walks over is
+  handed to the guest by the host.
+- **What the guest does not do.** No world simulation of its own: no
+  stamping of cities, roads or villages, no creature spawns, no water
+  cells, no sieges, no crew logic; all of that is the host's and
+  arrives as edits, tables and mirrors. The guest never saves; its
+  pack starts as a fresh kit each time it joins and lives only for the
+  session. Vehicles are the host's creatures: a guest cannot drive
+  them yet. Trains, tickets and the map work for the guest, since the
+  timetable is a function of the clock.
+- **Known limits.** Two players. Water the guest carves does not
+  flow on the guest (no cells). If both players change props in the
+  same two seconds one of them loses that change. Creatures only spawn
+  around the host. Between two home connections WebRTC finds a path
+  most of the time without a relay; if it does not, there is no relay
+  server, and the join will say so. On the Xbox the game must be
+  served from a URL (an index.html redirect is in the repo for GitHub
+  Pages).
+
 ## Build 39 — THE PAD (2026-09-12)
 
 Austin wants to play on an Xbox Series S, in Edge, with a friend. This

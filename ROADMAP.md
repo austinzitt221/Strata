@@ -137,10 +137,12 @@ order is mine. Big items are split so each build is one session.
 - **THE PAD** — DONE (Build 39): a gamepad plays the whole game, world
   and menus, by synthesizing the mouse and key events; fullscreen and a
   console preset. To be confirmed on the Xbox itself.
-- **TOGETHER** — two players in one world: host and guest by room code
-  over WebRTC (PeerJS from a CDN for the signalling), the host's world
-  is the truth, edits and players go both ways, the host's creatures
-  and props stream to the guest. Known limits go in the DEVLOG.
+- **TOGETHER** — DONE (Build 40): host and guest by room code over
+  WebRTC (PeerJS's free signalling from a CDN), the host's world is the
+  truth, edits and props go both ways, creatures stream to the guest
+  and its blows come back. Later, as they come up: guests driving,
+  guest packs that persist, a third player, a relay for the
+  connections that need one, the guest's carved water.
 
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 
