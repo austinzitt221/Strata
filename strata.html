@@ -49,6 +49,9 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#padcursor{position:fixed; left:0; top:0; width:18px; height:18px; margin:-9px 0 0 -9px; border:2px solid #ffd76a; border-radius:50%; box-shadow:0 0 0 2px #000, 0 0 8px rgba(0,0,0,.7); pointer-events:none; z-index:200;}
+#padhints{position:fixed; right:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:560px; line-height:1.5; letter-spacing:.5px;}
+body.pad{cursor:none;}
 #statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
 .statbar{width:220px; height:12px; background:rgba(10,9,16,0.75); border:2px solid var(--ui-border);}
 .statfill{height:100%;}
@@ -200,6 +203,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="sub">carve the world</div>
     <button class="btn" id="btnWorlds">WORLDS</button>
     <button class="btn" id="btnOptionsMain">OPTIONS</button>
+    <button class="btn" id="btnFullscreen">FULLSCREEN</button>
     <button class="btn" id="btnQuit">QUIT GAME</button>
   </div>
 </div>
@@ -234,6 +238,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="panel" style="min-width:420px;">
     <h2>OPTIONS</h2>
     <div class="optrow"><label>MOUSE SENSITIVITY</label><input type="range" id="optSens" min="20" max="300" step="5"><span class="val" id="optSensV"></span></div>
+    <div class="optrow"><label>STICK SENSITIVITY</label><input type="range" id="optPad" min="20" max="300" step="5"><span class="val" id="optPadV"></span></div>
     <div class="optrow"><label>FOV</label><input type="range" id="optFov" min="60" max="110" step="1"><span class="val" id="optFovV"></span></div>
     <div class="optrow"><label>RENDER DISTANCE</label><input type="range" id="optRd" min="2" max="32" step="1"><span class="val" id="optRdV"></span></div>
     <div class="optrow"><label>SHADOWS</label><input type="range" id="optShad" min="0" max="1" step="1"><span class="val" id="optShadV"></span></div>
@@ -243,6 +248,7 @@ input[type=range]{width:180px; accent-color:var(--accent);}
     <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>RENDER SCALE</label><input type="range" id="optRsc" min="50" max="150" step="25"><span class="val" id="optRscV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
+    <button class="btn small" id="btnConsolePreset" title="a console or a small machine: short view, no shadows or rays, 75% render scale, 60 fps">CONSOLE PRESET</button>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
 </div>
@@ -335,6 +341,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
   <div class="zl" id="scopezoom">4.0x</div>
 </div>
 <div id="itemtip" class="hidden"></div>
+<div id="padcursor" class="hidden"></div>
+<div id="padhints" class="hidden"></div>
 <div id="stationscreen" class="screen hidden dim">
   <div class="panel" style="min-width:420px;">
     <h2 id="stationtitle">STATION</h2>
@@ -4620,7 +4628,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -17726,10 +17734,195 @@ function updateProjectiles(dt){
 // ---------- input ----------
 const DIGITS = { Digit1:0, Digit2:1, Digit3:2, Digit4:3, Digit5:4, Digit6:5, Digit7:6, Digit8:7, Digit9:8, Digit0:9 };
 
-function isLocked(){ return game.debugLock || document.pointerLockElement === game.renderer.domElement; }
+function isLocked(){ return game.debugLock || game.padLock || document.pointerLockElement === game.renderer.domElement; }
 function requestLock(){
+  if (game.padLock) return;                      // a controller needs no pointer lock
   if (!isLocked()) game.renderer.domElement.requestPointerLock({ unadjustedMovement: true }).catch?.(()=>{});
 }
+
+// ---------- controller ----------
+// A gamepad (an Xbox pad in Edge on the console, or any pad on a PC) is
+// read every frame and turned into the events the mouse and keys already
+// send, so nothing downstream knows the difference. In the world: sticks
+// move and look, triggers are the mouse buttons, the face buttons are
+// jump, crouch, inventory and crafting. In any menu: the left stick moves
+// a cursor, the d-pad hops between controls, A clicks, B backs out.
+const PAD_DEAD = 0.18;
+const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, MENU: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▲ fly · ▼+LB/RB grid · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror, +LB/RB reach) · MENU pause';
+const PAD_HINT_MENU = 'stick: cursor · d-pad: hop · A select · X right-click · Y shift-click · B back · LT/RT scroll · LB/RB hotbar';
+const padSys = {
+  active: false, lastT: 0, lastPoll: 0, prev: [], cx: 0, cy: 0, chord: false, chordUsed: false, held: {}, rep: {}, grid: 0, layer: '',
+  init(){
+    this.cx = innerWidth / 2; this.cy = innerHeight / 2;
+    window.addEventListener('gamepadconnected', () => { this.wake(); toast('controller connected'); });
+    const loop = () => { try { this.poll(); } catch (err){ if (!this.errOnce){ this.errOnce = true; console.error(err); } } requestAnimationFrame(loop); };
+    requestAnimationFrame(loop);
+  },
+  pad(){
+    const gp = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (let i = 0; i < gp.length; i++) if (gp[i] && gp[i].connected) return gp[i];
+    return null;
+  },
+  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); },
+  sleep(){
+    this.active = false; game.padLock = false; game.padMove = null; this.layer = '';
+    for (const k in this.held) this.hold(k, false);
+    document.body.classList.remove('pad'); $('padcursor').classList.add('hidden'); $('padhints').classList.add('hidden');
+  },
+  // ---- synthetic input: the same events the mouse and keys send ----
+  key(code, down, shift){ document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code, bubbles: true, cancelable: true, shiftKey: !!shift })); },
+  tap(code){ this.key(code, true); this.key(code, false); },
+  hold(code, on){
+    if (on && !this.held[code]){ this.held[code] = true; this.key(code, true); }
+    else if (!on && this.held[code]){ this.held[code] = false; this.key(code, false); }
+  },
+  mouse(type, button, el, shift){
+    const ev = new MouseEvent(type, { bubbles: true, cancelable: true, button, buttons: type === 'mousedown' ? (button === 0 ? 1 : button === 2 ? 2 : 4) : 0, clientX: this.cx, clientY: this.cy, shiftKey: !!shift });
+    (el || document).dispatchEvent(ev);
+  },
+  look(dx, dy){ document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, movementX: dx, movementY: dy, clientX: this.cx, clientY: this.cy })); },
+  wheel(dy, el){ (el || document).dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: dy, clientX: this.cx, clientY: this.cy })); },
+  under(){ const c = $('padcursor'); c.style.display = 'none'; const el = document.elementFromPoint(this.cx, this.cy); c.style.display = ''; return el; },
+  // a held button that fires again while held
+  repeat(name, on, first, every, fn){
+    const r = this.rep[name] || (this.rep[name] = { t: 0, on: false });
+    if (!on){ r.on = false; return; }
+    const now = performance.now() / 1000;
+    if (!r.on){ r.on = true; r.t = now + first; fn(); return; }
+    if (now >= r.t){ r.t = now + every; fn(); }
+  },
+  poll(){
+    const p = this.pad();
+    const now = performance.now();
+    const dt = Math.min(0.05, (now - (this.lastPoll || now)) / 1000); this.lastPoll = now;
+    if (!p){ if (this.active && now - this.lastT > 60000) this.sleep(); return; }
+    const ax = i => { const v = p.axes[i] || 0; return Math.abs(v) < PAD_DEAD ? 0 : (v - Math.sign(v) * PAD_DEAD) / (1 - PAD_DEAD); };
+    const cur = []; for (let i = 0; i < 16; i++){ const b = p.buttons[i]; cur[i] = !!(b && (b.pressed || b.value > 0.5)); }
+    const prev = this.prev;
+    const down = i => cur[i] && !prev[i], up = i => !cur[i] && prev[i];
+    const busy = cur.some(Boolean) || Math.abs(ax(0)) + Math.abs(ax(1)) + Math.abs(ax(2)) + Math.abs(ax(3)) > 0;
+    if (busy){ if (!this.active) this.wake(); this.lastT = now; }
+    else if (this.active && now - this.lastT > 60000) this.sleep();
+    if (!this.active){ this.prev = cur; return; }
+    const inWorld = !!(game.running && game.ui === 'none');
+    game.padLock = inWorld;
+    const layer = inWorld ? 'world' : 'menu';
+    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF']) this.hold(k, false); } }
+    if (inWorld) this.world(cur, down, up, ax, dt); else this.menu(cur, down, up, ax, dt);
+    this.prev = cur;
+  },
+  digit(n){ this.tap(n === 9 ? 'Digit0' : 'Digit' + (n + 1)); },
+  world(cur, down, up, ax, dt){
+    // look: the right stick, squared for a fine centre
+    const lx = ax(2), ly = ax(3);
+    if (lx || ly){ const k = ((game.opts.padSens == null ? 100 : game.opts.padSens) / 100) * 1400 * dt; this.look(lx * Math.abs(lx) * k, ly * Math.abs(ly) * k); }
+    // move: the left stick, analog for walking, keys for everything that reads them
+    const mx = ax(0), my = -ax(1);
+    game.padMove = (mx || my) ? { x: mx, y: my } : null;
+    this.hold('KeyW', my > 0.45); this.hold('KeyS', my < -0.45); this.hold('KeyD', mx > 0.45); this.hold('KeyA', mx < -0.45);
+    this.hold('ShiftLeft', cur[PAD.LS]);
+    // triggers: the mouse buttons; R3: the middle button (scroll mode)
+    if (down(PAD.RT)) this.mouse('mousedown', 0); if (up(PAD.RT)) this.mouse('mouseup', 0);
+    if (down(PAD.LT)) this.mouse('mousedown', 2); if (up(PAD.LT)) this.mouse('mouseup', 2);
+    if (down(PAD.RS)){ this.mouse('mousedown', 1); this.mouse('mouseup', 1); }
+    // VIEW held is a chord layer; VIEW alone is the map
+    if (down(PAD.VIEW)){ this.chord = true; this.chordUsed = false; }
+    if (this.chord){
+      this.hold('Space', false); this.hold('KeyC', false);
+      const C = { [PAD.X]: 'KeyN', [PAD.Y]: 'KeyP', [PAD.A]: 'KeyK', [PAD.LB]: 'KeyB', [PAD.RB]: 'KeyV' };
+      for (const b in C) if (down(+b)){ this.tap(C[b]); this.chordUsed = true; }
+      if (up(PAD.VIEW)){ this.chord = false; if (!this.chordUsed) this.tap('KeyM'); }
+      return;
+    }
+    this.hold('Space', cur[PAD.A]); this.hold('KeyC', cur[PAD.B]);
+    if (down(PAD.X)) this.tap('KeyE');
+    if (down(PAD.Y)) this.tap('KeyQ');
+    if (down(PAD.UP)) this.tap('KeyZ');
+    this.hold('KeyF', cur[PAD.DOWN]);
+    // shoulders: the hotbar, or the grid size while ▼ is held
+    if (down(PAD.LB) || down(PAD.RB)){
+      const d = down(PAD.RB) ? 1 : -1;
+      if (cur[PAD.DOWN]){ this.digit(((game.gridIdx || 0) + d + 10) % 10); }
+      else this.digit(((game.hotSel || 0) + d + 10) % 10);
+    }
+    // ◄ ►: the wheel (size), repeating while held
+    this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
+    this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    if (down(PAD.MENU)) openPause();
+  },
+  // ---- menus: a cursor ----
+  menu(cur, down, up, ax, dt){
+    game.padMove = null;
+    const c = $('padcursor');
+    const sx = ax(0) + ax(2), sy = ax(1) + ax(3);
+    if (sx || sy){
+      this.cx = Math.max(4, Math.min(innerWidth - 4, this.cx + sx * Math.abs(sx) * 1100 * dt));
+      this.cy = Math.max(4, Math.min(innerHeight - 4, this.cy + sy * Math.abs(sy) * 1100 * dt));
+      this.moved();
+    }
+    const dirs = [[PAD.UP, 0, -1], [PAD.DOWN, 0, 1], [PAD.LEFT, -1, 0], [PAD.RIGHT, 1, 0]];
+    for (const [b, dx, dy] of dirs) this.repeat('d' + b, cur[b], 0.35, 0.12, () => this.hop(dx, dy));
+    if (down(PAD.A)) this.click(0, false);
+    if (down(PAD.X)) this.click(2, false);
+    if (down(PAD.Y)) this.click(0, true);
+    if (down(PAD.B) || down(PAD.MENU)) this.back();
+    this.repeat('scr-', cur[PAD.LT], 0, 0.1, () => this.wheel(-160, this.under()));
+    this.repeat('scr+', cur[PAD.RT], 0, 0.1, () => this.wheel(160, this.under()));
+    if ((down(PAD.LB) || down(PAD.RB)) && game.running && INV_UIS.includes(game.ui)) this.digit(((game.hotSel || 0) + (down(PAD.RB) ? 1 : -1) + 10) % 10);
+    c.style.transform = 'translate(' + this.cx.toFixed(0) + 'px,' + this.cy.toFixed(0) + 'px)';
+  },
+  moved(){ const el = this.under(); this.mouse('mousemove', 0, el); if (typeof invCursor !== 'undefined'){ invCursor.mx = this.cx; invCursor.my = this.cy; } },
+  click(button, shift){
+    const el = this.under(); if (!el) return;
+    if (el.tagName === 'INPUT' && el.type === 'range') return;    // ◄ ► move a slider
+    this.mouse('mousedown', button, el, shift); this.mouse('mouseup', button, el, shift);
+    if (button === 0) this.mouse('click', 0, el, shift);
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.focus();   // the console's keyboard comes up for a field
+  },
+  visible(el){
+    if (el.disabled) return false;
+    if (!el.offsetParent && getComputedStyle(el).position !== 'fixed') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 2 && r.height > 2 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+  },
+  targets(){ return [...document.querySelectorAll('button, .btn, .slot, .craftrow, .mrow, .worlditem, input, select, textarea, .cattab, .amtbtn, .tab')].filter(el => this.visible(el)); },
+  // the d-pad: the nearest control in that direction; on a slider, its value
+  hop(dx, dy){
+    const under = this.under();
+    if (under && under.tagName === 'INPUT' && under.type === 'range' && dx){
+      const step = +under.step || 1;
+      under.value = Math.max(+under.min, Math.min(+under.max, +under.value + dx * step));
+      under.dispatchEvent(new Event('input', { bubbles: true })); under.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    let best = null, bd = 1e9;
+    for (const el of this.targets()){
+      const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      const vx = x - this.cx, vy = y - this.cy, along = vx * dx + vy * dy, across = Math.abs(vx * dy - vy * dx);
+      if (along < 6 || across > along * 1.2 + 24) continue;
+      const d = along + across * 1.5;
+      if (d < bd){ bd = d; best = { x, y }; }
+    }
+    if (!best) return;
+    this.cx = best.x; this.cy = best.y; this.moved();
+    $('padcursor').style.transform = 'translate(' + this.cx.toFixed(0) + 'px,' + this.cy.toFixed(0) + 'px)';
+    AudioSys.sfx('select');
+  },
+  back(){
+    if (game.running){
+      if (game.ui === 'pause'){ resumeGame(); return; }
+      if (game.ui === 'options'){ $('btnOptionsBack').click(); return; }
+      if (game.ui === 'sign'){ closeSign(); return; }
+      if (game.ui !== 'none'){ if (typeof mapMenu !== 'undefined' && mapMenu.isOpen) mapMenu.close(); else closeOverlay(); }
+      return;
+    }
+    for (const b of document.querySelectorAll('button')){
+      if (!this.visible(b)) continue;
+      if (/^(BACK|CLOSE|CANCEL)/.test(b.textContent.trim().toUpperCase())){ b.click(); return; }
+    }
+  },
+};
 
 function bindInput(){
   const cv = () => game.renderer.domElement;
@@ -18886,6 +19079,8 @@ function updatePlayer(dt){
     if (k['KeyS']) fwd -= 1;
     if (k['KeyD']) str += 1;
     if (k['KeyA']) str -= 1;
+    // a stick walks at any speed and angle
+    if (game.padMove && (game.padMove.x || game.padMove.y)){ fwd = game.padMove.y; str = game.padMove.x; }
   }
   // in water = below sea level AND over a column that is actually a lake —
   // dry caves under normal land stay dry (no blanket world water table)
@@ -24213,6 +24408,7 @@ function openOptions(from){
   optionsReturn = from;
   const o = game.opts;
   $('optSens').value = o.sens; $('optFov').value = o.fov; $('optRd').value = o.rd; $('optVol').value = o.vol;
+  $('optPad').value = o.padSens == null ? 100 : o.padSens;
   $('optMus').value = o.music == null ? 45 : o.music;
   $('optRsc').value = o.rscale == null ? 100 : o.rscale;
   $('optShad').value = o.shadows; $('optRays').value = o.rays;
@@ -24227,6 +24423,7 @@ function openOptions(from){
 }
 function syncOptLabels(){
   $('optSensV').textContent = $('optSens').value + '%';
+  $('optPadV').textContent = $('optPad').value + '%';
   $('optFovV').textContent = $('optFov').value + '°';
   $('optRdV').textContent = lodTerrain.nearFarFor(+$('optRd').value) + 'm';
   $('optVolV').textContent = $('optVol').value + '%';
@@ -24248,6 +24445,7 @@ function applyOptions(){
   game.opts.shadows = +$('optShad').value;
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
+  game.opts.padSens = +$('optPad').value;
   game.opts.skin = +$('optSkin').value;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
@@ -26064,7 +26262,12 @@ function bindMenus(){
   $('btnSaveQuit').addEventListener('click', quitToTitle);
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  $('btnConsolePreset').addEventListener('click', () => {
+    $('optRd').value = 3; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 75; $('optFps').value = FPS_STOPS.indexOf(60);
+    syncOptLabels(); toast('console preset — short view, no shadows, 75% scale, 60 fps'); AudioSys.sfx('toggle');
+  });
+  $('btnFullscreen').addEventListener('click', () => { const el = document.documentElement; if (document.fullscreenElement) document.exitFullscreen(); else if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); });
   $('btnSignSave').addEventListener('click', closeSign);
   $('signtext').addEventListener('keydown', e => {
     if (e.code === 'Enter' && !e.shiftKey){ e.preventDefault(); closeSign(); }
@@ -26076,6 +26279,7 @@ function bindMenus(){
 
 initRenderer();
 bindInput();
+padSys.init();
 wireItemTips();
 bindInvDnD();
 bindMenus();
@@ -26087,7 +26291,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

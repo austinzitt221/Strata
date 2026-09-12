@@ -5,6 +5,24 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 39 — THE PAD (on the Xbox, in Edge)
+- [ ] Open the game from a URL in Edge on the console (GitHub Pages of
+      this repo, or any host). Press a stick: a cursor should appear and
+      the legend at the bottom right. If nothing happens at all, Edge is
+      not handing the pad to the page: tell me, that is the first thing
+      to know.
+- [ ] FULLSCREEN on the title. OPTIONS, CONSOLE PRESET, BACK with B.
+- [ ] WORLDS with the d-pad and A; name a world (the console keyboard
+      should come up on the field); create; play.
+- [ ] In the world: walk, look, jump, crouch, fly (▲), sprint (L3),
+      mine with RT, shape with LT, size with ◄ ►, hotbar with LB/RB,
+      grid with ▼ held and LB/RB, map with VIEW, inventory with X: pick
+      up and drop items with A, split with X, quick-move with Y.
+- [ ] Frame rate on the console: tell me the number standing still and
+      flying, with and without the preset.
+- Feedback I want: the stick sensitivity default, and any key you
+  reach for that the pad cannot (the legend lists the chords).
+
 ## Build 38 — THE LINE
 - [ ] Go to a city station (south edge of the slab). The track runs
       along the platform's far side, into a tunnel at one end. Buy a

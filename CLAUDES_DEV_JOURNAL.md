@@ -968,6 +968,30 @@ colours. I put the train in Lambert and got a black wall.
 
 Next: COUNTERS.
 
+## 2026-09-12 — Austin's console ask: THE PAD, then TOGETHER
+
+Austin wants to play with a friend on two Xbox Series S consoles, in
+the browser. Two builds: a controller, and two players in one world.
+
+The controller went in a morning because I refused to touch the input
+code: the pad is a synthesizer. It reads the Gamepad API and dispatches
+the same mousedown, wheel and keydown events the mouse and keyboard
+send, so every existing handler works unchanged, chords included. The
+only real change in the game is that a pad counts as pointer lock. The
+menus get a cursor and a d-pad that hops to the nearest control; that
+one function makes every screen I have ever built pad-usable.
+
+What I cannot verify here: Edge on the console handing the pad to the
+page, the console keyboard on a field, and the frame rate. Austin's
+first test is the whole question.
+
+TOGETHER next. The design I am going with: the host's world is the
+truth; the guest carves (edits go both ways, applied on receipt), sees
+the host's creatures and props as streamed state, and asks the host to
+do stateful things. Two players only. PeerJS's free signalling for
+room codes, WebRTC between them; a loopback transport so I can test it
+in one browser.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

@@ -2,6 +2,45 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 39 — THE PAD (2026-09-12)
+
+Austin wants to play on an Xbox Series S, in Edge, with a friend. This
+build is the controller half; TOGETHER (Build 40) is the other. Verified
+headlessly with a fake gamepad (a build-39 suite drives the title with
+the stick and the d-pad, opens WORLDS with A and backs out with B, moves
+a slider with the d-pad, then in the world looks with the right stick,
+walks with the left, holds the trigger for the drill, jumps with A,
+sizes with the d-pad, changes hotbar slot with the shoulders, sets the
+grid with the d-pad held, opens the map with VIEW, the inventory with
+X, picks an item up and puts it back with A, pauses with MENU and
+resumes with B).
+
+- **One idea.** The pad is read every frame and turned into the events
+  the mouse and keys already send (synthetic mousedown, wheel, keydown
+  on the document), so nothing downstream knows the difference and
+  every key the game has can be reached. A pad needs no pointer lock:
+  while it is in use the game counts itself locked.
+- **In the world.** Left stick walks (analog, any speed and angle),
+  right stick looks (squared for a fine centre, its own sensitivity in
+  OPTIONS), RT is the left button, LT the right, R3 the middle (scroll
+  mode), L3 sprint, A jump, B crouch, X inventory, Y crafting, LB/RB
+  hotbar, ◄ ► size, ▲ fly, ▼ held with LB/RB the grid size (▼ alone
+  toggles snap, as F does), VIEW the map, MENU pause. VIEW held is a
+  chord layer: +X blueprints, +Y photo, +A mirror, +LB/RB reach.
+- **In every menu.** A cursor. The sticks move it, the d-pad hops it to
+  the nearest control in that direction (on a slider ◄ ► change the
+  value instead), A clicks, X right-clicks, Y shift-clicks, B backs out
+  of anything, LT/RT scroll a list, LB/RB change the hotbar slot in the
+  inventory. A field takes focus on A, so the console's keyboard comes
+  up for a name.
+- **Hints.** A small legend at the bottom right while a pad is in use,
+  one for the world and one for menus. The mouse cursor hides.
+- **For the console.** A FULLSCREEN button on the title, and a CONSOLE
+  PRESET in OPTIONS (short view, no shadows or rays, 75% render scale,
+  60 fps). To play on the Xbox the file has to be served from a URL
+  (GitHub Pages from this repo works); Edge on the console supports the
+  Gamepad API, and this is the first thing to confirm on the machine.
+
 ## Build 38 — THE LINE (2026-09-11)
 
 Austin's trains, first of the City Arc queue. Verified headlessly (a
