@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 39.1 — THE PAD II: the white screen (2026-09-13)
+
+Austin on the Xbox: Edge on the console keeps the controller for
+itself as a mouse until you turn on its "website controls" switch by
+the address bar; the game then hears the pad, but making that switch
+with a world open turned the screen white with only the HUD and the
+markers left, the game still running underneath (mining worked). I
+cannot see that machine, so this build makes the renderer hard to
+break, gives it a way back, and gives Austin a readout to send me.
+Verified headlessly (a suite that reads the corner note through none,
+found and on; feeds the viewport a zero-height window and checks the
+camera is left alone, poisons the camera's aspect and checks the
+once-a-second guard heals it; resets the renderer and checks the old
+canvas is gone, the new one draws a frame with many colours, and the
+pause readout is filled; plus the pad suite).
+
+- **The viewport cannot go bad.** A browser switching modes can report
+  a zero-height window for a moment, and a camera given that aspect
+  never draws again: the likeliest cause. The size is now applied only
+  when it is real, re-applied after resize, orientation, fullscreen,
+  page-show and visibility changes with two delayed retries, and
+  checked once a second, so a camera that went bad heals within a
+  second on its own.
+- **A lost context comes back.** If the browser drops the WebGL
+  context the game waits three seconds for it to return and then
+  rebuilds the renderer from scratch; the same scene draws again on
+  the next frame.
+- **RESET GRAPHICS** in the pause menu does that rebuild by hand, and
+  under it a readout: window size, canvas size, pixel ratio, camera
+  aspect, controller state, GPU name. If the screen ever goes white
+  again, that line is what I need.
+- **The corner note.** Bottom left of the title (and menus): whether a
+  controller is heard, found but silent, or none, with the Xbox
+  instruction. The pad has always been polled every frame; this makes
+  the state visible.
+
 ## Build 41 — TOGETHER II (2026-09-13)
 
 Austin's second co-op report: the guest needs to keep its things

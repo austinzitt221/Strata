@@ -51,6 +51,8 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
 #netstatus{position:fixed; left:12px; top:44px; font-size:11px; color:#a9d4ff; background:rgba(10,9,16,.6); padding:4px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:30; letter-spacing:1px;}
 #padcursor{position:fixed; left:0; top:0; width:18px; height:18px; margin:-9px 0 0 -9px; border:2px solid #ffd76a; border-radius:50%; box-shadow:0 0 0 2px #000, 0 0 8px rgba(0,0,0,.7); pointer-events:none; z-index:200;}
+#padstate{position:fixed; left:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:420px; line-height:1.5; letter-spacing:.5px;}
+#padstate.on{color:#8bff9e;}
 #padhints{position:fixed; right:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:560px; line-height:1.5; letter-spacing:.5px;}
 body.pad{cursor:none;}
 #statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
@@ -272,6 +274,8 @@ body.pad{cursor:none;}
     <button class="btn" id="btnPauseOptions">OPTIONS</button>
     <button class="btn" id="btnInvite">INVITE A FRIEND</button>
     <div class="sub hidden" id="inviteBox" style="margin:4px 0 10px; line-height:1.6;"></div>
+    <button class="btn small" id="btnResetGfx" title="if the world has gone blank: a new renderer, everything drawn again">RESET GRAPHICS</button>
+    <div class="sub" id="gfxinfo" style="font-size:10px; margin:6px 0 8px; line-height:1.5;"></div>
     <button class="btn" id="btnSaveQuit">SAVE &amp; QUIT TO TITLE</button>
   </div>
 </div>
@@ -357,6 +361,7 @@ body.pad{cursor:none;}
 </div>
 <div id="itemtip" class="hidden"></div>
 <div id="padcursor" class="hidden"></div>
+<div id="padstate"></div>
 <div id="padhints" class="hidden"></div>
 <div id="stationscreen" class="screen hidden dim">
   <div class="panel" style="min-width:420px;">
@@ -5172,23 +5177,66 @@ function capsuleFree(x, y, z, edits){
 }
 
 // ---------- scene setup ----------
+// the viewport, applied only when it makes sense: a browser switching
+// modes (Edge on the Xbox taking the controller for the page, a
+// fullscreen change) can report a zero-height window for a moment, and
+// a camera given that aspect never draws again
+let vpW = 0, vpH = 0;
+function applyViewport(force){
+  const w = window.innerWidth, h = window.innerHeight;
+  if (!(w > 1 && h > 1) || !game.renderer) return false;
+  if (!force && w === vpW && h === vpH) return true;
+  vpW = w; vpH = h;
+  game.renderer.setSize(w, h);
+  if (game.camera){
+    game.camera.aspect = w / h;
+    game.camera.updateProjectionMatrix();
+  }
+  return true;
+}
 function initRenderer(){
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // raw colors end to end
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = false;   // we mark needsUpdate once per frame
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * ((game.opts.rscale || 100) / 100));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(Math.max(2, window.innerWidth), Math.max(2, window.innerHeight));
   renderer.domElement.className = 'game';
   document.body.insertBefore(renderer.domElement, document.body.firstChild);
   game.renderer = renderer;
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    if (game.camera){
-      game.camera.aspect = window.innerWidth / window.innerHeight;
-      game.camera.updateProjectionMatrix();
-    }
-  });
+  vpW = 0; vpH = 0;
+  // a lost context: the browser may give it back; if it does not within
+  // a few seconds the renderer is rebuilt from scratch
+  renderer.domElement.addEventListener('webglcontextlost', ev => { ev.preventDefault(); game.ctxLost = performance.now(); toast('graphics context lost — restoring'); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { game.ctxLost = 0; applyViewport(true); toast('graphics restored'); });
+  if (!initRenderer.bound){
+    initRenderer.bound = true;
+    const later = () => { applyViewport(); setTimeout(() => applyViewport(), 250); setTimeout(() => applyViewport(), 900); };
+    window.addEventListener('resize', later);
+    window.addEventListener('orientationchange', later);
+    document.addEventListener('fullscreenchange', later);
+    window.addEventListener('pageshow', later);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) later(); });
+  }
+}
+// throw the renderer away and make a new one: the same scene, every
+// texture and mesh uploaded again on the next frame
+function resetGraphics(){
+  const old = game.renderer;
+  if (old){ try { old.domElement.remove(); } catch (err) {} try { old.dispose(); } catch (err) {} }
+  game.ctxLost = 0;
+  initRenderer();
+  applyViewport(true);
+  if (game.terrainMat) game.terrainMat.needsUpdate = true;
+  toast('graphics reset');
+}
+// what the screen is doing, for a report from a machine I cannot see
+function gfxInfo(){
+  const r = game.renderer, cv = r && r.domElement, c = game.camera;
+  let gpu = '';
+  try { const gl = r.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; if (gl.isContextLost()) gpu = 'CONTEXT LOST · ' + gpu; } catch (err) {}
+  return 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
+       + ' · aspect ' + (c ? (+c.aspect).toFixed(3) : '-') + (c && !isFinite(c.aspect) ? ' BAD' : '') + ' · pad ' + (padSys.active ? 'on' : 'none') + (gpu ? ' · ' + gpu.slice(0, 60) : '');
 }
 
 const SKY = new THREE.Color(0x8fb8e8);
@@ -18316,11 +18364,20 @@ const padSys = {
     for (let i = 0; i < gp.length; i++) if (gp[i] && gp[i].connected) return gp[i];
     return null;
   },
-  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); },
+  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); this.state(); },
+  // the corner note: heard, or how to be heard
+  state(){
+    const el = $('padstate'); if (!el) return;
+    const p = this.pad();
+    el.classList.toggle('on', this.active);
+    el.classList.toggle('hidden', !!game.running && this.active);
+    el.textContent = this.active ? 'controller: on' : p ? 'controller: found — move a stick' : 'controller: none · on Xbox turn on Edge\'s website controls, then move a stick';
+  },
   sleep(){
     this.active = false; game.padLock = false; game.padMove = null; this.layer = '';
     for (const k in this.held) this.hold(k, false);
     document.body.classList.remove('pad'); $('padcursor').classList.add('hidden'); $('padhints').classList.add('hidden');
+    this.state();
   },
   // ---- synthetic input: the same events the mouse and keys send ----
   key(code, down, shift){ document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code, bubbles: true, cancelable: true, shiftKey: !!shift })); },
@@ -18348,6 +18405,7 @@ const padSys = {
     const p = this.pad();
     const now = performance.now();
     const dt = Math.min(0.05, (now - (this.lastPoll || now)) / 1000); this.lastPoll = now;
+    if (now - (this.stateT || 0) > 1000){ this.stateT = now; this.state(); }
     if (!p){ if (this.active && now - this.lastT > 60000) this.sleep(); return; }
     const ax = i => { const v = p.axes[i] || 0; return Math.abs(v) < PAD_DEAD ? 0 : (v - Math.sign(v) * PAD_DEAD) / (1 - PAD_DEAD); };
     const cur = []; for (let i = 0; i < 16; i++){ const b = p.buttons[i]; cur[i] = !!(b && (b.pressed || b.value > 0.5)); }
@@ -24968,6 +25026,7 @@ function buildBlueUI(){
 function openPause(){
   if (game.ui !== 'none') return;
   game.ui = 'pause'; show('pausemenu'); saveNow();
+  try { $('gfxinfo').textContent = gfxInfo(); } catch (err) {}
   if (netSys.guest && netSys.connected) netSys.send({ t: 'me', id: netSys.me(), p: netSys.profile() });
 }
 function resumeGame(){
@@ -26564,6 +26623,13 @@ function updateSunShadow(dt){
 }
 function frame(now){
   requestAnimationFrame(frame);
+  // once a second: the window's real size, a camera that went bad, a
+  // context that did not come back
+  if (now - (game.vpCheckT || 0) > 1000){
+    game.vpCheckT = now;
+    if (game.camera && !isFinite(game.camera.aspect)) applyViewport(true); else applyViewport();
+    if (game.ctxLost && now - game.ctxLost > 3000) resetGraphics();
+  }
   if (game.opts.fpsCap > 0 && now - (game.lastFrameT || 0) < 1000 / game.opts.fpsCap - 0.5) return;
   game.lastFrameT = now;
   const dt = Math.min(0.05, (now - lastT) / 1000);
@@ -26850,6 +26916,7 @@ function bindMenus(){
   $('btnResume').addEventListener('click', resumeGame);
   $('btnPauseOptions').addEventListener('click', () => openOptions('pause'));
   $('btnSaveQuit').addEventListener('click', quitToTitle);
+  $('btnResetGfx').addEventListener('click', () => { resetGraphics(); $('gfxinfo').textContent = gfxInfo(); });
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
   for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
@@ -26881,7 +26948,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

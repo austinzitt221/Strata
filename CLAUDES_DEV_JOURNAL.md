@@ -1039,6 +1039,18 @@ Creatures see both players through one function (targetFor) and one
 prey list; I had missed that the lurker and the husk go through
 crewSys.prey, which knew only the host. The test caught it.
 
+## 2026-09-13, later — the white screen on the Xbox
+
+The first report from the console: Edge holds the pad as a mouse until
+a switch by the address bar hands it to the page, and flipping that
+switch mid-game left the screen white with the game alive underneath.
+I cannot see the machine. What I can do is make the renderer refuse
+the likeliest poison (a zero-height window during the mode switch,
+which gives the camera an infinite aspect and it never draws again),
+heal itself once a second, rebuild after a lost context, and put a
+readout in the pause menu that Austin can read to me. Debugging blind
+is: remove the causes you can name, and instrument the rest.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
