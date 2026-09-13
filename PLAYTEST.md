@@ -26,9 +26,16 @@ their lists are retired; what came of them is Build 30.
       world.
 - [ ] On the Xbox: all of the above with the pad, and the frame rate
       with two players in view.
+- Played 2026-09-13 in a browser: works. Asked for and shipped as 41:
+  guest profiles that survive leaving and rejoining, creatures that go
+  for the guest, guests carrying animals and driving.
+- [ ] Build 41: as the guest, fill your pack, walk somewhere, quit, join
+      again: same things, same spot. Let a lurker come for you. Pick up
+      a sheep and throw it. Deploy a car and drive it while the host
+      watches; get out; let the host drive it.
 - Feedback I want: how long the join takes, how far behind the other
   player's movement looks, and everything the guest reaches for that
-  the host has and the guest does not (driving is the known one).
+  the host has and the guest does not.
 
 ## Build 39 — THE PAD (on the Xbox, in Edge)
 - [ ] Open the game from a URL in Edge on the console (GitHub Pages of
@@ -45,6 +52,8 @@ their lists are retired; what came of them is Build 30.
       up and drop items with A, split with X, quick-move with Y.
 - [ ] Frame rate on the console: tell me the number standing still and
       flying, with and without the preset.
+- Played 2026-09-13: works. The reach was hard to find: it is now
+  ▼ held with ◄ ► as well as the VIEW chord.
 - Feedback I want: the stick sensitivity default, and any key you
   reach for that the pad cannot (the legend lists the chords).
 

@@ -2,6 +2,45 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 41 — TOGETHER II (2026-09-13)
+
+Austin's second co-op report: the guest needs to keep its things
+between visits, creatures ignored the guest, the guest could not pick
+animals up, and the reach was hard to find on the pad. Verified
+headlessly with two loopback pages (a build-41 suite: the guest fills
+a slot, loses health, walks off and turns; the host's world holds the
+profile and it is in the host's save; the guest quits and rejoins and
+has the slot, the health, the spot and the heading back; a lurker
+spawned beside the guest and sixty metres from the host goes for the
+guest and its bite arrives on the guest; the guest lifts a grazer, it
+rides over the guest's head on both machines, and a throw lands on
+the host; the guest deploys a car, the host takes it and hands back
+its number, the guest drives it and the host's copy follows, the
+guest parks it; plus the build-40, pad and smoke suites).
+
+- **Your things, kept.** Each browser mints one player id. The host's
+  world keeps a profile per guest id: pack, dispenser, armor, health,
+  position, heading, hotbar, tool, snap, ledger, spawn point. The guest
+  sends it every ten seconds, on pause and on quit; the host saves it
+  with the world and hands it back on the next join, so you stand
+  where you left off with what you had. First visit: a fresh kit
+  beside the host.
+- **Creatures see both of you.** Every hostile and every villager reads
+  the nearer player: lurkers, husks, stalkers, wisps, siege raiders,
+  cabs braking, villagers turning to talk. Bites, explosions and
+  thrown light hurt whichever player they reach; the guest's arrive
+  as a message and the guest's armor applies.
+- **Carrying.** A guest's fists lift a creature and it rides over the
+  guest's head on both machines; a throw lands on the host with the
+  guest's aim. Penning it works too.
+- **Vehicles.** Anything a guest deploys is born on the host and comes
+  back as the guest's own mirror with the host's number. A guest can
+  ride it: the host hands the vehicle over, the guest's own physics
+  drive it, the host's copy follows the guest's pose, and parking
+  hands it back. A vehicle the other player is in says so.
+- **The pad.** Hold ▼ and press ◄ ► to pull the shape in and push it
+  out (the VIEW chord still works). The legend says so.
+
 ## Build 40 — TOGETHER (2026-09-12)
 
 Two players in one world, Austin's ask. Verified headlessly with two

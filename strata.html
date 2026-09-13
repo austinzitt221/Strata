@@ -11181,6 +11181,9 @@ function dropItem(it, at){
 function spawnEntity(type, x, y, z){
   const e = reviveEntity(type, x, y, z, ENT_DEF[type].hp);
   game.entities.push(e);
+  // a guest's new thing is born on the host: it goes up with a tag and
+  // comes back as a mirror with the host's number
+  if (netSys.guest){ e.tmp = netSys.tmpSeq++; e.local = true; netSys.spawnLater(e); }
   return e;
 }
 function killEntity(e, byPlayer){
@@ -12369,6 +12372,9 @@ const crewSys = {
     let best = null, bd = range;
     const pd = Math.hypot(h.x - game.pos.x, h.z - game.pos.z);
     if (pd < bd && game.ui === 'none' && !game.photo){ bd = pd; best = { x: game.pos.x, y: game.pos.y, z: game.pos.z, d: pd, ent: null }; }
+    // a friend in the world is prey too
+    const R = netSys.host ? netSys.remote : null;
+    if (R){ const rd = Math.hypot(h.x - R.x, h.z - R.z); if (rd < bd){ bd = rd; best = { x: R.x, y: R.y, z: R.z, d: rd, ent: null, guest: true }; } }
     for (const c of this.cached){
       if (c === h) continue;
       const d = Math.hypot(h.x - c.x, h.z - c.z);
@@ -17213,9 +17219,13 @@ function updateEntities(dt, now){
       // but only once you have lifted it. For the first beat of the grab your
       // arms are still reaching out, so it stays where you found it and then
       // comes up with your hands, on the same curve the viewmodel uses.
-      const tx = game.pos.x - Math.sin(game.yaw) * 0.35;
-      const tz = game.pos.z - Math.cos(game.yaw) * 0.35;
-      const ty = game.pos.y + 2.3;
+      // (a friend's catch rides the friend, from their streamed pose)
+      const CP = e.carrier === 'guest' ? netSys.remote : null;
+      if (e.carrier === 'guest' && !CP){ e.carried = false; e.carrier = null; }
+      const cx0 = CP ? CP.x : game.pos.x, cy0 = CP ? CP.y : game.pos.y, cz0 = CP ? CP.z : game.pos.z, cyaw = CP ? CP.yaw : game.yaw;
+      const tx = cx0 - Math.sin(cyaw) * 0.35;
+      const tz = cz0 - Math.cos(cyaw) * 0.35;
+      const ty = cy0 + 2.3;
       const k = carryLift(Math.min(1, (performance.now() - (game.grabT || 0)) / GRAB_MS));
       const from = e.grabFrom;
       if (from && k < 1){
@@ -17225,8 +17235,18 @@ function updateEntities(dt, now){
       } else { e.x = tx; e.y = ty; e.z = tz; }
       e.vx = 0; e.vy = 0; e.vz = 0;
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
-      if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
+      if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = cyaw; }
       continue;
+    }
+    // a vehicle a friend is driving: they own it, their pose places it
+    if (e.driver === 'guest'){
+      if (!netSys.remote){ e.driver = null; }
+      else {
+        if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+        e.mesh.position.set(e.x, e.y, e.z);
+        e.mesh.rotation.set(e.pitch || 0, e.heading || 0, e.roll || 0);
+        continue;
+      }
     }
     if (e.type === 'drop'){
       e.ttl = (e.ttl == null ? DROP_TTL : e.ttl) - dt;
@@ -17268,6 +17288,7 @@ function updateEntities(dt, now){
       continue;
     }
     const pd = netSys.nearestDist(e.x, e.z);
+    const TP = netSys.targetFor(e);              // the nearer player: where it looks, who it bites
     if (e.bossType){
       // bosses run their own physics and never despawn by distance
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
@@ -17315,8 +17336,8 @@ function updateEntities(dt, now){
       // a siege raider: the walls first, you if you get close
       const tg = siegeSys.raiderTarget(e, dt, pd);
       sx = tg[0]; sz = tg[1]; sp *= 1.1;
-      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
-      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5); }
+      const d3 = Math.hypot(e.x - TP.x, e.y - TP.y, e.z - TP.z);
+      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; netSys.hurt(TP, 8, (TP.x - e.x) * 2.5, (TP.z - e.z) * 2.5); }
     } else if (e.type === 'lurker' && (crewSys.prey(e, 15) || e.raider)){
       if (e.raider) sp *= 1.15;
       // a raider with no one in reach goes for the hum that called it
@@ -17333,7 +17354,7 @@ function updateEntities(dt, now){
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
       e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
-      if (game.dayF > 0.45){ sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.2; }
+      if (game.dayF > 0.45){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
       else if (ld < 9){
         // find the light and run from it
         let lx = e.x, lz = e.z, bd = 1e9;
@@ -17378,8 +17399,8 @@ function updateEntities(dt, now){
       // a light that drifts toward you and pops: TNT with a grudge
       e.fuse = e.fuse || 0;
       if (pd < 30){
-        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
-        const d3 = Math.hypot(sx, e.y - (game.pos.y + 0.9), sz);
+        sx = TP.x - e.x; sz = TP.z - e.z;
+        const d3 = Math.hypot(sx, e.y - (TP.y + 0.9), sz);
         if (d3 < 6) sp *= 1.6;                                      // the last rush
         if (d3 < 2.2){
           e.fuse += dt * 4;
@@ -17394,7 +17415,7 @@ function updateEntities(dt, now){
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
-      sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+      sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.8;
     } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
       if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
@@ -17415,7 +17436,7 @@ function updateEntities(dt, now){
       else if (t < -lim) e.dir = 1;
       const aheadX = e.axis === 'x' ? e.x + e.dir * 4 : e.x;
       const aheadZ = e.axis === 'x' ? e.z : e.z + e.dir * 4;
-      const brake = Math.hypot(game.pos.x - aheadX, game.pos.z - aheadZ) < 3.0;
+      const brake = Math.hypot(TP.x - aheadX, TP.z - aheadZ) < 3.0;
       sx = brake ? 0 : (e.axis === 'x' ? e.dir : 0);
       sz = brake ? 0 : (e.axis === 'x' ? 0 : e.dir);
       if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
@@ -17426,11 +17447,11 @@ function updateEntities(dt, now){
       sx = st[0]; sz = st[1]; sp = st[2];
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
-        sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
+        sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.6;
       } else if (pd < 3.2){
         // stop and face whoever came to talk
         sx = 0; sz = 0;
-        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(TP.x - e.x), -(TP.z - e.z));
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
@@ -17473,7 +17494,7 @@ function updateEntities(dt, now){
       // a floating thing: no gravity, it holds a height over the ground (or
       // over you), bobs, and slides around solid rock rather than through it
       const gh = game.gen.height(e.x, e.z);
-      const want = (pd < 30 ? Math.max(gh + 1.4, game.pos.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
+      const want = (pd < 30 ? Math.max(gh + 1.4, TP.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
       e.vy += ((want - e.y) * 2.2 - e.vy) * Math.min(1, 4 * dt);
       const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
       const le2 = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
@@ -17655,6 +17676,11 @@ function explode(x, y, z, r, dmg, opts){
     const f = 1 - pd / (r * 2.2);
     damagePlayer(Math.round(dmg * 0.8 * f), (game.pos.x - x) * 3 * f, (game.pos.z - z) * 3 * f);
   }
+  const R = netSys.host ? netSys.remote : null;
+  if (R){
+    const rd = Math.hypot(R.x - x, R.y + 0.9 - y, R.z - z);
+    if (rd < r * 2.2){ const f = 1 - rd / (r * 2.2); netSys.send({ t: 'hurt', dmg: Math.round(dmg * 0.8 * f), kx: (R.x - x) * 3 * f, kz: (R.z - z) * 3 * f }); }
+  }
 }
 // ---- set charges: fused explosives sitting in the world. TNT makes a
 // crater and hurts everything; the shaped mining charge computes its yield
@@ -17741,6 +17767,8 @@ function updateProjectiles(dt){
       Particles.burst(p.x, p.y, p.z, 0.1, [0xfff0a0, 0xffffff], 2, 0.4);
       const pd = Math.hypot(game.pos.x - p.x, game.pos.y + 0.9 - p.y, game.pos.z - p.z);
       if (pd < 1.7){ damagePlayer(p.dmg, (game.pos.x - p.x) * 2, (game.pos.z - p.z) * 2); done = true; }
+      const R = netSys.host ? netSys.remote : null;
+      if (R && Math.hypot(R.x - p.x, R.y + 0.9 - p.y, R.z - p.z) < 1.7){ netSys.send({ t: 'hurt', dmg: p.dmg, kx: (R.x - p.x) * 2, kz: (R.z - p.z) * 2 }); done = true; }
       if (done || p.t <= 0){ Particles.burst(p.x, p.y, p.z, 0.5, [0xfff0a0, 0xffffff], 10, 2); ps.splice(i, 1); }
       continue;
     }
@@ -17781,6 +17809,58 @@ const netSys = {
   remote: null, body: null, nid: 1, mirrors: new Map(), lastTables: '', lastTablesIn: '', tv: 0,
   stateT: 0, entT: 0, clockT: 0, tablesT: 0, hashT: 0, statusT: 0, connected: false, msgs: 0,
   makeCode(){ const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 5; i++) c += A[(Math.random() * A.length) | 0]; return c; },
+  tmpSeq: 1, spawnQ: [], meT: 0,
+  // who I am to a host: one id per browser, minted once
+  me(){
+    let id = null;
+    try { id = localStorage.getItem('strata:me'); } catch (err) {}
+    if (!id){ id = 'p' + Math.random().toString(36).slice(2, 10); try { localStorage.setItem('strata:me', id); } catch (err) {} }
+    return id;
+  },
+  // what a guest carries between visits: pack, armor, health, where they stood
+  profile(){
+    return { slots: game.slots, dispSlot: game.dispSlot, armor: game.armor, hp: game.hp, heal: game.heal || 0,
+      pos: { x: +game.pos.x.toFixed(2), y: +game.pos.y.toFixed(2), z: +game.pos.z.toFixed(2), yaw: game.yaw, pitch: game.pitch, fly: game.fly },
+      hotSel: game.hotSel, tool: game.tool, snapOn: game.snapOn, gridIdx: game.gridIdx, ledger: game.ledger, spawnPoint: game.spawnPoint, t: Date.now() };
+  },
+  takeProfile(p){
+    if (!p) return false;
+    if (p.slots) game.slots = p.slots.map(reviveItem);
+    if (p.dispSlot !== undefined) game.dispSlot = p.dispSlot;
+    if (p.armor) game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, p.armor);
+    if (p.hp != null) game.hp = p.hp;
+    game.heal = p.heal || 0;
+    if (p.pos && p.pos.x != null){ game.pos.set(p.pos.x, p.pos.y, p.pos.z); game.yaw = p.pos.yaw || 0; game.pitch = p.pos.pitch || 0; game.fly = !!p.pos.fly; game.forceStream = true; }
+    if (p.hotSel != null) game.hotSel = p.hotSel;
+    if (p.tool) game.tool = Object.assign(game.tool, p.tool);
+    if (p.snapOn != null) game.snapOn = !!p.snapOn;
+    if (p.gridIdx != null) game.gridIdx = p.gridIdx;
+    if (p.ledger) game.ledger = p.ledger;
+    if (p.spawnPoint) game.spawnPoint = p.spawnPoint;
+    buildHotbar(); refreshHotbar(); refreshToolHUD();
+    return true;
+  },
+  // a guest's spawns are sent up in a batch after the caller has set the fields
+  spawnLater(e){
+    this.spawnQ.push(e);
+    if (this.spawnQ.length === 1) setTimeout(() => this.flushSpawns(), 0);
+  },
+  flushSpawns(){
+    for (const e of this.spawnQ){
+      this.send({ t: 'spawn', tmp: e.tmp, type: e.type, x: e.x, y: e.y, z: e.z, hp: e.hp, charge: e.charge || 0, bat: e.bat || null, heading: e.heading || 0, item: e.item || null, ttl: e.ttl || 0 });
+    }
+    this.spawnQ.length = 0;
+  },
+  // who a creature looks at and bites: the nearer player
+  targetFor(e){
+    const R = this.host ? this.remote : null;
+    if (R && Math.hypot(R.x - e.x, R.z - e.z) < Math.hypot(game.pos.x - e.x, game.pos.z - e.z)) return { x: R.x, y: R.y, z: R.z, yaw: R.yaw, guest: true };
+    return { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, guest: false };
+  },
+  hurt(TP, dmg, kx, kz){
+    if (TP && TP.guest) this.send({ t: 'hurt', dmg, kx, kz });
+    else damagePlayer(dmg, kx, kz);
+  },
   loopback(){ return !!window.__netLoopback; },
   lib(){
     if (window.Peer || this.loopback()) return Promise.resolve(true);
@@ -17798,7 +17878,7 @@ const netSys = {
     if (this.loopback()){
       this.bc = new BroadcastChannel('strata-room-' + code);
       this.bc.onmessage = ev => { const m = ev.data; if (m && m.from !== role) this.onMsg(m); };
-      if (this.guest) this.send({ t: 'hello', ver: NET_VER });
+      if (this.guest) this.send({ t: 'hello', ver: NET_VER, id: this.me() });
       return true;
     }
     if (!(await this.lib())){ this.status('could not load the network library'); this.stop(); return false; }
@@ -17818,7 +17898,7 @@ const netSys = {
         this.peer.on('open', () => {
           const c = this.peer.connect(id, { reliable: true });
           this.conn = c;
-          c.on('open', () => this.send({ t: 'hello', ver: NET_VER }));
+          c.on('open', () => this.send({ t: 'hello', ver: NET_VER, id: this.me() }));
           c.on('data', m => this.onMsg(m));
           c.on('close', () => { if (game.running) toast('the host closed the room'); this.stop(); if (game.running) quitToTitle(); });
         });
@@ -17871,9 +17951,11 @@ const netSys = {
         if (!this.host) return;
         if (m.ver !== NET_VER){ this.send({ t: 'sorry', why: 'different build' }); return; }
         this.connected = true;
-        this.send({ t: 'world', data: buildSaveData() });
+        this.guestId = m.id || null;
+        game.guests = game.guests || {};
+        this.send({ t: 'world', data: buildSaveData(), you: (m.id && game.guests[m.id]) || null });
         this.status('friend joined · code ' + this.code);
-        toast('a friend joined your world');
+        toast('a friend joined your world' + (m.id && game.guests[m.id] ? ' — back where they left off' : ''));
         break;
       case 'sorry': this.status('the host is on a ' + m.why); this.stop(); break;
       case 'world': {
@@ -17883,15 +17965,21 @@ const netSys = {
         const data = m.data;
         hide('joinmenu');
         startWorldData('guest', data);
-        // stand beside the host
+        // back where you left off, or beside the host the first time
         const hp = data.player || {};
         if (hp.x != null){ game.pos.set(hp.x + 1.5, hp.y, hp.z + 1.5); game.fly = !!hp.fly; game.forceStream = true; }
+        if (m.you) this.takeProfile(m.you);
+        this.meT = 0;
         this.status('in ' + (data.name || 'a friend\'s world') + ' · code ' + this.code);
         toast('joined — the world is your friend\'s; carve, build, fight beside them');
         break;
       }
       case 'p':
         this.remote = m;
+        if (this.host && m.veh){
+          const e = game.entities.find(x => x.nid === m.veh.nid);
+          if (e && e.driver === 'guest'){ e.x = m.veh.x; e.y = m.veh.y; e.z = m.veh.z; e.heading = m.veh.h; e.pitch = m.veh.p || 0; e.roll = m.veh.r || 0; e.speed = m.veh.s || 0; e.charge = m.veh.c; }
+        }
         break;
       case 'e': {
         const ed = CORE.deserializeEdits([m.e])[0];
@@ -17928,6 +18016,64 @@ const netSys = {
         break;
       }
       case 'hurt': if (this.guest) damagePlayer(m.dmg, m.kx, m.kz); break;
+      case 'me':
+        if (!this.host || !m.id) return;
+        game.guests = game.guests || {};
+        game.guests[m.id] = m.p;
+        markSave();
+        break;
+      case 'grab': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && !e.carried){ e.carried = true; e.carrier = 'guest'; e.grabFrom = [e.x, e.y, e.z]; if (game.carried === e) game.carried = null; }
+        break;
+      }
+      case 'throw': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && e.carrier === 'guest'){ e.carried = false; e.carrier = null; e.x = m.x; e.y = m.y; e.z = m.z; e.vx = m.vx; e.vy = m.vy; e.vz = m.vz; }
+        break;
+      }
+      case 'despawn': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e){ if (game.carried === e) game.carried = null; const i = game.entities.indexOf(e); if (i >= 0) game.entities.splice(i, 1); if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; } markSave(); }
+        break;
+      }
+      case 'spawn': {
+        if (!this.host || !ENT_DEF[m.type]) return;
+        const e = spawnEntity(m.type, m.x, m.y, m.z);
+        if (m.hp != null) e.hp = m.hp;
+        if (m.charge) e.charge = m.charge;
+        if (m.bat) e.bat = m.bat;
+        if (m.heading) e.heading = m.heading;
+        if (m.item){ e.item = m.item; e.ttl = m.ttl || 60; }
+        e.nid = this.nid++;
+        this.send({ t: 'spawned', tmp: m.tmp, nid: e.nid });
+        markSave();
+        break;
+      }
+      case 'spawned': {
+        if (!this.guest) return;
+        const e = game.entities.find(x => x.tmp === m.tmp);
+        if (!e) return;
+        e.nid = m.nid; e.local = false; e.remote = true; delete e.tmp;
+        e.tx = e.x; e.ty = e.y; e.tz = e.z; e.seenT = performance.now();
+        this.mirrors.set(m.nid, e);
+        break;
+      }
+      case 'drive': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && e !== game.driving) e.driver = 'guest';
+        break;
+      }
+      case 'park': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e){ e.driver = null; e.x = m.x; e.y = m.y; e.z = m.z; e.heading = m.heading; e.charge = m.charge; if (m.bat) e.bat = m.bat; e.speed = 0; if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0); markSave(); }
+        break;
+      }
       case 'give': {
         if (!this.guest) return;
         const it = m.item; if (!it) return;
@@ -18004,14 +18150,14 @@ const netSys = {
       if (!near) continue;
       if (!e.nid) e.nid = this.nid++;
       const ry = e.mesh ? +e.mesh.rotation.y.toFixed(2) : 0;
-      out.push([e.nid, e.type, +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), ry, Math.round(e.hp || 0), e.type === 'drop' ? e.item : (e.crew ? 1 : 0), e.bossType || 0, e.heading != null ? +e.heading.toFixed(2) : 0]);
+      out.push([e.nid, e.type, +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), ry, Math.round(e.hp || 0), e.type === 'drop' ? e.item : (e.crew ? 1 : 0), e.bossType || 0, e.heading != null ? +e.heading.toFixed(2) : 0, e === game.driving ? 1 : 0, e.charge || 0]);
     }
     return out;
   },
   applyEnts(list){
     const seen = new Set();
     for (const r of list){
-      const [nid, type, x, y, z, ry, hp, extra, boss, heading] = r;
+      const [nid, type, x, y, z, ry, hp, extra, boss, heading, hostDrives, charge] = r;
       seen.add(nid);
       let e = this.mirrors.get(nid);
       if (!e){
@@ -18024,7 +18170,9 @@ const netSys = {
         game.entities.push(e);
         this.mirrors.set(nid, e);
       }
-      e.tx = x; e.ty = y; e.tz = z; e.try = ry; e.hp = hp; e.heading = heading; e.seenT = performance.now();
+      e.seenT = performance.now();
+      if (e === game.driving || e.carried){ e.hp = hp; continue; }     // mine to place this frame
+      e.tx = x; e.ty = y; e.tz = z; e.try = ry; e.hp = hp; e.heading = heading; e.hostDrives = !!hostDrives; if (VEH[type]) e.charge = charge;
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
     }
     for (const [nid, e] of this.mirrors){
@@ -18039,6 +18187,17 @@ const netSys = {
   mirrorTick(dt){
     const k = Math.min(1, dt * 12);
     for (const [, e] of this.mirrors){
+      if (e === game.driving) continue;
+      if (e.carried){
+        // riding over my head, the same as on the host
+        const tx = game.pos.x - Math.sin(game.yaw) * 0.35, tz = game.pos.z - Math.cos(game.yaw) * 0.35, ty = game.pos.y + 2.3;
+        const kk = carryLift(Math.min(1, (performance.now() - (game.grabT || 0)) / GRAB_MS)), from = e.grabFrom;
+        if (from && kk < 1){ e.x = from[0] + (tx - from[0]) * kk; e.y = from[1] + (ty - from[1]) * kk; e.z = from[2] + (tz - from[2]) * kk; }
+        else { e.x = tx; e.y = ty; e.z = tz; }
+        if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+        e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw;
+        continue;
+      }
       if (e.tx == null) continue;
       e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k;
       e.flash = Math.max(0, (e.flash || 0) - dt);
@@ -18084,7 +18243,13 @@ const netSys = {
       const it = selectedItem();
       this.send({ t: 'p', x: +game.pos.x.toFixed(2), y: +game.pos.y.toFixed(2), z: +game.pos.z.toFixed(2), yaw: +game.yaw.toFixed(3), pitch: +game.pitch.toFixed(3),
         fly: game.fly ? 1 : 0, cr: game.crouch ? 1 : 0, mv: +Math.hypot(game.vel.x, game.vel.z).toFixed(1), gr: game.grounded ? 1 : 0, sw: game.swim ? 1 : 0,
-        it: it ? { kind: it.kind, mat: it.mat, tier: it.tier } : null, work: game.mouseL ? 1 : 0, hp: game.hp, dr: game.driving ? 1 : 0 });
+        it: it ? { kind: it.kind, mat: it.mat, tier: it.tier } : null, work: game.mouseL ? 1 : 0, hp: game.hp, dr: game.driving ? 1 : 0,
+        veh: this.guest && game.driving && game.driving.nid ? { nid: game.driving.nid, x: +game.driving.x.toFixed(2), y: +game.driving.y.toFixed(2), z: +game.driving.z.toFixed(2), h: +(game.driving.heading || 0).toFixed(3), p: +(game.driving.pitch || 0).toFixed(3), r: +(game.driving.roll || 0).toFixed(3), s: +(game.driving.speed || 0).toFixed(1), c: game.driving.charge || 0 } : null });
+    }
+    // a guest's profile, every ten seconds, so the host's save remembers them
+    if (this.guest && this.connected){
+      this.meT += dt;
+      if (this.meT > 10){ this.meT = 0; this.send({ t: 'me', id: this.me(), p: this.profile() }); }
     }
     // the friend's body
     const R = this.remote;
@@ -18136,7 +18301,7 @@ const netSys = {
 // a cursor, the d-pad hops between controls, A clicks, B backs out.
 const PAD_DEAD = 0.18;
 const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, MENU: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
-const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▲ fly · ▼+LB/RB grid · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror, +LB/RB reach) · MENU pause';
+const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▼+◄ ► reach · ▼+LB/RB grid · ▲ fly · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror) · MENU pause';
 const PAD_HINT_MENU = 'stick: cursor · d-pad: hop · A select · X right-click · Y shift-click · B back · LT/RT scroll · LB/RB hotbar';
 const padSys = {
   active: false, lastT: 0, lastPoll: 0, prev: [], cx: 0, cy: 0, chord: false, chordUsed: false, held: {}, rep: {}, grid: 0, layer: '',
@@ -18195,7 +18360,7 @@ const padSys = {
     const inWorld = !!(game.running && game.ui === 'none');
     game.padLock = inWorld;
     const layer = inWorld ? 'world' : 'menu';
-    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF']) this.hold(k, false); } }
+    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF', 'KeyB', 'KeyV']) this.hold(k, false); } }
     if (inWorld) this.world(cur, down, up, ax, dt); else this.menu(cur, down, up, ax, dt);
     this.prev = cur;
   },
@@ -18233,9 +18398,16 @@ const padSys = {
       if (cur[PAD.DOWN]){ this.digit(((game.gridIdx || 0) + d + 10) % 10); }
       else this.digit(((game.hotSel || 0) + d + 10) % 10);
     }
-    // ◄ ►: the wheel (size), repeating while held
-    this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
-    this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    // ◄ ►: the wheel (size), repeating while held; with ▼ held, the reach
+    if (cur[PAD.DOWN]){
+      this.hold('KeyB', cur[PAD.RIGHT]); this.hold('KeyV', cur[PAD.LEFT]);
+      if (cur[PAD.LEFT] || cur[PAD.RIGHT]) game.fUsedCombo = true;
+      this.repeat('size-', false); this.repeat('size+', false);
+    } else {
+      this.hold('KeyB', false); this.hold('KeyV', false);
+      this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
+      this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    }
     if (down(PAD.MENU)) openPause();
   },
   // ---- menus: a cursor ----
@@ -18484,6 +18656,7 @@ function bindInput(){
             const ei = game.entities.indexOf(e);
             if (ei >= 0) game.entities.splice(ei, 1);
             if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+            if (netSys.guest && e.nid){ netSys.send({ t: 'despawn', nid: e.nid }); netSys.mirrors.delete(e.nid); }
             pn.animal = e.type;
             pnodeSys.rebuild(); markSave();
             AudioSys.sfx('toggle');
@@ -18997,7 +19170,11 @@ function unscope(){
 // ---------- the electric car: fast travel that drinks from your grid ----------
 function enterCar(e){
   if (game.driving) return;
+  if (netSys.guest && e.local){ toast('one moment — the world is still taking it'); return; }
+  if (netSys.guest && e.hostDrives){ toast('your friend is driving it'); return; }
+  if (netSys.host && e.driver === 'guest'){ toast('your friend is driving it'); return; }
   game.driving = e;
+  if (netSys.guest && e.nid) netSys.send({ t: 'drive', nid: e.nid });
   game.vel.set(0, 0, 0);
   e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
   const V0 = VEH[e.type] || VEH.car;
@@ -19014,6 +19191,7 @@ function exitCar(){
   game.driving = null;
   game.chase = null;
   AudioSys.setHum(false, 0, 0);
+  if (e && netSys.guest && e.nid) netSys.send({ t: 'park', nid: e.nid, x: e.x, y: e.y, z: e.z, heading: e.heading || 0, charge: e.charge || 0, bat: e.bat || null });
   if (e){
     // step out on the driver's side
     game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
@@ -21213,6 +21391,7 @@ function tryAction(dt, now){
         const dir = new THREE.Vector3();
         game.camera.getWorldDirection(dir);
         e.vx = dir.x * 9; e.vy = Math.max(3.5, dir.y * 9 + 3.2); e.vz = dir.z * 9;
+        if (netSys.guest && e.nid) netSys.send({ t: 'throw', nid: e.nid, x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz });
         game.punchT = now;
         toast('yeet');
         AudioSys.sfx('toggle');
@@ -21312,6 +21491,7 @@ function tryAction(dt, now){
         ent.grabFrom = [ent.x, ent.y, ent.z];    // lift starts from where it stood
         game.carried = ent;
         game.grabT = now;
+        if (netSys.guest && ent.nid) netSys.send({ t: 'grab', nid: ent.nid });
         toast('picked up ' + (ent.type === 'villager' ? crewSys.nameOf(ent) : 'the ' + ent.type) + ' — left click to throw');
         AudioSys.sfx('toggle');
       }
@@ -24788,6 +24968,7 @@ function buildBlueUI(){
 function openPause(){
   if (game.ui !== 'none') return;
   game.ui = 'pause'; show('pausemenu'); saveNow();
+  if (netSys.guest && netSys.connected) netSys.send({ t: 'me', id: netSys.me(), p: netSys.profile() });
 }
 function resumeGame(){
   hide('pausemenu'); game.ui = 'none'; requestLock();
@@ -24944,6 +25125,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
+    guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
     expedition: game.expedition || null,
@@ -25005,6 +25187,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
+  game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
   game.spires = data.spires || {};
@@ -25138,6 +25321,7 @@ function reviveItem(it){
 }
 function quitToTitle(){
   saveNow();
+  if (netSys.guest && netSys.connected) netSys.send({ t: 'me', id: netSys.me(), p: netSys.profile() });
   netSys.stop();
   game.photo = null;
   game.scope = 0;
@@ -26697,7 +26881,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { netSys, buildSaveData, startWorldData, markSave, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

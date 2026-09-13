@@ -1020,6 +1020,25 @@ host; a guest at the wheel would need the host to hand over one
 entity), a persistent guest pack, more than two players. Each is a
 build if the first playtest asks for it.
 
+## 2026-09-13 — TOGETHER II
+
+Austin played both builds in a browser and they held. His three asks
+were the three I had listed as not built, which is a good sign about
+the list. The profile is the important one: it makes a friend's world
+a place you live in, not visit. It lives in the host's save, keyed by
+an id each browser mints once, like Minecraft's player files.
+
+The pattern that made the rest cheap: an entity has one owner at a
+time. The host owns everything by default; a grab or a drive hands
+one entity to the guest (e.carrier, e.driver), the guest's pose
+places it, and a throw or a park hands it back. Spawns go the other
+way: the guest births the thing locally with a temporary tag, the
+host adopts it and returns its number. Nothing is simulated twice.
+
+Creatures see both players through one function (targetFor) and one
+prey list; I had missed that the lurker and the husk go through
+crewSys.prey, which knew only the host. The test caught it.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
