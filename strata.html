@@ -262,6 +262,10 @@ body.pad{cursor:none;}
     <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>RENDER SCALE</label><input type="range" id="optRsc" min="50" max="150" step="25"><span class="val" id="optRscV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
+    <div class="optrow"><label>SAFE GRAPHICS</label><input type="range" id="optSafe" min="0" max="1" step="1"><span class="val" id="optSafeV"></span></div>
+    <div class="sub" style="font-size:10px; margin:-4px 0 8px;">safe: no far country, far shapes, far trees or ground cover, a small shadow map, one mesher — for a machine that goes black. Takes effect when a world loads.</div>
+    <button class="btn small" id="btnSafePreset" title="everything low and safe graphics on">SAFE PRESET (XBOX)</button>
+    <div class="sub" id="gfxlogbox" style="font-size:10px; margin:8px 0 4px; line-height:1.5; white-space:pre-line; max-width:520px; text-align:left;"></div>
     <button class="btn small" id="btnConsolePreset" title="a console or a small machine: short view, no shadows or rays, 75% render scale, 60 fps">CONSOLE PRESET</button>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
@@ -275,7 +279,7 @@ body.pad{cursor:none;}
     <button class="btn" id="btnInvite">INVITE A FRIEND</button>
     <div class="sub hidden" id="inviteBox" style="margin:4px 0 10px; line-height:1.6;"></div>
     <button class="btn small" id="btnResetGfx" title="if the world has gone blank: a new renderer, everything drawn again">RESET GRAPHICS</button>
-    <div class="sub" id="gfxinfo" style="font-size:10px; margin:6px 0 8px; line-height:1.5;"></div>
+    <div class="sub" id="gfxinfo" style="font-size:10px; margin:6px 0 8px; line-height:1.5; white-space:pre-line; max-width:520px; text-align:left;"></div>
     <button class="btn" id="btnSaveQuit">SAVE &amp; QUIT TO TITLE</button>
   </div>
 </div>
@@ -564,6 +568,34 @@ document.getElementById('btnRetry').addEventListener('click', function(){ locati
 // Terrain is a signed distance field: base flat plane + ordered CSG edit list,
 // clamped so everything below bedrock is permanently solid. Meshed with dual
 // contouring (QEF vertices) so cube brushes cut sharp 90° corners.
+
+// A ring of the last things that went wrong (shader errors, lost
+// contexts, worker failures, thrown errors), shown in the pause menu
+// and on the options screen, and kept for the next session: for a
+// console I cannot see.
+const gfxLog = {
+  lines: [],
+  push(kind, args){
+    let t = args.map(a => typeof a === 'string' ? a : a && a.message ? a.message : (a && typeof a === 'object' ? (() => { try { return JSON.stringify(a).slice(0, 80); } catch (e){ return String(a); } })() : String(a))).join(' ');
+    const k = t.indexOf('ERROR:'); if (k > 0) t = t.slice(k);
+    t = t.replace(/\s+/g, ' ').slice(0, 220);
+    if (/^THREE\.(Quaternion|Matrix|Vector)/.test(t)) return;
+    const line = kind + ' ' + t;
+    if (this.lines[this.lines.length - 1] === line) return;
+    this.lines.push(line);
+    if (this.lines.length > 24) this.lines.shift();
+    try { localStorage.setItem('strata:gfxlog', JSON.stringify({ t: Date.now(), lines: this.lines })); } catch (e) {}
+  },
+  last(n){ return this.lines.slice(-(n || 4)); },
+  stored(){ try { return JSON.parse(localStorage.getItem('strata:gfxlog') || 'null'); } catch (e){ return null; } },
+};
+(function(){
+  const e0 = console.error.bind(console), w0 = console.warn.bind(console);
+  console.error = (...a) => { try { gfxLog.push('E', a); } catch (x) {} e0(...a); };
+  console.warn = (...a) => { try { gfxLog.push('W', a); } catch (x) {} w0(...a); };
+  window.addEventListener('error', ev => gfxLog.push('X', [(ev.message || 'error') + ' @' + (ev.lineno || 0)]));
+  window.addEventListener('unhandledrejection', ev => gfxLog.push('P', [String(ev.reason && ev.reason.message || ev.reason)]));
+})();
 
 // ===================== STRATA CORE BEGIN =====================
 // Pure logic — no THREE, no DOM. Extracted verbatim and run under node for
@@ -4128,7 +4160,7 @@ const meshPool = {
         '};\n';
       const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
       this.url = url;
-      const nW = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
+      const nW = game.opts && game.opts.safe ? 1 : Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
       for (let i = 0; i < nW; i++){
         const w = new Worker(url);
         w.onmessage = (ev) => this.done(w, ev.data);
@@ -4648,7 +4680,7 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100, safe: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
 function loadOpts(){
@@ -5235,8 +5267,13 @@ function gfxInfo(){
   const r = game.renderer, cv = r && r.domElement, c = game.camera;
   let gpu = '';
   try { const gl = r.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; if (gl.isContextLost()) gpu = 'CONTEXT LOST · ' + gpu; } catch (err) {}
-  return 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
-       + ' · aspect ' + (c ? (+c.aspect).toFixed(3) : '-') + (c && !isFinite(c.aspect) ? ' BAD' : '') + ' · pad ' + (padSys.active ? 'on' : 'none') + (gpu ? ' · ' + gpu.slice(0, 60) : '');
+  let meshed = 0, chunks = 0;
+  try { for (const [, ch] of game.terrain.chunks){ chunks++; if (ch.mesh) meshed++; } } catch (err) {}
+  const head = 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
+       + ' · aspect ' + (c ? (+c.aspect).toFixed(3) : '-') + (c && !isFinite(c.aspect) ? ' BAD' : '') + ' · pad ' + (padSys.active ? 'on' : 'none') + (gpu ? ' · ' + gpu.slice(0, 60) : '')
+       + '\nchunks ' + chunks + ' meshed ' + meshed + ' · workers ' + (meshPool.ok ? meshPool.workers.length : 'none') + ' · safe ' + (game.opts.safe ? 'ON' : 'off') + ' · rd ' + game.opts.rd + ' · scale ' + game.opts.rscale + '%';
+  const L = gfxLog.last(4);
+  return head + (L.length ? '\n' + L.join('\n') : '\nno errors logged');
 }
 
 const SKY = new THREE.Color(0x8fb8e8);
@@ -5285,7 +5322,7 @@ function buildScene(){
   // terrain samples the map manually, so its intensity stays near zero
   const sunL = new THREE.DirectionalLight(0xffffff, 0.0001);
   sunL.castShadow = true;
-  sunL.shadow.mapSize.set(4096, 4096);
+  sunL.shadow.mapSize.set(game.opts.safe ? 1024 : 4096, game.opts.safe ? 1024 : 4096);
   sunL.shadow.camera.near = 1;
   sunL.shadow.camera.far = 460;
   sunL.shadow.bias = 0;                    // biased manually in the shader
@@ -9483,7 +9520,7 @@ const farTreeSys = {
     this.group = null; this.trunks = null; this.canopy = null; this.lastCell = null;
   },
   refresh(){
-    if (!this.group || !game.gen || !game.gen.treeAt) return;
+    if (!this.group || !game.gen || !game.gen.treeAt || game.opts.safe) return;
     const TC = CORE.TREE_CELL;
     const cc = [Math.floor(game.pos.x / TC), Math.floor(game.pos.z / TC)];
     const key = cc[0] + ',' + cc[1];
@@ -9672,7 +9709,7 @@ const decorSys = {
     return out;
   },
   refresh(){
-    if (!this.group || !this.meshes) return;
+    if (!this.group || !this.meshes || game.opts.safe) return;
     const C = CORE.DECOR_CELL;
     const key = Math.floor(game.pos.x / C) + ',' + Math.floor(game.pos.z / C);
     if (key === this.lastCell && !this.pending && !this.dirty) return;
@@ -25044,6 +25081,9 @@ function openOptions(from){
   const fi = FPS_STOPS.indexOf(o.fpsCap);
   $('optFps').value = fi < 0 ? 7 : fi;
   $('optSkin').value = o.skin || 0;
+  $('optSafe').value = o.safe ? 1 : 0;
+  { const st = gfxLog.stored(); const cur = gfxLog.last(6);
+    $('gfxlogbox').textContent = cur.length ? 'this session:\n' + cur.join('\n') : (st && st.lines && st.lines.length ? 'last session:\n' + st.lines.slice(-6).join('\n') : 'no errors logged'); }
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -25063,6 +25103,7 @@ function syncOptLabels(){
   const fc = FPS_STOPS[+$('optFps').value];
   $('optFpsV').textContent = fc ? fc : 'MAX';
   $('optSkinV').textContent = PLAYER_SKINS[+$('optSkin').value].name;
+  $('optSafeV').textContent = +$('optSafe').value ? 'ON' : 'off';
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
@@ -25075,6 +25116,7 @@ function applyOptions(){
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
   game.opts.padSens = +$('optPad').value;
+  game.opts.safe = +$('optSafe').value;
   game.opts.skin = +$('optSkin').value;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
@@ -25546,7 +25588,7 @@ const farShapeSys = {
     game.scene.add(this.mesh);
   },
   update(){
-    if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat) return;
+    if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat || game.opts.safe) return;
     if (this.mesh && this.mesh.parent !== game.scene){ game.scene.add(this.mesh); }
     if (this.dirty || Math.hypot(game.pos.x - this.cx, game.pos.z - this.cz) > 400) this.build();
   },
@@ -25729,7 +25771,7 @@ const farTerrain = {
     return Math.max(Math.abs(game.pos.x - lv.cx), Math.abs(game.pos.z - lv.cz)) > this.L[k].E / 8;
   },
   update(){
-    if (!game.gen || !this.mat) return;
+    if (!game.gen || !this.mat || game.opts.safe) return;
     this.uPlayer.value.set(game.pos.x, game.pos.z);
     if (this.dirty){
       this.dirty = false;
@@ -26919,7 +26961,11 @@ function bindMenus(){
   $('btnResetGfx').addEventListener('click', () => { resetGraphics(); $('gfxinfo').textContent = gfxInfo(); });
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin', 'optSafe']) $(id).addEventListener('input', syncOptLabels);
+  $('btnSafePreset').addEventListener('click', () => {
+    $('optRd').value = 2; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 50; $('optFps').value = FPS_STOPS.indexOf(30); $('optSafe').value = 1;
+    syncOptLabels(); toast('safe preset — reload the world for it to take'); AudioSys.sfx('toggle');
+  });
   $('btnConsolePreset').addEventListener('click', () => {
     $('optRd').value = 3; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 75; $('optFps').value = FPS_STOPS.indexOf(60);
     syncOptLabels(); toast('console preset — short view, no shadows, 75% scale, 60 fps'); AudioSys.sfx('toggle');

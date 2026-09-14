@@ -1051,6 +1051,18 @@ heal itself once a second, rebuild after a lost context, and put a
 readout in the pause menu that Austin can read to me. Debugging blind
 is: remove the causes you can name, and instrument the rest.
 
+## 2026-09-14 — the console, second report
+
+Trees, no ground, then black. That is not the viewport; that is the
+renderer losing its context, and before it a shader or a worker not
+doing its job on that GPU. I have no console log from an Xbox and
+never will, so the game now keeps its own: every error the renderer
+prints, in a ring, across sessions, readable from the options screen
+and the pause menu. And a safe mode that leaves out everything heavy
+so we can bisect in two reports instead of ten. The next message from
+Austin should contain the actual error text, which is the first
+thing I have wanted since the first white screen.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

@@ -2,6 +2,37 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 39.2 — THE PAD III: eyes on the console (2026-09-14)
+
+Austin again, with the switch on before loading: the trees drew, the
+ground never did, and a second later the screen went black with only
+the HUD left. On a near-black page an all-black canvas is a graphics
+context the browser has taken away; a ground that never draws is the
+terrain shader or the meshing workers failing on that machine. Both
+are things I cannot see from here, so this build is instruments and a
+safe mode. Verified headlessly (a suite that seeds a stored error and
+finds it on the options screen, loads a world with safe graphics on
+and checks no far country, no far shapes, no far trees, one mesher
+and a small shadow map, and that a shader error logged by the
+renderer lands in the pause readout; plus the 39.1 suite).
+
+- **The log.** Every error and warning the game or the renderer prints
+  (shader compile failures, lost contexts, worker failures, thrown
+  errors) goes into a ring of the last twenty-four, kept in local
+  storage across sessions. The pause menu shows the last four under
+  the graphics readout; the options screen shows this session's, or
+  the last session's when this one has none, so a crash can still be
+  read the next day.
+- **The readout** now also says how many chunks are meshed, whether
+  the workers are alive, and whether safe mode is on.
+- **SAFE GRAPHICS.** An option, and a SAFE PRESET (XBOX) button that
+  sets it with a short view, no shadows or rays, half render scale and
+  30 fps. Safe leaves out the far country (the skin), the far shapes,
+  the far trees and the ground cover, uses a 1024 shadow map and one
+  mesher. It takes effect when a world loads. If the console draws the
+  world in safe mode, the culprit is among what safe leaves out; if it
+  does not, the log will say what failed.
+
 ## Build 39.1 — THE PAD II: the white screen (2026-09-13)
 
 Austin on the Xbox: Edge on the console keeps the controller for

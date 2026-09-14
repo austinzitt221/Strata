@@ -54,11 +54,14 @@ their lists are retired; what came of them is Build 30.
       flying, with and without the preset.
 - Played 2026-09-13: works. The reach was hard to find: it is now
   ▼ held with ◄ ► as well as the VIEW chord.
-- On the Xbox the screen went white after turning on Edge's website
-  controls with a world open (39.1). Next time: turn the switch on
-  BEFORE loading a world; if it goes white anyway, MENU, RESET
-  GRAPHICS, and read me the small line under it either way. The
-  corner note on the title says whether the pad is heard.
+- On the Xbox: white, then (switch on first) trees with no ground and
+  a cut to black (39.1, 39.2). Next time, in this order:
+  1. OPTIONS, SAFE PRESET (XBOX), BACK. Load a world. Does the ground
+     draw and stay?
+  2. Either way, MENU: read me every line under RESET GRAPHICS.
+  3. Back on the title, OPTIONS: the box at the bottom shows the
+     last errors. Read me those lines too (a photo of the screen is
+     perfect).
 - Feedback I want: the stick sensitivity default, and any key you
   reach for that the pad cannot (the legend lists the chords).
 
