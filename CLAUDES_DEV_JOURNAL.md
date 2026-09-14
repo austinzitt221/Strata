@@ -1063,6 +1063,16 @@ so we can bisect in two reports instead of ten. The next message from
 Austin should contain the actual error text, which is the first
 thing I have wanted since the first white screen.
 
+## 2026-09-14, later — the photo
+
+The first hard evidence from the console, from a phone photo of the
+pause menu: the browser's watchdog took the context ("web page
+caused context loss") and my own rebuild made the second error. Two
+lessons. One: after a punished context loss, do not ask the browser
+for another; wait. Two: the readout worked; a photo of a menu is a
+console log. The Xbox now starts safe and we raise the load a step at
+a time until we find the frame the watchdog hates.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

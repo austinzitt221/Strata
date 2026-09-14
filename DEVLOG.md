@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 39.3 — THE PAD IV: the watchdog (2026-09-14)
+
+Austin's photo of the pause readout, the first real evidence from the
+console: CONTEXT LOST, then "a WebGL context could not be created:
+web page caused context loss and was blocked", then an uncaught
+error from the rebuild. So: the console's browser watchdog took the
+graphics away from the page (a frame that worked the GPU too long),
+and my three-second rebuild asked for a new context, which the
+browser refuses to a page it has just punished, and threw. Safe mode
+was off in that run. Verified headlessly (a suite with an Xbox user
+agent that checks the first run starts safe and low and remembers
+it; loses the context through the WebGL extension and checks the
+notice shows, no renderer is forced, the loss is logged; restores it
+and checks the notice goes and the world draws).
+
+- **No forced rebuild.** A lost context now shows GRAPHICS LOST with a
+  running count of seconds and the advice to reload if it never
+  returns; Three asks the browser for the context back and the game
+  carries on when it does. RESET GRAPHICS by hand first checks the
+  browser will give a context at all and says so if not.
+- **The console starts safe.** An Xbox user agent gets, once, the safe
+  profile: safe graphics, short view, no shadows or rays, half render
+  scale, 30 fps, with a toast saying so and that OPTIONS raises it.
+  From there we raise one thing at a time until the watchdog bites,
+  and that thing is the fix.
+- The readout says "xbox" when it is one.
+
 ## Build 39.2 — THE PAD III: eyes on the console (2026-09-14)
 
 Austin again, with the switch on before loading: the trees drew, the

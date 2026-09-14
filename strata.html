@@ -49,6 +49,9 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#gfxlost{position:fixed; left:50%; top:40%; transform:translate(-50%,-50%); z-index:60; background:rgba(10,9,16,.85); border:2px solid #ff7a5c; padding:14px 20px; text-align:center; max-width:520px; pointer-events:none;}
+#gfxlost .t1{font-size:18px; letter-spacing:3px; color:#ff9a7c; margin-bottom:6px;}
+#gfxlost .t2{font-size:11px; color:var(--ui-hi); line-height:1.5;}
 #netstatus{position:fixed; left:12px; top:44px; font-size:11px; color:#a9d4ff; background:rgba(10,9,16,.6); padding:4px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:30; letter-spacing:1px;}
 #padcursor{position:fixed; left:0; top:0; width:18px; height:18px; margin:-9px 0 0 -9px; border:2px solid #ffd76a; border-radius:50%; box-shadow:0 0 0 2px #000, 0 0 8px rgba(0,0,0,.7); pointer-events:none; z-index:200;}
 #padstate{position:fixed; left:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:420px; line-height:1.5; letter-spacing:.5px;}
@@ -352,6 +355,7 @@ body.pad{cursor:none;}
 
 <div id="objlayer"></div>
 <div id="netstatus" class="hidden"></div>
+<div id="gfxlost" class="hidden"><div class="t1">GRAPHICS LOST</div><div class="t2" id="gfxlostsub">waiting for the browser to give the graphics back</div></div>
 
 <div id="xhair" class="hidden"></div>
 <div id="scope" class="hidden">
@@ -4683,9 +4687,20 @@ class Terrain {
 const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100, safe: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
+const ON_XBOX = /Xbox/i.test(navigator.userAgent);
 function loadOpts(){
-  try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
-  catch { return Object.assign({}, DEFAULT_OPTS); }
+  let o;
+  try { o = Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
+  catch { o = Object.assign({}, DEFAULT_OPTS); }
+  // a console's browser has a watchdog that takes the graphics away from a
+  // page that works it too hard: the first run there starts safe and low,
+  // and OPTIONS can raise it from there
+  if (ON_XBOX && !o.xboxProfiled){
+    Object.assign(o, { safe: 1, rd: 2, shadows: 0, rays: 0, rscale: 50, fpsCap: 30, xboxProfiled: 1 });
+    try { localStorage.setItem('strata:options', JSON.stringify(o)); } catch (err) {}
+    setTimeout(() => { try { toast('Xbox: safe graphics on for the first run — OPTIONS to raise it once it holds'); } catch (err) {} }, 2500);
+  }
+  return o;
 }
 function saveOpts(o){ localStorage.setItem('strata:options', JSON.stringify(o)); }
 
@@ -5239,8 +5254,12 @@ function initRenderer(){
   vpW = 0; vpH = 0;
   // a lost context: the browser may give it back; if it does not within
   // a few seconds the renderer is rebuilt from scratch
-  renderer.domElement.addEventListener('webglcontextlost', ev => { ev.preventDefault(); game.ctxLost = performance.now(); toast('graphics context lost — restoring'); });
-  renderer.domElement.addEventListener('webglcontextrestored', () => { game.ctxLost = 0; applyViewport(true); toast('graphics restored'); });
+  // the browser took the graphics away (on a console: its watchdog, for a
+  // frame that ran too long). Three asks for it back; opening a second
+  // context ourselves is refused by the browser and only adds an error,
+  // so we wait, say so on screen, and carry on when it returns
+  renderer.domElement.addEventListener('webglcontextlost', ev => { ev.preventDefault(); game.ctxLost = performance.now(); gfxLog.push('E', ['WebGL context lost']); show('gfxlost'); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { game.ctxLost = 0; hide('gfxlost'); applyViewport(true); gfxLog.push('W', ['WebGL context restored']); toast('graphics restored'); });
   if (!initRenderer.bound){
     initRenderer.bound = true;
     const later = () => { applyViewport(); setTimeout(() => applyViewport(), 250); setTimeout(() => applyViewport(), 900); };
@@ -5255,9 +5274,13 @@ function initRenderer(){
 // texture and mesh uploaded again on the next frame
 function resetGraphics(){
   const old = game.renderer;
+  try {
+    const test = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+    if (!test){ toast('the browser is refusing new graphics contexts — reload the page (the world is saved)'); return; }
+  } catch (err){ toast('the browser is refusing new graphics contexts — reload the page (the world is saved)'); return; }
   if (old){ try { old.domElement.remove(); } catch (err) {} try { old.dispose(); } catch (err) {} }
-  game.ctxLost = 0;
-  initRenderer();
+  game.ctxLost = 0; hide('gfxlost');
+  try { initRenderer(); } catch (err){ gfxLog.push('E', ['reset failed: ' + err.message]); toast('graphics reset failed — reload the page (the world is saved)'); return; }
   applyViewport(true);
   if (game.terrainMat) game.terrainMat.needsUpdate = true;
   toast('graphics reset');
@@ -5269,7 +5292,7 @@ function gfxInfo(){
   try { const gl = r.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; if (gl.isContextLost()) gpu = 'CONTEXT LOST · ' + gpu; } catch (err) {}
   let meshed = 0, chunks = 0;
   try { for (const [, ch] of game.terrain.chunks){ chunks++; if (ch.mesh) meshed++; } } catch (err) {}
-  const head = 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
+  const head = (ON_XBOX ? 'xbox · ' : '') + 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
        + ' · aspect ' + (c ? (+c.aspect).toFixed(3) : '-') + (c && !isFinite(c.aspect) ? ' BAD' : '') + ' · pad ' + (padSys.active ? 'on' : 'none') + (gpu ? ' · ' + gpu.slice(0, 60) : '')
        + '\nchunks ' + chunks + ' meshed ' + meshed + ' · workers ' + (meshPool.ok ? meshPool.workers.length : 'none') + ' · safe ' + (game.opts.safe ? 'ON' : 'off') + ' · rd ' + game.opts.rd + ' · scale ' + game.opts.rscale + '%';
   const L = gfxLog.last(4);
@@ -26670,7 +26693,7 @@ function frame(now){
   if (now - (game.vpCheckT || 0) > 1000){
     game.vpCheckT = now;
     if (game.camera && !isFinite(game.camera.aspect)) applyViewport(true); else applyViewport();
-    if (game.ctxLost && now - game.ctxLost > 3000) resetGraphics();
+    if (game.ctxLost){ const el = $('gfxlostsub'); if (el) el.textContent = 'waiting for the browser to give the graphics back · ' + Math.round((now - game.ctxLost) / 1000) + 's · if it never does: reload the page, the world is saved'; }
   }
   if (game.opts.fpsCap > 0 && now - (game.lastFrameT || 0) < 1000 / game.opts.fpsCap - 0.5) return;
   game.lastFrameT = now;

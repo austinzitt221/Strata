@@ -54,14 +54,16 @@ their lists are retired; what came of them is Build 30.
       flying, with and without the preset.
 - Played 2026-09-13: works. The reach was hard to find: it is now
   ▼ held with ◄ ► as well as the VIEW chord.
-- On the Xbox: white, then (switch on first) trees with no ground and
-  a cut to black (39.1, 39.2). Next time, in this order:
-  1. OPTIONS, SAFE PRESET (XBOX), BACK. Load a world. Does the ground
-     draw and stay?
-  2. Either way, MENU: read me every line under RESET GRAPHICS.
-  3. Back on the title, OPTIONS: the box at the bottom shows the
-     last errors. Read me those lines too (a photo of the screen is
-     perfect).
+- On the Xbox: the browser's watchdog takes the graphics away (the
+  readout said so, 39.3). The console now starts in safe graphics on
+  its own. Next time:
+  1. Load a world in the default (safe) settings. Does it hold for a
+     few minutes of walking and mining? If it goes black, MENU and
+     photograph the readout.
+  2. If it holds: OPTIONS, turn SAFE GRAPHICS off, keep the rest low,
+     reload the world. Holds? Then raise SHADOWS, then RENDER
+     DISTANCE, one at a time, a world load each. Tell me which step
+     breaks it.
 - Feedback I want: the stick sensitivity default, and any key you
   reach for that the pad cannot (the legend lists the chords).
 
