@@ -2,6 +2,64 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 43 — THROUGHPUT (2026-09-15)
+
+Austin's PC playtest of Build 42: 180 fps in the country, 20 fps while a
+city meshes and minutes to load one, 60 fps once it has, and the player
+outpacing the mesher on anything faster than a run. Measured first: a
+headless run that teleports beside a city, a node bench of the mesher
+over a dump of that city's 968 edits, a CPU profile of each, a census of
+the scene by owning system. Three findings, three fixes, and a fourth
+found on the way.
+
+- **The mesher was paying for the sky.** A quarter of every chunk's time
+  went to `skyNear` — nine string-keyed map lookups per SDF sample to
+  ask whether a sky island reaches this column, on top of ruin lookups
+  keyed the same way. Now: integer keys, a per-cell candidate list, and
+  a local grid that proves once whether anything in the sky or any
+  ruin can reach it, then skips those terms for every sample. The
+  generator's material is only computed where no edit claims the
+  point (in a city most crossings sit on a placed face), and the region
+  query keeps its last answer for the height and material paths that
+  ask for the same column back to back. Bit-identical output over 1620
+  chunks of two city dumps (hashed before and after). City chunk 19.7 →
+  7.0 ms, wilderness chunk 8.2 → 6.4 ms.
+- **More workers, and a column sticks to one.** Up to eight mesh workers
+  on a big CPU (a six-core Ryzen reports twelve threads; two stay for
+  the page and the browser's GPU process). A column's chunks go to the
+  same worker when it is free, so a tower's eight chunks sample the
+  generator once through the cached local height grid. Together with
+  the mesher work, roughly four times the chunks per second.
+- **Chunks draw merged, in arenas.** Every chunk owns a slot in its
+  32 m tile's vertex buffers; a landing chunk writes its slot and
+  uploads only that range, a chunk that outgrows its slot takes a fresh
+  one at the end and the old goes degenerate, a mostly-hollow tile
+  compacts. No rebuild on a landing, ever. A city's near field: 845
+  chunk draws → 56 tiles.
+- **Static props draw merged too.** Tables, beds, stoves, torches and
+  power nodes are baked after each rebuild into one mesh per material
+  (per face group of a multi-material box); the originals stay in
+  their group, invisible, so everything that reads them is unchanged;
+  a model's moving parts (whatever its root keeps in userData: a lever's
+  arm, a crank's handle, a stove's mouth) stay their own draws. The
+  same city: 1113 draws a pass → 193, and the shadow pass with it
+  (3059 → 313).
+- **The stamp freeze.** Every prop system rebuilt all its models on every
+  add, and a city adds hundreds: the towers rose through a two-second
+  freeze of rebuilding the same tables again and again. Adds inside a
+  city or village stamp now batch and rebuild once: 2185 → 376 ms
+  here, most of which is the edits themselves.
+- Normals of the near field are now Int8 like the ring's (the arena
+  shares the ring's quantized layout): the pixel-diff harness against
+  Build 41 shows a mean difference of 1.4 levels on 4% of pixels.
+- F3 shows the tile count.
+- Known: the console is parked (Austin's call after Build 42). The
+  power nodes' unique label textures keep one draw each; villagers are
+  one draw per part.
+- Tests: CORE 362 (tile runs, skin), mesh hashes identical, smoke, b27,
+  b30, b35, b38, b39.2, b40, b41, b7b regressions, city load harness,
+  pixel-diff harness.
+
 ## Build 42 — LEAN (2026-09-15)
 
 Austin asked for a performance build: faster without touching the

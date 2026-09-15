@@ -1110,6 +1110,37 @@ scan never finishes under software GL, so the mask keeps changing and
 keeps forcing the map — so that one is verified by construction and by
 the pixel harness, not by a count. Worth a real machine's minute.
 
+## 2026-09-15, later — THROUGHPUT
+
+Austin's numbers were the brief: 180 in the country, 20 in a city,
+minutes to load one, and a player who outruns the mesher on a bicycle.
+The console is parked; that was his call and the right one.
+
+The mesher profile was humbling. A quarter of every chunk was
+`skyNear` — the question "is there a sky island over this column",
+asked with nine string-keyed lookups per sample because I once wrote
+it for a handful of calls and then put it under the SDF. Another
+seventh was ruins, keyed the same way. Both were exact to fix (integer
+keys, a per-cell candidate list, a local grid that proves once that
+nothing reaches it), and the hash harness said bit-identical over
+1620 chunks. I like that harness more every build: it turns "I think
+this is the same" into a number.
+
+The draw calls were the other half. A city's near field was 845 chunk
+draws and 1300 prop draws, each a table leg. The chunk arena — every
+chunk a slot in its tile's buffers, landing chunks writing only their
+range — is the design I should have had from HORIZON A; the cooldown
+tiles I tried first rebuilt a whole tile per landing and were slower
+than what they replaced under a stream. The prop merge is simpler than
+it looks because the systems already keep their moving parts in the
+model's userData; that is the keep-list for free.
+
+And the stamp freeze, found by accident with the profiler still
+running: every prop system rebuilt all of its models on every add. Two
+hundred beds, two hundred rebuilds. A batch counter fixed it in ten
+lines. The lesson for the next system I write: an add should mark
+dirty, and a frame should rebuild once.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

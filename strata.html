@@ -900,7 +900,15 @@ function makeGen(seed){
     lmCache.set(key, L);
     return L;
   }
+  // the last answer is kept: height(), archAt(), lmAt() ask for the same
+  // column back to back from the material and height paths (Build 43)
+  let rqX = NaN, rqZ = NaN, rqQ = null;
   function regionQuery(x, z){
+    if (x === rqX && z === rqZ) return rqQ;
+    rqQ = regionQueryRaw(x, z); rqX = x; rqZ = z;
+    return rqQ;
+  }
+  function regionQueryRaw(x, z){
     // domain warp wobbles the borders so cells never read as straight lines
     const wx = x + (noise2(sWp, x * 0.0032, z * 0.0032) - 0.5) * 156;
     const wz = z + (noise2(sWp, x * 0.0032 + 71.3, z * 0.0032 + 29.7) - 0.5) * 156;
@@ -1458,8 +1466,9 @@ function makeGen(seed){
   const RUIN_CELL = 72;
   const ruinCache = new Map();
   function ruinInCell(cx, cz){
-    const key = cx + ',' + cz;
-    if (ruinCache.has(key)) return ruinCache.get(key);
+    const key = (cx + 32768) * 65536 + (cz + 32768);
+    const hit = ruinCache.get(key);
+    if (hit !== undefined) return hit;
     let R = null;
     const h0 = hashInt(sU ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
     if (h0 / 4294967296 < 0.42){
@@ -1523,9 +1532,9 @@ function makeGen(seed){
   // flattened dome of rock (radius rx, rim ragged by noise) with a cone of
   // stone hanging beneath it, floating between 58 and 90 m up — high above
   // every hill, below the world's ceiling.
-  const skyCache = new Map();
+  const skyCache = new Map(), skyCandCache = new Map();
   function skyInCell(cx, cz){
-    const key = cx + ',' + cz;
+    const key = (cx + 32768) * 65536 + (cz + 32768);
     let S = skyCache.get(key);
     if (S !== undefined) return S;
     S = null;
@@ -1542,17 +1551,53 @@ function makeGen(seed){
       S.spireTop = S.spire ? y + 38 : y;
     }
     skyCache.set(key, S);
-    if (skyCache.size > 400) skyCache.clear();
+    if (skyCache.size > 4096){ skyCache.clear(); skyCandCache.clear(); }
     return S;
   }
-  function skyNear(x, z){
-    const cx = Math.floor(x / SKY_CELL), cz = Math.floor(z / SKY_CELL);
-    let best = null;
+  // the islands of the 3x3 neighbourhood whose reach box meets a cell, in
+  // scan order, cached per cell: the mesher asks this for every sample
+  // (Build 43 -- it was nine string-keyed lookups per call, a quarter of
+  // the mesher's time)
+  function skyCands(cx, cz){
+    const key = (cx + 32768) * 65536 + (cz + 32768);
+    let L = skyCandCache.get(key);
+    if (L !== undefined) return L;
+    L = [];
+    const x0 = cx * SKY_CELL, z0 = cz * SKY_CELL, x1 = x0 + SKY_CELL, z1 = z0 + SKY_CELL;
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
       const S = skyInCell(cx + dx, cz + dz);
-      if (S && Math.abs(S.x - x) < S.rx + 6 && Math.abs(S.z - z) < S.rx + 6) best = S;
+      if (S && S.x + S.rx + 6 > x0 && S.x - S.rx - 6 < x1 && S.z + S.rx + 6 > z0 && S.z - S.rx - 6 < z1) L.push(S);
+    }
+    skyCandCache.set(key, L);
+    return L;
+  }
+  function skyNear(x, z){
+    const L = skyCands(Math.floor(x / SKY_CELL), Math.floor(z / SKY_CELL));
+    let best = null;
+    for (let i = 0; i < L.length; i++){
+      const S = L[i];
+      if (Math.abs(S.x - x) < S.rx + 6 && Math.abs(S.z - z) < S.rx + 6) best = S;
     }
     return best;
+  }
+  // can anything in the sky (island, spire) or any ruin reach a box? A local
+  // grid that provably sees none skips those terms for every sample
+  function skyReaches(x0, z0, x1, z1){
+    for (let cz = Math.floor(z0 / SKY_CELL); cz <= Math.floor(z1 / SKY_CELL); cz++)
+      for (let cx = Math.floor(x0 / SKY_CELL); cx <= Math.floor(x1 / SKY_CELL); cx++){
+        const L = skyCands(cx, cz);
+        for (let i = 0; i < L.length; i++){
+          const S = L[i];
+          if (S.x + S.rx + 6 > x0 && S.x - S.rx - 6 < x1 && S.z + S.rx + 6 > z0 && S.z - S.rx - 6 < z1) return true;
+        }
+      }
+    return false;
+  }
+  function ruinReaches(x0, z0, x1, z1){
+    for (let cz = Math.floor(z0 / RUIN_CELL); cz <= Math.floor(z1 / RUIN_CELL); cz++)
+      for (let cx = Math.floor(x0 / RUIN_CELL); cx <= Math.floor(x1 / RUIN_CELL); cx++)
+        if (ruinInCell(cx, cz)) return true;
+    return false;
   }
   // distance to the island solid (conservative); 1e9 far from any
   function skySDF(x, y, z){
@@ -1642,16 +1687,19 @@ function makeGen(seed){
   // carved: the cave field flares open above an entrance (its mouth term
   // grows with height above the ground), and an island over a cave mouth
   // used to come out hollow through the middle.
-  function sdfFromH(h, x, y, z, prims){
-    const d = sdfTerrain(h, x, y, z, prims);
-    if (y >= 40){ const sk = Math.min(skySDF(x, y, z), spireSDF(x, y, z)); return sk < d ? sk : d; }
+  // skip: bit 1 = nothing in the sky can reach here, bit 2 = no ruin can
+  // (a local grid proves both once; each term returns 1e9 there anyway)
+  function sdfFromH(h, x, y, z, prims, skip){
+    const d = sdfTerrain(h, x, y, z, prims, skip);
+    if (y >= 40 && !(skip & 1)){ const sk = Math.min(skySDF(x, y, z), spireSDF(x, y, z)); return sk < d ? sk : d; }
     return d;
   }
-  function sdfTerrain(h, x, y, z, prims){
+  function sdfTerrain(h, x, y, z, prims, skip){
     let d = (y - h) * 0.65;
-    const net = prims && prims.length;
+    const net = prims && prims.length, noRuin = skip & 2;
     if (!net){
       if (d > 2.5){
+        if (noRuin) return d;
         const rs = ruinSDF(x, y, z);
         return rs < d ? rs : d;
       }
@@ -1661,15 +1709,17 @@ function makeGen(seed){
         // builds an invisible floor the collider bounces on. Near entrance
         // zones, keep taking max with the carve so the air over a hole knows
         // the nearest solid is the rim, not the missing ground.
-        if (entranceMask(x, z) < 0.15) return Math.min(d, ruinSDF(x, y, z));
+        if (entranceMask(x, z) < 0.15) return noRuin ? d : Math.min(d, ruinSDF(x, y, z));
       }
     } else if (d > 8){
       // well above any breach mouth flare: plain air
+      if (noRuin) return d;
       const rs = ruinSDF(x, y, z);
       return rs < d ? rs : d;
     }
     d = Math.max(d, -caveCarve(x, y, z, h));
     if (net) d = Math.max(d, -primCarve(x, y, z, prims));
+    if (noRuin) return d;
     const rs = ruinSDF(x, y, z);
     return rs < d ? rs : d;
   }
@@ -1800,6 +1850,9 @@ function makeGen(seed){
     st = st || VOX;
     x0 -= 2 * st; z0 -= 2 * st; x1 += 2 * st; z1 += 2 * st; // hermite margin
     const lPrims = gatherBox(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
+    // what this grid can never see: proved once over its extent (padded past
+    // every tap the mesher makes), so every sample skips the term
+    const skip = (skyReaches(x0 - 4, z0 - 4, x1 + 4, z1 + 4) ? 0 : 1) | (ruinReaches(x0 - 4, z0 - 4, x1 + 4, z1 + 4) ? 0 : 2);
     const nx = Math.round((x1 - x0) / st) + 1, nz = Math.round((z1 - z0) / st) + 1;
     const grid = new Float32Array(nx * nz);
     for (let j = 0; j < nz; j++)
@@ -1817,7 +1870,7 @@ function makeGen(seed){
     return {
       height: lh, heightRange, mat, caves: true, caveFloorY: -86, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, waterYAt,
       caveInBox, floodedAt, chamberAt, caveNetCell,
-      sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z, lPrims),
+      sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z, lPrims, skip),
       makeLocal,
     };
   }
@@ -2209,7 +2262,7 @@ function lastMatEdit(){ return _matEdit; }
 function materialAt(px, py, pz, edits, gen){
   _matEdit = null;
   if (py < BEDROCK_Y) return MAT.BEDROCK;
-  let m = (gen || FLAT_GEN).mat(px, py, pz);
+  let m = -1;
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
     // <= 0: boundary samples count as solid (SOLID = d <= 0), so a snapped
@@ -2217,7 +2270,9 @@ function materialAt(px, py, pz, edits, gen){
     // generator's material (grass specks in placed obsidian)
     if ((e.op === 1 || e.op === 2 || e.op === 3) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
   }
-  return m;
+  // the generator's material only where no edit claimed the point: in a
+  // city most crossings sit on a placed face (Build 43)
+  return m >= 0 ? m : (gen || FLAT_GEN).mat(px, py, pz);
 }
 
 // exact surface normal (world-field gradient direction) of an edit at a
@@ -2371,6 +2426,7 @@ function msGrow(n){
   MS_P = g2(MS_P, 3); MS_N2 = g2(MS_N2, 3); MS_M = g2(MS_M, 1);
   MS_SK = g2(MS_SK, 1); MS_AO2 = g2(MS_AO2, 1); MS_AX2 = g2(MS_AX2, 3);
 }
+const MS_QIDX = [];
 function meshChunk(cx, cy, cz, allEdits, gen, LSC){
   gen = gen || FLAT_GEN;
   // LOD scale: the same dual contourer with voxels LSC times larger —
@@ -2444,7 +2500,8 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
     const bx0 = Math.max(0, Math.floor((px0 - gox) / GC)), bx1 = Math.min(GNX - 1, Math.floor((px1 - gox) / GC));
     const by0 = Math.max(0, Math.floor((py0 - goy) / GC)), by1 = Math.min(GNY - 1, Math.floor((py1 - goy) / GC));
     const bz0 = Math.max(0, Math.floor((pz0 - goz) / GC)), bz1 = Math.min(GNZ - 1, Math.floor((pz1 - goz) / GC));
-    const idx = [];
+    const idx = MS_QIDX;                       // scratch, copied out below (callers nest)
+    idx.length = 0;
     for (let bz = bz0; bz <= bz1; bz++) for (let by = by0; by <= by1; by++) for (let bx = bx0; bx <= bx1; bx++){
       const list = buckets[(bz * GNY + by) * GNX + bx];
       if (!list) continue;
@@ -2458,7 +2515,7 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
             EBB[b6 + 2] <= pz1 && EBB[b6 + 5] >= pz0) idx.push(i);
       }
     }
-    idx.sort((a, b) => a - b);                 // creation order
+    if (idx.length > 1) idx.sort((a, b) => a - b);   // creation order
     const out = new Array(idx.length);
     for (let k = 0; k < idx.length; k++) out[k] = aoEdits[idx[k]];
     return out;
@@ -4186,7 +4243,11 @@ const meshPool = {
         '};\n';
       const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
       this.url = url;
-      const nW = game.opts && game.opts.safe ? 1 : Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
+      // Build 43: up to eight workers on a big CPU (a six-core Ryzen reports
+      // twelve threads; two stay for the page and the browser's own GPU
+      // process), the old three on a four-thread machine
+      const hc = navigator.hardwareConcurrency || 4;
+      const nW = game.opts && game.opts.safe ? 1 : hc <= 4 ? Math.max(1, hc - 1) : Math.min(8, hc - 2);
       for (let i = 0; i < nW; i++){
         const w = new Worker(url);
         w.onmessage = (ev) => this.done(w, ev.data);
@@ -4272,8 +4333,17 @@ const meshPool = {
                    c[0] * M + M + 4, c[1] * M + M + 4, c[2] * M + M + 4];
       const rows = CORE.serializeEdits(CORE.cullEdits(src.edits, box, 0));
       const id = ++this.seq;
-      const w = this.idle.pop();
-      this.jobs.set(id, { src, key, c });
+      // the chunks of one column go to one worker when it is free: its local
+      // height grid is cached per column, so a tower's eight chunks sample
+      // the generator once instead of eight times (Build 43)
+      let w = null;
+      if (this.idle.length > 1){
+        const want = this.workers[(((c[0] * 73856093) ^ (c[2] * 19349663)) >>> 0) % this.workers.length];
+        const wi = this.idle.indexOf(want);
+        if (wi >= 0){ w = want; this.idle.splice(wi, 1); }
+      }
+      if (!w) w = this.idle.pop();
+      this.jobs.set(id, { src, key, c, hot: this.pickedHot });
       this.inflight.add(src.id + '|' + key);
       w.postMessage({ id, cx: c[0], cy: c[1], cz: c[2], edits: rows, sc: src.sc || 1, drop: src.feat ? 1 : 0 });
     }
@@ -4310,6 +4380,7 @@ const meshPool = {
     return null;
   },
   pick(src){
+    this.pickedHot = false;
     const M = src.chunkM || CORE.CHUNK_M;
     // travel prefetch: score from where you'll BE in a second, and weight
     // by look direction — chunks in front of the camera stream first, the
@@ -4330,7 +4401,7 @@ const meshPool = {
         const d = (c[0] - px) * (c[0] - px) + (c[1] - py) * (c[1] - py) + (c[2] - pz) * (c[2] - pz);
         if (d < bd){ bd = d; best = [key, c]; }
       }
-      if (best){ src.hot.delete(best[0]); return best; }
+      if (best){ src.hot.delete(best[0]); this.pickedHot = true; return best; }
     }
     for (const [key, c] of src.dirty){
       if (this.inflight.has(src.id + '|' + key)) continue;  // wait for the stale result
@@ -4351,7 +4422,7 @@ const meshPool = {
       this.jobs.delete(msg.id);
       this.inflight.delete(job.src.id + '|' + job.key);
       if (!job.src.dirty.has(job.key))          // re-dirtied mid-flight: stale
-        job.src.applyResult(job.key, job.c[0], job.c[1], job.c[2], msg.d);
+        job.src.applyResult(job.key, job.c[0], job.c[1], job.c[2], msg.d, job.hot);
     }
     // keep the pipeline full: the freed worker takes the next chunk NOW,
     // not on the next animation frame
@@ -4375,7 +4446,116 @@ class Terrain {
     this.center = [0, 0, 0];         // chunk coords of player (x,y,z)
     this.radius = 3;
     this.id = 'T'; this.sc = 1; this.chunkM = CORE.CHUNK_M;   // pool source
+    // Build 43: chunks are drawn merged, 4x4x4 of them (32 m) per mesh, an
+    // ARENA: every chunk owns a slot in the tile's vertex buffers, a landing
+    // chunk writes its slot and uploads only that range, a chunk that
+    // outgrows its slot takes a fresh one at the end and the old one goes
+    // degenerate. Nothing is ever rebuilt on a landing. A city's near field
+    // was a thousand draws a pass; it is a few dozen
+    this.tiles = new Map();          // tile key -> arena
   }
+  tileKey(cx, cy, cz){ return (cx >> 2) + ',' + (cy >> 2) + ',' + (cz >> 2); }
+  tileOf(cx, cy, cz){
+    const tk = this.tileKey(cx, cy, cz);
+    let t = this.tiles.get(tk);
+    if (!t){
+      const M = CORE.CHUNK_M * 4;
+      t = { key: tk, mesh: null, geo: null, cap: 0, used: 0, dead: 0, slots: new Map(),
+            P: null, Nr: null, Ax: null, Mt: null, Sk: null, Ao: null,
+            cx: (cx >> 2) * M + M / 2, cy: (cy >> 2) * M + M / 2, cz: (cz >> 2) * M + M / 2 };
+      this.tiles.set(tk, t);
+    }
+    return t;
+  }
+  // (re)make the tile's geometry over its arrays; the sphere is the tile's
+  // own box (chunks reach a voxel past their edges), never recomputed
+  tileGeo(t){
+    if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh = null; }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(t.P, 3));
+    g.setAttribute('normal', new THREE.BufferAttribute(t.Nr, 3, true));
+    g.setAttribute('aMat', new THREE.BufferAttribute(t.Mt, 1));
+    g.setAttribute('aSky', new THREE.BufferAttribute(t.Sk, 1, true));
+    g.setAttribute('aAO', new THREE.BufferAttribute(t.Ao, 1, true));
+    g.setAttribute('aAxis', new THREE.BufferAttribute(t.Ax, 3, true));
+    g.setDrawRange(0, t.used);
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(t.cx, t.cy, t.cz), CORE.CHUNK_M * 4 * 0.8661 + 1.5);
+    const mesh = new THREE.Mesh(g, this.material);
+    mesh.castShadow = true;
+    mesh.frustumCulled = true;
+    this.scene.add(mesh);
+    t.mesh = mesh; t.geo = g;
+    for (const k of t.slots.keys()){ const ch = this.chunks.get(k); if (ch) ch.mesh = mesh; }
+  }
+  // room for `need` more vertices: grow (and compact) into fresh arrays
+  tileGrow(t, need){
+    const live = t.used - t.dead;
+    const cap = Math.max(6144, Math.ceil((live + need) * 1.6));
+    const P = new Float32Array(cap * 3), Nr = new Int8Array(cap * 3), Ax = new Int8Array(cap * 3);
+    const Mt = new Uint8Array(cap), Sk = new Uint8Array(cap), Ao = new Uint8Array(cap);
+    let o = 0;
+    for (const s of t.slots.values()){
+      if (t.P){
+        P.set(t.P.subarray(s.start * 3, (s.start + s.count) * 3), o * 3);
+        Nr.set(t.Nr.subarray(s.start * 3, (s.start + s.count) * 3), o * 3);
+        Ax.set(t.Ax.subarray(s.start * 3, (s.start + s.count) * 3), o * 3);
+        Mt.set(t.Mt.subarray(s.start, s.start + s.count), o);
+        Sk.set(t.Sk.subarray(s.start, s.start + s.count), o);
+        Ao.set(t.Ao.subarray(s.start, s.start + s.count), o);
+      }
+      s.start = o; o += s.count;
+    }
+    t.P = P; t.Nr = Nr; t.Ax = Ax; t.Mt = Mt; t.Sk = Sk; t.Ao = Ao;
+    t.cap = cap; t.used = o; t.dead = 0;
+    this.tileGeo(t);
+  }
+  // a chunk's geometry into its tile: the same slot if it still fits, else
+  // a new one at the end; only the written range is uploaded
+  placeChunk(key, cx, cy, cz, d){
+    const t = this.tileOf(cx, cy, cz);
+    const n = d.mats.length;
+    let s = t.slots.get(key);
+    if (s && n > s.count){ this.freeSlot(t, s); t.slots.delete(key); s = null; }
+    let fresh = false;
+    if (!s){
+      if (t.used + n > t.cap){ this.tileGrow(t, n); fresh = true; }
+      s = { start: t.used, count: n };
+      t.used += n;
+      t.slots.set(key, s);
+      t.geo.setDrawRange(0, t.used);
+    }
+    const a = s.start;
+    t.P.set(d.positions, a * 3); t.Nr.set(d.normals, a * 3); t.Ax.set(d.axes, a * 3);
+    t.Mt.set(d.mats, a); t.Sk.set(d.skys, a); t.Ao.set(d.aos, a);
+    if (n < s.count){ t.P.fill(0, (a + n) * 3, (a + s.count) * 3); }   // the rest of the slot: degenerate
+    if (!fresh){
+      const A = t.geo.attributes;
+      for (const nm of ['position', 'normal', 'aAxis']){ A[nm].addUpdateRange(a * 3, s.count * 3); A[nm].needsUpdate = true; }
+      for (const nm of ['aMat', 'aSky', 'aAO']){ A[nm].addUpdateRange(a, s.count); A[nm].needsUpdate = true; }
+    }
+    return t;
+  }
+  freeSlot(t, s){
+    t.P.fill(0, s.start * 3, (s.start + s.count) * 3);
+    if (t.geo){ const A = t.geo.attributes.position; A.addUpdateRange(s.start * 3, s.count * 3); A.needsUpdate = true; }
+    t.dead += s.count;
+  }
+  // a chunk leaves its tile (scrolled out, or came back empty)
+  removeChunk(key, ch){
+    ch.mesh = null;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const t = this.tiles.get(this.tileKey(cx, cy, cz));
+    if (!t) return;
+    const s = t.slots.get(key);
+    if (!s) return;
+    this.freeSlot(t, s);
+    t.slots.delete(key);
+    if (!t.slots.size){
+      if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); }
+      this.tiles.delete(t.key);
+    } else if (t.dead > 4096 && t.dead > t.used * 0.5) this.tileGrow(t, 0);   // mostly holes: compact
+  }
+  meshedCount(){ let n = 0; for (const [, ch] of this.chunks) if (ch.mesh) n++; return n; }
   chunkOfWorld(x, z){ return [Math.floor(x / CORE.CHUNK_M), Math.floor(z / CORE.CHUNK_M)]; }
 
   // stream chunks around player; returns true if set changed
@@ -4395,7 +4575,7 @@ class Terrain {
     // drop far chunks
     for (const [key, ch] of this.chunks){
       if (!want.has(key)){
-        if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
+        this.removeChunk(key, ch);
         if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
       if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
         this.chunks.delete(key);
@@ -4548,34 +4728,19 @@ class Terrain {
     const ch = this.chunks.get(key);
     if (!ch) return;
     const data = CORE.meshChunk(cx, cy, cz, this.edits, this.gen);
-    this.applyResult(key, cx, cy, cz, data);
+    this.applyResult(key, cx, cy, cz, data, true);
   }
 
   // install finished chunk geometry (from the pool or the sync path)
-  applyResult(key, cx, cy, cz, data){
+  applyResult(key, cx, cy, cz, data, hot){
     const ch = this.chunks.get(key);
     if (!ch) return;                             // scrolled out mid-flight
     ch.done = 1;                                 // meshed — even if it came back empty
-    farTerrain.maskFrame = 99;                   // something landed: re-cut the mask now
     this.remeshWater(ch, cx, cy, cz);
-    if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); ch.mesh = null; }
-    if (!data) return;
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(data.normals, 3));
-    g.setAttribute('aMat', new THREE.BufferAttribute(data.mats, 1));
-    g.setAttribute('aSky', new THREE.BufferAttribute(data.skys, 1));
-    g.setAttribute('aAO', new THREE.BufferAttribute(data.aos, 1));
-    g.setAttribute('aAxis', new THREE.BufferAttribute(data.axes, 3));
-    const mesh = new THREE.Mesh(g, this.material);
-    mesh.castShadow = true;
-    mesh.frustumCulled = true;
-    g.computeBoundingSphere();
-    // a chunk's mesh is never edited in place (a remesh replaces it), so
-    // the CPU copy of every buffer goes the moment the GPU has it
-    for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);
-    this.scene.add(mesh);
-    ch.mesh = mesh;
+    farTerrain.maskFrame = 99;                   // what stands changed: re-cut the mask now
+    if (!data){ this.removeChunk(key, ch); ch.built = 1; return; }   // nothing to draw: it stands at once
+    const t = this.placeChunk(key, cx, cy, cz, lodTerrain.quantize(data));
+    ch.mesh = t.mesh; ch.built = 1;
   }
 
   // lake surface quads for this chunk footprint: 1m cells at sea level over
@@ -4703,10 +4868,12 @@ class Terrain {
 
   disposeAll(){
     for (const [, ch] of this.chunks){
-      if (ch.mesh){ this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
       if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
       if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
+      ch.mesh = null;
     }
+    for (const [, t] of this.tiles) if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); }
+    this.tiles.clear();
     this.chunks.clear(); this.dirty.clear();
   }
 }
@@ -7656,7 +7823,7 @@ const beaconSys = {
     g.add(base); g.add(pillar); g.add(gem);
     return g;
   },
-  add(x, y, z, yaw){ game.beacons.push(yaw ? [x, y, z, yaw] : [x, y, z]); this.rebuild(); markSave(); toast('home beacon set'); },
+  add(x, y, z, yaw){ game.beacons.push(yaw ? [x, y, z, yaw] : [x, y, z]); propRebuild(this); markSave(); toast('home beacon set'); },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.beacons.length;
     for (const b of game.beacons){
@@ -7810,7 +7977,7 @@ const bedSys = {
     g.add(frame); g.add(head); g.add(mattress); g.add(blanket); g.add(pillow);
     return g;
   },
-  add(x, y, z, yaw){ game.beds.push([x, y, z, yaw]); this.rebuild(); markSave(); },
+  add(x, y, z, yaw){ game.beds.push([x, y, z, yaw]); propRebuild(this); markSave(); },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.beds.length;
     for (const b of game.beds){
@@ -7899,6 +8066,7 @@ const stoveSys = {
     chimney.position.set(0.25, 1.25, 0.25);
     const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.38, 0.06), M.mouthCold);
     mouth.position.set(0, 0.4, -0.46);
+    mouth.userData.keep = true;                    // swaps material when lit: stays its own draw
     const lip = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.08, 0.1), M.top);
     lip.position.set(0, 0.16, -0.46);
     g.add(body); g.add(top); g.add(chimney); g.add(mouth); g.add(lip);
@@ -7907,7 +8075,7 @@ const stoveSys = {
   },
   add(x, y, z, yaw){
     game.stoves.push({ x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0, id: game.pSeq++ });
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
   },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.stoves.length;
@@ -8041,7 +8209,7 @@ const bulbSys = {
   },
   add(x, y, z, nx, ny, nz){
     game.bulbs.push([x, y, z, nx == null ? 0 : nx, ny == null ? 1 : ny, nz == null ? 0 : nz, game.pSeq++]);
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
   },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.bulbs.length;
@@ -8100,7 +8268,7 @@ const ropeSys = {
   },
   add(x, y, z, len){
     (game.ropes = game.ropes || []).push([+x.toFixed(2), +y.toFixed(2), +z.toFixed(2), +len.toFixed(1)]);
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
   },
   removeAt(i){ game.ropes.splice(i, 1); this.rebuild(); markSave(); },
   // rope line near the crosshair ray (fists-down pickup)
@@ -8650,7 +8818,7 @@ const pnodeSys = {
     if (t === 'gen') n.burn = 0;
     if (extra) Object.assign(n, extra);
     game.pnodes.push(n);
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
     return n;
   },
   byId(id){ return (game.pnodes || []).find(n => n.id === id); },
@@ -8681,7 +8849,7 @@ const pnodeSys = {
     });
     if (w) addStackItem('wire', w);
     game.pnodes.splice(game.pnodes.indexOf(n), 1);
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
     return w;
   },
   // world position of a wire terminal: n<id> node, b<id> bulb, s<id> stove
@@ -9494,7 +9662,7 @@ const torchSys = {
     g.add(stick); g.add(tip);
     return g;
   },
-  add(x, y, z){ game.torches.push([x, y, z]); this.rebuild(); markSave(); },
+  add(x, y, z){ game.torches.push([x, y, z]); propRebuild(this); markSave(); },
   // remove torches near a point; returns how many were popped
   removeNear(x, y, z, r){
     const keep = [], popped = game.torches.length;
@@ -10036,7 +10204,7 @@ const doorSys = {
     game.doors.push({ x: gd.x - Math.cos(gd.yaw) * gd.w * 0.5, y: gd.y,
                       z: gd.z + Math.sin(gd.yaw) * gd.w * 0.5,
                       yaw: gd.yaw, open: false, w: gd.w, h: gd.h, gate: gd.gate ? 1 : undefined });
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
   },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.doors.length;
@@ -10102,7 +10270,7 @@ const tableSys = {
     g.add(top); g.add(tools);
     return g;
   },
-  add(x, y, z, yaw){ game.tables.push(yaw ? [x, y, z, yaw] : [x, y, z]); this.rebuild(); markSave(); },
+  add(x, y, z, yaw){ game.tables.push(yaw ? [x, y, z, yaw] : [x, y, z]); propRebuild(this); markSave(); },
   onRay(maxDist){
     maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
@@ -10380,6 +10548,96 @@ function nearTable(){
     if (Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z) < 4) return true;
   }
   return false;
+}
+// Build 43: the static prop systems draw MERGED. After a rebuild, every
+// part of every model is baked (world transform, per material, per face
+// group of a multi-material box) into one mesh per material; the originals
+// stay in the group, invisible, so nothing that reads them changes. Parts
+// flagged keep (a stove's mouth, which swaps material when lit) stay their
+// own draw. A city had a thousand tables, beds, stoves and torches, each
+// five draws; it is now a handful
+function mergeStatic(sys){
+  const g = sys.group;
+  if (!g) return;
+  if (sys.merged){
+    game.scene.remove(sys.merged);
+    for (const m of sys.merged.children) m.geometry.dispose();
+    sys.merged = null;
+  }
+  g.updateMatrixWorld(true);
+  // a model's moving parts are the objects its root keeps in userData (a
+  // lever's arm, a crank's handle, a stove's mouth): those stay their own
+  // draws, with everything under them
+  const keep = new Set();
+  for (const root of g.children){
+    const ud = root.userData || {};
+    for (const k in ud){ const v = ud[k]; if (v && v.isObject3D) v.traverse(o => keep.add(o)); }
+  }
+  const buckets = new Map();
+  const take = (mat, o, start, count) => {
+    let b = buckets.get(mat);
+    if (!b) buckets.set(mat, b = { parts: [], cast: !!o.castShadow, nv: 0, ni: 0, nrm: true, uv: true });
+    b.parts.push([o, start, count]);
+    const geo = o.geometry;
+    b.nv += geo.attributes.position.count; b.ni += count;
+    if (!geo.attributes.normal) b.nrm = false;
+    if (!geo.attributes.uv) b.uv = false;
+  };
+  g.traverse(o => {
+    if (!o.isMesh || !o.geometry || !o.geometry.attributes.position || (o.userData && o.userData.keep) || keep.has(o)) return;
+    const geo = o.geometry, total = geo.index ? geo.index.count : geo.attributes.position.count;
+    if (Array.isArray(o.material)){
+      if (!geo.groups.length) return;
+      for (const grp of geo.groups){
+        const cnt = grp.count === Infinity ? total - grp.start : grp.count;
+        take(o.material[grp.materialIndex || 0], o, grp.start, cnt);
+      }
+    } else take(o.material, o, 0, total);
+  });
+  const merged = new THREE.Group();
+  merged.name = (sys.group.name || 'props') + '-merged';
+  const v = new THREE.Vector3(), nm = new THREE.Matrix3();
+  for (const [mat, b] of buckets){
+    const P = new Float32Array(b.nv * 3), Nn = b.nrm ? new Float32Array(b.nv * 3) : null, UV = b.uv ? new Float32Array(b.nv * 2) : null;
+    const I = new Uint32Array(b.ni);
+    let vo = 0, io = 0;
+    const done = new Map();                        // an object's vertices go in once, even across face groups
+    for (const [o, start, count] of b.parts){
+      const geo = o.geometry, pa = geo.attributes.position;
+      let base = done.get(o);
+      if (base === undefined){
+        base = vo;
+        nm.getNormalMatrix(o.matrixWorld);
+        for (let i = 0; i < pa.count; i++){
+          v.fromBufferAttribute(pa, i).applyMatrix4(o.matrixWorld);
+          P[(vo + i) * 3] = v.x; P[(vo + i) * 3 + 1] = v.y; P[(vo + i) * 3 + 2] = v.z;
+          if (Nn){ v.fromBufferAttribute(geo.attributes.normal, i).applyMatrix3(nm).normalize(); Nn[(vo + i) * 3] = v.x; Nn[(vo + i) * 3 + 1] = v.y; Nn[(vo + i) * 3 + 2] = v.z; }
+          if (UV){ UV[(vo + i) * 2] = geo.attributes.uv.getX(i); UV[(vo + i) * 2 + 1] = geo.attributes.uv.getY(i); }
+        }
+        vo += pa.count;
+        done.set(o, base);
+      }
+      if (geo.index){ const ix = geo.index; for (let i = 0; i < count; i++) I[io++] = ix.getX(start + i) + base; }
+      else for (let i = 0; i < count; i++) I[io++] = start + i + base;
+    }
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    if (Nn) mg.setAttribute('normal', new THREE.BufferAttribute(Nn, 3));
+    if (UV) mg.setAttribute('uv', new THREE.BufferAttribute(UV, 2));
+    mg.setIndex(new THREE.BufferAttribute(I.subarray(0, io), 1));
+    mg.computeBoundingSphere();
+    const m = new THREE.Mesh(mg, mat);
+    m.castShadow = b.cast;
+    m.userData.noShadow = !b.cast;
+    merged.add(m);
+  }
+  for (const [, b] of buckets) for (const [o] of b.parts) o.visible = false;
+  game.scene.add(merged);
+  sys.merged = merged;
+}
+for (const sys of [tableSys, bedSys, stoveSys, torchSys, pnodeSys]){
+  const orig = sys.rebuild;
+  sys.rebuild = function(){ orig.apply(this, arguments); mergeStatic(this); };
 }
 function rebuildSolidProps(){
   const props = [];
@@ -11739,7 +11997,8 @@ const villageSys = {
       }
       if (!rec.stamped){
         rec.stamped = true;
-        this.stamp(v, rec);
+        propBatchBegin();
+        try { this.stamp(v, rec); } finally { propBatchEnd(); }
         this.footbridge(v, rec);
         toast('you found ' + rec.name + ' — a village');
         AudioSys.sfx('craft');
@@ -16076,7 +16335,7 @@ const railSys = {
       (game.rails = game.rails || []).push(L);
       toast('rail line laid — wire a power source to a rail meter, then right-click the meter to ride');
     } else if (L) toast('rail line discarded — a line needs at least two spikes');
-    this.rebuild(); markSave();
+    propRebuild(this); markSave();
   },
   endpointNear(x, y, z, r){
     for (const L of game.rails || []){
@@ -17206,12 +17465,14 @@ const citySys = {
       if (!rec.stamped){
         rec.stamped = true;
         const n0 = game.edits.length;
-        this.stamp(c, rec);
+        propBatchBegin();
+        try { this.stamp(c, rec); } finally { propBatchEnd(); }
         farShapeSys.tagRange(n0);
         markSave();
       } else if (!rec.station && rec.gy != null){
         // a city from before the trains: it gets its station now
-        this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8);
+        propBatchBegin();
+        try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
@@ -25262,7 +25523,21 @@ function defaultSlots(mode){
 }
 
 // ---------- save / load ----------
-function markSave(){ game.savePending = true; game.saveTimer = performance.now(); netSys.dirty = true; }
+function markSave(){ game.savePending = true; game.saveTimer = performance.now(); netSave(); }
+function netSave(){ netSys.dirty = true; }
+// Build 43: a prop system rebuilds its models when a prop is added -- all of
+// them, every add. A city stamps hundreds, so the towers rose through a
+// two-second freeze of rebuilding the same tables again and again. Inside a
+// batch the rebuilds wait and run once at the end
+const propBatchSet = new Set();
+function propRebuild(sys){ if (game.propBatch){ propBatchSet.add(sys); return; } sys.rebuild(); }
+function propBatchBegin(){ game.propBatch = (game.propBatch || 0) + 1; }
+function propBatchEnd(){
+  game.propBatch = Math.max(0, (game.propBatch || 1) - 1);
+  if (game.propBatch) return;
+  const list = [...propBatchSet]; propBatchSet.clear();
+  for (const sys of list) sys.rebuild();
+}
 function saveNow(){
   if (!game.running || !game.worldId) return;
   if (netSys.guest) return;                       // a guest's world belongs to the host
@@ -26076,7 +26351,7 @@ const farTerrain = {
         let ok = true;
         for (let cy = range[0]; cy <= range[1] && ok; cy++){
           const ch = T.chunks.get(cx + ',' + cy + ',' + cz);
-          if (!ch || ch.banded || !(ch.mesh || ch.empty || ch.done)) ok = false;
+          if (!ch || ch.banded || !(ch.mesh || ch.empty || ch.built)) ok = false;
         }
         if (ok){
           const ix = cx - ox, iz = cz - oz;
@@ -27180,7 +27455,7 @@ function frame(now){
       $('fpsbox').textContent =
         game.fps + ' fps\n' +
         'chunk queue ' + game.terrain.dirty.size + '  workers ' +
-          (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '\n' +
+          (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '  tiles ' + game.terrain.tiles.size + '\n' +
         'ring queue ' + lodQ + '  tiles ' + lodTiles + '  skin ' + skinL + '/' + farTerrain.L.length + (skinJ ? ' (building)' : '') + '\n' +
         'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls + '\n' +
         'shadow passes ' + (shadowSys.passes - (game.shPass0 || 0)) + '/' + (shadowSys.frames - (game.shFrame0 || 0)) + '  skin draws ' + (farTerrain.draws || 0);

@@ -5,6 +5,29 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 43 — THROUGHPUT (PC)
+The build for the city report: faster meshing, merged draws, no stamp
+freeze. Nothing should look different except a hair of shading noise.
+- [ ] The same walk into the same city as before, F3 up: how long until
+      the meshing counter reaches zero, and the fps while it climbs.
+      Before it was minutes and 20 fps.
+- [ ] Standing in the loaded city, F3: draws should be a few hundred,
+      not a thousand, and the fps well above the 60 you had.
+- [ ] Drive, then fly, out of the city and across country: does the
+      world keep up now, and at what speed does it start to lose?
+- [ ] Approach a fresh city or village: the moment the towers rise
+      should no longer hitch for a second or two.
+- [ ] Carve and place beside a tower, then inside one, then in a village
+      house: the hole appears the same frame as before, nothing pops,
+      no flicker at the edge of the cut.
+- [ ] Place a table, a bed, a stove, a torch, a lever and a crank; use
+      them; light the stove; pull the lever; wind the crank. They should
+      look and behave exactly as before. Pick one up again.
+- [ ] Look at the near ground closely in low sun: any banding on smooth
+      slopes that was not there before?
+- Feedback I want: the load time and fps numbers in the city, and the
+  speed at which the world stops keeping up.
+
 ## Build 42 — LEAN (PC first, then the Xbox)
 Nothing here should look different. The build is a success if you
 cannot tell it apart from Build 41 except by the frame counter.

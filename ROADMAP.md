@@ -152,6 +152,13 @@ order is mine. Big items are split so each build is one session.
   copies of geometry dropped once uploaded (heap halved). Next levers
   if the console still chugs on its preset: merge chunk draws, merge
   entity part meshes, a smaller shadow map at low render scale.
+- **THROUGHPUT** — DONE (Build 43): the console is parked (Austin's
+  call). For the PC: the mesher rid of its sky and ruin lookups (2.8x
+  on city chunks), eight workers with column affinity, chunks drawn
+  merged in arenas (845 draws → 56), static props merged per material,
+  the stamp freeze gone. Next levers if cities still drag: villagers
+  as one draw, power-node labels only when near, a coarser first pass
+  for the far ring when moving fast.
 
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 
