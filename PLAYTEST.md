@@ -5,6 +5,32 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 42 — LEAN (PC first, then the Xbox)
+Nothing here should look different. The build is a success if you
+cannot tell it apart from Build 41 except by the frame counter.
+- [ ] PC: stand in the same spot as before with F3 up, note the fps,
+      turn a full circle, walk, mine a while. F3 now also shows
+      "shadow passes N/M": standing still or only turning the camera
+      the first number should be well under the second; with animals
+      or villagers about it climbs toward M (that is right: they move).
+- [ ] Look hard at the far hills while turning: no tiles popping in
+      at the edge of the view, no notch where the far skin meets the
+      real ground, no seam between the sun's shadows and the skin.
+- [ ] A low sun: shadows of hills behind you still fall ahead of you;
+      god rays look as they did; the sun's glow is not clipped in a
+      box.
+- [ ] Sleep, or drag the time slider in photo mode: shadows follow the
+      sun without lagging or stepping.
+- [ ] Xbox, without safe mode: the fps against the 15 it gave before,
+      in the same kind of place. Then the crash test: mine and fly
+      about as you did when it died — does it die, and after how long.
+- [ ] Xbox, on its preset: the same two numbers. (On the preset only the
+      memory work applies, so the fps may not move; the crash is what
+      I want to know about.)
+- Feedback I want: the two fps numbers and whether the crash is gone
+  or later. If it still dies on the preset, we park the console, as
+  agreed, and the next levers are known.
+
 ## Build 40 — TOGETHER (two machines)
 - [ ] Both open the game from the same URL. One of you plays a world,
       pauses, INVITE A FRIEND: a five-letter code. The other: JOIN A

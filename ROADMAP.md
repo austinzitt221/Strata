@@ -145,6 +145,13 @@ order is mine. Big items are split so each build is one session.
   drive. Later, as they come up: a third player, a relay for the
   connections that need one, the guest's carved water, crew that
   follow a guest, a guest sleeping through the night.
+- **LEAN** — DONE (Build 42): the performance build Austin asked for
+  after the console's 15 fps. Same picture, less work: the far skin
+  drawn in frustum-culled runs, the shadow map re-rendered only when
+  it would differ, god rays drawing only what can cover the sun, CPU
+  copies of geometry dropped once uploaded (heap halved). Next levers
+  if the console still chugs on its preset: merge chunk draws, merge
+  entity part meshes, a smaller shadow map at low render scale.
 
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 

@@ -2,6 +2,60 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 42 — LEAN (2026-09-15)
+
+Austin asked for a performance build: faster without touching the
+picture. Profiled first (a scene census, the render counters with and
+without the shadow pass, a heap probe), then took the four biggest
+loads that could go without a pixel moving, and proved the pixel with a
+harness that renders the same world at the same poses on the old and
+the new build and diffs the screenshots (differences below a third of
+a percent of pixels, all of them twinkling stars and drifting cloud
+edges).
+
+- **The far skin is drawn in runs, not whole.** Every clipmap level was
+  one 166k-triangle mesh with culling off — 830k triangles a frame, most
+  of them behind the camera or under the finer level's hole. The worker
+  now writes each level's index tile-major (6×6 tiles, each with its own
+  y range); every frame the tiles in the eye's frustum (and, for the two
+  casting levels, the tiles in the sun's shadow box) are found by
+  bounding sphere and consecutive ones merge into one draw over the
+  shared index buffer. Casting runs sit on layer 1, which only the sun's
+  camera sees, so a hill behind you still throws its shadow ahead.
+  Main pass 904k → 455k triangles; the shadow pass 572k → 315k; draw
+  calls about the same as before.
+- **The shadow map re-renders only when it would differ.** A fingerprint
+  of every visible caster (world matrix, geometry, instance buffer) is
+  checked before the frame; the map is redrawn when something moved,
+  appeared, vanished or changed shape, when the sun turned past 0.06°
+  (a 20 m shadow moves 2 cm), when the anchor left a 2 m window, when
+  the coverage mask or a skin hole changed. Standing still, turning the
+  camera, walking alone: no shadow pass. A village of walkers: every
+  frame, as before. The scene's matrices are updated once, by hand,
+  for both passes.
+- **God rays draw only what can cover the sun.** The occlusion target is
+  black everywhere but the disc, so the silhouette pass now culls by a
+  sub-frustum around the disc and rasterises inside a scissor rect —
+  a few draws instead of the whole world a second time.
+- **CPU copies go once uploaded.** Chunk meshes, the near ring's tiles
+  and the skin's buffers drop their arrays after the GPU has them
+  (they are only ever replaced, never edited or read back). Heap after
+  a full load at rd 5: 192 MB → 92 MB; geometry held on the CPU 108 MB
+  → 5 MB. This is the one aimed at the console's memory limit.
+- The coverage mask is re-cut when something lands or you cross a
+  chunk (as before) and otherwise every tenth frame instead of every
+  second one, cut into a scratch copy and uploaded only when a byte
+  changed.
+- F3 shows shadow passes per frames and the skin's draw count.
+- Tests: CORE tile runs (cover both index buffers exactly, y ranges hold
+  every vertex, every quad once, 6×6 at n=24 and one tile at n=16);
+  the pixel-diff harness at four daylight poses and four sun-facing /
+  night poses; smoke, b27, b30, b35, b38, b39.2, b41 regressions
+  (three of them updated for the tiled skin).
+- Known: on the console preset (safe graphics: no skin, no shadows, no
+  rays) only the memory work applies; if the Xbox still chugs there,
+  the next levers are chunk draw merging and the entity meshes.
+
 ## Build 39.3 — THE PAD IV: the watchdog (2026-09-14)
 
 Austin's photo of the pause readout, the first real evidence from the

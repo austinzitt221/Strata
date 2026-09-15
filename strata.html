@@ -3448,6 +3448,7 @@ function heightGrid(J, gen){
 // row, the column, or the coarse quad's b-c diagonal), normals for both,
 // a concavity AO, per-quad materials (the highest corner's), water flags
 // and depths. The main thread only uploads.
+const SKIN_TILES = 6;
 function skinGrid(J, gen){
   const G = heightGrid(J, gen);
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
@@ -3499,19 +3500,40 @@ function skinGrid(J, gen){
     mt[r * n + i] = Math.max(0, G.m[qc] - 1);
   }
   // index buffers: the whole grid, and the wet quads (the coarser level's
-  // hole is cut per fragment by a rect uniform, never by re-indexing)
+  // hole is cut per fragment by a rect uniform, never by re-indexing).
+  // Tile-major: T x T tiles per level, each a contiguous run of the index
+  // with its own y range, so the renderer draws only the tiles in front of
+  // the camera and none that lie wholly inside the finer level's hole
+  // (Build 42: a level surrounds the player; most of it is behind them)
+  const T = n % SKIN_TILES === 0 ? SKIN_TILES : 1, tc = n / T;
   const idx = new Uint32Array(n * n * 6);
   const widx = new Uint32Array(n * n * 6);
+  const tiles = new Float32Array(T * T * 8);
   let w = 0, ww = 0;
-  const wet = G.wet;
-  for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
-    const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
-    idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d;
-    if (wet[a] || wet[b] || wet[c] || wet[d]){
-      widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
+  const wet = G.wet, rs = G.rs, wy = G.wy;
+  for (let tr = 0; tr < T; tr++) for (let ti = 0; ti < T; ti++){
+    const o = (tr * T + ti) * 8;
+    tiles[o] = w; tiles[o + 2] = ww;
+    let ymin = Infinity, ymax = -Infinity, wmin = Infinity, wmax = -Infinity;
+    for (let r = tr * tc; r <= (tr + 1) * tc; r++) for (let i = ti * tc; i <= (ti + 1) * tc; i++){
+      const kk = r * N1 + i, y0 = h[kk], y1 = hc[kk], yd = y0 - rs[kk] - 0.5;
+      if (yd < ymin) ymin = yd;
+      if (y0 < ymin) ymin = y0; if (y0 > ymax) ymax = y0;
+      if (y1 < ymin) ymin = y1; if (y1 > ymax) ymax = y1;
+      if (wet[kk]){ const y = wy[kk]; if (y < wmin) wmin = y; if (y > wmax) wmax = y; }
     }
+    for (let r = tr * tc; r < (tr + 1) * tc; r++) for (let i = ti * tc; i < (ti + 1) * tc; i++){
+      const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
+      idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d;
+      if (wet[a] || wet[b] || wet[c] || wet[d]){
+        widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
+      }
+    }
+    tiles[o + 1] = w - tiles[o]; tiles[o + 3] = ww - tiles[o + 2];
+    tiles[o + 4] = ymin; tiles[o + 5] = ymax;
+    tiles[o + 6] = wmin === Infinity ? 0 : wmin; tiles[o + 7] = wmax === -Infinity ? 0 : wmax;
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, rs: G.rs, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, rs: G.rs, idx, widx: widx.slice(0, ww), tiles, T };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -4339,6 +4361,9 @@ const meshPool = {
   },
 };
 
+// Build 42: a buffer attribute that drops its CPU array once uploaded --
+// for geometry that is only ever replaced, never updated or read back
+function freeUploaded(){ this.array = null; }
 class Terrain {
   constructor(scene, material, edits, gen){
     this.scene = scene;
@@ -4546,6 +4571,9 @@ class Terrain {
     mesh.castShadow = true;
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
+    // a chunk's mesh is never edited in place (a remesh replaces it), so
+    // the CPU copy of every buffer goes the moment the GPU has it
+    for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);
     this.scene.add(mesh);
     ch.mesh = mesh;
   }
@@ -5283,6 +5311,7 @@ function resetGraphics(){
   try { initRenderer(); } catch (err){ gfxLog.push('E', ['reset failed: ' + err.message]); toast('graphics reset failed — reload the page (the world is saved)'); return; }
   applyViewport(true);
   if (game.terrainMat) game.terrainMat.needsUpdate = true;
+  shadowSys.force = true;
   toast('graphics reset');
 }
 // what the screen is doing, for a report from a machine I cannot see
@@ -5349,6 +5378,7 @@ function buildScene(){
   sunL.shadow.camera.near = 1;
   sunL.shadow.camera.far = 460;
   sunL.shadow.bias = 0;                    // biased manually in the shader
+  sunL.shadow.camera.layers.enable(1);     // the skin's casting runs live on layer 1 (Build 42)
   scene.add(sunL);
   scene.add(sunL.target);
   game.sunLight = sunL;
@@ -25141,6 +25171,7 @@ function applyOptions(){
   game.opts.padSens = +$('optPad').value;
   game.opts.safe = +$('optSafe').value;
   game.opts.skin = +$('optSkin').value;
+  shadowSys.force = true;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
   AudioSys.setMusicVolume(game.opts.music);
@@ -25796,11 +25827,14 @@ const farTerrain = {
   update(){
     if (!game.gen || !this.mat || game.opts.safe) return;
     this.uPlayer.value.set(game.pos.x, game.pos.z);
+    this.cull();
     if (this.dirty){
       this.dirty = false;
       for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
     }
-    if (++this.maskFrame >= 2){ this.maskFrame = 0; this.updateMask(); }
+    // the mask is re-cut the frame anything lands or the player crosses a
+    // chunk (maskFrame is pushed to 99 there); between, a slow safety net
+    if (++this.maskFrame >= 10){ this.maskFrame = 0; this.updateMask(); }
     let inflight = 0;
     for (const lv of this.levels) if (lv.job) inflight++;
     if (inflight < 2)
@@ -25831,21 +25865,27 @@ const farTerrain = {
       : [1, 1, 0, 0];
     this.mat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
     this.waterSurfMat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
+    // a tile wholly inside the hole would be discarded fragment by fragment:
+    // skip it outright (the hole moves only when a level rebuilds)
+    const lv = this.levels[k];
+    if (lv && lv.tiles){
+      const cut = !!(fine && fine.mesh);
+      for (const t of lv.tiles) t.hole = cut && t.x0 >= v[0] && t.z0 >= v[1] && t.x1 <= v[2] && t.z1 <= v[3];
+    }
+    shadowSys.force = true; shadowSys.forceWhy = 'skin level';
   },
   build(k, cx, cz, x0, z0, n, g){
     const Lk = this.L[k], lv = this.levels[k];
     lv.n = n; lv.s = Lk.s; lv.x0 = x0; lv.z0 = z0; lv.wet = g.wet;
     lv.cx = cx; lv.cz = cz;
+    lv.rs = g.rs; lv.wy = g.wy;
+    // every tile shares the level's vertex buffers and one index buffer,
+    // and draws its own run of it; the CPU copies go once uploaded
     const posAttr = new THREE.BufferAttribute(g.pos, 3);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', posAttr);
-    geo.setAttribute('aHc', new THREE.BufferAttribute(g.hc, 1));
-    geo.setAttribute('normal', new THREE.BufferAttribute(g.nrm, 3, true));
-    geo.setAttribute('aNc', new THREE.BufferAttribute(g.nrc, 3, true));
-    geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1, true));
-    geo.setAttribute('aRise', new THREE.BufferAttribute(g.rs, 1));
-    geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), Lk.E * 1.5 + 600);
+    const hcAttr = new THREE.BufferAttribute(g.hc, 1), nrmAttr = new THREE.BufferAttribute(g.nrm, 3, true);
+    const nrcAttr = new THREE.BufferAttribute(g.nrc, 3, true), aoAttr = new THREE.BufferAttribute(g.ao, 1, true);
+    const rsAttr = new THREE.BufferAttribute(g.rs, 1), idxAttr = new THREE.BufferAttribute(g.idx, 1);
+    for (const a of [posAttr, hcAttr, nrmAttr, nrcAttr, aoAttr, idxAttr]) a.onUpload(freeUploaded);
     const tex = new THREE.DataTexture(g.mt, n, n, THREE.RedFormat, THREE.UnsignedByteType);
     tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
     tex.needsUpdate = true;
@@ -25855,42 +25895,143 @@ const farTerrain = {
     mu.uMatTex.value = tex;
     mu.uMatOrigin.value.set(x0, z0);
     mu.uMatSpan.value = 2 * Lk.E;
-    if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
-    if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
-    lv.mesh = new THREE.Mesh(geo, this.mat[k]);
-    lv.mesh.frustumCulled = false;
+    this.drop(lv);
     // the two near levels cast (they are what the shadow frustum reaches)
-    lv.mesh.castShadow = k <= 1;
-    lv.mesh.userData.noShadow = k > 1;
     if (k <= 1){
       if (!this.depthMat) this.depthMat = [];
       if (!this.depthMat[k]) this.depthMat[k] = new THREE.ShaderMaterial({ uniforms: this.mat[k].uniforms, vertexShader: SKIN_VERT, fragmentShader: SKIN_DEPTH_FRAG });
-      lv.mesh.customDepthMaterial = this.depthMat[k];
+    }
+    const sea = game.gen.seaLevel;
+    const wetAny = sea != null && g.widx.length > 0;
+    let depAttr = null, wyAttr = null, flAttr = null, widxAttr = null;
+    if (wetAny){
+      depAttr = new THREE.BufferAttribute(g.dep, 1); wyAttr = new THREE.BufferAttribute(g.wy, 1);
+      flAttr = new THREE.BufferAttribute(g.fl, 2); widxAttr = new THREE.BufferAttribute(g.widx, 1);
+      for (const a of [depAttr, flAttr, widxAttr]) a.onUpload(freeUploaded);
+      this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
+    }
+    // the level is drawn as RUNS: every frame, the tiles in front of the
+    // camera (and, for the casting levels, the tiles in the sun's shadow
+    // box) are found by bounding sphere, and consecutive tiles merge into
+    // one draw over a shared index buffer -- a handful of calls per level
+    // instead of one per tile. Run meshes are made as needed and kept
+    const T = g.T || 1, tiles = g.tiles, tw = (2 * Lk.E) / T, hw = tw / 2;
+    lv.mesh = new THREE.Group(); lv.mesh.name = 'skin' + k;
+    lv.water = wetAny ? new THREE.Group() : null;
+    if (lv.water) lv.water.name = 'skinwater' + k;
+    lv.attrs = { posAttr, hcAttr, nrmAttr, nrcAttr, aoAttr, rsAttr, idxAttr, depAttr, wyAttr, flAttr, widxAttr };
+    lv.k = k;
+    lv.tiles = [];
+    lv.runs = []; lv.castRuns = k <= 1 ? [] : null; lv.waterRuns = wetAny ? [] : null;
+    for (let t = 0; t < T * T; t++){
+      const o = t * 8, tx0 = x0 + (t % T) * tw, tz0 = z0 + Math.floor(t / T) * tw;
+      const ymin = tiles[o + 4] - 1, ymax = tiles[o + 5] + 1, hy = (ymax - ymin) / 2;
+      const wmin = tiles[o + 6] - 1, wmax = tiles[o + 7] + 1, wh = (wmax - wmin) / 2;
+      lv.tiles.push({
+        x0: tx0, z0: tz0, x1: tx0 + tw, z1: tz0 + tw, ymin, ymax, wmin, wmax, hole: false,
+        start: tiles[o], count: tiles[o + 1], wstart: tiles[o + 2], wcount: tiles[o + 3],
+        sph: new THREE.Sphere(new THREE.Vector3(tx0 + hw, (ymin + ymax) / 2, tz0 + hw), Math.sqrt(2 * hw * hw + hy * hy) + 1),
+        wsph: new THREE.Sphere(new THREE.Vector3(tx0 + hw, (wmin + wmax) / 2, tz0 + hw), Math.sqrt(2 * hw * hw + wh * wh) + 1),
+      });
     }
     this.scene.add(lv.mesh);
-    const sea = game.gen.seaLevel;
-    if (sea != null){
-      const widx = g.widx;
-      if (widx.length){
-        const wg = new THREE.BufferGeometry();
-        wg.setAttribute('position', posAttr);
-        wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
-        wg.setAttribute('aWY', new THREE.BufferAttribute(g.wy, 1));
-        wg.setAttribute('aFlow', new THREE.BufferAttribute(g.fl, 2));
-        wg.setIndex(new THREE.BufferAttribute(widx, 1));
-        wg.boundingSphere = geo.boundingSphere;
-        this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
-        lv.water = new THREE.Mesh(wg, this.waterSurfMat[k]);
-        lv.water.frustumCulled = false;
-        lv.water.renderOrder = 3;
-        lv.water.userData.noShadow = true;
-        this.scene.add(lv.water);
-      }
-    }
+    if (lv.water) this.scene.add(lv.water);
     // this level's hole is the finer level's extent; the coarser level's
     // hole follows this level's new extent
     this.setHole(k);
     this.setHole(k + 1);
+  },
+  drop(lv){
+    for (const key of ['mesh', 'water']){
+      const grp = lv[key];
+      if (!grp) continue;
+      this.scene.remove(grp);
+      for (const m of grp.children) m.geometry.dispose();
+      lv[key] = null;
+    }
+    lv.tiles = null; lv.runs = null; lv.castRuns = null; lv.waterRuns = null; lv.attrs = null;
+  },
+  // a run mesh over the level's shared buffers. Casting runs live on layer
+  // 1: the sun's camera sees them, the player's does not (the same ground
+  // is drawn for the eye by the camera runs, cut to the eye's frustum)
+  mkRun(lv, cast, water){
+    const A = lv.attrs, k = lv.k, geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', A.posAttr);
+    if (water){
+      geo.setAttribute('aDep', A.depAttr); geo.setAttribute('aWY', A.wyAttr); geo.setAttribute('aFlow', A.flAttr);
+      geo.setIndex(A.widxAttr);
+    } else {
+      geo.setAttribute('aHc', A.hcAttr); geo.setAttribute('normal', A.nrmAttr); geo.setAttribute('aNc', A.nrcAttr);
+      geo.setAttribute('aAO', A.aoAttr); geo.setAttribute('aRise', A.rsAttr);
+      geo.setIndex(A.idxAttr);
+    }
+    geo.boundingSphere = new THREE.Sphere();
+    const m = new THREE.Mesh(geo, water ? this.waterSurfMat[k] : this.mat[k]);
+    m.visible = false;
+    m.castShadow = cast;
+    m.userData.noShadow = !cast;
+    if (cast){ m.customDepthMaterial = this.depthMat[k]; m.layers.set(1); }
+    if (water) m.renderOrder = 3;
+    (water ? lv.water : lv.mesh).add(m);
+    return m;
+  },
+  // consecutive tiles that pass (not in the hole, inside the frustum) merge
+  // into one draw; tiles with nothing to draw neither join nor break a run
+  runs(lv, list, fr, water){
+    let ri = 0, cur = null, bx0 = 0, bz0 = 0, bx1 = 0, bz1 = 0, by0 = 0, by1 = 0;
+    const close = () => {
+      if (!cur) return;
+      const c = cur.geometry.boundingSphere.center;
+      c.set((bx0 + bx1) / 2, (by0 + by1) / 2, (bz0 + bz1) / 2);
+      cur.geometry.boundingSphere.radius = Math.hypot(bx1 - bx0, by1 - by0, bz1 - bz0) / 2 + 1;
+      cur = null;
+    };
+    for (const t of lv.tiles){
+      const cnt = water ? t.wcount : t.count;
+      if (cnt === 0) continue;
+      const on = !t.hole && !!fr && fr.intersectsSphere(water ? t.wsph : t.sph);
+      if (!on){ close(); continue; }
+      const y0 = water ? t.wmin : t.ymin, y1 = water ? t.wmax : t.ymax;
+      if (!cur){
+        cur = list[ri] || (list[ri] = this.mkRun(lv, list === lv.castRuns, water));
+        ri++;
+        cur.visible = true;
+        cur.geometry.setDrawRange(water ? t.wstart : t.start, cnt);
+        bx0 = t.x0; bz0 = t.z0; bx1 = t.x1; bz1 = t.z1; by0 = y0; by1 = y1;
+      } else {
+        cur.geometry.drawRange.count += cnt;
+        if (t.x0 < bx0) bx0 = t.x0; if (t.z0 < bz0) bz0 = t.z0; if (t.x1 > bx1) bx1 = t.x1; if (t.z1 > bz1) bz1 = t.z1;
+        if (y0 < by0) by0 = y0; if (y1 > by1) by1 = y1;
+      }
+    }
+    close();
+    for (let i = ri; i < list.length; i++) list[i].visible = false;
+    return ri;
+  },
+  // every frame: the eye's frustum for the camera runs and the water, the
+  // sun's for the casting runs (so a hill behind you still throws its
+  // shadow ahead of you). Matrices are brought current first
+  cull(){
+    if (!this.levels) return;
+    const cam = game.camera;
+    cam.updateMatrixWorld();
+    const cf = this._cf || (this._cf = new THREE.Frustum());
+    const m4 = this._m4 || (this._m4 = new THREE.Matrix4()), inv = this._inv || (this._inv = new THREE.Matrix4());
+    cf.setFromProjectionMatrix(m4.multiplyMatrices(cam.projectionMatrix, inv.copy(cam.matrixWorld).invert()));
+    const L = game.sunLight;
+    let lf = null;
+    if (L && L.castShadow){
+      L.updateMatrixWorld(); L.target.updateMatrixWorld();
+      L.shadow.updateMatrices(L);
+      lf = L.shadow.getFrustum();
+    }
+    this.draws = 0;
+    for (const lv of this.levels){
+      if (!lv.tiles) continue;
+      this.draws += this.runs(lv, lv.runs, cf, false);
+      if (lv.castRuns) this.draws += this.runs(lv, lv.castRuns, lf, false);
+      if (lv.waterRuns) this.draws += this.runs(lv, lv.waterRuns, cf, true);
+    }
   },
   // the skin is a SURFACE: a column is covered once the chunks that hold
   // its surface band are STANDING (a mesh in the scene, or provably empty)
@@ -25920,7 +26061,10 @@ const farTerrain = {
   updateMask(){
     const T = game.terrain;
     if (!T) return;
-    const n = this.maskN, data = this.maskData;
+    const n = this.maskN;
+    // cut into a scratch copy; the texture (and the shadow map, which the
+    // skin's caster reads it through) only refresh when a byte changed
+    const data = this._maskNext || (this._maskNext = new Uint8Array(this.maskData.length));
     data.fill(0);
     const pcx = Math.floor(game.pos.x / CORE.CHUNK_M), pcz = Math.floor(game.pos.z / CORE.CHUNK_M);
     const ox = pcx - n / 2, oz = pcz - n / 2;
@@ -26006,8 +26150,14 @@ const farTerrain = {
         }
       }
     }
+    const cur = this.maskData, mo = this.uMaskOrigin.value;
+    let changed = mo.x !== ox * CORE.CHUNK_M || mo.y !== oz * CORE.CHUNK_M;
+    if (!changed) for (let i = 0; i < data.length; i++) if (data[i] !== cur[i]){ changed = true; break; }
+    if (!changed) return;
+    cur.set(data);
     this.maskTex.needsUpdate = true;
     this.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
+    shadowSys.force = true; shadowSys.forceWhy = 'mask';
   },
 };
 
@@ -26436,6 +26586,7 @@ const lodTerrain = {
     mesh.castShadow = ring.sc <= 4;
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
+    for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);   // rebuilt from the members' data, never edited
     this.scene.add(mesh);
     t.mesh = mesh;
     for (const k of t.members){ const ch = ring.chunks.get(k); if (ch) ch.built = 1; }
@@ -26506,6 +26657,7 @@ const godRays = {
     if (!game.opts.rays || !this.occRT || game.dayF < 0.06 || game.underwater) return;
     const sd = game.terrainMat.uniforms.uSunDir.value;
     const sunW = new THREE.Vector3().copy(game.camera.position).addScaledVector(sd, 300);
+    game.camera.matrixWorldInverse.copy(game.camera.matrixWorld).invert();   // this frame's view, not last frame's
     const pr = sunW.clone().project(game.camera);
     if (pr.z > 1 || Math.abs(pr.x) > 1.5 || Math.abs(pr.y) > 1.5) return;
     this.sunMesh.position.copy(sunW);
@@ -26513,15 +26665,39 @@ const godRays = {
     const r = game.renderer;
     const su = r.shadowMap.needsUpdate;
     r.shadowMap.needsUpdate = false;               // no shadow work in the prepass
-    r.setRenderTarget(this.occRT);
+    // Build 42: the occlusion texture is black everywhere but the sun disc,
+    // so only what can cover the disc is drawn -- a sub-frustum around it
+    // culls by bounding sphere and a scissor rect bounds the fill. The
+    // whole target is still cleared first (a clear obeys the scissor)
+    const cam = game.camera, RT = this.occRT;
+    const vz = -sunW.clone().applyMatrix4(cam.matrixWorldInverse).z;
+    const th = Math.tan(cam.fov * Math.PI / 360);
+    const ry = Math.min(1, 30 / Math.max(1, vz) / th * 1.3 + 0.02), rx = Math.min(1, ry / cam.aspect + 0.02);
+    const nx0 = Math.max(-1, pr.x - rx), nx1 = Math.min(1, pr.x + rx), ny0 = Math.max(-1, pr.y - ry), ny1 = Math.min(1, pr.y + ry);
+    r.setRenderTarget(RT);
     r.setClearColor(0x000000, 1);
     r.clear(true, true);
-    r.render(this.sunScene, game.camera);
+    if (nx1 <= nx0 || ny1 <= ny0){ r.setRenderTarget(null); r.shadowMap.needsUpdate = su; return; }
+    const W = RT.width, H = RT.height;
+    const sx = Math.floor((nx0 * 0.5 + 0.5) * W), sy = Math.floor((ny0 * 0.5 + 0.5) * H);
+    RT.scissor.set(sx, sy, Math.ceil((nx1 * 0.5 + 0.5) * W) - sx, Math.ceil((ny1 * 0.5 + 0.5) * H) - sy);
+    RT.scissorTest = true;
+    r.setRenderTarget(RT);                          // re-applies the scissor
+    r.render(this.sunScene, cam);
+    const cc = this.cullCam || (this.cullCam = new THREE.PerspectiveCamera());
+    cc.fov = cam.fov; cc.aspect = cam.aspect; cc.near = cam.near; cc.far = cam.far;
+    cc.setViewOffset(1000, 1000, (nx0 * 0.5 + 0.5) * 1000, (1 - (ny1 * 0.5 + 0.5)) * 1000, (nx1 - nx0) * 500, (ny1 - ny0) * 500);
+    cc.updateProjectionMatrix();
+    const fr = this.frustum || (this.frustum = new THREE.Frustum());
+    const pm = this.projM || (this.projM = new THREE.Matrix4());
+    fr.setFromProjectionMatrix(pm.multiplyMatrices(cc.projectionMatrix, cam.matrixWorldInverse));
     // silhouette the world: hide overlays (they share the noShadow flag),
-    // paint everything else black over the sun disc
+    // and everything the sub-frustum cannot see; paint the rest black
     const hidden = [];
     game.scene.traverse(o => {
-      if (o.userData && o.userData.noShadow && o.visible){ o.visible = false; hidden.push(o); }
+      if (!o.visible) return;
+      if (o.userData && o.userData.noShadow){ o.visible = false; hidden.push(o); return; }
+      if (o.isMesh && o.frustumCulled && o.geometry && !fr.intersectsObject(o)){ o.visible = false; hidden.push(o); }
     });
     const bg = game.scene.background;
     game.scene.background = null;
@@ -26533,6 +26709,7 @@ const godRays = {
     game.scene.overrideMaterial = null;
     game.scene.background = bg;
     for (const o of hidden) o.visible = true;
+    RT.scissorTest = false;
     r.setRenderTarget(null);
     r.shadowMap.needsUpdate = su;
     this.quadMat.uniforms.uSunPos.value.set(pr.x * 0.5 + 0.5, pr.y * 0.5 + 0.5);
@@ -26654,6 +26831,65 @@ function markCasters(node){
   for (const ch of node.children) markCasters(ch);
 }
 let castMarkT = 0;
+// Build 42: the shadow map is re-rendered only when it would come out
+// different -- the sun turned past a hair (0.06 deg; a 20 m shadow moves
+// 2 cm), the anchor left its 2 m window (the map covers 176 m around it),
+// or something that casts moved, appeared, vanished or changed shape.
+// Turning the camera, standing still, walking on your own across quiet
+// ground: no shadow pass at all. A village of walkers: every frame, as
+// before. Nothing on screen changes; only the work behind it.
+const shadowSys = {
+  force: true, ax: 1e9, ay: 1e9, az: 1e9, sd: new THREE.Vector3(9, 9, 9), n: 0, passes: 0, frames: 0,
+  // is this anchor / sun far enough from the rendered one to move the camera
+  anchor(ax, ay, az, sd){
+    if (!this.force && Math.abs(ax - this.ax) <= 2 && Math.abs(ay - this.ay) <= 2 && Math.abs(az - this.az) <= 2 && sd.distanceToSquared(this.sd) < 1e-6) return false;
+    this.ax = ax; this.ay = ay; this.az = az; this.sd.copy(sd);
+    this.force = true; this.forceWhy = 'sun or anchor';
+    return true;
+  },
+  // what a caster is, for the F3 readout and the tally harness
+  label(o){
+    const parts = [];
+    for (let p = o, i = 0; p && p !== game.scene && i < 4; p = p.parent, i++) parts.push((p.name || p.type) + (p.userData && p.userData.kind ? ':' + p.userData.kind : ''));
+    return parts.join(' < ');
+  },
+  // right before the frame renders: every visible caster against its last
+  // rendered world matrix (and geometry, and instance buffer)
+  decide(){
+    const r = game.renderer;
+    if (!r || !game.scene) return;
+    game.scene.updateMatrixWorld();
+    game.scene.matrixWorldAutoUpdate = false;      // done here, once, for both passes
+    this.frames++;
+    const L = game.sunLight;
+    if (!L || !L.castShadow){ r.shadowMap.needsUpdate = false; return; }
+    let dirty = this.force, n = 0;
+    this.why = dirty ? 'forced: ' + (this.forceWhy || '?') : '';
+    this.force = false; this.forceWhy = '';
+    const walk = (o) => {
+      if (!o.visible) return;
+      if (o.isMesh && o.castShadow){
+        n++;
+        const e = o.matrixWorld.elements, s = o._shM, g = o.geometry, pa = g && g.attributes.position;
+        const iv = o.isInstancedMesh ? o.instanceMatrix.version * 1048576 + o.count : 0;
+        const pv = pa ? pa.version : -1;
+        if (!s){ o._shM = new Float64Array(e); if (!dirty){ dirty = true; this.why = 'new ' + this.label(o); } }
+        else {
+          if (!dirty && (o._shG !== g || o._shI !== iv || o._shP !== pv)){ dirty = true; this.why = 'reshaped ' + this.label(o); }
+          if (!dirty) for (let i = 0; i < 16; i++) if (s[i] !== e[i]){ dirty = true; this.why = 'moved ' + this.label(o); break; }
+          if (dirty) s.set(e);
+        }
+        o._shG = g; o._shI = iv; o._shP = pv;
+      }
+      const c = o.children;
+      for (let i = 0; i < c.length; i++) walk(c[i]);
+    };
+    walk(game.scene);
+    if (n !== this.n){ if (!dirty) this.why = 'count ' + this.n + ' -> ' + n; this.n = n; dirty = true; }
+    r.shadowMap.needsUpdate = dirty;
+    if (dirty) this.passes++;
+  },
+};
 function updateSunShadow(dt){
   const L = game.sunLight;
   if (!L || !game.terrainMat) return;
@@ -26670,16 +26906,18 @@ function updateSunShadow(dt){
   if (cam.right !== sr){
     cam.left = -sr; cam.right = sr; cam.top = sr; cam.bottom = -sr;
     cam.updateProjectionMatrix();
+    shadowSys.force = true;
   }
   // snap the anchor to shadow texels so edges don't shimmer while walking
   const texel = (2 * sr) / L.shadow.mapSize.width;
   const ax = Math.round(game.pos.x / texel) * texel;
   const ay = Math.round(game.pos.y / texel) * texel;
   const az = Math.round(game.pos.z / texel) * texel;
-  L.position.set(ax + sd.x * 220, ay + sd.y * 220, az + sd.z * 220);
-  L.target.position.set(ax, ay, az);
-  L.target.updateMatrixWorld();
-  game.renderer.shadowMap.needsUpdate = true;
+  if (shadowSys.anchor(ax, ay, az, sd)){
+    L.position.set(ax + sd.x * 220, ay + sd.y * 220, az + sd.z * 220);
+    L.target.position.set(ax, ay, az);
+    L.target.updateMatrixWorld();
+  }
   u.uShadowTexel.value = 1 / L.shadow.mapSize.width;
   if (L.shadow.map){
     u.uShadowMap.value = L.shadow.map.texture;
@@ -26920,6 +27158,7 @@ function frame(now){
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
 
+  shadowSys.decide();
   godRays.prepass();
   game.renderer.render(game.scene, game.camera);
   godRays.composite();
@@ -26943,7 +27182,9 @@ function frame(now){
         'chunk queue ' + game.terrain.dirty.size + '  workers ' +
           (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '\n' +
         'ring queue ' + lodQ + '  tiles ' + lodTiles + '  skin ' + skinL + '/' + farTerrain.L.length + (skinJ ? ' (building)' : '') + '\n' +
-        'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls;
+        'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls + '\n' +
+        'shadow passes ' + (shadowSys.passes - (game.shPass0 || 0)) + '/' + (shadowSys.frames - (game.shFrame0 || 0)) + '  skin draws ' + (farTerrain.draws || 0);
+      game.shPass0 = shadowSys.passes; game.shFrame0 = shadowSys.frames;
     } else {
       $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
     }
@@ -27017,7 +27258,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
