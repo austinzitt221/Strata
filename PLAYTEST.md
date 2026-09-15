@@ -5,6 +5,32 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 42 — LEAN (PC first, then the Xbox)
+Nothing here should look different. The build is a success if you
+cannot tell it apart from Build 41 except by the frame counter.
+- [ ] PC: stand in the same spot as before with F3 up, note the fps,
+      turn a full circle, walk, mine a while. F3 now also shows
+      "shadow passes N/M": standing still or only turning the camera
+      the first number should be well under the second; with animals
+      or villagers about it climbs toward M (that is right: they move).
+- [ ] Look hard at the far hills while turning: no tiles popping in
+      at the edge of the view, no notch where the far skin meets the
+      real ground, no seam between the sun's shadows and the skin.
+- [ ] A low sun: shadows of hills behind you still fall ahead of you;
+      god rays look as they did; the sun's glow is not clipped in a
+      box.
+- [ ] Sleep, or drag the time slider in photo mode: shadows follow the
+      sun without lagging or stepping.
+- [ ] Xbox, without safe mode: the fps against the 15 it gave before,
+      in the same kind of place. Then the crash test: mine and fly
+      about as you did when it died — does it die, and after how long.
+- [ ] Xbox, on its preset: the same two numbers. (On the preset only the
+      memory work applies, so the fps may not move; the crash is what
+      I want to know about.)
+- Feedback I want: the two fps numbers and whether the crash is gone
+  or later. If it still dies on the preset, we park the console, as
+  agreed, and the next levers are known.
+
 ## Build 40 — TOGETHER (two machines)
 - [ ] Both open the game from the same URL. One of you plays a world,
       pauses, INVITE A FRIEND: a five-letter code. The other: JOIN A
@@ -26,9 +52,16 @@ their lists are retired; what came of them is Build 30.
       world.
 - [ ] On the Xbox: all of the above with the pad, and the frame rate
       with two players in view.
+- Played 2026-09-13 in a browser: works. Asked for and shipped as 41:
+  guest profiles that survive leaving and rejoining, creatures that go
+  for the guest, guests carrying animals and driving.
+- [ ] Build 41: as the guest, fill your pack, walk somewhere, quit, join
+      again: same things, same spot. Let a lurker come for you. Pick up
+      a sheep and throw it. Deploy a car and drive it while the host
+      watches; get out; let the host drive it.
 - Feedback I want: how long the join takes, how far behind the other
   player's movement looks, and everything the guest reaches for that
-  the host has and the guest does not (driving is the known one).
+  the host has and the guest does not.
 
 ## Build 39 — THE PAD (on the Xbox, in Edge)
 - [ ] Open the game from a URL in Edge on the console (GitHub Pages of
@@ -45,6 +78,18 @@ their lists are retired; what came of them is Build 30.
       up and drop items with A, split with X, quick-move with Y.
 - [ ] Frame rate on the console: tell me the number standing still and
       flying, with and without the preset.
+- Played 2026-09-13: works. The reach was hard to find: it is now
+  ▼ held with ◄ ► as well as the VIEW chord.
+- On the Xbox: the browser's watchdog takes the graphics away (the
+  readout said so, 39.3). The console now starts in safe graphics on
+  its own. Next time:
+  1. Load a world in the default (safe) settings. Does it hold for a
+     few minutes of walking and mining? If it goes black, MENU and
+     photograph the readout.
+  2. If it holds: OPTIONS, turn SAFE GRAPHICS off, keep the rest low,
+     reload the world. Holds? Then raise SHADOWS, then RENDER
+     DISTANCE, one at a time, a world load each. Tell me which step
+     breaks it.
 - Feedback I want: the stick sensitivity default, and any key you
   reach for that the pad cannot (the legend lists the chords).
 

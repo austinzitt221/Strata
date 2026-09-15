@@ -2,6 +2,193 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 42 — LEAN (2026-09-15)
+
+Austin asked for a performance build: faster without touching the
+picture. Profiled first (a scene census, the render counters with and
+without the shadow pass, a heap probe), then took the four biggest
+loads that could go without a pixel moving, and proved the pixel with a
+harness that renders the same world at the same poses on the old and
+the new build and diffs the screenshots (differences below a third of
+a percent of pixels, all of them twinkling stars and drifting cloud
+edges).
+
+- **The far skin is drawn in runs, not whole.** Every clipmap level was
+  one 166k-triangle mesh with culling off — 830k triangles a frame, most
+  of them behind the camera or under the finer level's hole. The worker
+  now writes each level's index tile-major (6×6 tiles, each with its own
+  y range); every frame the tiles in the eye's frustum (and, for the two
+  casting levels, the tiles in the sun's shadow box) are found by
+  bounding sphere and consecutive ones merge into one draw over the
+  shared index buffer. Casting runs sit on layer 1, which only the sun's
+  camera sees, so a hill behind you still throws its shadow ahead.
+  Main pass 904k → 455k triangles; the shadow pass 572k → 315k; draw
+  calls about the same as before.
+- **The shadow map re-renders only when it would differ.** A fingerprint
+  of every visible caster (world matrix, geometry, instance buffer) is
+  checked before the frame; the map is redrawn when something moved,
+  appeared, vanished or changed shape, when the sun turned past 0.06°
+  (a 20 m shadow moves 2 cm), when the anchor left a 2 m window, when
+  the coverage mask or a skin hole changed. Standing still, turning the
+  camera, walking alone: no shadow pass. A village of walkers: every
+  frame, as before. The scene's matrices are updated once, by hand,
+  for both passes.
+- **God rays draw only what can cover the sun.** The occlusion target is
+  black everywhere but the disc, so the silhouette pass now culls by a
+  sub-frustum around the disc and rasterises inside a scissor rect —
+  a few draws instead of the whole world a second time.
+- **CPU copies go once uploaded.** Chunk meshes, the near ring's tiles
+  and the skin's buffers drop their arrays after the GPU has them
+  (they are only ever replaced, never edited or read back). Heap after
+  a full load at rd 5: 192 MB → 92 MB; geometry held on the CPU 108 MB
+  → 5 MB. This is the one aimed at the console's memory limit.
+- The coverage mask is re-cut when something lands or you cross a
+  chunk (as before) and otherwise every tenth frame instead of every
+  second one, cut into a scratch copy and uploaded only when a byte
+  changed.
+- F3 shows shadow passes per frames and the skin's draw count.
+- Tests: CORE tile runs (cover both index buffers exactly, y ranges hold
+  every vertex, every quad once, 6×6 at n=24 and one tile at n=16);
+  the pixel-diff harness at four daylight poses and four sun-facing /
+  night poses; smoke, b27, b30, b35, b38, b39.2, b41 regressions
+  (three of them updated for the tiled skin).
+- Known: on the console preset (safe graphics: no skin, no shadows, no
+  rays) only the memory work applies; if the Xbox still chugs there,
+  the next levers are chunk draw merging and the entity meshes.
+
+## Build 39.3 — THE PAD IV: the watchdog (2026-09-14)
+
+Austin's photo of the pause readout, the first real evidence from the
+console: CONTEXT LOST, then "a WebGL context could not be created:
+web page caused context loss and was blocked", then an uncaught
+error from the rebuild. So: the console's browser watchdog took the
+graphics away from the page (a frame that worked the GPU too long),
+and my three-second rebuild asked for a new context, which the
+browser refuses to a page it has just punished, and threw. Safe mode
+was off in that run. Verified headlessly (a suite with an Xbox user
+agent that checks the first run starts safe and low and remembers
+it; loses the context through the WebGL extension and checks the
+notice shows, no renderer is forced, the loss is logged; restores it
+and checks the notice goes and the world draws).
+
+- **No forced rebuild.** A lost context now shows GRAPHICS LOST with a
+  running count of seconds and the advice to reload if it never
+  returns; Three asks the browser for the context back and the game
+  carries on when it does. RESET GRAPHICS by hand first checks the
+  browser will give a context at all and says so if not.
+- **The console starts safe.** An Xbox user agent gets, once, the safe
+  profile: safe graphics, short view, no shadows or rays, half render
+  scale, 30 fps, with a toast saying so and that OPTIONS raises it.
+  From there we raise one thing at a time until the watchdog bites,
+  and that thing is the fix.
+- The readout says "xbox" when it is one.
+
+## Build 39.2 — THE PAD III: eyes on the console (2026-09-14)
+
+Austin again, with the switch on before loading: the trees drew, the
+ground never did, and a second later the screen went black with only
+the HUD left. On a near-black page an all-black canvas is a graphics
+context the browser has taken away; a ground that never draws is the
+terrain shader or the meshing workers failing on that machine. Both
+are things I cannot see from here, so this build is instruments and a
+safe mode. Verified headlessly (a suite that seeds a stored error and
+finds it on the options screen, loads a world with safe graphics on
+and checks no far country, no far shapes, no far trees, one mesher
+and a small shadow map, and that a shader error logged by the
+renderer lands in the pause readout; plus the 39.1 suite).
+
+- **The log.** Every error and warning the game or the renderer prints
+  (shader compile failures, lost contexts, worker failures, thrown
+  errors) goes into a ring of the last twenty-four, kept in local
+  storage across sessions. The pause menu shows the last four under
+  the graphics readout; the options screen shows this session's, or
+  the last session's when this one has none, so a crash can still be
+  read the next day.
+- **The readout** now also says how many chunks are meshed, whether
+  the workers are alive, and whether safe mode is on.
+- **SAFE GRAPHICS.** An option, and a SAFE PRESET (XBOX) button that
+  sets it with a short view, no shadows or rays, half render scale and
+  30 fps. Safe leaves out the far country (the skin), the far shapes,
+  the far trees and the ground cover, uses a 1024 shadow map and one
+  mesher. It takes effect when a world loads. If the console draws the
+  world in safe mode, the culprit is among what safe leaves out; if it
+  does not, the log will say what failed.
+
+## Build 39.1 — THE PAD II: the white screen (2026-09-13)
+
+Austin on the Xbox: Edge on the console keeps the controller for
+itself as a mouse until you turn on its "website controls" switch by
+the address bar; the game then hears the pad, but making that switch
+with a world open turned the screen white with only the HUD and the
+markers left, the game still running underneath (mining worked). I
+cannot see that machine, so this build makes the renderer hard to
+break, gives it a way back, and gives Austin a readout to send me.
+Verified headlessly (a suite that reads the corner note through none,
+found and on; feeds the viewport a zero-height window and checks the
+camera is left alone, poisons the camera's aspect and checks the
+once-a-second guard heals it; resets the renderer and checks the old
+canvas is gone, the new one draws a frame with many colours, and the
+pause readout is filled; plus the pad suite).
+
+- **The viewport cannot go bad.** A browser switching modes can report
+  a zero-height window for a moment, and a camera given that aspect
+  never draws again: the likeliest cause. The size is now applied only
+  when it is real, re-applied after resize, orientation, fullscreen,
+  page-show and visibility changes with two delayed retries, and
+  checked once a second, so a camera that went bad heals within a
+  second on its own.
+- **A lost context comes back.** If the browser drops the WebGL
+  context the game waits three seconds for it to return and then
+  rebuilds the renderer from scratch; the same scene draws again on
+  the next frame.
+- **RESET GRAPHICS** in the pause menu does that rebuild by hand, and
+  under it a readout: window size, canvas size, pixel ratio, camera
+  aspect, controller state, GPU name. If the screen ever goes white
+  again, that line is what I need.
+- **The corner note.** Bottom left of the title (and menus): whether a
+  controller is heard, found but silent, or none, with the Xbox
+  instruction. The pad has always been polled every frame; this makes
+  the state visible.
+
+## Build 41 — TOGETHER II (2026-09-13)
+
+Austin's second co-op report: the guest needs to keep its things
+between visits, creatures ignored the guest, the guest could not pick
+animals up, and the reach was hard to find on the pad. Verified
+headlessly with two loopback pages (a build-41 suite: the guest fills
+a slot, loses health, walks off and turns; the host's world holds the
+profile and it is in the host's save; the guest quits and rejoins and
+has the slot, the health, the spot and the heading back; a lurker
+spawned beside the guest and sixty metres from the host goes for the
+guest and its bite arrives on the guest; the guest lifts a grazer, it
+rides over the guest's head on both machines, and a throw lands on
+the host; the guest deploys a car, the host takes it and hands back
+its number, the guest drives it and the host's copy follows, the
+guest parks it; plus the build-40, pad and smoke suites).
+
+- **Your things, kept.** Each browser mints one player id. The host's
+  world keeps a profile per guest id: pack, dispenser, armor, health,
+  position, heading, hotbar, tool, snap, ledger, spawn point. The guest
+  sends it every ten seconds, on pause and on quit; the host saves it
+  with the world and hands it back on the next join, so you stand
+  where you left off with what you had. First visit: a fresh kit
+  beside the host.
+- **Creatures see both of you.** Every hostile and every villager reads
+  the nearer player: lurkers, husks, stalkers, wisps, siege raiders,
+  cabs braking, villagers turning to talk. Bites, explosions and
+  thrown light hurt whichever player they reach; the guest's arrive
+  as a message and the guest's armor applies.
+- **Carrying.** A guest's fists lift a creature and it rides over the
+  guest's head on both machines; a throw lands on the host with the
+  guest's aim. Penning it works too.
+- **Vehicles.** Anything a guest deploys is born on the host and comes
+  back as the guest's own mirror with the host's number. A guest can
+  ride it: the host hands the vehicle over, the guest's own physics
+  drive it, the host's copy follows the guest's pose, and parking
+  hands it back. A vehicle the other player is in says so.
+- **The pad.** Hold ▼ and press ◄ ► to pull the shape in and push it
+  out (the VIEW chord still works). The legend says so.
+
 ## Build 40 — TOGETHER (2026-09-12)
 
 Two players in one world, Austin's ask. Verified headlessly with two

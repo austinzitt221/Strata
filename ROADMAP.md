@@ -140,9 +140,18 @@ order is mine. Big items are split so each build is one session.
 - **TOGETHER** — DONE (Build 40): host and guest by room code over
   WebRTC (PeerJS's free signalling from a CDN), the host's world is the
   truth, edits and props go both ways, creatures stream to the guest
-  and its blows come back. Later, as they come up: guests driving,
-  guest packs that persist, a third player, a relay for the
-  connections that need one, the guest's carved water.
+  and its blows come back. TOGETHER II (Build 41): guest profiles kept
+  in the host's world, creatures see both players, guests carry and
+  drive. Later, as they come up: a third player, a relay for the
+  connections that need one, the guest's carved water, crew that
+  follow a guest, a guest sleeping through the night.
+- **LEAN** — DONE (Build 42): the performance build Austin asked for
+  after the console's 15 fps. Same picture, less work: the far skin
+  drawn in frustum-culled runs, the shadow map re-rendered only when
+  it would differ, god rays drawing only what can cover the sun, CPU
+  copies of geometry dropped once uploaded (heap halved). Next levers
+  if the console still chugs on its preset: merge chunk draws, merge
+  entity part meshes, a smaller shadow map at low render scale.
 
 ## The City Arc (brainstormed with Austin 2026-09-10, in my order)
 

@@ -49,8 +49,13 @@ input[type=range]{width:180px; accent-color:var(--accent);}
 
 /* ---------- HUD ---------- */
 #hud{position:fixed; inset:0; pointer-events:none; z-index:20;}
+#gfxlost{position:fixed; left:50%; top:40%; transform:translate(-50%,-50%); z-index:60; background:rgba(10,9,16,.85); border:2px solid #ff7a5c; padding:14px 20px; text-align:center; max-width:520px; pointer-events:none;}
+#gfxlost .t1{font-size:18px; letter-spacing:3px; color:#ff9a7c; margin-bottom:6px;}
+#gfxlost .t2{font-size:11px; color:var(--ui-hi); line-height:1.5;}
 #netstatus{position:fixed; left:12px; top:44px; font-size:11px; color:#a9d4ff; background:rgba(10,9,16,.6); padding:4px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:30; letter-spacing:1px;}
 #padcursor{position:fixed; left:0; top:0; width:18px; height:18px; margin:-9px 0 0 -9px; border:2px solid #ffd76a; border-radius:50%; box-shadow:0 0 0 2px #000, 0 0 8px rgba(0,0,0,.7); pointer-events:none; z-index:200;}
+#padstate{position:fixed; left:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:420px; line-height:1.5; letter-spacing:.5px;}
+#padstate.on{color:#8bff9e;}
 #padhints{position:fixed; right:10px; bottom:8px; font-size:10px; color:var(--ui-hi); background:rgba(10,9,16,.72); padding:5px 8px; border:2px solid rgba(74,68,88,.6); pointer-events:none; z-index:150; max-width:560px; line-height:1.5; letter-spacing:.5px;}
 body.pad{cursor:none;}
 #statbars{position:absolute; left:50%; bottom:88px; transform:translateX(-50%); display:flex; gap:10px; width:552px; justify-content:space-between;}
@@ -260,6 +265,10 @@ body.pad{cursor:none;}
     <div class="optrow"><label>MUSIC</label><input type="range" id="optMus" min="0" max="100" step="5"><span class="val" id="optMusV"></span></div>
     <div class="optrow"><label>RENDER SCALE</label><input type="range" id="optRsc" min="50" max="150" step="25"><span class="val" id="optRscV"></span></div>
     <div class="optrow"><label>SKIN</label><input type="range" id="optSkin" min="0" max="4" step="1"><span class="val" id="optSkinV"></span></div>
+    <div class="optrow"><label>SAFE GRAPHICS</label><input type="range" id="optSafe" min="0" max="1" step="1"><span class="val" id="optSafeV"></span></div>
+    <div class="sub" style="font-size:10px; margin:-4px 0 8px;">safe: no far country, far shapes, far trees or ground cover, a small shadow map, one mesher — for a machine that goes black. Takes effect when a world loads.</div>
+    <button class="btn small" id="btnSafePreset" title="everything low and safe graphics on">SAFE PRESET (XBOX)</button>
+    <div class="sub" id="gfxlogbox" style="font-size:10px; margin:8px 0 4px; line-height:1.5; white-space:pre-line; max-width:520px; text-align:left;"></div>
     <button class="btn small" id="btnConsolePreset" title="a console or a small machine: short view, no shadows or rays, 75% render scale, 60 fps">CONSOLE PRESET</button>
     <button class="btn" id="btnOptionsBack">BACK</button>
   </div>
@@ -272,6 +281,8 @@ body.pad{cursor:none;}
     <button class="btn" id="btnPauseOptions">OPTIONS</button>
     <button class="btn" id="btnInvite">INVITE A FRIEND</button>
     <div class="sub hidden" id="inviteBox" style="margin:4px 0 10px; line-height:1.6;"></div>
+    <button class="btn small" id="btnResetGfx" title="if the world has gone blank: a new renderer, everything drawn again">RESET GRAPHICS</button>
+    <div class="sub" id="gfxinfo" style="font-size:10px; margin:6px 0 8px; line-height:1.5; white-space:pre-line; max-width:520px; text-align:left;"></div>
     <button class="btn" id="btnSaveQuit">SAVE &amp; QUIT TO TITLE</button>
   </div>
 </div>
@@ -344,6 +355,7 @@ body.pad{cursor:none;}
 
 <div id="objlayer"></div>
 <div id="netstatus" class="hidden"></div>
+<div id="gfxlost" class="hidden"><div class="t1">GRAPHICS LOST</div><div class="t2" id="gfxlostsub">waiting for the browser to give the graphics back</div></div>
 
 <div id="xhair" class="hidden"></div>
 <div id="scope" class="hidden">
@@ -357,6 +369,7 @@ body.pad{cursor:none;}
 </div>
 <div id="itemtip" class="hidden"></div>
 <div id="padcursor" class="hidden"></div>
+<div id="padstate"></div>
 <div id="padhints" class="hidden"></div>
 <div id="stationscreen" class="screen hidden dim">
   <div class="panel" style="min-width:420px;">
@@ -559,6 +572,34 @@ document.getElementById('btnRetry').addEventListener('click', function(){ locati
 // Terrain is a signed distance field: base flat plane + ordered CSG edit list,
 // clamped so everything below bedrock is permanently solid. Meshed with dual
 // contouring (QEF vertices) so cube brushes cut sharp 90° corners.
+
+// A ring of the last things that went wrong (shader errors, lost
+// contexts, worker failures, thrown errors), shown in the pause menu
+// and on the options screen, and kept for the next session: for a
+// console I cannot see.
+const gfxLog = {
+  lines: [],
+  push(kind, args){
+    let t = args.map(a => typeof a === 'string' ? a : a && a.message ? a.message : (a && typeof a === 'object' ? (() => { try { return JSON.stringify(a).slice(0, 80); } catch (e){ return String(a); } })() : String(a))).join(' ');
+    const k = t.indexOf('ERROR:'); if (k > 0) t = t.slice(k);
+    t = t.replace(/\s+/g, ' ').slice(0, 220);
+    if (/^THREE\.(Quaternion|Matrix|Vector)/.test(t)) return;
+    const line = kind + ' ' + t;
+    if (this.lines[this.lines.length - 1] === line) return;
+    this.lines.push(line);
+    if (this.lines.length > 24) this.lines.shift();
+    try { localStorage.setItem('strata:gfxlog', JSON.stringify({ t: Date.now(), lines: this.lines })); } catch (e) {}
+  },
+  last(n){ return this.lines.slice(-(n || 4)); },
+  stored(){ try { return JSON.parse(localStorage.getItem('strata:gfxlog') || 'null'); } catch (e){ return null; } },
+};
+(function(){
+  const e0 = console.error.bind(console), w0 = console.warn.bind(console);
+  console.error = (...a) => { try { gfxLog.push('E', a); } catch (x) {} e0(...a); };
+  console.warn = (...a) => { try { gfxLog.push('W', a); } catch (x) {} w0(...a); };
+  window.addEventListener('error', ev => gfxLog.push('X', [(ev.message || 'error') + ' @' + (ev.lineno || 0)]));
+  window.addEventListener('unhandledrejection', ev => gfxLog.push('P', [String(ev.reason && ev.reason.message || ev.reason)]));
+})();
 
 // ===================== STRATA CORE BEGIN =====================
 // Pure logic — no THREE, no DOM. Extracted verbatim and run under node for
@@ -3407,6 +3448,7 @@ function heightGrid(J, gen){
 // row, the column, or the coarse quad's b-c diagonal), normals for both,
 // a concavity AO, per-quad materials (the highest corner's), water flags
 // and depths. The main thread only uploads.
+const SKIN_TILES = 6;
 function skinGrid(J, gen){
   const G = heightGrid(J, gen);
   const n = J.n, s = J.s, N1 = n + 1, x0 = J.x0, z0 = J.z0;
@@ -3458,19 +3500,40 @@ function skinGrid(J, gen){
     mt[r * n + i] = Math.max(0, G.m[qc] - 1);
   }
   // index buffers: the whole grid, and the wet quads (the coarser level's
-  // hole is cut per fragment by a rect uniform, never by re-indexing)
+  // hole is cut per fragment by a rect uniform, never by re-indexing).
+  // Tile-major: T x T tiles per level, each a contiguous run of the index
+  // with its own y range, so the renderer draws only the tiles in front of
+  // the camera and none that lie wholly inside the finer level's hole
+  // (Build 42: a level surrounds the player; most of it is behind them)
+  const T = n % SKIN_TILES === 0 ? SKIN_TILES : 1, tc = n / T;
   const idx = new Uint32Array(n * n * 6);
   const widx = new Uint32Array(n * n * 6);
+  const tiles = new Float32Array(T * T * 8);
   let w = 0, ww = 0;
-  const wet = G.wet;
-  for (let r = 0; r < n; r++) for (let i = 0; i < n; i++){
-    const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
-    idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d;
-    if (wet[a] || wet[b] || wet[c] || wet[d]){
-      widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
+  const wet = G.wet, rs = G.rs, wy = G.wy;
+  for (let tr = 0; tr < T; tr++) for (let ti = 0; ti < T; ti++){
+    const o = (tr * T + ti) * 8;
+    tiles[o] = w; tiles[o + 2] = ww;
+    let ymin = Infinity, ymax = -Infinity, wmin = Infinity, wmax = -Infinity;
+    for (let r = tr * tc; r <= (tr + 1) * tc; r++) for (let i = ti * tc; i <= (ti + 1) * tc; i++){
+      const kk = r * N1 + i, y0 = h[kk], y1 = hc[kk], yd = y0 - rs[kk] - 0.5;
+      if (yd < ymin) ymin = yd;
+      if (y0 < ymin) ymin = y0; if (y0 > ymax) ymax = y0;
+      if (y1 < ymin) ymin = y1; if (y1 > ymax) ymax = y1;
+      if (wet[kk]){ const y = wy[kk]; if (y < wmin) wmin = y; if (y > wmax) wmax = y; }
     }
+    for (let r = tr * tc; r < (tr + 1) * tc; r++) for (let i = ti * tc; i < (ti + 1) * tc; i++){
+      const a = r * N1 + i, b = a + 1, c = a + N1, d = c + 1;
+      idx[w++] = a; idx[w++] = c; idx[w++] = b; idx[w++] = b; idx[w++] = c; idx[w++] = d;
+      if (wet[a] || wet[b] || wet[c] || wet[d]){
+        widx[ww++] = a; widx[ww++] = c; widx[ww++] = b; widx[ww++] = b; widx[ww++] = c; widx[ww++] = d;
+      }
+    }
+    tiles[o + 1] = w - tiles[o]; tiles[o + 3] = ww - tiles[o + 2];
+    tiles[o + 4] = ymin; tiles[o + 5] = ymax;
+    tiles[o + 6] = wmin === Infinity ? 0 : wmin; tiles[o + 7] = wmax === -Infinity ? 0 : wmax;
   }
-  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, rs: G.rs, idx, widx: widx.slice(0, ww) };
+  return { pos, hc, nrm, nrc, ao, dep, mt, wet, wy: G.wy, fl: G.fl, rs: G.rs, idx, widx: widx.slice(0, ww), tiles, T };
 }
 // Feature-ring chunks (sky islands, landmark spires at range) keep only
 // what rises over the heightfield: triangles whose three corners all lie
@@ -4123,7 +4186,7 @@ const meshPool = {
         '};\n';
       const url = URL.createObjectURL(new Blob([src], { type: 'application/javascript' }));
       this.url = url;
-      const nW = Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
+      const nW = game.opts && game.opts.safe ? 1 : Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 4) - 1));
       for (let i = 0; i < nW; i++){
         const w = new Worker(url);
         w.onmessage = (ev) => this.done(w, ev.data);
@@ -4298,6 +4361,9 @@ const meshPool = {
   },
 };
 
+// Build 42: a buffer attribute that drops its CPU array once uploaded --
+// for geometry that is only ever replaced, never updated or read back
+function freeUploaded(){ this.array = null; }
 class Terrain {
   constructor(scene, material, edits, gen){
     this.scene = scene;
@@ -4505,6 +4571,9 @@ class Terrain {
     mesh.castShadow = true;
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
+    // a chunk's mesh is never edited in place (a remesh replaces it), so
+    // the CPU copy of every buffer goes the moment the GPU has it
+    for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);
     this.scene.add(mesh);
     ch.mesh = mesh;
   }
@@ -4643,12 +4712,23 @@ class Terrain {
 }
 
 // ---------- options / persistence ----------
-const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100 };
+const DEFAULT_OPTS = { sens: 100, fov: 80, rd: 6, vol: 70, music: 45, shadows: 1, rays: 1, fpsCap: 0, skin: 0, rscale: 100, padSens: 100, safe: 0 };
 // FPS cap slider stops; 0 = uncapped (browser vsync = the display's refresh rate)
 const FPS_STOPS = [30, 45, 60, 90, 120, 144, 180, 0];
+const ON_XBOX = /Xbox/i.test(navigator.userAgent);
 function loadOpts(){
-  try { return Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
-  catch { return Object.assign({}, DEFAULT_OPTS); }
+  let o;
+  try { o = Object.assign({}, DEFAULT_OPTS, JSON.parse(localStorage.getItem('strata:options') || '{}')); }
+  catch { o = Object.assign({}, DEFAULT_OPTS); }
+  // a console's browser has a watchdog that takes the graphics away from a
+  // page that works it too hard: the first run there starts safe and low,
+  // and OPTIONS can raise it from there
+  if (ON_XBOX && !o.xboxProfiled){
+    Object.assign(o, { safe: 1, rd: 2, shadows: 0, rays: 0, rscale: 50, fpsCap: 30, xboxProfiled: 1 });
+    try { localStorage.setItem('strata:options', JSON.stringify(o)); } catch (err) {}
+    setTimeout(() => { try { toast('Xbox: safe graphics on for the first run — OPTIONS to raise it once it holds'); } catch (err) {} }, 2500);
+  }
+  return o;
 }
 function saveOpts(o){ localStorage.setItem('strata:options', JSON.stringify(o)); }
 
@@ -5172,23 +5252,80 @@ function capsuleFree(x, y, z, edits){
 }
 
 // ---------- scene setup ----------
+// the viewport, applied only when it makes sense: a browser switching
+// modes (Edge on the Xbox taking the controller for the page, a
+// fullscreen change) can report a zero-height window for a moment, and
+// a camera given that aspect never draws again
+let vpW = 0, vpH = 0;
+function applyViewport(force){
+  const w = window.innerWidth, h = window.innerHeight;
+  if (!(w > 1 && h > 1) || !game.renderer) return false;
+  if (!force && w === vpW && h === vpH) return true;
+  vpW = w; vpH = h;
+  game.renderer.setSize(w, h);
+  if (game.camera){
+    game.camera.aspect = w / h;
+    game.camera.updateProjectionMatrix();
+  }
+  return true;
+}
 function initRenderer(){
   const renderer = new THREE.WebGLRenderer({ antialias: false });
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace; // raw colors end to end
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = false;   // we mark needsUpdate once per frame
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * ((game.opts.rscale || 100) / 100));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(Math.max(2, window.innerWidth), Math.max(2, window.innerHeight));
   renderer.domElement.className = 'game';
   document.body.insertBefore(renderer.domElement, document.body.firstChild);
   game.renderer = renderer;
-  window.addEventListener('resize', () => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    if (game.camera){
-      game.camera.aspect = window.innerWidth / window.innerHeight;
-      game.camera.updateProjectionMatrix();
-    }
-  });
+  vpW = 0; vpH = 0;
+  // a lost context: the browser may give it back; if it does not within
+  // a few seconds the renderer is rebuilt from scratch
+  // the browser took the graphics away (on a console: its watchdog, for a
+  // frame that ran too long). Three asks for it back; opening a second
+  // context ourselves is refused by the browser and only adds an error,
+  // so we wait, say so on screen, and carry on when it returns
+  renderer.domElement.addEventListener('webglcontextlost', ev => { ev.preventDefault(); game.ctxLost = performance.now(); gfxLog.push('E', ['WebGL context lost']); show('gfxlost'); });
+  renderer.domElement.addEventListener('webglcontextrestored', () => { game.ctxLost = 0; hide('gfxlost'); applyViewport(true); gfxLog.push('W', ['WebGL context restored']); toast('graphics restored'); });
+  if (!initRenderer.bound){
+    initRenderer.bound = true;
+    const later = () => { applyViewport(); setTimeout(() => applyViewport(), 250); setTimeout(() => applyViewport(), 900); };
+    window.addEventListener('resize', later);
+    window.addEventListener('orientationchange', later);
+    document.addEventListener('fullscreenchange', later);
+    window.addEventListener('pageshow', later);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) later(); });
+  }
+}
+// throw the renderer away and make a new one: the same scene, every
+// texture and mesh uploaded again on the next frame
+function resetGraphics(){
+  const old = game.renderer;
+  try {
+    const test = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+    if (!test){ toast('the browser is refusing new graphics contexts — reload the page (the world is saved)'); return; }
+  } catch (err){ toast('the browser is refusing new graphics contexts — reload the page (the world is saved)'); return; }
+  if (old){ try { old.domElement.remove(); } catch (err) {} try { old.dispose(); } catch (err) {} }
+  game.ctxLost = 0; hide('gfxlost');
+  try { initRenderer(); } catch (err){ gfxLog.push('E', ['reset failed: ' + err.message]); toast('graphics reset failed — reload the page (the world is saved)'); return; }
+  applyViewport(true);
+  if (game.terrainMat) game.terrainMat.needsUpdate = true;
+  shadowSys.force = true;
+  toast('graphics reset');
+}
+// what the screen is doing, for a report from a machine I cannot see
+function gfxInfo(){
+  const r = game.renderer, cv = r && r.domElement, c = game.camera;
+  let gpu = '';
+  try { const gl = r.getContext(); const ext = gl.getExtension('WEBGL_debug_renderer_info'); gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : ''; if (gl.isContextLost()) gpu = 'CONTEXT LOST · ' + gpu; } catch (err) {}
+  let meshed = 0, chunks = 0;
+  try { for (const [, ch] of game.terrain.chunks){ chunks++; if (ch.mesh) meshed++; } } catch (err) {}
+  const head = (ON_XBOX ? 'xbox · ' : '') + 'window ' + innerWidth + '×' + innerHeight + ' · canvas ' + (cv ? cv.width + '×' + cv.height : '-') + ' · dpr ' + (+devicePixelRatio).toFixed(2)
+       + ' · aspect ' + (c ? (+c.aspect).toFixed(3) : '-') + (c && !isFinite(c.aspect) ? ' BAD' : '') + ' · pad ' + (padSys.active ? 'on' : 'none') + (gpu ? ' · ' + gpu.slice(0, 60) : '')
+       + '\nchunks ' + chunks + ' meshed ' + meshed + ' · workers ' + (meshPool.ok ? meshPool.workers.length : 'none') + ' · safe ' + (game.opts.safe ? 'ON' : 'off') + ' · rd ' + game.opts.rd + ' · scale ' + game.opts.rscale + '%';
+  const L = gfxLog.last(4);
+  return head + (L.length ? '\n' + L.join('\n') : '\nno errors logged');
 }
 
 const SKY = new THREE.Color(0x8fb8e8);
@@ -5237,10 +5374,11 @@ function buildScene(){
   // terrain samples the map manually, so its intensity stays near zero
   const sunL = new THREE.DirectionalLight(0xffffff, 0.0001);
   sunL.castShadow = true;
-  sunL.shadow.mapSize.set(4096, 4096);
+  sunL.shadow.mapSize.set(game.opts.safe ? 1024 : 4096, game.opts.safe ? 1024 : 4096);
   sunL.shadow.camera.near = 1;
   sunL.shadow.camera.far = 460;
   sunL.shadow.bias = 0;                    // biased manually in the shader
+  sunL.shadow.camera.layers.enable(1);     // the skin's casting runs live on layer 1 (Build 42)
   scene.add(sunL);
   scene.add(sunL.target);
   game.sunLight = sunL;
@@ -9435,7 +9573,7 @@ const farTreeSys = {
     this.group = null; this.trunks = null; this.canopy = null; this.lastCell = null;
   },
   refresh(){
-    if (!this.group || !game.gen || !game.gen.treeAt) return;
+    if (!this.group || !game.gen || !game.gen.treeAt || game.opts.safe) return;
     const TC = CORE.TREE_CELL;
     const cc = [Math.floor(game.pos.x / TC), Math.floor(game.pos.z / TC)];
     const key = cc[0] + ',' + cc[1];
@@ -9624,7 +9762,7 @@ const decorSys = {
     return out;
   },
   refresh(){
-    if (!this.group || !this.meshes) return;
+    if (!this.group || !this.meshes || game.opts.safe) return;
     const C = CORE.DECOR_CELL;
     const key = Math.floor(game.pos.x / C) + ',' + Math.floor(game.pos.z / C);
     if (key === this.lastCell && !this.pending && !this.dirty) return;
@@ -11181,6 +11319,9 @@ function dropItem(it, at){
 function spawnEntity(type, x, y, z){
   const e = reviveEntity(type, x, y, z, ENT_DEF[type].hp);
   game.entities.push(e);
+  // a guest's new thing is born on the host: it goes up with a tag and
+  // comes back as a mirror with the host's number
+  if (netSys.guest){ e.tmp = netSys.tmpSeq++; e.local = true; netSys.spawnLater(e); }
   return e;
 }
 function killEntity(e, byPlayer){
@@ -12369,6 +12510,9 @@ const crewSys = {
     let best = null, bd = range;
     const pd = Math.hypot(h.x - game.pos.x, h.z - game.pos.z);
     if (pd < bd && game.ui === 'none' && !game.photo){ bd = pd; best = { x: game.pos.x, y: game.pos.y, z: game.pos.z, d: pd, ent: null }; }
+    // a friend in the world is prey too
+    const R = netSys.host ? netSys.remote : null;
+    if (R){ const rd = Math.hypot(h.x - R.x, h.z - R.z); if (rd < bd){ bd = rd; best = { x: R.x, y: R.y, z: R.z, d: rd, ent: null, guest: true }; } }
     for (const c of this.cached){
       if (c === h) continue;
       const d = Math.hypot(h.x - c.x, h.z - c.z);
@@ -17213,9 +17357,13 @@ function updateEntities(dt, now){
       // but only once you have lifted it. For the first beat of the grab your
       // arms are still reaching out, so it stays where you found it and then
       // comes up with your hands, on the same curve the viewmodel uses.
-      const tx = game.pos.x - Math.sin(game.yaw) * 0.35;
-      const tz = game.pos.z - Math.cos(game.yaw) * 0.35;
-      const ty = game.pos.y + 2.3;
+      // (a friend's catch rides the friend, from their streamed pose)
+      const CP = e.carrier === 'guest' ? netSys.remote : null;
+      if (e.carrier === 'guest' && !CP){ e.carried = false; e.carrier = null; }
+      const cx0 = CP ? CP.x : game.pos.x, cy0 = CP ? CP.y : game.pos.y, cz0 = CP ? CP.z : game.pos.z, cyaw = CP ? CP.yaw : game.yaw;
+      const tx = cx0 - Math.sin(cyaw) * 0.35;
+      const tz = cz0 - Math.cos(cyaw) * 0.35;
+      const ty = cy0 + 2.3;
       const k = carryLift(Math.min(1, (performance.now() - (game.grabT || 0)) / GRAB_MS));
       const from = e.grabFrom;
       if (from && k < 1){
@@ -17225,8 +17373,18 @@ function updateEntities(dt, now){
       } else { e.x = tx; e.y = ty; e.z = tz; }
       e.vx = 0; e.vy = 0; e.vz = 0;
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
-      if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw; }
+      if (e.mesh){ e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = cyaw; }
       continue;
+    }
+    // a vehicle a friend is driving: they own it, their pose places it
+    if (e.driver === 'guest'){
+      if (!netSys.remote){ e.driver = null; }
+      else {
+        if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+        e.mesh.position.set(e.x, e.y, e.z);
+        e.mesh.rotation.set(e.pitch || 0, e.heading || 0, e.roll || 0);
+        continue;
+      }
     }
     if (e.type === 'drop'){
       e.ttl = (e.ttl == null ? DROP_TTL : e.ttl) - dt;
@@ -17268,6 +17426,7 @@ function updateEntities(dt, now){
       continue;
     }
     const pd = netSys.nearestDist(e.x, e.z);
+    const TP = netSys.targetFor(e);              // the nearer player: where it looks, who it bites
     if (e.bossType){
       // bosses run their own physics and never despawn by distance
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
@@ -17315,8 +17474,8 @@ function updateEntities(dt, now){
       // a siege raider: the walls first, you if you get close
       const tg = siegeSys.raiderTarget(e, dt, pd);
       sx = tg[0]; sz = tg[1]; sp *= 1.1;
-      const d3 = Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z);
-      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; damagePlayer(8, (game.pos.x - e.x) * 2.5, (game.pos.z - e.z) * 2.5); }
+      const d3 = Math.hypot(e.x - TP.x, e.y - TP.y, e.z - TP.z);
+      if (d3 < 1.6 && e.atkT <= 0){ e.atkT = 1; netSys.hurt(TP, 8, (TP.x - e.x) * 2.5, (TP.z - e.z) * 2.5); }
     } else if (e.type === 'lurker' && (crewSys.prey(e, 15) || e.raider)){
       if (e.raider) sp *= 1.15;
       // a raider with no one in reach goes for the hum that called it
@@ -17333,7 +17492,7 @@ function updateEntities(dt, now){
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
       e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
-      if (game.dayF > 0.45){ sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.2; }
+      if (game.dayF > 0.45){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
       else if (ld < 9){
         // find the light and run from it
         let lx = e.x, lz = e.z, bd = 1e9;
@@ -17378,8 +17537,8 @@ function updateEntities(dt, now){
       // a light that drifts toward you and pops: TNT with a grudge
       e.fuse = e.fuse || 0;
       if (pd < 30){
-        sx = game.pos.x - e.x; sz = game.pos.z - e.z;
-        const d3 = Math.hypot(sx, e.y - (game.pos.y + 0.9), sz);
+        sx = TP.x - e.x; sz = TP.z - e.z;
+        const d3 = Math.hypot(sx, e.y - (TP.y + 0.9), sz);
         if (d3 < 6) sp *= 1.6;                                      // the last rush
         if (d3 < 2.2){
           e.fuse += dt * 4;
@@ -17394,7 +17553,7 @@ function updateEntities(dt, now){
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
     } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
-      sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.8;
+      sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.8;
     } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
       if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
@@ -17415,7 +17574,7 @@ function updateEntities(dt, now){
       else if (t < -lim) e.dir = 1;
       const aheadX = e.axis === 'x' ? e.x + e.dir * 4 : e.x;
       const aheadZ = e.axis === 'x' ? e.z : e.z + e.dir * 4;
-      const brake = Math.hypot(game.pos.x - aheadX, game.pos.z - aheadZ) < 3.0;
+      const brake = Math.hypot(TP.x - aheadX, TP.z - aheadZ) < 3.0;
       sx = brake ? 0 : (e.axis === 'x' ? e.dir : 0);
       sz = brake ? 0 : (e.axis === 'x' ? 0 : e.dir);
       if (e.mesh) e.mesh.rotation.y = e.axis === 'x'
@@ -17426,11 +17585,11 @@ function updateEntities(dt, now){
       sx = st[0]; sz = st[1]; sp = st[2];
     } else if (e.type === 'villager'){
       if (e.fleeT > 0){
-        sx = e.x - game.pos.x; sz = e.z - game.pos.z; sp *= 1.6;
+        sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.6;
       } else if (pd < 3.2){
         // stop and face whoever came to talk
         sx = 0; sz = 0;
-        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+        if (e.mesh) e.mesh.rotation.y = Math.atan2(-(TP.x - e.x), -(TP.z - e.z));
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
@@ -17473,7 +17632,7 @@ function updateEntities(dt, now){
       // a floating thing: no gravity, it holds a height over the ground (or
       // over you), bobs, and slides around solid rock rather than through it
       const gh = game.gen.height(e.x, e.z);
-      const want = (pd < 30 ? Math.max(gh + 1.4, game.pos.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
+      const want = (pd < 30 ? Math.max(gh + 1.4, TP.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
       e.vy += ((want - e.y) * 2.2 - e.vy) * Math.min(1, 4 * dt);
       const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
       const le2 = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
@@ -17655,6 +17814,11 @@ function explode(x, y, z, r, dmg, opts){
     const f = 1 - pd / (r * 2.2);
     damagePlayer(Math.round(dmg * 0.8 * f), (game.pos.x - x) * 3 * f, (game.pos.z - z) * 3 * f);
   }
+  const R = netSys.host ? netSys.remote : null;
+  if (R){
+    const rd = Math.hypot(R.x - x, R.y + 0.9 - y, R.z - z);
+    if (rd < r * 2.2){ const f = 1 - rd / (r * 2.2); netSys.send({ t: 'hurt', dmg: Math.round(dmg * 0.8 * f), kx: (R.x - x) * 3 * f, kz: (R.z - z) * 3 * f }); }
+  }
 }
 // ---- set charges: fused explosives sitting in the world. TNT makes a
 // crater and hurts everything; the shaped mining charge computes its yield
@@ -17741,6 +17905,8 @@ function updateProjectiles(dt){
       Particles.burst(p.x, p.y, p.z, 0.1, [0xfff0a0, 0xffffff], 2, 0.4);
       const pd = Math.hypot(game.pos.x - p.x, game.pos.y + 0.9 - p.y, game.pos.z - p.z);
       if (pd < 1.7){ damagePlayer(p.dmg, (game.pos.x - p.x) * 2, (game.pos.z - p.z) * 2); done = true; }
+      const R = netSys.host ? netSys.remote : null;
+      if (R && Math.hypot(R.x - p.x, R.y + 0.9 - p.y, R.z - p.z) < 1.7){ netSys.send({ t: 'hurt', dmg: p.dmg, kx: (R.x - p.x) * 2, kz: (R.z - p.z) * 2 }); done = true; }
       if (done || p.t <= 0){ Particles.burst(p.x, p.y, p.z, 0.5, [0xfff0a0, 0xffffff], 10, 2); ps.splice(i, 1); }
       continue;
     }
@@ -17781,6 +17947,58 @@ const netSys = {
   remote: null, body: null, nid: 1, mirrors: new Map(), lastTables: '', lastTablesIn: '', tv: 0,
   stateT: 0, entT: 0, clockT: 0, tablesT: 0, hashT: 0, statusT: 0, connected: false, msgs: 0,
   makeCode(){ const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = ''; for (let i = 0; i < 5; i++) c += A[(Math.random() * A.length) | 0]; return c; },
+  tmpSeq: 1, spawnQ: [], meT: 0,
+  // who I am to a host: one id per browser, minted once
+  me(){
+    let id = null;
+    try { id = localStorage.getItem('strata:me'); } catch (err) {}
+    if (!id){ id = 'p' + Math.random().toString(36).slice(2, 10); try { localStorage.setItem('strata:me', id); } catch (err) {} }
+    return id;
+  },
+  // what a guest carries between visits: pack, armor, health, where they stood
+  profile(){
+    return { slots: game.slots, dispSlot: game.dispSlot, armor: game.armor, hp: game.hp, heal: game.heal || 0,
+      pos: { x: +game.pos.x.toFixed(2), y: +game.pos.y.toFixed(2), z: +game.pos.z.toFixed(2), yaw: game.yaw, pitch: game.pitch, fly: game.fly },
+      hotSel: game.hotSel, tool: game.tool, snapOn: game.snapOn, gridIdx: game.gridIdx, ledger: game.ledger, spawnPoint: game.spawnPoint, t: Date.now() };
+  },
+  takeProfile(p){
+    if (!p) return false;
+    if (p.slots) game.slots = p.slots.map(reviveItem);
+    if (p.dispSlot !== undefined) game.dispSlot = p.dispSlot;
+    if (p.armor) game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, p.armor);
+    if (p.hp != null) game.hp = p.hp;
+    game.heal = p.heal || 0;
+    if (p.pos && p.pos.x != null){ game.pos.set(p.pos.x, p.pos.y, p.pos.z); game.yaw = p.pos.yaw || 0; game.pitch = p.pos.pitch || 0; game.fly = !!p.pos.fly; game.forceStream = true; }
+    if (p.hotSel != null) game.hotSel = p.hotSel;
+    if (p.tool) game.tool = Object.assign(game.tool, p.tool);
+    if (p.snapOn != null) game.snapOn = !!p.snapOn;
+    if (p.gridIdx != null) game.gridIdx = p.gridIdx;
+    if (p.ledger) game.ledger = p.ledger;
+    if (p.spawnPoint) game.spawnPoint = p.spawnPoint;
+    buildHotbar(); refreshHotbar(); refreshToolHUD();
+    return true;
+  },
+  // a guest's spawns are sent up in a batch after the caller has set the fields
+  spawnLater(e){
+    this.spawnQ.push(e);
+    if (this.spawnQ.length === 1) setTimeout(() => this.flushSpawns(), 0);
+  },
+  flushSpawns(){
+    for (const e of this.spawnQ){
+      this.send({ t: 'spawn', tmp: e.tmp, type: e.type, x: e.x, y: e.y, z: e.z, hp: e.hp, charge: e.charge || 0, bat: e.bat || null, heading: e.heading || 0, item: e.item || null, ttl: e.ttl || 0 });
+    }
+    this.spawnQ.length = 0;
+  },
+  // who a creature looks at and bites: the nearer player
+  targetFor(e){
+    const R = this.host ? this.remote : null;
+    if (R && Math.hypot(R.x - e.x, R.z - e.z) < Math.hypot(game.pos.x - e.x, game.pos.z - e.z)) return { x: R.x, y: R.y, z: R.z, yaw: R.yaw, guest: true };
+    return { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, guest: false };
+  },
+  hurt(TP, dmg, kx, kz){
+    if (TP && TP.guest) this.send({ t: 'hurt', dmg, kx, kz });
+    else damagePlayer(dmg, kx, kz);
+  },
   loopback(){ return !!window.__netLoopback; },
   lib(){
     if (window.Peer || this.loopback()) return Promise.resolve(true);
@@ -17798,7 +18016,7 @@ const netSys = {
     if (this.loopback()){
       this.bc = new BroadcastChannel('strata-room-' + code);
       this.bc.onmessage = ev => { const m = ev.data; if (m && m.from !== role) this.onMsg(m); };
-      if (this.guest) this.send({ t: 'hello', ver: NET_VER });
+      if (this.guest) this.send({ t: 'hello', ver: NET_VER, id: this.me() });
       return true;
     }
     if (!(await this.lib())){ this.status('could not load the network library'); this.stop(); return false; }
@@ -17818,7 +18036,7 @@ const netSys = {
         this.peer.on('open', () => {
           const c = this.peer.connect(id, { reliable: true });
           this.conn = c;
-          c.on('open', () => this.send({ t: 'hello', ver: NET_VER }));
+          c.on('open', () => this.send({ t: 'hello', ver: NET_VER, id: this.me() }));
           c.on('data', m => this.onMsg(m));
           c.on('close', () => { if (game.running) toast('the host closed the room'); this.stop(); if (game.running) quitToTitle(); });
         });
@@ -17871,9 +18089,11 @@ const netSys = {
         if (!this.host) return;
         if (m.ver !== NET_VER){ this.send({ t: 'sorry', why: 'different build' }); return; }
         this.connected = true;
-        this.send({ t: 'world', data: buildSaveData() });
+        this.guestId = m.id || null;
+        game.guests = game.guests || {};
+        this.send({ t: 'world', data: buildSaveData(), you: (m.id && game.guests[m.id]) || null });
         this.status('friend joined · code ' + this.code);
-        toast('a friend joined your world');
+        toast('a friend joined your world' + (m.id && game.guests[m.id] ? ' — back where they left off' : ''));
         break;
       case 'sorry': this.status('the host is on a ' + m.why); this.stop(); break;
       case 'world': {
@@ -17883,15 +18103,21 @@ const netSys = {
         const data = m.data;
         hide('joinmenu');
         startWorldData('guest', data);
-        // stand beside the host
+        // back where you left off, or beside the host the first time
         const hp = data.player || {};
         if (hp.x != null){ game.pos.set(hp.x + 1.5, hp.y, hp.z + 1.5); game.fly = !!hp.fly; game.forceStream = true; }
+        if (m.you) this.takeProfile(m.you);
+        this.meT = 0;
         this.status('in ' + (data.name || 'a friend\'s world') + ' · code ' + this.code);
         toast('joined — the world is your friend\'s; carve, build, fight beside them');
         break;
       }
       case 'p':
         this.remote = m;
+        if (this.host && m.veh){
+          const e = game.entities.find(x => x.nid === m.veh.nid);
+          if (e && e.driver === 'guest'){ e.x = m.veh.x; e.y = m.veh.y; e.z = m.veh.z; e.heading = m.veh.h; e.pitch = m.veh.p || 0; e.roll = m.veh.r || 0; e.speed = m.veh.s || 0; e.charge = m.veh.c; }
+        }
         break;
       case 'e': {
         const ed = CORE.deserializeEdits([m.e])[0];
@@ -17928,6 +18154,64 @@ const netSys = {
         break;
       }
       case 'hurt': if (this.guest) damagePlayer(m.dmg, m.kx, m.kz); break;
+      case 'me':
+        if (!this.host || !m.id) return;
+        game.guests = game.guests || {};
+        game.guests[m.id] = m.p;
+        markSave();
+        break;
+      case 'grab': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && !e.carried){ e.carried = true; e.carrier = 'guest'; e.grabFrom = [e.x, e.y, e.z]; if (game.carried === e) game.carried = null; }
+        break;
+      }
+      case 'throw': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && e.carrier === 'guest'){ e.carried = false; e.carrier = null; e.x = m.x; e.y = m.y; e.z = m.z; e.vx = m.vx; e.vy = m.vy; e.vz = m.vz; }
+        break;
+      }
+      case 'despawn': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e){ if (game.carried === e) game.carried = null; const i = game.entities.indexOf(e); if (i >= 0) game.entities.splice(i, 1); if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; } markSave(); }
+        break;
+      }
+      case 'spawn': {
+        if (!this.host || !ENT_DEF[m.type]) return;
+        const e = spawnEntity(m.type, m.x, m.y, m.z);
+        if (m.hp != null) e.hp = m.hp;
+        if (m.charge) e.charge = m.charge;
+        if (m.bat) e.bat = m.bat;
+        if (m.heading) e.heading = m.heading;
+        if (m.item){ e.item = m.item; e.ttl = m.ttl || 60; }
+        e.nid = this.nid++;
+        this.send({ t: 'spawned', tmp: m.tmp, nid: e.nid });
+        markSave();
+        break;
+      }
+      case 'spawned': {
+        if (!this.guest) return;
+        const e = game.entities.find(x => x.tmp === m.tmp);
+        if (!e) return;
+        e.nid = m.nid; e.local = false; e.remote = true; delete e.tmp;
+        e.tx = e.x; e.ty = e.y; e.tz = e.z; e.seenT = performance.now();
+        this.mirrors.set(m.nid, e);
+        break;
+      }
+      case 'drive': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e && e !== game.driving) e.driver = 'guest';
+        break;
+      }
+      case 'park': {
+        if (!this.host) return;
+        const e = game.entities.find(x => x.nid === m.nid);
+        if (e){ e.driver = null; e.x = m.x; e.y = m.y; e.z = m.z; e.heading = m.heading; e.charge = m.charge; if (m.bat) e.bat = m.bat; e.speed = 0; if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0); markSave(); }
+        break;
+      }
       case 'give': {
         if (!this.guest) return;
         const it = m.item; if (!it) return;
@@ -18004,14 +18288,14 @@ const netSys = {
       if (!near) continue;
       if (!e.nid) e.nid = this.nid++;
       const ry = e.mesh ? +e.mesh.rotation.y.toFixed(2) : 0;
-      out.push([e.nid, e.type, +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), ry, Math.round(e.hp || 0), e.type === 'drop' ? e.item : (e.crew ? 1 : 0), e.bossType || 0, e.heading != null ? +e.heading.toFixed(2) : 0]);
+      out.push([e.nid, e.type, +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), ry, Math.round(e.hp || 0), e.type === 'drop' ? e.item : (e.crew ? 1 : 0), e.bossType || 0, e.heading != null ? +e.heading.toFixed(2) : 0, e === game.driving ? 1 : 0, e.charge || 0]);
     }
     return out;
   },
   applyEnts(list){
     const seen = new Set();
     for (const r of list){
-      const [nid, type, x, y, z, ry, hp, extra, boss, heading] = r;
+      const [nid, type, x, y, z, ry, hp, extra, boss, heading, hostDrives, charge] = r;
       seen.add(nid);
       let e = this.mirrors.get(nid);
       if (!e){
@@ -18024,7 +18308,9 @@ const netSys = {
         game.entities.push(e);
         this.mirrors.set(nid, e);
       }
-      e.tx = x; e.ty = y; e.tz = z; e.try = ry; e.hp = hp; e.heading = heading; e.seenT = performance.now();
+      e.seenT = performance.now();
+      if (e === game.driving || e.carried){ e.hp = hp; continue; }     // mine to place this frame
+      e.tx = x; e.ty = y; e.tz = z; e.try = ry; e.hp = hp; e.heading = heading; e.hostDrives = !!hostDrives; if (VEH[type]) e.charge = charge;
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
     }
     for (const [nid, e] of this.mirrors){
@@ -18039,6 +18325,17 @@ const netSys = {
   mirrorTick(dt){
     const k = Math.min(1, dt * 12);
     for (const [, e] of this.mirrors){
+      if (e === game.driving) continue;
+      if (e.carried){
+        // riding over my head, the same as on the host
+        const tx = game.pos.x - Math.sin(game.yaw) * 0.35, tz = game.pos.z - Math.cos(game.yaw) * 0.35, ty = game.pos.y + 2.3;
+        const kk = carryLift(Math.min(1, (performance.now() - (game.grabT || 0)) / GRAB_MS)), from = e.grabFrom;
+        if (from && kk < 1){ e.x = from[0] + (tx - from[0]) * kk; e.y = from[1] + (ty - from[1]) * kk; e.z = from[2] + (tz - from[2]) * kk; }
+        else { e.x = tx; e.y = ty; e.z = tz; }
+        if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+        e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.y = game.yaw;
+        continue;
+      }
       if (e.tx == null) continue;
       e.x += (e.tx - e.x) * k; e.y += (e.ty - e.y) * k; e.z += (e.tz - e.z) * k;
       e.flash = Math.max(0, (e.flash || 0) - dt);
@@ -18084,7 +18381,13 @@ const netSys = {
       const it = selectedItem();
       this.send({ t: 'p', x: +game.pos.x.toFixed(2), y: +game.pos.y.toFixed(2), z: +game.pos.z.toFixed(2), yaw: +game.yaw.toFixed(3), pitch: +game.pitch.toFixed(3),
         fly: game.fly ? 1 : 0, cr: game.crouch ? 1 : 0, mv: +Math.hypot(game.vel.x, game.vel.z).toFixed(1), gr: game.grounded ? 1 : 0, sw: game.swim ? 1 : 0,
-        it: it ? { kind: it.kind, mat: it.mat, tier: it.tier } : null, work: game.mouseL ? 1 : 0, hp: game.hp, dr: game.driving ? 1 : 0 });
+        it: it ? { kind: it.kind, mat: it.mat, tier: it.tier } : null, work: game.mouseL ? 1 : 0, hp: game.hp, dr: game.driving ? 1 : 0,
+        veh: this.guest && game.driving && game.driving.nid ? { nid: game.driving.nid, x: +game.driving.x.toFixed(2), y: +game.driving.y.toFixed(2), z: +game.driving.z.toFixed(2), h: +(game.driving.heading || 0).toFixed(3), p: +(game.driving.pitch || 0).toFixed(3), r: +(game.driving.roll || 0).toFixed(3), s: +(game.driving.speed || 0).toFixed(1), c: game.driving.charge || 0 } : null });
+    }
+    // a guest's profile, every ten seconds, so the host's save remembers them
+    if (this.guest && this.connected){
+      this.meT += dt;
+      if (this.meT > 10){ this.meT = 0; this.send({ t: 'me', id: this.me(), p: this.profile() }); }
     }
     // the friend's body
     const R = this.remote;
@@ -18136,7 +18439,7 @@ const netSys = {
 // a cursor, the d-pad hops between controls, A clicks, B backs out.
 const PAD_DEAD = 0.18;
 const PAD = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, VIEW: 8, MENU: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
-const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▲ fly · ▼+LB/RB grid · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror, +LB/RB reach) · MENU pause';
+const PAD_HINT_WORLD = 'RT use · LT shape/aim · A jump · B crouch · X inventory · Y craft · LB/RB hotbar · ◄ ► size · ▼+◄ ► reach · ▼+LB/RB grid · ▲ fly · L3 sprint · R3 mode · VIEW map (+X blueprints, +Y photo, +A mirror) · MENU pause';
 const PAD_HINT_MENU = 'stick: cursor · d-pad: hop · A select · X right-click · Y shift-click · B back · LT/RT scroll · LB/RB hotbar';
 const padSys = {
   active: false, lastT: 0, lastPoll: 0, prev: [], cx: 0, cy: 0, chord: false, chordUsed: false, held: {}, rep: {}, grid: 0, layer: '',
@@ -18151,11 +18454,20 @@ const padSys = {
     for (let i = 0; i < gp.length; i++) if (gp[i] && gp[i].connected) return gp[i];
     return null;
   },
-  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); },
+  wake(){ this.active = true; this.lastT = performance.now(); document.body.classList.add('pad'); $('padhints').classList.remove('hidden'); this.state(); },
+  // the corner note: heard, or how to be heard
+  state(){
+    const el = $('padstate'); if (!el) return;
+    const p = this.pad();
+    el.classList.toggle('on', this.active);
+    el.classList.toggle('hidden', !!game.running && this.active);
+    el.textContent = this.active ? 'controller: on' : p ? 'controller: found — move a stick' : 'controller: none · on Xbox turn on Edge\'s website controls, then move a stick';
+  },
   sleep(){
     this.active = false; game.padLock = false; game.padMove = null; this.layer = '';
     for (const k in this.held) this.hold(k, false);
     document.body.classList.remove('pad'); $('padcursor').classList.add('hidden'); $('padhints').classList.add('hidden');
+    this.state();
   },
   // ---- synthetic input: the same events the mouse and keys send ----
   key(code, down, shift){ document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code, bubbles: true, cancelable: true, shiftKey: !!shift })); },
@@ -18183,6 +18495,7 @@ const padSys = {
     const p = this.pad();
     const now = performance.now();
     const dt = Math.min(0.05, (now - (this.lastPoll || now)) / 1000); this.lastPoll = now;
+    if (now - (this.stateT || 0) > 1000){ this.stateT = now; this.state(); }
     if (!p){ if (this.active && now - this.lastT > 60000) this.sleep(); return; }
     const ax = i => { const v = p.axes[i] || 0; return Math.abs(v) < PAD_DEAD ? 0 : (v - Math.sign(v) * PAD_DEAD) / (1 - PAD_DEAD); };
     const cur = []; for (let i = 0; i < 16; i++){ const b = p.buttons[i]; cur[i] = !!(b && (b.pressed || b.value > 0.5)); }
@@ -18195,7 +18508,7 @@ const padSys = {
     const inWorld = !!(game.running && game.ui === 'none');
     game.padLock = inWorld;
     const layer = inWorld ? 'world' : 'menu';
-    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF']) this.hold(k, false); } }
+    if (layer !== this.layer){ this.layer = layer; $('padhints').textContent = inWorld ? PAD_HINT_WORLD : PAD_HINT_MENU; $('padcursor').classList.toggle('hidden', inWorld); if (inWorld){ for (const k of ['KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'KeyF', 'KeyB', 'KeyV']) this.hold(k, false); } }
     if (inWorld) this.world(cur, down, up, ax, dt); else this.menu(cur, down, up, ax, dt);
     this.prev = cur;
   },
@@ -18233,9 +18546,16 @@ const padSys = {
       if (cur[PAD.DOWN]){ this.digit(((game.gridIdx || 0) + d + 10) % 10); }
       else this.digit(((game.hotSel || 0) + d + 10) % 10);
     }
-    // ◄ ►: the wheel (size), repeating while held
-    this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
-    this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    // ◄ ►: the wheel (size), repeating while held; with ▼ held, the reach
+    if (cur[PAD.DOWN]){
+      this.hold('KeyB', cur[PAD.RIGHT]); this.hold('KeyV', cur[PAD.LEFT]);
+      if (cur[PAD.LEFT] || cur[PAD.RIGHT]) game.fUsedCombo = true;
+      this.repeat('size-', false); this.repeat('size+', false);
+    } else {
+      this.hold('KeyB', false); this.hold('KeyV', false);
+      this.repeat('size-', cur[PAD.LEFT], 0, 0.14, () => this.wheel(120));
+      this.repeat('size+', cur[PAD.RIGHT], 0, 0.14, () => this.wheel(-120));
+    }
     if (down(PAD.MENU)) openPause();
   },
   // ---- menus: a cursor ----
@@ -18484,6 +18804,7 @@ function bindInput(){
             const ei = game.entities.indexOf(e);
             if (ei >= 0) game.entities.splice(ei, 1);
             if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+            if (netSys.guest && e.nid){ netSys.send({ t: 'despawn', nid: e.nid }); netSys.mirrors.delete(e.nid); }
             pn.animal = e.type;
             pnodeSys.rebuild(); markSave();
             AudioSys.sfx('toggle');
@@ -18997,7 +19318,11 @@ function unscope(){
 // ---------- the electric car: fast travel that drinks from your grid ----------
 function enterCar(e){
   if (game.driving) return;
+  if (netSys.guest && e.local){ toast('one moment — the world is still taking it'); return; }
+  if (netSys.guest && e.hostDrives){ toast('your friend is driving it'); return; }
+  if (netSys.host && e.driver === 'guest'){ toast('your friend is driving it'); return; }
   game.driving = e;
+  if (netSys.guest && e.nid) netSys.send({ t: 'drive', nid: e.nid });
   game.vel.set(0, 0, 0);
   e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
   const V0 = VEH[e.type] || VEH.car;
@@ -19014,6 +19339,7 @@ function exitCar(){
   game.driving = null;
   game.chase = null;
   AudioSys.setHum(false, 0, 0);
+  if (e && netSys.guest && e.nid) netSys.send({ t: 'park', nid: e.nid, x: e.x, y: e.y, z: e.z, heading: e.heading || 0, charge: e.charge || 0, bat: e.bat || null });
   if (e){
     // step out on the driver's side
     game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
@@ -21213,6 +21539,7 @@ function tryAction(dt, now){
         const dir = new THREE.Vector3();
         game.camera.getWorldDirection(dir);
         e.vx = dir.x * 9; e.vy = Math.max(3.5, dir.y * 9 + 3.2); e.vz = dir.z * 9;
+        if (netSys.guest && e.nid) netSys.send({ t: 'throw', nid: e.nid, x: e.x, y: e.y, z: e.z, vx: e.vx, vy: e.vy, vz: e.vz });
         game.punchT = now;
         toast('yeet');
         AudioSys.sfx('toggle');
@@ -21312,6 +21639,7 @@ function tryAction(dt, now){
         ent.grabFrom = [ent.x, ent.y, ent.z];    // lift starts from where it stood
         game.carried = ent;
         game.grabT = now;
+        if (netSys.guest && ent.nid) netSys.send({ t: 'grab', nid: ent.nid });
         toast('picked up ' + (ent.type === 'villager' ? crewSys.nameOf(ent) : 'the ' + ent.type) + ' — left click to throw');
         AudioSys.sfx('toggle');
       }
@@ -24788,6 +25116,8 @@ function buildBlueUI(){
 function openPause(){
   if (game.ui !== 'none') return;
   game.ui = 'pause'; show('pausemenu'); saveNow();
+  try { $('gfxinfo').textContent = gfxInfo(); } catch (err) {}
+  if (netSys.guest && netSys.connected) netSys.send({ t: 'me', id: netSys.me(), p: netSys.profile() });
 }
 function resumeGame(){
   hide('pausemenu'); game.ui = 'none'; requestLock();
@@ -24804,6 +25134,9 @@ function openOptions(from){
   const fi = FPS_STOPS.indexOf(o.fpsCap);
   $('optFps').value = fi < 0 ? 7 : fi;
   $('optSkin').value = o.skin || 0;
+  $('optSafe').value = o.safe ? 1 : 0;
+  { const st = gfxLog.stored(); const cur = gfxLog.last(6);
+    $('gfxlogbox').textContent = cur.length ? 'this session:\n' + cur.join('\n') : (st && st.lines && st.lines.length ? 'last session:\n' + st.lines.slice(-6).join('\n') : 'no errors logged'); }
   syncOptLabels();
   show('optionsmenu');
   if (from === 'pause') hide('pausemenu');
@@ -24823,6 +25156,7 @@ function syncOptLabels(){
   const fc = FPS_STOPS[+$('optFps').value];
   $('optFpsV').textContent = fc ? fc : 'MAX';
   $('optSkinV').textContent = PLAYER_SKINS[+$('optSkin').value].name;
+  $('optSafeV').textContent = +$('optSafe').value ? 'ON' : 'off';
 }
 function applyOptions(){
   game.opts.sens = +$('optSens').value;
@@ -24835,7 +25169,9 @@ function applyOptions(){
   game.opts.rays = +$('optRays').value;
   game.opts.fpsCap = FPS_STOPS[+$('optFps').value] || 0;
   game.opts.padSens = +$('optPad').value;
+  game.opts.safe = +$('optSafe').value;
   game.opts.skin = +$('optSkin').value;
+  shadowSys.force = true;
   playerBody.applySkin(game.opts.skin);
   AudioSys.setVolume(game.opts.vol);
   AudioSys.setMusicVolume(game.opts.music);
@@ -24944,6 +25280,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
+    guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
     expedition: game.expedition || null,
@@ -25005,6 +25342,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
+  game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
   game.spires = data.spires || {};
@@ -25138,6 +25476,7 @@ function reviveItem(it){
 }
 function quitToTitle(){
   saveNow();
+  if (netSys.guest && netSys.connected) netSys.send({ t: 'me', id: netSys.me(), p: netSys.profile() });
   netSys.stop();
   game.photo = null;
   game.scope = 0;
@@ -25303,7 +25642,7 @@ const farShapeSys = {
     game.scene.add(this.mesh);
   },
   update(){
-    if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat) return;
+    if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat || game.opts.safe) return;
     if (this.mesh && this.mesh.parent !== game.scene){ game.scene.add(this.mesh); }
     if (this.dirty || Math.hypot(game.pos.x - this.cx, game.pos.z - this.cz) > 400) this.build();
   },
@@ -25486,13 +25825,16 @@ const farTerrain = {
     return Math.max(Math.abs(game.pos.x - lv.cx), Math.abs(game.pos.z - lv.cz)) > this.L[k].E / 8;
   },
   update(){
-    if (!game.gen || !this.mat) return;
+    if (!game.gen || !this.mat || game.opts.safe) return;
     this.uPlayer.value.set(game.pos.x, game.pos.z);
+    this.cull();
     if (this.dirty){
       this.dirty = false;
       for (const lv of this.levels){ lv.cx = 1e9; lv.cz = 1e9; }
     }
-    if (++this.maskFrame >= 2){ this.maskFrame = 0; this.updateMask(); }
+    // the mask is re-cut the frame anything lands or the player crosses a
+    // chunk (maskFrame is pushed to 99 there); between, a slow safety net
+    if (++this.maskFrame >= 10){ this.maskFrame = 0; this.updateMask(); }
     let inflight = 0;
     for (const lv of this.levels) if (lv.job) inflight++;
     if (inflight < 2)
@@ -25523,21 +25865,27 @@ const farTerrain = {
       : [1, 1, 0, 0];
     this.mat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
     this.waterSurfMat[k].uniforms.uHole.value.set(v[0], v[1], v[2], v[3]);
+    // a tile wholly inside the hole would be discarded fragment by fragment:
+    // skip it outright (the hole moves only when a level rebuilds)
+    const lv = this.levels[k];
+    if (lv && lv.tiles){
+      const cut = !!(fine && fine.mesh);
+      for (const t of lv.tiles) t.hole = cut && t.x0 >= v[0] && t.z0 >= v[1] && t.x1 <= v[2] && t.z1 <= v[3];
+    }
+    shadowSys.force = true; shadowSys.forceWhy = 'skin level';
   },
   build(k, cx, cz, x0, z0, n, g){
     const Lk = this.L[k], lv = this.levels[k];
     lv.n = n; lv.s = Lk.s; lv.x0 = x0; lv.z0 = z0; lv.wet = g.wet;
     lv.cx = cx; lv.cz = cz;
+    lv.rs = g.rs; lv.wy = g.wy;
+    // every tile shares the level's vertex buffers and one index buffer,
+    // and draws its own run of it; the CPU copies go once uploaded
     const posAttr = new THREE.BufferAttribute(g.pos, 3);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', posAttr);
-    geo.setAttribute('aHc', new THREE.BufferAttribute(g.hc, 1));
-    geo.setAttribute('normal', new THREE.BufferAttribute(g.nrm, 3, true));
-    geo.setAttribute('aNc', new THREE.BufferAttribute(g.nrc, 3, true));
-    geo.setAttribute('aAO', new THREE.BufferAttribute(g.ao, 1, true));
-    geo.setAttribute('aRise', new THREE.BufferAttribute(g.rs, 1));
-    geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
-    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(cx, 0, cz), Lk.E * 1.5 + 600);
+    const hcAttr = new THREE.BufferAttribute(g.hc, 1), nrmAttr = new THREE.BufferAttribute(g.nrm, 3, true);
+    const nrcAttr = new THREE.BufferAttribute(g.nrc, 3, true), aoAttr = new THREE.BufferAttribute(g.ao, 1, true);
+    const rsAttr = new THREE.BufferAttribute(g.rs, 1), idxAttr = new THREE.BufferAttribute(g.idx, 1);
+    for (const a of [posAttr, hcAttr, nrmAttr, nrcAttr, aoAttr, idxAttr]) a.onUpload(freeUploaded);
     const tex = new THREE.DataTexture(g.mt, n, n, THREE.RedFormat, THREE.UnsignedByteType);
     tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
     tex.needsUpdate = true;
@@ -25547,42 +25895,143 @@ const farTerrain = {
     mu.uMatTex.value = tex;
     mu.uMatOrigin.value.set(x0, z0);
     mu.uMatSpan.value = 2 * Lk.E;
-    if (lv.mesh){ this.scene.remove(lv.mesh); lv.mesh.geometry.dispose(); }
-    if (lv.water){ this.scene.remove(lv.water); lv.water.geometry.dispose(); lv.water = null; }
-    lv.mesh = new THREE.Mesh(geo, this.mat[k]);
-    lv.mesh.frustumCulled = false;
+    this.drop(lv);
     // the two near levels cast (they are what the shadow frustum reaches)
-    lv.mesh.castShadow = k <= 1;
-    lv.mesh.userData.noShadow = k > 1;
     if (k <= 1){
       if (!this.depthMat) this.depthMat = [];
       if (!this.depthMat[k]) this.depthMat[k] = new THREE.ShaderMaterial({ uniforms: this.mat[k].uniforms, vertexShader: SKIN_VERT, fragmentShader: SKIN_DEPTH_FRAG });
-      lv.mesh.customDepthMaterial = this.depthMat[k];
+    }
+    const sea = game.gen.seaLevel;
+    const wetAny = sea != null && g.widx.length > 0;
+    let depAttr = null, wyAttr = null, flAttr = null, widxAttr = null;
+    if (wetAny){
+      depAttr = new THREE.BufferAttribute(g.dep, 1); wyAttr = new THREE.BufferAttribute(g.wy, 1);
+      flAttr = new THREE.BufferAttribute(g.fl, 2); widxAttr = new THREE.BufferAttribute(g.widx, 1);
+      for (const a of [depAttr, flAttr, widxAttr]) a.onUpload(freeUploaded);
+      this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
+    }
+    // the level is drawn as RUNS: every frame, the tiles in front of the
+    // camera (and, for the casting levels, the tiles in the sun's shadow
+    // box) are found by bounding sphere, and consecutive tiles merge into
+    // one draw over a shared index buffer -- a handful of calls per level
+    // instead of one per tile. Run meshes are made as needed and kept
+    const T = g.T || 1, tiles = g.tiles, tw = (2 * Lk.E) / T, hw = tw / 2;
+    lv.mesh = new THREE.Group(); lv.mesh.name = 'skin' + k;
+    lv.water = wetAny ? new THREE.Group() : null;
+    if (lv.water) lv.water.name = 'skinwater' + k;
+    lv.attrs = { posAttr, hcAttr, nrmAttr, nrcAttr, aoAttr, rsAttr, idxAttr, depAttr, wyAttr, flAttr, widxAttr };
+    lv.k = k;
+    lv.tiles = [];
+    lv.runs = []; lv.castRuns = k <= 1 ? [] : null; lv.waterRuns = wetAny ? [] : null;
+    for (let t = 0; t < T * T; t++){
+      const o = t * 8, tx0 = x0 + (t % T) * tw, tz0 = z0 + Math.floor(t / T) * tw;
+      const ymin = tiles[o + 4] - 1, ymax = tiles[o + 5] + 1, hy = (ymax - ymin) / 2;
+      const wmin = tiles[o + 6] - 1, wmax = tiles[o + 7] + 1, wh = (wmax - wmin) / 2;
+      lv.tiles.push({
+        x0: tx0, z0: tz0, x1: tx0 + tw, z1: tz0 + tw, ymin, ymax, wmin, wmax, hole: false,
+        start: tiles[o], count: tiles[o + 1], wstart: tiles[o + 2], wcount: tiles[o + 3],
+        sph: new THREE.Sphere(new THREE.Vector3(tx0 + hw, (ymin + ymax) / 2, tz0 + hw), Math.sqrt(2 * hw * hw + hy * hy) + 1),
+        wsph: new THREE.Sphere(new THREE.Vector3(tx0 + hw, (wmin + wmax) / 2, tz0 + hw), Math.sqrt(2 * hw * hw + wh * wh) + 1),
+      });
     }
     this.scene.add(lv.mesh);
-    const sea = game.gen.seaLevel;
-    if (sea != null){
-      const widx = g.widx;
-      if (widx.length){
-        const wg = new THREE.BufferGeometry();
-        wg.setAttribute('position', posAttr);
-        wg.setAttribute('aDep', new THREE.BufferAttribute(g.dep, 1));
-        wg.setAttribute('aWY', new THREE.BufferAttribute(g.wy, 1));
-        wg.setAttribute('aFlow', new THREE.BufferAttribute(g.fl, 2));
-        wg.setIndex(new THREE.BufferAttribute(widx, 1));
-        wg.boundingSphere = geo.boundingSphere;
-        this.waterSurfMat[k].uniforms.uSeaY.value = sea - 0.02;
-        lv.water = new THREE.Mesh(wg, this.waterSurfMat[k]);
-        lv.water.frustumCulled = false;
-        lv.water.renderOrder = 3;
-        lv.water.userData.noShadow = true;
-        this.scene.add(lv.water);
-      }
-    }
+    if (lv.water) this.scene.add(lv.water);
     // this level's hole is the finer level's extent; the coarser level's
     // hole follows this level's new extent
     this.setHole(k);
     this.setHole(k + 1);
+  },
+  drop(lv){
+    for (const key of ['mesh', 'water']){
+      const grp = lv[key];
+      if (!grp) continue;
+      this.scene.remove(grp);
+      for (const m of grp.children) m.geometry.dispose();
+      lv[key] = null;
+    }
+    lv.tiles = null; lv.runs = null; lv.castRuns = null; lv.waterRuns = null; lv.attrs = null;
+  },
+  // a run mesh over the level's shared buffers. Casting runs live on layer
+  // 1: the sun's camera sees them, the player's does not (the same ground
+  // is drawn for the eye by the camera runs, cut to the eye's frustum)
+  mkRun(lv, cast, water){
+    const A = lv.attrs, k = lv.k, geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', A.posAttr);
+    if (water){
+      geo.setAttribute('aDep', A.depAttr); geo.setAttribute('aWY', A.wyAttr); geo.setAttribute('aFlow', A.flAttr);
+      geo.setIndex(A.widxAttr);
+    } else {
+      geo.setAttribute('aHc', A.hcAttr); geo.setAttribute('normal', A.nrmAttr); geo.setAttribute('aNc', A.nrcAttr);
+      geo.setAttribute('aAO', A.aoAttr); geo.setAttribute('aRise', A.rsAttr);
+      geo.setIndex(A.idxAttr);
+    }
+    geo.boundingSphere = new THREE.Sphere();
+    const m = new THREE.Mesh(geo, water ? this.waterSurfMat[k] : this.mat[k]);
+    m.visible = false;
+    m.castShadow = cast;
+    m.userData.noShadow = !cast;
+    if (cast){ m.customDepthMaterial = this.depthMat[k]; m.layers.set(1); }
+    if (water) m.renderOrder = 3;
+    (water ? lv.water : lv.mesh).add(m);
+    return m;
+  },
+  // consecutive tiles that pass (not in the hole, inside the frustum) merge
+  // into one draw; tiles with nothing to draw neither join nor break a run
+  runs(lv, list, fr, water){
+    let ri = 0, cur = null, bx0 = 0, bz0 = 0, bx1 = 0, bz1 = 0, by0 = 0, by1 = 0;
+    const close = () => {
+      if (!cur) return;
+      const c = cur.geometry.boundingSphere.center;
+      c.set((bx0 + bx1) / 2, (by0 + by1) / 2, (bz0 + bz1) / 2);
+      cur.geometry.boundingSphere.radius = Math.hypot(bx1 - bx0, by1 - by0, bz1 - bz0) / 2 + 1;
+      cur = null;
+    };
+    for (const t of lv.tiles){
+      const cnt = water ? t.wcount : t.count;
+      if (cnt === 0) continue;
+      const on = !t.hole && !!fr && fr.intersectsSphere(water ? t.wsph : t.sph);
+      if (!on){ close(); continue; }
+      const y0 = water ? t.wmin : t.ymin, y1 = water ? t.wmax : t.ymax;
+      if (!cur){
+        cur = list[ri] || (list[ri] = this.mkRun(lv, list === lv.castRuns, water));
+        ri++;
+        cur.visible = true;
+        cur.geometry.setDrawRange(water ? t.wstart : t.start, cnt);
+        bx0 = t.x0; bz0 = t.z0; bx1 = t.x1; bz1 = t.z1; by0 = y0; by1 = y1;
+      } else {
+        cur.geometry.drawRange.count += cnt;
+        if (t.x0 < bx0) bx0 = t.x0; if (t.z0 < bz0) bz0 = t.z0; if (t.x1 > bx1) bx1 = t.x1; if (t.z1 > bz1) bz1 = t.z1;
+        if (y0 < by0) by0 = y0; if (y1 > by1) by1 = y1;
+      }
+    }
+    close();
+    for (let i = ri; i < list.length; i++) list[i].visible = false;
+    return ri;
+  },
+  // every frame: the eye's frustum for the camera runs and the water, the
+  // sun's for the casting runs (so a hill behind you still throws its
+  // shadow ahead of you). Matrices are brought current first
+  cull(){
+    if (!this.levels) return;
+    const cam = game.camera;
+    cam.updateMatrixWorld();
+    const cf = this._cf || (this._cf = new THREE.Frustum());
+    const m4 = this._m4 || (this._m4 = new THREE.Matrix4()), inv = this._inv || (this._inv = new THREE.Matrix4());
+    cf.setFromProjectionMatrix(m4.multiplyMatrices(cam.projectionMatrix, inv.copy(cam.matrixWorld).invert()));
+    const L = game.sunLight;
+    let lf = null;
+    if (L && L.castShadow){
+      L.updateMatrixWorld(); L.target.updateMatrixWorld();
+      L.shadow.updateMatrices(L);
+      lf = L.shadow.getFrustum();
+    }
+    this.draws = 0;
+    for (const lv of this.levels){
+      if (!lv.tiles) continue;
+      this.draws += this.runs(lv, lv.runs, cf, false);
+      if (lv.castRuns) this.draws += this.runs(lv, lv.castRuns, lf, false);
+      if (lv.waterRuns) this.draws += this.runs(lv, lv.waterRuns, cf, true);
+    }
   },
   // the skin is a SURFACE: a column is covered once the chunks that hold
   // its surface band are STANDING (a mesh in the scene, or provably empty)
@@ -25612,7 +26061,10 @@ const farTerrain = {
   updateMask(){
     const T = game.terrain;
     if (!T) return;
-    const n = this.maskN, data = this.maskData;
+    const n = this.maskN;
+    // cut into a scratch copy; the texture (and the shadow map, which the
+    // skin's caster reads it through) only refresh when a byte changed
+    const data = this._maskNext || (this._maskNext = new Uint8Array(this.maskData.length));
     data.fill(0);
     const pcx = Math.floor(game.pos.x / CORE.CHUNK_M), pcz = Math.floor(game.pos.z / CORE.CHUNK_M);
     const ox = pcx - n / 2, oz = pcz - n / 2;
@@ -25698,8 +26150,14 @@ const farTerrain = {
         }
       }
     }
+    const cur = this.maskData, mo = this.uMaskOrigin.value;
+    let changed = mo.x !== ox * CORE.CHUNK_M || mo.y !== oz * CORE.CHUNK_M;
+    if (!changed) for (let i = 0; i < data.length; i++) if (data[i] !== cur[i]){ changed = true; break; }
+    if (!changed) return;
+    cur.set(data);
     this.maskTex.needsUpdate = true;
     this.uMaskOrigin.value.set(ox * CORE.CHUNK_M, oz * CORE.CHUNK_M);
+    shadowSys.force = true; shadowSys.forceWhy = 'mask';
   },
 };
 
@@ -26128,6 +26586,7 @@ const lodTerrain = {
     mesh.castShadow = ring.sc <= 4;
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
+    for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);   // rebuilt from the members' data, never edited
     this.scene.add(mesh);
     t.mesh = mesh;
     for (const k of t.members){ const ch = ring.chunks.get(k); if (ch) ch.built = 1; }
@@ -26198,6 +26657,7 @@ const godRays = {
     if (!game.opts.rays || !this.occRT || game.dayF < 0.06 || game.underwater) return;
     const sd = game.terrainMat.uniforms.uSunDir.value;
     const sunW = new THREE.Vector3().copy(game.camera.position).addScaledVector(sd, 300);
+    game.camera.matrixWorldInverse.copy(game.camera.matrixWorld).invert();   // this frame's view, not last frame's
     const pr = sunW.clone().project(game.camera);
     if (pr.z > 1 || Math.abs(pr.x) > 1.5 || Math.abs(pr.y) > 1.5) return;
     this.sunMesh.position.copy(sunW);
@@ -26205,15 +26665,39 @@ const godRays = {
     const r = game.renderer;
     const su = r.shadowMap.needsUpdate;
     r.shadowMap.needsUpdate = false;               // no shadow work in the prepass
-    r.setRenderTarget(this.occRT);
+    // Build 42: the occlusion texture is black everywhere but the sun disc,
+    // so only what can cover the disc is drawn -- a sub-frustum around it
+    // culls by bounding sphere and a scissor rect bounds the fill. The
+    // whole target is still cleared first (a clear obeys the scissor)
+    const cam = game.camera, RT = this.occRT;
+    const vz = -sunW.clone().applyMatrix4(cam.matrixWorldInverse).z;
+    const th = Math.tan(cam.fov * Math.PI / 360);
+    const ry = Math.min(1, 30 / Math.max(1, vz) / th * 1.3 + 0.02), rx = Math.min(1, ry / cam.aspect + 0.02);
+    const nx0 = Math.max(-1, pr.x - rx), nx1 = Math.min(1, pr.x + rx), ny0 = Math.max(-1, pr.y - ry), ny1 = Math.min(1, pr.y + ry);
+    r.setRenderTarget(RT);
     r.setClearColor(0x000000, 1);
     r.clear(true, true);
-    r.render(this.sunScene, game.camera);
+    if (nx1 <= nx0 || ny1 <= ny0){ r.setRenderTarget(null); r.shadowMap.needsUpdate = su; return; }
+    const W = RT.width, H = RT.height;
+    const sx = Math.floor((nx0 * 0.5 + 0.5) * W), sy = Math.floor((ny0 * 0.5 + 0.5) * H);
+    RT.scissor.set(sx, sy, Math.ceil((nx1 * 0.5 + 0.5) * W) - sx, Math.ceil((ny1 * 0.5 + 0.5) * H) - sy);
+    RT.scissorTest = true;
+    r.setRenderTarget(RT);                          // re-applies the scissor
+    r.render(this.sunScene, cam);
+    const cc = this.cullCam || (this.cullCam = new THREE.PerspectiveCamera());
+    cc.fov = cam.fov; cc.aspect = cam.aspect; cc.near = cam.near; cc.far = cam.far;
+    cc.setViewOffset(1000, 1000, (nx0 * 0.5 + 0.5) * 1000, (1 - (ny1 * 0.5 + 0.5)) * 1000, (nx1 - nx0) * 500, (ny1 - ny0) * 500);
+    cc.updateProjectionMatrix();
+    const fr = this.frustum || (this.frustum = new THREE.Frustum());
+    const pm = this.projM || (this.projM = new THREE.Matrix4());
+    fr.setFromProjectionMatrix(pm.multiplyMatrices(cc.projectionMatrix, cam.matrixWorldInverse));
     // silhouette the world: hide overlays (they share the noShadow flag),
-    // paint everything else black over the sun disc
+    // and everything the sub-frustum cannot see; paint the rest black
     const hidden = [];
     game.scene.traverse(o => {
-      if (o.userData && o.userData.noShadow && o.visible){ o.visible = false; hidden.push(o); }
+      if (!o.visible) return;
+      if (o.userData && o.userData.noShadow){ o.visible = false; hidden.push(o); return; }
+      if (o.isMesh && o.frustumCulled && o.geometry && !fr.intersectsObject(o)){ o.visible = false; hidden.push(o); }
     });
     const bg = game.scene.background;
     game.scene.background = null;
@@ -26225,6 +26709,7 @@ const godRays = {
     game.scene.overrideMaterial = null;
     game.scene.background = bg;
     for (const o of hidden) o.visible = true;
+    RT.scissorTest = false;
     r.setRenderTarget(null);
     r.shadowMap.needsUpdate = su;
     this.quadMat.uniforms.uSunPos.value.set(pr.x * 0.5 + 0.5, pr.y * 0.5 + 0.5);
@@ -26346,6 +26831,65 @@ function markCasters(node){
   for (const ch of node.children) markCasters(ch);
 }
 let castMarkT = 0;
+// Build 42: the shadow map is re-rendered only when it would come out
+// different -- the sun turned past a hair (0.06 deg; a 20 m shadow moves
+// 2 cm), the anchor left its 2 m window (the map covers 176 m around it),
+// or something that casts moved, appeared, vanished or changed shape.
+// Turning the camera, standing still, walking on your own across quiet
+// ground: no shadow pass at all. A village of walkers: every frame, as
+// before. Nothing on screen changes; only the work behind it.
+const shadowSys = {
+  force: true, ax: 1e9, ay: 1e9, az: 1e9, sd: new THREE.Vector3(9, 9, 9), n: 0, passes: 0, frames: 0,
+  // is this anchor / sun far enough from the rendered one to move the camera
+  anchor(ax, ay, az, sd){
+    if (!this.force && Math.abs(ax - this.ax) <= 2 && Math.abs(ay - this.ay) <= 2 && Math.abs(az - this.az) <= 2 && sd.distanceToSquared(this.sd) < 1e-6) return false;
+    this.ax = ax; this.ay = ay; this.az = az; this.sd.copy(sd);
+    this.force = true; this.forceWhy = 'sun or anchor';
+    return true;
+  },
+  // what a caster is, for the F3 readout and the tally harness
+  label(o){
+    const parts = [];
+    for (let p = o, i = 0; p && p !== game.scene && i < 4; p = p.parent, i++) parts.push((p.name || p.type) + (p.userData && p.userData.kind ? ':' + p.userData.kind : ''));
+    return parts.join(' < ');
+  },
+  // right before the frame renders: every visible caster against its last
+  // rendered world matrix (and geometry, and instance buffer)
+  decide(){
+    const r = game.renderer;
+    if (!r || !game.scene) return;
+    game.scene.updateMatrixWorld();
+    game.scene.matrixWorldAutoUpdate = false;      // done here, once, for both passes
+    this.frames++;
+    const L = game.sunLight;
+    if (!L || !L.castShadow){ r.shadowMap.needsUpdate = false; return; }
+    let dirty = this.force, n = 0;
+    this.why = dirty ? 'forced: ' + (this.forceWhy || '?') : '';
+    this.force = false; this.forceWhy = '';
+    const walk = (o) => {
+      if (!o.visible) return;
+      if (o.isMesh && o.castShadow){
+        n++;
+        const e = o.matrixWorld.elements, s = o._shM, g = o.geometry, pa = g && g.attributes.position;
+        const iv = o.isInstancedMesh ? o.instanceMatrix.version * 1048576 + o.count : 0;
+        const pv = pa ? pa.version : -1;
+        if (!s){ o._shM = new Float64Array(e); if (!dirty){ dirty = true; this.why = 'new ' + this.label(o); } }
+        else {
+          if (!dirty && (o._shG !== g || o._shI !== iv || o._shP !== pv)){ dirty = true; this.why = 'reshaped ' + this.label(o); }
+          if (!dirty) for (let i = 0; i < 16; i++) if (s[i] !== e[i]){ dirty = true; this.why = 'moved ' + this.label(o); break; }
+          if (dirty) s.set(e);
+        }
+        o._shG = g; o._shI = iv; o._shP = pv;
+      }
+      const c = o.children;
+      for (let i = 0; i < c.length; i++) walk(c[i]);
+    };
+    walk(game.scene);
+    if (n !== this.n){ if (!dirty) this.why = 'count ' + this.n + ' -> ' + n; this.n = n; dirty = true; }
+    r.shadowMap.needsUpdate = dirty;
+    if (dirty) this.passes++;
+  },
+};
 function updateSunShadow(dt){
   const L = game.sunLight;
   if (!L || !game.terrainMat) return;
@@ -26362,16 +26906,18 @@ function updateSunShadow(dt){
   if (cam.right !== sr){
     cam.left = -sr; cam.right = sr; cam.top = sr; cam.bottom = -sr;
     cam.updateProjectionMatrix();
+    shadowSys.force = true;
   }
   // snap the anchor to shadow texels so edges don't shimmer while walking
   const texel = (2 * sr) / L.shadow.mapSize.width;
   const ax = Math.round(game.pos.x / texel) * texel;
   const ay = Math.round(game.pos.y / texel) * texel;
   const az = Math.round(game.pos.z / texel) * texel;
-  L.position.set(ax + sd.x * 220, ay + sd.y * 220, az + sd.z * 220);
-  L.target.position.set(ax, ay, az);
-  L.target.updateMatrixWorld();
-  game.renderer.shadowMap.needsUpdate = true;
+  if (shadowSys.anchor(ax, ay, az, sd)){
+    L.position.set(ax + sd.x * 220, ay + sd.y * 220, az + sd.z * 220);
+    L.target.position.set(ax, ay, az);
+    L.target.updateMatrixWorld();
+  }
   u.uShadowTexel.value = 1 / L.shadow.mapSize.width;
   if (L.shadow.map){
     u.uShadowMap.value = L.shadow.map.texture;
@@ -26380,6 +26926,13 @@ function updateSunShadow(dt){
 }
 function frame(now){
   requestAnimationFrame(frame);
+  // once a second: the window's real size, a camera that went bad, a
+  // context that did not come back
+  if (now - (game.vpCheckT || 0) > 1000){
+    game.vpCheckT = now;
+    if (game.camera && !isFinite(game.camera.aspect)) applyViewport(true); else applyViewport();
+    if (game.ctxLost){ const el = $('gfxlostsub'); if (el) el.textContent = 'waiting for the browser to give the graphics back · ' + Math.round((now - game.ctxLost) / 1000) + 's · if it never does: reload the page, the world is saved'; }
+  }
   if (game.opts.fpsCap > 0 && now - (game.lastFrameT || 0) < 1000 / game.opts.fpsCap - 0.5) return;
   game.lastFrameT = now;
   const dt = Math.min(0.05, (now - lastT) / 1000);
@@ -26605,6 +27158,7 @@ function frame(now){
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
 
+  shadowSys.decide();
   godRays.prepass();
   game.renderer.render(game.scene, game.camera);
   godRays.composite();
@@ -26628,7 +27182,9 @@ function frame(now){
         'chunk queue ' + game.terrain.dirty.size + '  workers ' +
           (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '\n' +
         'ring queue ' + lodQ + '  tiles ' + lodTiles + '  skin ' + skinL + '/' + farTerrain.L.length + (skinJ ? ' (building)' : '') + '\n' +
-        'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls;
+        'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls + '\n' +
+        'shadow passes ' + (shadowSys.passes - (game.shPass0 || 0)) + '/' + (shadowSys.frames - (game.shFrame0 || 0)) + '  skin draws ' + (farTerrain.draws || 0);
+      game.shPass0 = shadowSys.passes; game.shFrame0 = shadowSys.frames;
     } else {
       $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
     }
@@ -26666,9 +27222,14 @@ function bindMenus(){
   $('btnResume').addEventListener('click', resumeGame);
   $('btnPauseOptions').addEventListener('click', () => openOptions('pause'));
   $('btnSaveQuit').addEventListener('click', quitToTitle);
+  $('btnResetGfx').addEventListener('click', () => { resetGraphics(); $('gfxinfo').textContent = gfxInfo(); });
   $('btnCraftClose').addEventListener('click', closeOverlay);
   $('btnRespawn').addEventListener('click', respawn);
-  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin']) $(id).addEventListener('input', syncOptLabels);
+  for (const id of ['optSens', 'optPad', 'optFov', 'optRd', 'optVol', 'optMus', 'optRsc', 'optShad', 'optRays', 'optFps', 'optSkin', 'optSafe']) $(id).addEventListener('input', syncOptLabels);
+  $('btnSafePreset').addEventListener('click', () => {
+    $('optRd').value = 2; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 50; $('optFps').value = FPS_STOPS.indexOf(30); $('optSafe').value = 1;
+    syncOptLabels(); toast('safe preset — reload the world for it to take'); AudioSys.sfx('toggle');
+  });
   $('btnConsolePreset').addEventListener('click', () => {
     $('optRd').value = 3; $('optShad').value = 0; $('optRays').value = 0; $('optRsc').value = 75; $('optFps').value = FPS_STOPS.indexOf(60);
     syncOptLabels(); toast('console preset — short view, no shadows, 75% scale, 60 fps'); AudioSys.sfx('toggle');
@@ -26697,7 +27258,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { netSys, buildSaveData, startWorldData, markSave, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

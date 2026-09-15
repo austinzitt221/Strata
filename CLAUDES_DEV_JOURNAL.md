@@ -1020,6 +1020,96 @@ host; a guest at the wheel would need the host to hand over one
 entity), a persistent guest pack, more than two players. Each is a
 build if the first playtest asks for it.
 
+## 2026-09-13 — TOGETHER II
+
+Austin played both builds in a browser and they held. His three asks
+were the three I had listed as not built, which is a good sign about
+the list. The profile is the important one: it makes a friend's world
+a place you live in, not visit. It lives in the host's save, keyed by
+an id each browser mints once, like Minecraft's player files.
+
+The pattern that made the rest cheap: an entity has one owner at a
+time. The host owns everything by default; a grab or a drive hands
+one entity to the guest (e.carrier, e.driver), the guest's pose
+places it, and a throw or a park hands it back. Spawns go the other
+way: the guest births the thing locally with a temporary tag, the
+host adopts it and returns its number. Nothing is simulated twice.
+
+Creatures see both players through one function (targetFor) and one
+prey list; I had missed that the lurker and the husk go through
+crewSys.prey, which knew only the host. The test caught it.
+
+## 2026-09-13, later — the white screen on the Xbox
+
+The first report from the console: Edge holds the pad as a mouse until
+a switch by the address bar hands it to the page, and flipping that
+switch mid-game left the screen white with the game alive underneath.
+I cannot see the machine. What I can do is make the renderer refuse
+the likeliest poison (a zero-height window during the mode switch,
+which gives the camera an infinite aspect and it never draws again),
+heal itself once a second, rebuild after a lost context, and put a
+readout in the pause menu that Austin can read to me. Debugging blind
+is: remove the causes you can name, and instrument the rest.
+
+## 2026-09-14 — the console, second report
+
+Trees, no ground, then black. That is not the viewport; that is the
+renderer losing its context, and before it a shader or a worker not
+doing its job on that GPU. I have no console log from an Xbox and
+never will, so the game now keeps its own: every error the renderer
+prints, in a ring, across sessions, readable from the options screen
+and the pause menu. And a safe mode that leaves out everything heavy
+so we can bisect in two reports instead of ten. The next message from
+Austin should contain the actual error text, which is the first
+thing I have wanted since the first white screen.
+
+## 2026-09-14, later — the photo
+
+The first hard evidence from the console, from a phone photo of the
+pause menu: the browser's watchdog took the context ("web page
+caused context loss") and my own rebuild made the second error. Two
+lessons. One: after a punished context loss, do not ask the browser
+for another; wait. Two: the readout worked; a photo of a menu is a
+console log. The Xbox now starts safe and we raise the load a step at
+a time until we find the frame the watchdog hates.
+
+## 2026-09-15 — LEAN
+
+A performance build with one rule: no pixel moves. The rule turned out
+to be the best tool. I wrote a harness that loads the same world at the
+same poses on the old file and the new and diffs the screenshots, and
+it caught me twice. Once it showed a whole washed-out frame on the
+old build and nothing on the new — I spent an hour convinced I had
+broken the god rays, dumped the occlusion target (the disc was there,
+exactly where it should be), probed pixels before and after a manual
+composite (identical on both builds), and finally reran the pair: the
+wash was one transient frame of the old build, not a difference at
+all. The lesson is old but I needed it again: a difference is not a
+finding until it reproduces. The other catch was real and quiet: my
+first tiling drew one mesh per tile and the draw calls went up by
+seventy; the run merge over a shared index buffer brought them back to
+where they were, and the two casting levels needed the sun's frustum,
+not the eye's, or a hill behind you would stop shadowing the ground
+ahead. Layer 1, which only the sun's camera sees, was the clean way to
+say "cast but do not draw".
+
+Where the load actually was, for next time: the far skin (five whole
+levels, 830k triangles, culling off) was more than four fifths of the
+triangles in a frame; the shadow pass re-rendered every frame whether
+or not anything had moved; god rays drew the whole world a second time
+to silhouette a disc that covers two percent of the screen; and the CPU
+kept a copy of every vertex it had already handed to the GPU — a
+hundred megabytes at rd 5. None of it visible, all of it paid for
+sixty times a second.
+
+SwiftShader cannot tell me frame times (four frames in six seconds),
+only counts: triangles, draws, passes, bytes. That was enough to steer
+by, but the fps numbers have to come from Austin's machines. The
+shadow fingerprint I could not even settle here — the ring's column
+scan never finishes under software GL, so the mask keeps changing and
+keeps forcing the map — so that one is verified by construction and by
+the pixel harness, not by a count. Worth a real machine's minute.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -1037,6 +1127,16 @@ about 25 minutes together.
 screenshot difference and reports the luminance step at the coverage
 edge; `linecheck.js` compares the near mesh's lighting terms to the
 skin's per 2 m cell. Use them before touching the skin's shading.
+
+**Performance instruments (Build 42).** `b42shot.js <file> <prefix>
+[sun]` renders one world at fixed poses (weather clear, clock held,
+fps box hidden) and `imgdiff.py a.png b.png` counts the pixels that
+differ: the way to prove a change is invisible — run it on the old
+file and the new. `measure.js` gives the render counters with and
+without the shadow pass; `scenestat.js` a census of the scene by
+mesh group and triangles; `memprobe.js` where the heap goes;
+`shadowwhy.js` tallies why the shadow map re-rendered. SwiftShader
+gives counts, never frame times.
 
 **How I play.** I can stand somewhere, look, walk, fly, build, mine,
 open screens and take screenshots. I cannot feel frame pacing or see
