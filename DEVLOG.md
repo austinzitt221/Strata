@@ -2,6 +2,46 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 50 — THE CASINO (2026-09-17)
+
+City Arc item 11, Austin's. The first slice: blackjack, dice, the
+wheel. Poker is its own later slice or not at all.
+
+- **The hall.** The park or lot after the pit's becomes the casino: a
+  dark obsidian hall on its own block, a lit crystal marquee over the
+  door on the plaza side, windows either side, a sign, four torches in
+  the corners, three green tables in a row facing the door, and a
+  croupier at a counter at the back. Cities from before get theirs on
+  the next visit; a small city with only one spare block gets a pit and
+  no casino.
+- **Blackjack.** A fresh 52-card shoe every hand. Bets 10 / 50 / 200.
+  DEAL, HIT, STAND; the dealer's second card face down until the hand
+  ends; the dealer stands on 17; a natural pays three to two; a push
+  returns the bet.
+- **The dice.** Two dice. HIGH (8–12) and LOW (2–6) pay even; SEVEN
+  pays four to one.
+- **The wheel.** A hundred coins a spin, sixteen segments: eight
+  blanks, 50, 200 and 500 coins, your stake back, ten iron ingots,
+  forty-eight rounds, a diamond, and THE SPORTS CAR at a quarter
+  weight — about one spin in sixty. The car lands in your inventory as
+  the dealership's does; the paper prints the jackpot; HARROW MOTORS
+  moves.
+- **The seed's own luck.** Every shuffle, roll and spin comes from the
+  world seed and a count that is saved, so a world's luck replays the
+  same and two players on one seed see the same cards. Never a die.
+- The house's take lifts OLD TOWN HOLDINGS a hair (a thousand coins
+  lost is one percent). A single payout of five hundred or more is a
+  headline.
+- Tests: `b50test.js` (the casino on a block distinct from the pit,
+  five SDF probes — the hall's air, its wall, the door, the crystal
+  marquee, the roof — three tables, the croupier and the sign; the
+  blackjack table right-clicked, a hand dealt and played out with the
+  coins matching the rules and the dealer standing on 17, the same
+  count dealing the same hand; sixty dice rolls each paid to the roll;
+  the wheel spun to the car with the jackpot in the paper and the count
+  saved; the old-city migration); smoke, b32, b44, b45, b46, b47, b48,
+  b49 regressions.
+
 ## Build 49 — OWNERSHIP (2026-09-16)
 
 City Arc item 10, Austin's. The phone's BUSINESS app stops holding a

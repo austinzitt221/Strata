@@ -404,6 +404,16 @@ body.pad{cursor:none;}
     <div id="banklist" style="max-height:60vh; overflow:auto;"></div>
   </div>
 </div>
+<div id="casinoscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:560px; max-width:720px;">
+    <h2 id="casinotitle">THE CASINO</h2>
+    <div class="sub" id="casinosub" style="margin-bottom:8px;"></div>
+    <div id="casinobet" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;"></div>
+    <div id="casinotable" style="min-height:110px; font-family:monospace; white-space:pre-wrap; line-height:1.6; font-size:15px; margin-bottom:8px;"></div>
+    <div id="casinobtns" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+    <div class="sub" style="margin-top:8px;">E to close</div>
+  </div>
+</div>
 <div id="exchangescreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
     <h2 id="exchangetitle">THE EXCHANGE</h2>
@@ -8687,6 +8697,28 @@ const pnodeSys = {
         p2.position.set(px, py, -0.07);
         g.add(p2);
       }
+    } else if (t === 'gtable'){
+      // green felt on dark legs; the wheel table stands its wheel up
+      if (!M.felt) M.felt = new THREE.MeshBasicMaterial({ color: 0x1f6b3a });
+      if (!M.chip) M.chip = new THREE.MeshBasicMaterial({ color: 0xd94a63 });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 1.1), M.felt); top.position.y = 0.86;
+      const rim = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 1.2), M.dark); rim.position.y = 0.78;
+      g.add(top, rim);
+      for (const [lx, lz] of [[-0.8, -0.45], [0.8, -0.45], [-0.8, 0.45], [0.8, 0.45]]){ const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.78, 0.12), M.dark); leg.position.set(lx, 0.39, lz); g.add(leg); }
+      if (n.game === 'wheel'){
+        const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64; const c2 = cv.getContext('2d');
+        for (let i = 0; i < 16; i++){ c2.beginPath(); c2.moveTo(32, 32); c2.arc(32, 32, 30, i * Math.PI / 8, (i + 1) * Math.PI / 8); c2.fillStyle = i === 15 ? '#ffd25a' : i % 2 ? '#d94a63' : '#e8e4d8'; c2.fill(); }
+        const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+        const wm = new THREE.MeshBasicMaterial({ map: tex });
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.08, 16), [M.dark, wm, wm]);
+        wheel.rotation.x = Math.PI / 2; wheel.position.set(0, 1.55, -0.3); g.add(wheel);
+        const postW = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), M.dark); postW.position.set(0, 1.2, -0.3); g.add(postW);
+      } else if (n.game === 'dice'){
+        for (const [dx, dz] of [[-0.2, 0.1], [0.15, -0.15]]){ const d = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), M.knob); d.position.set(dx, 1.0, dz); d.rotation.y = dx; g.add(d); }
+      } else {
+        for (let i = 0; i < 3; i++){ const cd = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.02, 0.32), new THREE.MeshBasicMaterial({ color: 0xf2efe6 })); cd.position.set(-0.4 + i * 0.4, 0.93, 0.15); cd.rotation.y = (i - 1) * 0.2; g.add(cd); }
+        for (let i = 0; i < 4; i++){ const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 8), i % 2 ? M.chip : M.steel); ch.position.set(0.6, 0.94 + i * 0.03, -0.3); g.add(ch); }
+      }
     } else if (t === 'statue'){
       // a figure in marble on a plinth, one fist up (the plaque is text: rebuild)
       if (!M.marble) M.marble = pixMat(PixTex.make('statueMarble', (c, w, h, rng) => { pxSpeckle(c, rng, '#d8d6cf', '#c4c2ba', '#e9e7e0', 24); c.fillStyle = '#b9b7ae'; c.fillRect(0, 7, 16, 1); c.fillRect(9, 0, 1, 7); }));
@@ -8945,7 +8977,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench' || n.t === 'statue') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench' || n.t === 'statue' || n.t === 'gtable') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -10884,6 +10916,7 @@ const VROLE = {
   floor:   { name: 'floor broker', coat: 0x3a3a44, hat: 0x6a6a76 },
   promoter:{ name: 'fight promoter', coat: 0x7a2f5a, hat: 0xd9b25a },
   banker:  { name: 'banker',       coat: 0x1f3a2a, hat: 0xd9d9c0 },
+  croupier:{ name: 'croupier',     coat: 0x2a1a2e, hat: 0xd94a63 },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -17654,6 +17687,135 @@ const shopSys = {
     }
   },
 };
+// ---------- THE CASINO (Build 50) ----------
+// Three tables. Blackjack against a dealer who stands on seventeen,
+// paying three to two on a natural. Two dice: HIGH and LOW pay even,
+// SEVEN pays four to one. The wheel: a hundred coins a spin, sixteen
+// segments, one of them the sports car. Every card, roll and spin
+// comes from the seed and a count that is saved, so a world's luck is
+// its own and replays the same. The house's take lifts OLD TOWN.
+const WHEEL = [
+  { t: 'nothing' }, { t: '50 coins', coin: 50 }, { t: 'nothing' }, { t: '10 iron ingots', item: { kind: 'ironingot', count: 10 } },
+  { t: 'nothing' }, { t: '200 coins', coin: 200 }, { t: 'nothing' }, { t: '48 rounds', item: { kind: 'rounds', count: 48 } },
+  { t: 'nothing' }, { t: 'a diamond', mat: 1 }, { t: 'nothing' }, { t: '500 coins', coin: 500 },
+  { t: 'nothing' }, { t: 'your stake back', coin: 100 }, { t: 'nothing' }, { t: 'THE SPORTS CAR', car: 1, w: 0.25 },
+];
+const casinoSys = {
+  BETS: [10, 50, 200], SPIN: 100,
+  bet: 10, hand: null, last: '',
+  G(){ return game.casino || (game.casino = { n: 0, won: 0, lost: 0 }); },
+  rng(){ const G = this.G(); G.n++; return CORE.mulberry32((game.seed ^ Math.imul(G.n, 0x9E3779B1)) >>> 0); },
+  coins(){ return CORE.countItem(game.slots, 'coin'); },
+  open(pn){
+    if (netSys.guest){ toast('the tables deal with the host'); return; }
+    if (game.ui !== 'none') return;
+    game.ui = 'casino'; this.pn = pn; this.game = pn.game || 'blackjack'; this.hand = null; this.last = '';
+    $('casinotitle').textContent = this.game === 'blackjack' ? 'BLACKJACK' : this.game === 'dice' ? 'THE DICE' : 'THE WHEEL';
+    this.render();
+    show('casinoscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  btn(parent, label, ok, fn){
+    const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label;
+    if (!ok) b.style.opacity = '0.4';
+    b.addEventListener('click', ev => { ev.stopPropagation(); if (ok){ fn(); this.render(); } else AudioSys.sfx('deny'); });
+    parent.appendChild(b); return b;
+  },
+  take(n){ CORE.consumeItem(game.slots, 'coin', n); this.G().lost += n; econSys.move('old', 0.00001 * n); refreshHotbar(); },
+  pay(n, why){
+    if (n <= 0) return;
+    addStackItem('coin', n); this.G().won += n; refreshHotbar();
+    if (n >= 500){ const rec = citySys.cityOf ? citySys.cityOf(game.pos.x, game.pos.z) : null; econSys.note('A STRANGER TAKES ' + n + ' COINS OFF THE ' + (why || 'TABLES') + (rec ? ' AT ' + rec.name : ''), ['deed', 'casino'], rec && rec.key, true); }
+  },
+  render(){
+    const T = $('casinotable'), B = $('casinobtns'), S = $('casinobet'), coins = this.coins();
+    B.innerHTML = ''; S.innerHTML = '';
+    $('casinosub').textContent = 'coins ' + coins + ' · ' + (this.game === 'blackjack' ? 'the dealer stands on 17 · a natural pays 3 to 2' : this.game === 'dice' ? 'HIGH 8–12 and LOW 2–6 pay even · SEVEN pays 4 to 1' : this.SPIN + ' coins a spin · sixteen segments · one is the car');
+    if (this.game !== 'wheel'){
+      S.appendChild(Object.assign(document.createElement('span'), { className: 'sub', textContent: 'bet:' }));
+      const inPlay = this.hand && !this.hand.done;
+      for (const b of this.BETS){ const e = this.btn(S, b + 'c', !inPlay && coins >= b, () => { this.bet = b; }); if (b === this.bet) e.style.borderColor = '#ffd25a'; }
+      if (this.bet > coins) this.bet = this.BETS.find(b => b <= coins) || this.BETS[0];
+    }
+    if (this.game === 'blackjack'){
+      const H = this.hand;
+      if (!H){ T.textContent = (this.last || 'a fresh shoe.') + '\n\nDEAL to play ' + this.bet + ' coins'; this.btn(B, 'DEAL', coins >= this.bet, () => this.deal()); return; }
+      T.textContent = 'DEALER  ' + (H.done ? this.show(H.dealer) + '  (' + this.total(H.dealer) + ')' : this.show([H.dealer[0]]) + ' [?]') + '\nYOU     ' + this.show(H.you) + '  (' + this.total(H.you) + ')' + (H.done ? '\n\n' + H.result : '');
+      if (!H.done){ this.btn(B, 'HIT', true, () => this.hit()); this.btn(B, 'STAND', true, () => this.stand()); }
+      else this.btn(B, 'DEAL AGAIN', coins >= this.bet, () => this.deal());
+      return;
+    }
+    if (this.game === 'dice'){
+      T.textContent = (this.last || 'two dice.') + '\n\ncall it for ' + this.bet + ' coins';
+      for (const k of ['HIGH', 'LOW', 'SEVEN']) this.btn(B, k, coins >= this.bet, () => this.dice(k));
+      return;
+    }
+    T.textContent = (this.last || 'the wheel: ' + WHEEL.filter(w => w.t !== 'nothing').map(w => w.t).join(' · ') + ' — and eight blanks.') + '\n\nSPIN for ' + this.SPIN + ' coins';
+    this.btn(B, 'SPIN', coins >= this.SPIN, () => this.spin());
+  },
+  // ---- blackjack ----
+  show(cards){ return cards.map(c => 'A23456789TJQK'[c % 13] + '♠♥♦♣'[(c / 13) | 0]).join(' '); },
+  total(cards){
+    let t = 0, aces = 0;
+    for (const c of cards){ const v = c % 13; if (v === 0){ aces++; t += 11; } else t += Math.min(10, v + 1); }
+    while (t > 21 && aces > 0){ t -= 10; aces--; }
+    return t;
+  },
+  deal(){
+    if (this.coins() < this.bet) return;
+    this.take(this.bet);
+    const R = this.rng(), shoe = [];
+    for (let i = 0; i < 52; i++) shoe.push(i);
+    for (let i = 51; i > 0; i--){ const j = (R() * (i + 1)) | 0; const tmp = shoe[i]; shoe[i] = shoe[j]; shoe[j] = tmp; }
+    const H = this.hand = { shoe, you: [shoe.pop(), shoe.pop()], dealer: [shoe.pop(), shoe.pop()], done: false, bet: this.bet, result: '' };
+    if (this.total(H.you) === 21){ H.done = true; const win = Math.floor(this.bet * 2.5); this.pay(win, 'CARDS'); H.result = 'BLACKJACK — ' + win + ' coins'; AudioSys.sfx('craft'); }
+    else AudioSys.sfx('click');
+    markSave(); this.show2();
+  },
+  show2(){ if (game.ui === 'casino') this.render(); },
+  hit(){ const H = this.hand; if (!H || H.done) return; H.you.push(H.shoe.pop()); if (this.total(H.you) > 21) this.settle(); else { AudioSys.sfx('click'); this.show2(); } },
+  stand(){ const H = this.hand; if (!H || H.done) return; while (this.total(H.dealer) < 17) H.dealer.push(H.shoe.pop()); this.settle(); },
+  settle(){
+    const H = this.hand; H.done = true;
+    const y = this.total(H.you), d = this.total(H.dealer);
+    if (y > 21){ H.result = 'bust — the house takes ' + H.bet; AudioSys.sfx('deny'); }
+    else if (d > 21 || y > d){ this.pay(H.bet * 2, 'CARDS'); H.result = (d > 21 ? 'the dealer busts' : 'you win') + ' — ' + H.bet * 2 + ' coins'; AudioSys.sfx('craft'); }
+    else if (y === d){ this.pay(H.bet, 'CARDS'); H.result = 'a push — your ' + H.bet + ' back'; AudioSys.sfx('click'); }
+    else { H.result = 'the dealer wins — the house takes ' + H.bet; AudioSys.sfx('deny'); }
+    markSave(); this.show2();
+  },
+  // ---- dice ----
+  dice(kind){
+    if (this.coins() < this.bet) return;
+    this.take(this.bet);
+    const R = this.rng(), a = 1 + ((R() * 6) | 0), b = 1 + ((R() * 6) | 0), sum = a + b;
+    const win = kind === 'HIGH' ? sum >= 8 : kind === 'LOW' ? sum <= 6 : sum === 7;
+    const pay = win ? (kind === 'SEVEN' ? this.bet * 5 : this.bet * 2) : 0;
+    this.pay(pay, 'DICE');
+    this.last = a + ' and ' + b + ' — ' + sum + '. ' + kind + (win ? ' — ' + pay + ' coins' : ' — the house takes ' + this.bet);
+    AudioSys.sfx(win ? 'craft' : 'deny'); markSave(); this.show2();
+  },
+  // ---- the wheel ----
+  spin(){
+    if (this.coins() < this.SPIN) return;
+    this.take(this.SPIN);
+    const R = this.rng();
+    let total = 0; for (const w of WHEEL) total += w.w || 1;
+    let r = R() * total, seg = WHEEL[0];
+    for (const w of WHEEL){ r -= (w.w || 1); if (r <= 0){ seg = w; break; } }
+    if (seg.coin) this.pay(seg.coin, 'WHEEL');
+    else if (seg.item) giveItem(Object.assign({}, seg.item), seg.item.count);
+    else if (seg.mat) giveItem({ kind: 'mat', mat: CORE.MAT.DIAMOND }, 1);
+    else if (seg.car){
+      giveItem({ kind: 'sportscar', charge: 100 }, 1);
+      const rec = citySys.cityOf ? citySys.cityOf(game.pos.x, game.pos.z) : null;
+      econSys.note('JACKPOT — A STRANGER DRIVES A SPORTS CAR OUT OF THE CASINO' + (rec ? ' AT ' + rec.name : ''), ['deed', 'casino'], rec && rec.key, true);
+      econSys.move('motors', 0.03);
+      this.G().cars = (this.G().cars || 0) + 1;
+    }
+    this.last = 'the wheel stops on ' + seg.t.toUpperCase() + (seg.car ? ' — it is in your inventory' : '');
+    AudioSys.sfx(seg.t === 'nothing' ? 'deny' : seg.car ? 'boom' : 'craft'); refreshHotbar(); markSave(); this.show2();
+  },
+};
 const MONUMENTS = {
   champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
   siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
@@ -18322,8 +18484,55 @@ const citySys = {
         vname: villageSys.nameFor((Math.imul(c.seed, 151) + 23) >>> 0), post: { x: hx, z: hz + 1.8, yaw: yawTo(0, -1) } });
       rec.arc9 = 1;
     }
+    // THE CASINO (Build 50): an old city gets one on the next block over
+    if (!rec.arc10){
+      const T = rec.towers || [];
+      let t = T.find(b => b.kind === 'casino');
+      if (!t){
+        const pb = this.plan(c).blocks.find(b => b.kind === 'casino');
+        if (pb){ const m = T.find(b => b.bx === pb.bx && b.bz === pb.bz); if (m) m.kind = 'casino'; t = m || pb; }
+      }
+      if (t && !rec.casino){
+        const ax = c.x + t.bx * 36, az = c.z + t.bz * 36;
+        const cy = CORE.makeEdit(0, 2, +ax.toFixed(1), +(g + 12).toFixed(1), +az.toFixed(1), 34, 0, 0); cy.sy = 24; applyEdit(cy);
+        game.torches = game.torches.filter(tt => Math.hypot(tt[0] - ax, tt[2] - az) > 15);
+        this.stampCasino(c, rec, g, ax, az, t);
+      }
+      rec.arc10 = 1;
+    }
     rec.counters = 1;
     pnodeSys.rebuild();
+  },
+  // THE CASINO (Build 50): a dark hall with a lit marquee over the door,
+  // three tables inside (cards, dice, the wheel), a croupier at a
+  // counter at the back, torches in the corners
+  stampCasino(c, rec, g, ax, az, t){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);
+    const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0, fz = fx === 0 ? -Math.sign(t.bz) : 0;   // toward the plaza
+    const px = fz ? 1 : 0, pz = fx ? 1 : 0;
+    EB(1, ax, g + 3.5, az, 22, 7.0, 22, MAT.OBSIDIAN);
+    EB(0, ax, g + 3.25, az, 20.4, 6.5, 20.4, 0, 1);
+    EB(0, ax + fx * 10.5, g + 1.9, az + fz * 10.5, fx ? 2.4 : 3.2, 3.4, fx ? 3.2 : 2.4, 0, 1);      // the door
+    EB(1, ax + fx * 11.2, g + 5.2, az + fz * 11.2, fx ? 0.7 : 9, 1.4, fx ? 9 : 0.7, MAT.CRYSTAL);   // the marquee
+    for (const side of [-1, 1]) EB(0, ax + fx * 10.5 + px * side * 6, g + 3.4, az + fz * 10.5 + pz * side * 6, fx ? 1.0 : 2.4, 1.4, fx ? 2.4 : 1.0, 0, 1);   // windows
+    pnodeSys.add('sign', ax + fx * 11.6 - px * 3.4, g, az + fz * 11.6 - pz * 3.4, yawTo(fx, fz), { text: 'THE CASINO\n' + (rec.name || 'THE CITY') + '\ncards \u00b7 dice \u00b7 the wheel' });
+    // the tables: a row across the hall, facing the door
+    const games = ['blackjack', 'dice', 'wheel'];
+    games.forEach((gm, i) => pnodeSys.add('gtable', ax - fx * 1.5 + px * (i - 1) * 6, g, az - fz * 1.5 + pz * (i - 1) * 6, yawTo(fx, fz), { game: gm }));
+    // the cage: a counter at the back, the croupier behind it
+    pnodeSys.add('counter', ax - fx * 7.4, g + 0.35, az - fz * 7.4, 0, { len: 4 });
+    game.pnodes[game.pnodes.length - 1].yaw = yawTo(fx, fz);
+    const post = { x: ax - fx * 8.6, z: az - fz * 8.6, yaw: yawTo(fx, fz) };
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) game.torches.push([ax + sx * 9.4, g + 2.2, az + sz * 9.4]);
+    (rec.houses = rec.houses || []).push({ x: ax + fx * 10.5, z: az + fz * 10.5, role: 'croupier', face: [fx, fz], w: 22, d: 22, gy: g, rep: 0,
+      vname: villageSys.nameFor((Math.imul(c.seed, 173) + 29) >>> 0), post });
+    rec.casino = { x: +ax.toFixed(1), z: +az.toFixed(1), gy: g, fx, fz };
+    rec.arc10 = 1;
   },
   // THE PIT (Build 47): a bowl sunk three metres into a block with three
   // steps of stands around it, a cut through the stands on the plaza
@@ -18402,6 +18611,10 @@ const citySys = {
     let pit = null;
     for (const b of out) if ((b.kind === 'park' || b.kind === 'lot') && (!pit || Math.abs(b.bx) + Math.abs(b.bz) < Math.abs(pit.bx) + Math.abs(pit.bz))) pit = b;
     if (pit) pit.kind = 'pit';
+    // THE CASINO (Build 50): the next nearest park or lot
+    let cas = null;
+    for (const b of out) if ((b.kind === 'park' || b.kind === 'lot') && (!cas || Math.abs(b.bx) + Math.abs(b.bz) < Math.abs(cas.bx) + Math.abs(cas.bz))) cas = b;
+    if (cas) cas.kind = 'casino';
     return { n, blocks: out, harbor };
   },
   stamp(c, rec){
@@ -18442,6 +18655,7 @@ const citySys = {
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
       const fz = fx === 0 ? -Math.sign(t.bz) : 0;
       if (t.kind === 'pit'){ this.stampPit(c, rec, g, tx, tz, t); continue; }
+      if (t.kind === 'casino'){ this.stampCasino(c, rec, g, tx, tz, t); continue; }
       if (t.kind === 'park'){
         // a lawn painted onto the pavement, benches, one lamp
         const pk = CORE.makeEdit(2, 1, +tx.toFixed(1), +(g - 0.4).toFixed(1), +tz.toFixed(1), 24, MAT.GRASS, 0);
@@ -18574,7 +18788,7 @@ const citySys = {
       const pick = pool.length ? pool[0] : (all.find(i => !used.has(i)) != null ? all.find(i => !used.has(i)) : (all[0] || 0));
       used.add(pick); idxs.push(pick);
     }
-    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter');   // the pit's promoter is already on the list
+    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter' || h.role === 'croupier');   // the pit's and the casino's people are already on the list
     for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
@@ -18621,7 +18835,7 @@ const citySys = {
         propBatchBegin();
         try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
-      } else if ((!rec.counters || !rec.arc7 || !rec.arc8 || !rec.arc9) && rec.gy != null && rec.houses){
+      } else if ((!rec.counters || !rec.arc7 || !rec.arc8 || !rec.arc9 || !rec.arc10) && rec.gy != null && rec.houses){
         // a city from before the counters: its keepers go indoors now
         propBatchBegin();
         try { this.stampCounters(c, rec); } finally { propBatchEnd(); }
@@ -19156,6 +19370,7 @@ function talkTo(vent){
   if (vent.role === 'stock'){ econSys.openExchange((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'promoter'){ pitSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'banker'){ bankSys.open((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'croupier'){ toast(['the wheel pays the car about once in sixty spins', 'the dealer stands on seventeen', 'seven pays four to one on the dice', 'the house takes its cut in OLD TOWN shares'][(Math.random() * 4) | 0]); return; }
   if (vent.role === 'floor'){
     toast(['buy low, sell high, stranger', 'OLD TOWN pays its dividend whatever the price does', 'the Herald knows tomorrow — seven times in ten', 'a siege knocks every company in the city'][(Math.random() * 4) | 0]);
     return;
@@ -20338,6 +20553,7 @@ function bindInput(){
           return;
         }
         if (pn.t === 'statue'){ toast((pn.text || '').replace(/\n/g, ' \u00b7 ')); return; }
+        if (pn.t === 'gtable'){ casinoSys.open(pn); return; }
         if (pn.t === 'board'){
           const rec = game.villages[pn.vkey];
           if (rec) boardSys.open(rec);
@@ -20553,7 +20769,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -26519,7 +26735,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -26795,7 +27011,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [],
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null,
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -26858,7 +27074,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || [];
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null;
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -27077,6 +27293,8 @@ const farShapeSys = {
           out.push({ x: tx, y: g + 5.8, z: tz, sx: 21, sy: 0.5, sz: 15, yaw: 0, mat: t.mat });
         } else if (t.kind === 'pit'){
           out.push({ x: tx, y: g + 1.5, z: tz, sx: 28, sy: 3, sz: 28, yaw: 0, mat: M.STONEBRICK });
+        } else if (t.kind === 'casino'){
+          out.push({ x: tx, y: g + 3.5, z: tz, sx: 22, sy: 7, sz: 22, yaw: 0, mat: M.OBSIDIAN });
         } else if (t.kind === 'lot' && t.district === 'industrial'){
           out.push({ x: tx + 6, y: g + 9, z: tz - 6, sx: 3.2, sy: 18, sz: 3.2, yaw: 0, mat: M.BASALT });
           out.push({ x: tx - 5, y: g + 2.2, z: tz + 4, sx: 10, sy: 4.4, sz: 8, yaw: 0, mat: M.ROCK });
@@ -28777,7 +28995,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -206,7 +206,7 @@ so the city's economy is one thing that reacts to what you do.
    the city economy so a siege hurts your shop too. Sell once a day to
    a buyer who makes an offer you can raise, lower or decline. Managed
    from the phone's BUSINESS app.
-11. **THE CASINO** (Austin's) — blackjack, dice, and the item wheel
+11. **THE CASINO** (Austin's) — FIRST SLICE DONE (Build 50: blackjack, dice, the wheel with the car). Blackjack, dice, and the item wheel
    with a sports car jackpot first; poker against AI players as its
    own later slice, built properly or not at all.
 12. **THE TRACK** (Austin's) — a stamped circuit outside the city with

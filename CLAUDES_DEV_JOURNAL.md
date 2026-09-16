@@ -1261,6 +1261,22 @@ a shape to it. I notice the city is getting full — plaza flanks all
 taken (hall, press, exchange, bank), four statue corners, the pit on
 a block. THE CASINO will need a block of its own.
 
+## 2026-09-17, morning — THE CASINO
+
+"Never a die" survived the casino, which surprised me. A shuffle from
+the seed and a saved count is still a shuffle; the player cannot tell,
+and the world can: reload the save and the same hand comes back, so
+there is no save-scumming and nothing to save-scum for. The first
+version of the house's take moved OLD TOWN four percent a spin, and
+the test showed the share at 350 after a session. Numbers I type
+without computing are the ones the tests exist for.
+
+The pit, the bank, the shops, the casino: four builds in a night, all
+in the same city, all leaning on the same six things (a hall, a
+counter, a role, a screen, a dawn hook, a save field). The City Arc
+has a shape now. THE TRACK is next, and it is the first one outside
+the walls.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 50 — THE CASINO
+- [ ] Find the casino (a dark hall with a lit marquee, a block off the
+      plaza). Three tables: right click each. Does the room read as a
+      casino at pixel scale?
+- [ ] Blackjack at 50: a few hands. Does the card text read cleanly?
+      Would you rather see cards drawn?
+- [ ] The dice: is SEVEN at four to one tempting enough?
+- [ ] The wheel: ten spins. Then decide whether you would chase the car.
+- Feedback I want: which table you go back to; whether the bets should
+  go higher; whether poker against the floor brokers is worth the
+  build (it is a big one — only if you would play it).
+
 ## Build 49 — OWNERSHIP
 - [ ] Trade with a keeper until goodwill 20 (the grocer is cheapest to
       befriend). The row at the bottom of their screen: buy it. Does
