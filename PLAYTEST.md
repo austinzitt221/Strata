@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 48 — THE BANK
+- [ ] The bank on the plaza's south side. Put coins in, sleep a night,
+      look again. Is one percent a day worth the walk?
+- [ ] Die with a balance. Is the relief real, or does it make death
+      cheap?
+- [ ] Borrow the maximum, buy something you could not afford, and pay
+      it back inside the week from the phone. Then do it again and do
+      not pay: the collectors at dawn. Are they a threat, a nuisance,
+      or a coin farm (each one you kill costs you 40)?
+- Feedback I want: whether the loan limit (200 + 20 a standing point)
+  is enough to matter for a car or a shop; whether the collectors
+  should also take coins from your pockets when they hit you.
+
 ## Build 47 — THE PIT + MONUMENTS
 - [ ] Find the pit in a city (a block off the plaza; the sign on the
       stands says THE PIT). Walk the stands, go down the steps into the

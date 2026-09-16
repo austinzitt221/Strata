@@ -2,6 +2,39 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 48 — THE BANK (2026-09-16)
+
+City Arc item 9. Coins that outlive you, and a reason to owe someone.
+
+- **The hall.** On the plaza's south flank, the mirror of the town
+  hall: door on the plaza, the banker at a counter, a vault chest, a
+  sign, two torches. Cities from before get theirs on the next visit.
+- **One account.** Every bank keeps the same account. IN 25 / 100 /
+  ALL and OUT 25 / 100 / ALL from your pockets. Deposits earn one
+  percent a day at dawn, compounding, and are not in your slots — a
+  death drops your pockets and leaves the balance where it was.
+- **A loan** against your standing in that city: two hundred coins,
+  plus twenty a point. Four percent a day, due in seven days. BORROW
+  100 / 500 / MAX; REPAY 100 / ALL at any counter, or from the phone's
+  BUSINESS app. Borrowing nudges the builders' share price.
+- **Default.** Past the due day the collectors come at dawn where you
+  stand — three the first day, one more each day after — big lurkers
+  in coats that do not burn, are not drawn off by your generators, and
+  do not lose you at seventy metres. The lending city takes five
+  standing a day. Every collector you kill goes on the bill (40c).
+  Paid up, they go home at once. The first default is a headline; every
+  dawn after, the phone rings.
+- Lurkers in the pit and collectors now act in creative mode too (the
+  creative gate skipped every free lurker, which had left THE PENS
+  standing still for a creative fighter).
+- Tests: `b48test.js` (the hall, the banker right-clicked and the
+  sheet's eleven buttons, deposits and a withdrawal, interest at dawn
+  and none twice in a day, the loan capped at the limit, a repayment,
+  death keeping the balance and the debt, the default: four collectors
+  at dawn closing in and alive by day, five the next, the bill, the
+  ring, the standing, settled and gone; the phone's row and REPAY; the
+  save); smoke, b32, b44, b45, b46, b47 regressions.
+
 ## Build 47 — THE PIT + MONUMENTS (2026-09-16)
 
 City Arc item 8. The first thing in a city that is a show, not a shop.

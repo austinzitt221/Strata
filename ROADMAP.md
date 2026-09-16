@@ -198,7 +198,7 @@ so the city's economy is one thing that reacts to what you do.
    and city rep. Monuments: the city raises a statue to your deeds in
    the plaza with a plaque (champion, siege breaker, the survey of the
    deep), and the paper prints it. The show-off for a city completed.
-9. **THE BANK** (mine) — deposits that survive death, interest by the
+9. **THE BANK** (mine) — DONE (Build 48). Deposits that survive death, interest by the
    day, loans to buy a shop or a car. Default and the collectors come,
    as a raid.
 10. **OWNERSHIP** (Austin's) — buy a shop once the keeper's goodwill is

@@ -1228,6 +1228,24 @@ fist up, the city stopped being scenery.
 
 THE BANK is next. Deposits, interest, loans, and the collectors.
 
+## 2026-09-16, later that night — THE BANK
+
+A small build, on purpose. The bank is three numbers and a hall, and
+its whole value is what it lets the next builds assume: OWNERSHIP can
+price a shop above what anyone carries, THE CASINO can take a stake
+that hurts, and death stops being a wipe for anyone who banked. The
+collectors are the only new behaviour, and they are lurkers with two
+flags and a coat.
+
+One gate I did not know about: creative mode skips every free lurker
+in the update loop, so a creative player's PENS bout would have been
+three statues. I found it because the collectors' scale read null in
+the test, which turned out to be my own test order, but the reading
+took me through that line. Wrong alarms still find things.
+
+OWNERSHIP next — Austin's, and the one the phone's BUSINESS app has
+been holding a placeholder for since Build 46.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
