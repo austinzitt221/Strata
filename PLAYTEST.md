@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 51 — THE TRACK
+- [ ] Find the track (outside one wall of a city — the sign by the
+      stand). Walk the circuit. Does the pad sit right against the
+      land around it, or is there a cliff where the hills were cut?
+- [ ] With a sports car in your slots: the steward, RACE. The count,
+      the grid, three laps. Is the sports car's handling a race on
+      this track, or a fight with the ends?
+- [ ] Try the bike and the hoverbike.
+- [ ] Bet from the stand. Watch a whole race. Is it worth watching?
+- Feedback I want: the AI's pace (too easy, too hard, per class);
+  whether the checkpoints ever fail you when you are on the road;
+  whether the track wants a chicane, a hill, or a second layout.
+
 ## Build 50 — THE CASINO
 - [ ] Find the casino (a dark hall with a lit marquee, a block off the
       plaza). Three tables: right click each. Does the room read as a

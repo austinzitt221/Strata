@@ -414,6 +414,14 @@ body.pad{cursor:none;}
     <div class="sub" style="margin-top:8px;">E to close</div>
   </div>
 </div>
+<div id="racescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:600px; max-width:780px;">
+    <h2 id="racetitle">THE TRACK</h2>
+    <div class="sub" id="racesub" style="margin-bottom:8px;"></div>
+    <div id="racestake" style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;"></div>
+    <div id="racelist" style="max-height:58vh; overflow:auto;"></div>
+  </div>
+</div>
 <div id="exchangescreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
     <h2 id="exchangetitle">THE EXCHANGE</h2>
@@ -10917,6 +10925,7 @@ const VROLE = {
   promoter:{ name: 'fight promoter', coat: 0x7a2f5a, hat: 0xd9b25a },
   banker:  { name: 'banker',       coat: 0x1f3a2a, hat: 0xd9d9c0 },
   croupier:{ name: 'croupier',     coat: 0x2a1a2e, hat: 0xd94a63 },
+  steward: { name: 'race steward', coat: 0x3a3a2a, hat: 0xf0f0e8 },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -17816,6 +17825,221 @@ const casinoSys = {
     AudioSys.sfx(seg.t === 'nothing' ? 'deny' : seg.car ? 'boom' : 'craft'); refreshHotbar(); markSave(); this.show2();
   },
 };
+// ---------- THE TRACK (Build 51) ----------
+// A circuit outside the walls. Three classes. RACE: the entry fee, your
+// own machine on the grid with three drivers, three laps through eight
+// checkpoints, purses for the places. BET: the race runs without you;
+// a stake on a driver at odds from their form. The drivers' form comes
+// from the seed and a race count that is saved.
+const RACE_CLASSES = {
+  sportscar: { name: 'sports cars', top: 24.5, purse: [300, 120, 50], fee: 50 },
+  bike:      { name: 'motorcycles', top: 19.5, purse: [220, 90, 40],  fee: 30 },
+  hover:     { name: 'hoverbikes',  top: 23.5, purse: [260, 100, 45], fee: 40 },
+};
+const RACER_NAMES = ['Vell', 'Okoro', 'Dast', 'Marn', 'Ilya', 'Torv', 'Brann', 'Sefa'];
+const trackSys = {
+  LAPS: 3, CPS: 8, STAKES: [25, 100, 250],
+  stake: 25,
+  L(){ return 120 + 50 * Math.PI; },
+  G(){ return game.races || (game.races = { n: 0, wins: 0, purse: 0 }); },
+  local(s){
+    const L = this.L(), A = 25 * Math.PI;
+    s = ((s % L) + L) % L;
+    if (s < 30) return [s, 25];
+    if (s < 30 + A){ const a = Math.PI / 2 - (s - 30) / 25; return [30 + 25 * Math.cos(a), 25 * Math.sin(a)]; }
+    if (s < 90 + A) return [30 - (s - 30 - A), -25];
+    if (s < 90 + 2 * A){ const a = -Math.PI / 2 - (s - 90 - A) / 25; return [-30 + 25 * Math.cos(a), 25 * Math.sin(a)]; }
+    return [-30 + (s - 90 - 2 * A), 25];
+  },
+  world(T, u, v){ return T.rot ? [T.cx + v, T.cz + u] : [T.cx + u, T.cz + v]; },
+  point(T, s){ const [u, v] = this.local(s); return this.world(T, u, v); },
+  heading(T, s){ const a = this.point(T, s - 0.5), b = this.point(T, s + 0.5); return Math.atan2(-(b[0] - a[0]), -(b[1] - a[1])); },
+  normal(T, s){ const h = this.heading(T, s); return [Math.cos(h), -Math.sin(h)]; },   // to the right of travel
+  nearest(T, x, z){
+    const L = this.L(); let best = 0, bd = 1e9;
+    for (let i = 0; i < 64; i++){ const s = i * L / 64, p = this.point(T, s), d = Math.hypot(p[0] - x, p[1] - z); if (d < bd){ bd = d; best = s; } }
+    let step = L / 64;
+    for (let k = 0; k < 9; k++){ step /= 2; for (const s2 of [best - step, best + step]){ const p = this.point(T, s2), d = Math.hypot(p[0] - x, p[1] - z); if (d < bd){ bd = d; best = ((s2 % L) + L) % L; } } }
+    return { s: best, d: bd };
+  },
+  // the field for a race: three drivers with form from the seed and the count
+  field(rec, cls, n){
+    const rng = CORE.mulberry32((game.seed ^ Math.imul(n + 1, 0x9E3779B1) ^ (cls.length * 7919)) >>> 0);
+    const out = [], used = new Set();
+    for (let i = 0; i < 3; i++){
+      let ni = (rng() * RACER_NAMES.length) | 0; while (used.has(ni)) ni = (ni + 1) % RACER_NAMES.length; used.add(ni);
+      out.push({ name: RACER_NAMES[ni], skill: +(0.84 + rng() * 0.14).toFixed(3), phase: rng() * 6.28, lane: (i - 1) * 2.6 });
+    }
+    let tot = 0; for (const f of out){ f.p = Math.pow(f.skill, 24); tot += f.p; }
+    for (const f of out){ f.p /= tot; f.odds = Math.max(1.2, +(0.9 / f.p).toFixed(1)); }
+    return out;
+  },
+  have(cls){ return (game.driving && game.driving.type === cls) || game.slots.some(s => s && s.kind === cls && !s.wrecked); },
+  open(rec){
+    if (!rec || !rec.track){ toast('no track here'); return; }
+    if (netSys.guest){ toast('the steward deals with the host'); return; }
+    if (game.ui !== 'none') return;
+    if (game.race){ toast('a race is on'); return; }
+    game.activeTrack = rec.key; game.ui = 'race';
+    $('racetitle').textContent = 'THE TRACK OF ' + rec.name;
+    this.refresh();
+    show('racescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  refresh(){
+    const rec = (game.cities || {})[game.activeTrack]; if (!rec || !rec.track) return;
+    const coins = CORE.countItem(game.slots, 'coin'), list = $('racelist'), G = this.G(); list.innerHTML = '';
+    if (this.stake > coins) this.stake = this.STAKES[0];
+    const st = $('racestake'); st.innerHTML = '';
+    st.appendChild(Object.assign(document.createElement('span'), { className: 'sub', textContent: 'your stake on a driver:' }));
+    for (const s of this.STAKES){ const b = document.createElement('span'); b.className = 'btn small'; b.textContent = s + 'c'; if (s === this.stake) b.style.borderColor = '#ffd25a'; if (s > coins) b.style.opacity = '0.4'; b.addEventListener('click', () => { if (s <= coins){ this.stake = s; this.refresh(); } else AudioSys.sfx('deny'); }); st.appendChild(b); }
+    $('racesub').textContent = 'coins ' + coins + ' · three laps, eight checkpoints · ' + (G.n || 0) + ' races run here, ' + (G.wins || 0) + ' won · E to close';
+    for (const cls in RACE_CLASSES){
+      const C = RACE_CLASSES[cls], F = this.field(rec, cls, G.n), have = this.have(cls);
+      const r = phoneSys.row(list, '<div class="cname" style="min-width:170px;">' + C.name.toUpperCase() + '<div class="sub">purse ' + C.purse.join(' / ') + ' · entry ' + C.fee + 'c' + (have ? '' : ' · bring a ' + VEH[cls].name) + '</div></div>');
+      const b = document.createElement('span'); b.className = 'btn small'; b.style.marginLeft = 'auto'; b.textContent = 'RACE';
+      if (!have || coins < C.fee) b.style.opacity = '0.4';
+      b.addEventListener('click', ev => { ev.stopPropagation(); if (have && coins >= C.fee) this.start(rec, cls, 'race', null); else { toast(have ? 'the entry is ' + C.fee + ' coins' : 'bring a ' + VEH[cls].name + ' to the grid'); AudioSys.sfx('deny'); } });
+      r.appendChild(b);
+      const r2 = phoneSys.row(list, '<div class="sub" style="width:100%;">the field: ' + F.map(f => f.name + ' (' + f.odds + ':1)').join(' · ') + '</div>');
+      r2.style.flexWrap = 'wrap';
+      const bt = document.createElement('div'); bt.style.cssText = 'display:flex; gap:4px; width:100%; margin-top:4px; justify-content:flex-end;';
+      for (const f of F){ const bb = document.createElement('span'); bb.className = 'btn small'; bb.textContent = 'BET ' + f.name.toUpperCase(); if (coins < this.stake) bb.style.opacity = '0.4'; bb.addEventListener('click', ev => { ev.stopPropagation(); if (coins >= this.stake) this.start(rec, cls, 'bet', { name: f.name, odds: f.odds, stake: this.stake }); else AudioSys.sfx('deny'); }); bt.appendChild(bb); }
+      r2.appendChild(bt);
+    }
+  },
+  gridS(i){ return this.L() - 3 - i * 4.5; },
+  start(rec, cls, mode, bet){
+    const T = rec.track, C = RACE_CLASSES[cls], G = this.G();
+    if (game.race) return;
+    if (mode === 'race'){ CORE.consumeItem(game.slots, 'coin', C.fee); }
+    else { CORE.consumeItem(game.slots, 'coin', bet.stake); }
+    closeOverlay(); game.ui = 'none';
+    const F = this.field(rec, cls, G.n); G.n++;
+    const R = game.race = { key: rec.key, cls, mode, laps: this.LAPS, t: 0, count: 4, bet, results: [], player: null, ai: [], over: 0 };
+    F.forEach((f, i) => {
+      const s = this.gridS(mode === 'race' ? i + 1 : i), p = this.point(T, s), nrm = this.normal(T, s);
+      const e = spawnEntity(cls, p[0] + nrm[0] * f.lane, T.gy + 0.6, p[1] + nrm[1] * f.lane);
+      e.racer = Object.assign({ s, lap: -1, speed: 0, finished: 0, cls }, f);   // the grid is behind the line: the first crossing starts lap one
+      e.heading = this.heading(T, s); e.charge = 100; e.noSave = 1;
+      R.ai.push(e);
+    });
+    if (mode === 'race'){
+      // your machine on the front of the grid: the one you are driving, or one from your slots
+      const s = this.gridS(0), p = this.point(T, s);
+      let v = game.driving && game.driving.type === cls ? game.driving : null;
+      if (!v){
+        const i = game.slots.findIndex(sl => sl && sl.kind === cls && !sl.wrecked);
+        const it = game.slots[i]; game.slots[i] = null;
+        v = spawnEntity(cls, p[0], T.gy + 0.6, p[1]); v.charge = it.charge == null ? 100 : it.charge; if (it.bat) v.bat = it.bat;
+        refreshHotbar();
+      }
+      v.x = p[0]; v.z = p[1]; v.y = T.gy + 0.6; v.heading = this.heading(T, s); v.vx = 0; v.vz = 0; v.vy = 0; v.speed = 0;
+      if (v.mesh) v.mesh.position.set(v.x, v.y, v.z);
+      if (game.driving !== v) enterCar(v);
+      game.pos.set(v.x, v.y + 1, v.z);
+      R.player = { passed: 0, lap: 0, finished: 0, best: 0, lapT: 0 };
+      toast('on the grid — three laps of ' + C.name + ' · ' + C.purse[0] + 'c to the winner');
+    } else toast(bet.stake + 'c on ' + bet.name + ' at ' + bet.odds + ':1 — watch from the stand');
+    AudioSys.sfx('click'); markSave();
+  },
+  // a driver's speed: form, the curves, a breath of the seed's weather
+  drive(e, dt){
+    const R = game.race, r = e.racer;
+    if (!R || !R.ai.includes(e)){ delete e.racer; return; }
+    const rec = (game.cities || {})[R.key], T = rec && rec.track; if (!T) return;
+    if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+    if (R.count <= 0 && !r.finished){
+      const C = RACE_CLASSES[R.cls], [u] = this.local(r.s);
+      const curve = Math.abs(u) > 30;
+      const want = C.top * r.skill * (curve ? 0.76 : 1) * (1 + 0.05 * Math.sin(r.s * 0.04 + r.phase + R.t * 0.3));
+      r.speed += (want - r.speed) * Math.min(1, (r.speed < want ? 0.9 : 2.5) * dt);
+      r.s += r.speed * dt;
+      if (r.s >= this.L()){ r.s -= this.L(); r.lap++; if (r.lap >= R.laps){ r.finished = R.t; R.results.push({ name: r.name, t: R.t, e }); } }
+    } else if (r.finished) r.speed = Math.max(0, r.speed - 6 * dt), r.s += r.speed * dt;
+    const p = this.point(T, r.s), nrm = this.normal(T, r.s), h = this.heading(T, r.s);
+    e.x = p[0] + nrm[0] * r.lane; e.z = p[1] + nrm[1] * r.lane; e.y = T.gy + (VEH[e.type].hover ? 2.3 : 0.55);
+    e.heading = h; e.vx = 0; e.vz = 0; e.vy = 0;
+    e.mesh.position.set(e.x, e.y, e.z); e.mesh.rotation.set(0, h, 0);
+  },
+  progress(R, T, e){ return e.racer.lap * this.L() + e.racer.s; },
+  tick(dt){
+    const R = game.race;
+    this.k = (this.k || 0) + 1;
+    if (!R){ if (this.k % 120 === 0) for (const e of [...game.entities]) if (e.racer) killEntity(e, false); return; }
+    const rec = (game.cities || {})[R.key], T = rec && rec.track;
+    if (!T){ this.abandon('the track is gone'); return; }
+    if (R.count > 0){
+      const c0 = Math.ceil(R.count); R.count -= dt; const c1 = Math.ceil(R.count);
+      if (c1 !== c0){ toast(c1 > 0 ? String(c1) : 'GO'); AudioSys.sfx(c1 > 0 ? 'click' : 'boom'); }
+      if (R.count > 0) return;
+    }
+    R.t += dt;
+    const L = this.L(), P = R.player;
+    if (P && !P.finished){
+      const v = game.driving;
+      if (!v || v.type !== R.cls){ if ((P.off = (P.off || 0) + dt) > 4){ this.abandon('you left your machine'); return; } }
+      else {
+        P.off = 0;
+        const n = this.nearest(T, v.x, v.z);
+        if (n.d < 9){
+          const nextS = ((P.passed + 1) % this.CPS) * L / this.CPS;
+          const ahead = ((n.s - nextS) % L + L) % L;
+          if (ahead < 12){
+            P.passed++;
+            if (P.passed >= this.CPS){
+              P.passed = 0; P.lap++; const lt = R.t - P.lapT; P.lapT = R.t; if (!P.best || lt < P.best) P.best = lt;
+              if (P.lap >= R.laps){ P.finished = R.t; R.results.push({ name: 'you', t: R.t, you: true }); }
+              else toast('lap ' + (P.lap + 1) + ' of ' + R.laps + ' · ' + lt.toFixed(1) + ' s · ' + this.place(R, T) + ' of 4');
+            } else if (P.passed % 2 === 0) toast(this.place(R, T) + ' of 4');
+          }
+          P.prog = P.lap * L + P.passed * L / this.CPS + Math.min(L / this.CPS, ((n.s - P.passed * L / this.CPS) % L + L) % L);
+        } else if (n.d > 30 && (P.wide = (P.wide || 0) + dt) > 12){ this.abandon('you left the circuit'); return; }
+      }
+    }
+    // the flag: everyone home, or the last of them twenty seconds behind, or five minutes
+    const home = R.ai.filter(e => e.racer && e.racer.finished).length + (P && P.finished ? 1 : 0);
+    const n = R.ai.length + (P ? 1 : 0);
+    if (home >= n || (home >= 1 && R.t - Math.min(...R.results.map(r => r.t)) > 40) || R.t > 300) this.finish(R, rec);
+  },
+  place(R, T){
+    const P = R.player; let ahead = 0;
+    for (const e of R.ai) if (e.racer && this.progress(R, T, e) > (P.prog || 0)) ahead++;
+    return ['1st', '2nd', '3rd', '4th'][ahead];
+  },
+  finish(R, rec){
+    const G = this.G();
+    R.results.sort((a, b) => a.t - b.t);
+    const order = R.results.map(r => r.name);
+    for (const e of R.ai) if (e.racer && !e.racer.finished) order.push(e.racer.name);
+    if (R.player && !R.player.finished) order.push('you');
+    const C = RACE_CLASSES[R.cls];
+    if (R.mode === 'race'){
+      const place = order.indexOf('you');
+      const pay = C.purse[place] || 0;
+      if (pay) addStackItem('coin', pay);
+      G.purse += pay; if (place === 0) G.wins++;
+      toast(['you win', 'second', 'third', 'last'][Math.min(3, place)] + (pay ? ' — ' + pay + ' coins' : '') + (R.player.best ? ' · best lap ' + R.player.best.toFixed(1) + ' s' : ''));
+      if (place === 0) econSys.note('A STRANGER WINS THE ' + C.name.toUpperCase() + ' AT THE TRACK OF ' + rec.name, ['deed', 'race'], rec.key, true);
+      AudioSys.sfx(place === 0 ? 'craft' : 'deny');
+    } else {
+      const won = order[0] === R.bet.name;
+      const pay = won ? Math.round(R.bet.stake * R.bet.odds) : 0;
+      if (pay) addStackItem('coin', pay);
+      toast(order[0] + ' takes it' + (won ? ' — ' + pay + ' coins to you' : ' — your ' + R.bet.stake + ' is the house’s'));
+      AudioSys.sfx(won ? 'craft' : 'deny');
+    }
+    game.race = null; game.lastRace = { cls: R.cls, order, t: R.t };
+    const ai = R.ai;
+    setTimeout(() => { for (const e of ai) if (game.entities.includes(e)) killEntity(e, false); }, 8000);
+    refreshHotbar(); markSave();
+  },
+  abandon(why){
+    const R = game.race; if (!R) return;
+    game.race = null;
+    for (const e of R.ai) if (game.entities.includes(e)) killEntity(e, false);
+    toast('the race is off — ' + why); AudioSys.sfx('deny'); markSave();
+  },
+};
 const MONUMENTS = {
   champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
   siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
@@ -18506,6 +18730,66 @@ const citySys = {
   // THE CASINO (Build 50): a dark hall with a lit marquee over the door,
   // three tables inside (cards, dice, the wheel), a croupier at a
   // counter at the back, torches in the corners
+  // THE TRACK (Build 51): a stadium circuit -- two 60 m straights and two
+  // half-circles of 25 m radius, 10 m wide -- on a flattened pad outside
+  // the city on the side with the least relief, no water and no highway.
+  // A grandstand along the home straight, a steward at a counter by it.
+  stampTrack(c, rec, g){
+    const MAT = CORE.MAT, span = (rec.n || 3) * 36 + 8, half = span / 2;
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);
+    const links = roadSys.linksNear(c.x, c.z, 200);
+    const sides = [[1, 0], [-1, 0], [0, -1]];
+    let best = null, bs = 1e9;
+    for (const [dx, dz] of sides){
+      const cx = c.x + dx * (half + 82), cz = c.z + dz * (half + 82);
+      const rot = dx !== 0 ? 1 : 0;                                    // straights parallel to the wall
+      const ex = rot ? 52 : 78, ez = rot ? 78 : 52;
+      const hr = game.gen.heightRange(cx - ex, cz - ez, cx + ex, cz + ez);
+      let score = (hr[1] - hr[0]) + Math.abs((hr[0] + hr[1]) / 2 - g) * 0.5;
+      if (game.gen.wetAt) for (const [ox, oz] of [[0, 0], [-ex, -ez], [ex, -ez], [-ex, ez], [ex, ez]]) if (game.gen.wetAt(cx + ox, cz + oz)) score += 1000;
+      for (const L of links){
+        const fromA = Math.hypot(L.sx - c.x, L.sz - c.z) < Math.hypot(L.ex - c.x, L.ez - c.z);
+        const vx = fromA ? L.ex - L.sx : L.sx - L.ex, vz = fromA ? L.ez - L.sz : L.sz - L.ez, vl = Math.hypot(vx, vz) || 1;
+        if ((vx * dx + vz * dz) / vl > 0.45) score += 500;
+      }
+      if (score < bs){ bs = score; best = { cx, cz, rot, dx, dz }; }
+    }
+    const T = { cx: +best.cx.toFixed(1), cz: +best.cz.toFixed(1), gy: g, rot: best.rot, dx: best.dx, dz: best.dz };
+    const W = (u, v) => T.rot ? [T.cx + v, T.cz + u] : [T.cx + u, T.cz + v];
+    const EB = (op, u, v, y, su, sy, sv, mat, nl) => {
+      const [x, z] = W(u, v);
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), T.rot ? sv : su, mat || 0, 0);
+      e.sy = sy; e.sz = T.rot ? su : sv; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const CYL = (op, u, v, y, d, sy, mat) => {
+      const [x, z] = W(u, v);
+      const e = CORE.makeEdit(op, 2, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), d, mat || 0, 0);
+      e.sy = sy; applyEdit(e);
+    };
+    // the pad: the hills cut down to the city's level, the dips filled, grass on top
+    EB(0, 0, 0, g + 24.4, 156, 48, 104, 0);
+    EB(1, 0, 0, g - 5.2, 156, 10.4, 104, MAT.ROCK);
+    EB(2, 0, 0, g - 0.4, 156, 1.6, 104, MAT.GRASS);
+    // the circuit: a stadium of basalt, its infield grass again
+    CYL(2, 30, 0, g - 0.4, 60, 1.6, MAT.BASALT); CYL(2, -30, 0, g - 0.4, 60, 1.6, MAT.BASALT);
+    EB(2, 0, 0, g - 0.4, 60, 1.6, 60, MAT.BASALT);
+    CYL(2, 30, 0, g - 0.4, 40, 1.6, MAT.GRASS); CYL(2, -30, 0, g - 0.4, 40, 1.6, MAT.GRASS);
+    EB(2, 0, 0, g - 0.4, 60, 1.6, 40, MAT.GRASS);
+    EB(2, 0, 25, g - 0.4, 1.2, 1.6, 10, MAT.MARBLE);                     // the line
+    // the grandstand along the home straight, three steps
+    for (let k = 0; k < 3; k++) EB(1, 0, 33 + k * 2, g + (1 + k) / 2, 50, 1 + k, 2, MAT.STONEBRICK);
+    for (const u of [-24, 24]){ const [x, z] = W(u, 32.4); game.torches.push([x, g + 1.2, z]); }
+    // the steward's counter at the stand's end, the sign at the other
+    const [kx, kz] = W(30, 30.6), [px, pz] = W(30, 32.0), [sx, sz] = W(-30, 31.0);
+    const vx = T.rot ? 1 : 0, vz = T.rot ? 0 : 1;                       // the +v direction in the world
+    pnodeSys.add('counter', kx, g + 0.35, kz, 0, { len: 2.4 });
+    game.pnodes[game.pnodes.length - 1].yaw = yawTo(-vx, -vz);
+    pnodeSys.add('sign', sx, g, sz, yawTo(-vx, -vz), { text: 'THE TRACK\n' + (rec.name || 'THE CITY') + '\nrace \u00b7 bet' });
+    (rec.houses = rec.houses || []).push({ x: kx, z: kz, role: 'steward', face: [-vx, -vz], w: 1, d: 1, gy: g, rep: 0,
+      vname: villageSys.nameFor((Math.imul(c.seed, 191) + 31) >>> 0), post: { x: px, z: pz, yaw: yawTo(-vx, -vz) } });
+    rec.track = T;
+    rec.arc11 = 1;
+  },
   stampCasino(c, rec, g, ax, az, t){
     const MAT = CORE.MAT;
     const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
@@ -18845,6 +19129,13 @@ const citySys = {
         }
         torchSys.rebuild(); markSave();
       }
+      if (rec.stamped && rec.gy != null && !rec.arc11){
+        // THE TRACK (Build 51): a circuit outside the walls, laid after the
+        // city's own edits are tagged so the flattened pad bakes into the skin
+        propBatchBegin();
+        try { this.stampTrack(c, rec, rec.gy); } finally { propBatchEnd(); }
+        torchSys.rebuild(); pnodeSys.rebuild(); markSave();
+      }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
         monumentSys.settle(rec);
@@ -19076,6 +19367,7 @@ function updateEntities(dt, now){
       continue;
     }
     if (e === game.driving) continue;            // driveCar owns it this frame
+    if (e.racer){ trackSys.drive(e, dt); continue; }
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
     if (!VEH[e.type] && !e.crew && pd > (e.ckey || e.collector ? 180 : 70)){
@@ -19370,6 +19662,7 @@ function talkTo(vent){
   if (vent.role === 'stock'){ econSys.openExchange((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'promoter'){ pitSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'banker'){ bankSys.open((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'steward'){ trackSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'croupier'){ toast(['the wheel pays the car about once in sixty spins', 'the dealer stands on seventeen', 'seven pays four to one on the dice', 'the house takes its cut in OLD TOWN shares'][(Math.random() * 4) | 0]); return; }
   if (vent.role === 'floor'){
     toast(['buy low, sell high, stranger', 'OLD TOWN pays its dividend whatever the price does', 'the Herald knows tomorrow — seven times in ten', 'a siege knocks every company in the city'][(Math.random() * 4) | 0]);
@@ -20769,7 +21062,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino' || game.ui === 'race')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -21007,6 +21300,7 @@ function unscope(){
 // ---------- the electric car: fast travel that drinks from your grid ----------
 function enterCar(e){
   if (game.driving) return;
+  if (e.racer){ toast('that one is racing'); return; }
   if (netSys.guest && e.local){ toast('one moment — the world is still taking it'); return; }
   if (netSys.guest && e.hostDrives){ toast('your friend is driving it'); return; }
   if (netSys.host && e.driver === 'guest'){ toast('your friend is driving it'); return; }
@@ -26735,7 +27029,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -27011,7 +27305,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null,
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -27043,7 +27337,7 @@ function buildSaveData(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag)
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag && !e.racer)
       .map(e => e.type === 'drop'
         ? ['drop', +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), 1, 0, 0, e.item, Math.round(e.ttl || 0)]
         : [e.type, e.x, e.y, e.z, e.hp,
@@ -27074,7 +27368,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null;
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null;
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -28756,7 +29050,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); }
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -28995,7 +29289,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -209,7 +209,7 @@ so the city's economy is one thing that reacts to what you do.
 11. **THE CASINO** (Austin's) — FIRST SLICE DONE (Build 50: blackjack, dice, the wheel with the car). Blackjack, dice, and the item wheel
    with a sports car jackpot first; poker against AI players as its
    own later slice, built properly or not at all.
-12. **THE TRACK** (Austin's) — a stamped circuit outside the city with
+12. **THE TRACK** (Austin's) — DONE (Build 51). A stamped circuit outside the city with
    checkpoints, AI drivers that follow it, lap timing and positions.
    Race for coin, or bet from the stands on a race that runs without
    you. Classes: sports car, bike, hoverbike.

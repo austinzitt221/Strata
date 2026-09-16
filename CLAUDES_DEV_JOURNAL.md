@@ -1277,6 +1277,25 @@ counter, a role, a screen, a dawn hook, a save field). The City Arc
 has a shape now. THE TRACK is next, and it is the first one outside
 the walls.
 
+## 2026-09-17, midday — THE TRACK
+
+The drivers are not driving. They are a number on a curve, and the
+curve is a stadium I can write in five lines of arithmetic. The test
+that mattered was the one that said the flag fell at thirty-three
+seconds when the arithmetic said forty: the grid sits behind the line,
+so the first crossing was counting as a lap. The player's checkpoints
+did not have the bug because they count the line last. Two systems
+for the same thing, one right, is how you find the wrong one.
+
+The pad was the risk. A 156 by 104 metre cut and fill outside the wall
+is the biggest single edit in the game, and the far skin would have
+kept the hills over it, so it is stamped after the city's edits are
+tagged and bakes in like anything a player digs. I have not seen it
+from a kilometre yet; that is on the playtest list.
+
+THE CONTRACTOR next: mine, and the first one where the SDF is the
+judge.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

@@ -2,6 +2,50 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 51 — THE TRACK (2026-09-17)
+
+City Arc item 12, Austin's. The first piece of the city outside its
+walls.
+
+- **The circuit.** A stadium — two 60 m straights and two half-circles
+  of 25 m radius, ten metres wide, 277 m round — on a pad flattened to
+  the city's level outside the wall, on the side with the least relief,
+  no water and no highway leaving that way. Basalt on grass, a marble
+  line, a three-step grandstand along the home straight with torches,
+  a sign, and the race steward at a counter at the stand's end. Laid
+  after the city's own edits are tagged, so the pad bakes into the far
+  skin. Cities from before get theirs on the next visit.
+- **Three classes:** sports cars, motorcycles, hoverbikes. Each race
+  has a field of three drivers with form from the seed and a saved
+  race count — a skill, a name, odds from the skill (the favourite
+  short, the outsider long).
+- **RACE.** The entry (50 / 30 / 40), your own machine on the front of
+  the grid — the one you are driving, or one from your slots — the
+  three drivers behind, a count of four, then three laps through eight
+  checkpoints (no cutting: the next checkpoint only counts within nine
+  metres of the road). Toasts for your place and lap times. Purses 300
+  / 120 / 50 for the sports cars, less for the others. Four seconds out
+  of your machine or twelve seconds off the circuit and the race is
+  off. A win is a headline.
+- **BET.** A stake (25 / 100 / 250) on a driver at their odds; the race
+  runs without you and you watch from the stand.
+- **The drivers** follow the centreline in their lane at their form's
+  share of the class top speed, slower through the ends, with a breath
+  of variation; they hold on the grid through the count and coast after
+  the flag. They cannot be taken (a racing car refuses you), are never
+  saved, and are swept eight seconds after the flag or on abandon.
+- Tests: `b51test.js` (the circuit's place outside the wall and nine
+  material probes — infield, straight, line, far straight, end, outside,
+  two stand steps; the curve closed, its nearest-point search exact,
+  its distance from the two centres exact everywhere; the field
+  repeatable; the steward right-clicked and six rows with RACE dim
+  without a machine; a race entered from a slotted car — fee, grid,
+  three drivers holding through the count, moving and on the road after
+  ten seconds, driven round by hand to the flag first, the purse, the
+  win, the headline, the sweep; a bet on the favourite paid at the
+  odds; a race abandoned from a hoverbike with the drivers gone and no
+  racer in the save); smoke, b32, b44–b50 regressions.
+
 ## Build 50 — THE CASINO (2026-09-17)
 
 City Arc item 11, Austin's. The first slice: blackjack, dice, the
