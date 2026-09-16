@@ -213,7 +213,7 @@ so the city's economy is one thing that reacts to what you do.
    checkpoints, AI drivers that follow it, lap timing and positions.
    Race for coin, or bet from the stands on a race that runs without
    you. Classes: sports car, bike, hoverbike.
-13. **THE CONTRACTOR** (mine) — cities post carve-to-spec jobs: a
+13. **THE CONTRACTOR** (mine) — DONE (Build 52). Cities post carve-to-spec jobs: a
    foundation pit, a canal between two points, a road cut through a
    rise. Scored by volume against the requested shape (the SDF measures
    it exactly), paid by tier. The job only this game can offer.

@@ -1296,6 +1296,24 @@ from a kilometre yet; that is on the playtest list.
 THE CONTRACTOR next: mine, and the first one where the SDF is the
 judge.
 
+## 2026-09-17, afternoon — THE CONTRACTOR
+
+This one is the game's own. Every other builder game would have to
+count blocks; this one asks the field whether a point is air, five
+hundred times, and has an exact answer to "is the box dug". The shell
+is the part I am proudest of: the same question asked just outside
+the box turns "did you dig it" into "did you dig only it", which is
+what a client means by to spec.
+
+The first cut job found no rise, because I measured rises against the
+plaza and the plaza is a slab twenty metres above the country. A rise
+is ground higher than the road on either side of it. Obvious once the
+test said "pit" where I expected "cut".
+
+THE CARTOGRAPHER and THE MAIL CAR are the last two City Arc items.
+Then the slotted ones — FARMING first, I think, because it touches
+the most of the game.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

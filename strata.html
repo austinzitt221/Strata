@@ -13655,6 +13655,12 @@ const objectiveSys = {
       }
       if (best) out.push(best);
     }
+    // a contract in hand marks its site, with how much of it is dug (Build 52)
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key], J = rec.job;
+      if (!J || !J.taken || !rec.stamped) continue;
+      out.push({ id: 'job' + key, x: J.box.x, z: J.box.z, y: J.box.y + J.box.sy / 2 + 2, label: JOB_DEF[J.type].tag + ' ' + Math.round((J.score || 0) * 100) + '%', rec: { name: rec.name || 'the city' }, job: J });
+    }
     // discovered forts advertise themselves until their vault is looted
     for (const key in (game.forts || {})){
       const rec = game.forts[key];
@@ -14255,6 +14261,7 @@ const tradeSys = {
       list.appendChild(row);
     });
     if (T.e.role === 'mayor' && crec) blueprintMarket.rows(list, crec);
+    if (T.e.role === 'mayor' && crec) contractSys.rows(list, crec);
     if (crec && SHOP_DEF[T.e.role]) shopSys.rows(list, hrec, crec, T.e.vi);
   },
   execute(o){
@@ -18038,6 +18045,143 @@ const trackSys = {
     game.race = null;
     for (const e of R.ai) if (game.entities.includes(e)) killEntity(e, false);
     toast('the race is off — ' + why); AudioSys.sfx('deny'); markSave();
+  },
+};
+// ---------- THE CONTRACTOR (Build 52) ----------
+// The city posts carve-to-spec work at the mayor's office: a foundation
+// pit, a canal, a road cut through a rise. The spec is a box. The SDF
+// is the judge: the box is sampled every metre and the job is done when
+// nineteen in twenty samples are air. A shell round the box is sampled
+// too, and ground you took that was not asked for costs you.
+const JOB_DEF = {
+  pit:   { tag: 'PIT',   name: 'a foundation pit', pay: 180, line: 'dig the marked box out, floor and walls' },
+  canal: { tag: 'CANAL', name: 'a canal cut',      pay: 260, line: 'a trench the length of the mark, open to the sky' },
+  cut:   { tag: 'CUT',   name: 'a road cut',       pay: 400, line: 'cut the marked box clean through the rise' },
+};
+const contractSys = {
+  PASS: 0.95, STEP: 1.0,
+  viz: null, vizKey: null,
+  compass(dx, dz){ const a = Math.atan2(dx, -dz); return ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8]; },
+  // what the city wants next, by turns; a cut wants a rise and falls back to a pit
+  post(rec){
+    if (!rec.stamped || rec.gy == null) return null;
+    const done = rec.jobsDone || 0, g = rec.gy, half = ((rec.n || 3) * 36 + 8) / 2, T = rec.track;
+    const rng = CORE.mulberry32((game.seed ^ Math.imul(done + 1, 0x9E3779B1) ^ Math.imul(rec.x | 0, 0x85EBCA6B)) >>> 0);
+    const sides = [[1, 0], [-1, 0], [0, -1], [0, 1]].filter(([dx, dz]) => !(T && dx === T.dx && dz === T.dz));
+    const [dx, dz] = sides[(rng() * sides.length) | 0], px = dz ? 1 : 0, pz = dx ? 1 : 0;
+    let type = ['pit', 'canal', 'cut'][done % 3], box = null;
+    const r1 = v => Math.round(v * 2) / 2;
+    if (type === 'cut'){
+      let best = null;
+      // a rise is ground higher than both its approaches along the way out of the city
+      for (let a = 0; a < 6.283; a += 0.05) for (const r of [half + 50, half + 80, half + 115, half + 150, half + 200]){
+        const ux = Math.cos(a), uz = Math.sin(a);
+        const x = rec.x + ux * r, z = rec.z + uz * r, h = game.gen.height(x, z);
+        if (T && Math.hypot(x - T.cx, z - T.cz) < 110) continue;
+        const base = Math.max(game.gen.height(x - ux * 17, z - uz * 17), game.gen.height(x + ux * 17, z + uz * 17));
+        if (h - base >= 5 && (!best || h - base > best.rise)) best = { x, z, h, a, base, rise: h - base };
+      }
+      if (best){ const alongX = Math.abs(Math.cos(best.a)) > 0.7; box = { x: r1(best.x), y: r1(best.base + 3.5), z: r1(best.z), sx: alongX ? 30 : 6, sy: 6, sz: alongX ? 6 : 30 }; }
+      else type = 'pit';
+    }
+    if (type === 'pit'){
+      const cx = rec.x + dx * (half + 45) + px * (rng() - 0.5) * 60, cz = rec.z + dz * (half + 45) + pz * (rng() - 0.5) * 60;
+      const h = game.gen.height(cx, cz);
+      box = { x: r1(cx), y: r1(h - 2.5), z: r1(cz), sx: 12, sy: 5, sz: 8 };
+    } else if (type === 'canal'){
+      const cx = rec.x + dx * (half + 55), cz = rec.z + dz * (half + 55);
+      const h = game.gen.height(cx, cz);
+      box = { x: r1(cx), y: r1(h - 1.5), z: r1(cz), sx: px ? 40 : 4, sy: 3, sz: pz ? 40 : 4 };
+    }
+    const pay = Math.round(JOB_DEF[type].pay * (0.8 + (rec.n || 3) * 0.07));
+    rec.job = { type, box, pay, day: game.day || 0, taken: 0, score: 0, base: 0, shell0: 0, spoil: 0 };
+    markSave();
+    return rec.job;
+  },
+  edits(B, pad){ return nearEdits([B.x - B.sx / 2 - pad, B.y - B.sy / 2 - pad, B.z - B.sz / 2 - pad, B.x + B.sx / 2 + pad, B.y + B.sy / 2 + pad, B.z + B.sz / 2 + pad]); },
+  // the fraction of the box that is air
+  score(J){
+    const B = J.box, E = this.edits(B, 2), st = this.STEP; let n = 0, air = 0;
+    for (let x = B.x - B.sx / 2 + st / 2; x < B.x + B.sx / 2; x += st)
+      for (let y = B.y - B.sy / 2 + st / 2; y < B.y + B.sy / 2; y += st)
+        for (let z = B.z - B.sz / 2 + st / 2; z < B.z + B.sz / 2; z += st){ n++; if (CORE.evalSDF(x, y, z, E, game.gen) > 0.05) air++; }
+    return n ? air / n : 0;
+  },
+  // the shell: two metres round the box below its top, sampled every two metres; how much of it is air
+  shell(J){
+    const B = J.box, E = this.edits(B, 4), st = 2; let n = 0, air = 0;
+    const inBox = (x, y, z) => Math.abs(x - B.x) < B.sx / 2 && Math.abs(y - B.y) < B.sy / 2 && Math.abs(z - B.z) < B.sz / 2;
+    for (let x = B.x - B.sx / 2 - 2 + 0.5; x < B.x + B.sx / 2 + 2; x += st)
+      for (let y = B.y - B.sy / 2 - 2 + 0.5; y < B.y + B.sy / 2; y += st)
+        for (let z = B.z - B.sz / 2 - 2 + 0.5; z < B.z + B.sz / 2 + 2; z += st){
+          if (inBox(x, y, z)) continue;
+          n++; if (CORE.evalSDF(x, y, z, E, game.gen) > 0.05) air++;
+        }
+    return n ? air / n : 0;
+  },
+  rows(list, crec){
+    if (netSys.guest) return;
+    const J = crec.job || this.post(crec); if (!J) return;
+    const D = JOB_DEF[J.type], B = J.box;
+    const head = document.createElement('div'); head.className = 'invlabel'; head.textContent = 'THE CITY WORKS — carve to spec'; list.appendChild(head);
+    const row = document.createElement('div'); row.className = 'craftrow';
+    const nm = document.createElement('div'); nm.className = 'cname';
+    const d = Math.round(Math.hypot(B.x - crec.x, B.z - crec.z)), dir = this.compass(B.x - crec.x, B.z - crec.z);
+    nm.innerHTML = (J.taken ? 'in hand: ' : 'the city wants ') + D.name + '<div class="sub">' + D.line + ' · ' + B.sx + '×' + B.sy + '×' + B.sz + ' m · ' + d + ' m ' + dir + ' of the plaza' + (J.taken ? ' · ' + Math.round((J.score || 0) * 100) + '% dug' : '') + '</div>';
+    const cost = document.createElement('div'); cost.style.marginLeft = 'auto';
+    cost.textContent = J.taken ? 'marked' : J.pay + 'c'; cost.style.color = J.taken ? '#8a8494' : '#8bff9e';
+    row.appendChild(nm); row.appendChild(cost);
+    row.addEventListener('click', () => { if (!J.taken){ this.accept(crec); tradeSys.refresh(); } else { toast('the site is marked — ' + d + ' m ' + dir); AudioSys.sfx('click'); } });
+    list.appendChild(row);
+  },
+  accept(rec){
+    const J = rec.job; if (!J || J.taken) return;
+    J.taken = 1; J.base = this.score(J); J.score = J.base; J.shell0 = this.shell(J); J.spoil = 0;
+    objectiveSys._objsT = 0;
+    toast(JOB_DEF[J.type].name + ' — the site is marked · ' + J.pay + ' coins when the box is clear');
+    AudioSys.sfx('craft'); markSave();
+  },
+  ensureViz(J, key){
+    if (this.viz && this.vizKey === key) { this.viz.position.set(J.box.x, J.box.y, J.box.z); return; }
+    this.clearViz();
+    const B = J.box;
+    this.viz = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(B.sx, B.sy, B.sz)), new THREE.LineBasicMaterial({ color: 0xffd75e, transparent: true, opacity: 0.9, depthTest: false }));
+    this.viz.position.set(B.x, B.y, B.z); this.viz.renderOrder = 5; this.viz.frustumCulled = false;
+    game.scene.add(this.viz); this.vizKey = key;
+  },
+  clearViz(){ if (this.viz){ game.scene.remove(this.viz); this.viz.geometry.dispose(); this.viz.material.dispose(); this.viz = null; this.vizKey = null; } },
+  tick(dt){
+    if (netSys.guest) return;
+    this.t = (this.t || 0) + dt;
+    let near = null, nearKey = null, nd = 1e9;
+    for (const key in (game.cities || {})){
+      const rec = game.cities[key], J = rec.job;
+      if (!J || !J.taken) continue;
+      const d = Math.hypot(J.box.x - game.pos.x, J.box.z - game.pos.z);
+      if (d < nd){ nd = d; near = rec; nearKey = key; }
+    }
+    if (!near || nd > 320){ this.clearViz(); return; }
+    const J = near.job;
+    this.ensureViz(J, nearKey);
+    if (this.t < 2 || nd > 90) return;
+    this.t = 0;
+    const sc = this.score(J);
+    if (Math.round(sc * 100) !== Math.round((J.score || 0) * 100)){ J.score = sc; objectiveSys._objsT = 0; }
+    if (sc >= this.PASS) this.complete(near, J);
+  },
+  complete(rec, J){
+    const sh = this.shell(J);
+    const spoil = Math.max(0, sh - J.shell0);
+    const cut = Math.min(0.5, spoil * 1.5), pay = Math.round(J.pay * (1 - cut));
+    addStackItem('coin', pay);
+    rec.jobsDone = (rec.jobsDone || 0) + 1;
+    rec.job = null; this.clearViz();
+    citySys.cred(rec, 6);
+    toast(JOB_DEF[J.type].name + ' done — ' + pay + ' coins' + (cut > 0.01 ? ' (' + Math.round(cut * 100) + '% off for ground not asked for)' : ' · clean work'));
+    econSys.note(rec.name + ' TAKES DELIVERY OF ' + JOB_DEF[J.type].name.toUpperCase().replace(/^A /, 'A ') + ' FROM A CONTRACTOR', ['deed', 'works'], rec.key, true);
+    econSys.move('build', 0.02);
+    objectiveSys._objsT = 0;
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
   },
 };
 const MONUMENTS = {
@@ -25152,6 +25296,7 @@ function buildMissionsUI(){
                    : o.zig ? 'ziggurat'
                    : o.siege ? o.rec.name + ' — UNDER SIEGE'
                    : o.city ? o.rec.name + ' — the city'
+                   : o.job ? o.rec.name + ' — ' + JOB_DEF[o.job.type].name
                    : o.hrec ? (o.hrec.vname + ' — ' + o.rec.name)
                             : (o.rec.name + ' — notice board');
     const t2 = document.createElement('div');
@@ -25160,6 +25305,7 @@ function buildMissionsUI(){
                     : o.fort ? (o.label === 'VAULT' ? 'the warlord is dead — open the vault' : 'kill the warlord, take his key, loot the vault')
                     : o.siege ? 'raiders are breaking the walls — kill your share for coin and standing'
                     : o.city ? 'shops, a mayor with deeds, work — standing ' + ((game.cities[o.id.slice(4)] || {}).rep || 0)
+                    : o.job ? JOB_DEF[o.job.type].line + ' · ' + o.job.box.sx + '×' + o.job.box.sy + '×' + o.job.box.sz + ' m · ' + o.job.pay + 'c · ' + Math.round((o.job.score || 0) * 100) + '% dug'
                     : o.hrec ? missionSys.describe(o.rec, o.hrec)
                              : 'reach the marked spot')
                    + ' · ' + o.label + ' ' + d + 'm';
@@ -29050,7 +29196,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); }
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -29289,7 +29435,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 52 — THE CONTRACTOR (2026-09-17)
+
+City Arc item 13, mine. The job only this game can offer: carve to
+spec, and the SDF is the judge.
+
+- **The posting.** The mayor's office carries THE CITY WORKS: one job
+  at a time, by turns — a foundation pit (12×5×8 m, its top at the
+  ground, outside the wall on a side the track does not use), a canal
+  cut (40 m long, 4 wide, 3 deep, parallel to the wall), a road cut
+  (30 m long, 6 wide, 6 tall, through the biggest rise within two
+  hundred metres of the wall — ground higher than both its
+  approaches along the way out; with no such rise the city asks for a
+  pit instead). Pay 180 / 260 / 400 scaled by the city's size.
+- **The spec is a box.** Accepting it marks the site: a yellow
+  wireframe of the box in the world when you are within three hundred
+  metres, a marker with the tag and the percentage dug, a line in the
+  missions tab with the dimensions, the pay and the progress.
+- **Scoring.** Every two seconds while you are within ninety metres
+  the box is sampled every metre and the job is done when nineteen in
+  twenty samples are air. A shell two metres round the box, below its
+  top, is sampled too: air you made there that was solid when you
+  took the job is ground the city did not ask for, and it costs up to
+  half the pay. Clean work says so.
+- **Done:** the coins, six standing, a headline, the builders' share up,
+  and the next job posted on your next visit to the office.
+- Tests: `b52test.js` (the mayor's row and its text, the box outside
+  the wall and away from the track, the accept — baseline, shell,
+  marker, missions tab line; the wireframe; half the box dug scoring
+  sixty-one percent and the marker following; the rest dug scoring
+  full and paying in full on the next tick with the site cleared and
+  the headline; the canal dug three metres wide of the mark paying
+  half; the third posting and the save); smoke, b32, b44–b51
+  regressions.
+
 ## Build 51 — THE TRACK (2026-09-17)
 
 City Arc item 12, Austin's. The first piece of the city outside its

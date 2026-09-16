@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 52 — THE CONTRACTOR
+- [ ] The mayor: THE CITY WORKS at the bottom of the screen. Take the
+      pit. Find the yellow box. Dig it with whatever drill you have.
+      Watch the marker's percentage. Is the box readable from inside
+      it as well as from outside?
+- [ ] Do the canal sloppily on purpose — wide and deep — and see the
+      pay cut. Then do the cut cleanly.
+- Feedback I want: whether ninety-five percent is the right bar with
+  a sphere drill (the corners are the hard part — a cube drill does
+  them); whether the shell penalty feels fair; what other shapes the
+  city should ask for (a cistern? a tunnel between two marks?).
+
 ## Build 51 — THE TRACK
 - [ ] Find the track (outside one wall of a city — the sign by the
       stand). Walk the circuit. Does the pad sit right against the
