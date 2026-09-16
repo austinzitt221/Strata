@@ -168,7 +168,7 @@ economy index (sieges, your businesses, what you buy and sell, the
 region's wattage) that prices, shop income and the exchange all read,
 so the city's economy is one thing that reacts to what you do.
 
-6. **COUNTERS** (Austin's) — traders stop wandering: every trade is a
+6. **COUNTERS** (Austin's) — DONE (Build 44). Traders stop wandering: every trade is a
    real shop with an interior, a counter and a named keeper behind it
    (the electrics shop with its wares on display, the arms dealer, the
    tool shop), the mayor gets an office, the station gets a ticket

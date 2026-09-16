@@ -5,6 +5,23 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 44 — COUNTERS
+- [ ] Walk into a city you know. The five keepers are gone from the
+      pavements; each shop has a sign by its door. Go in: a counter,
+      the keeper behind it, wares on pedestals. Right click the keeper
+      (or the counter) — the same trade screen as before.
+- [ ] Try to take something off a pedestal.
+- [ ] The town hall on the plaza's north side: the mayor at the desk
+      inside, the deeds and civic work in the same screen as before.
+- [ ] The station: a clerk behind the kiosk. Right click them — tickets.
+      The kiosk itself still sells them too.
+- [ ] Pedestrians still walk the avenues and still only talk.
+- [ ] Hire a keeper: the shop stands empty, the sign stays.
+- [ ] A brand-new city: everything above from the first visit.
+- Feedback I want: do the shops read as shops from the street; is the
+  counter in the right place for the room; anything the keeper does
+  that looks wrong (stuck in the counter, facing a wall).
+
 ## Build 43 — THROUGHPUT (PC)
 The build for the city report: faster meshing, merged draws, no stamp
 freeze. Nothing should look different except a hair of shading noise.

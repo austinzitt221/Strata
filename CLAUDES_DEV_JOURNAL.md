@@ -1141,6 +1141,29 @@ hundred beds, two hundred rebuilds. A batch counter fixed it in ten
 lines. The lesson for the next system I write: an add should mark
 dirty, and a frame should rebuild once.
 
+## 2026-09-16 — COUNTERS
+
+Back on the roadmap, and the first City Arc item is a good one to
+start with because it is mostly placing things I already have: a
+counter is a table with a front, a post is a home the keeper does not
+wander from, a sign already takes text, a pedestal already shows an
+item. The new work was the geometry of a room — where a counter reads
+as a counter (two fifths from the door, not against the back wall,
+which the first screenshot showed me), and where the wares go so you
+walk past them to the keeper.
+
+Two small things I want to remember. The right-click ray hits the
+counter before the keeper, so the counter has to hand the click on;
+and my test camera looked straight ahead at a keeper whose centre sat
+three centimetres below the pick radius, which cost me an hour of
+suspecting the code. Look where a player would look.
+
+The clerk is the first villager who does not trade: right click opens
+the station screen. That pattern — a person as the front of a system —
+is what the rest of the arc is: the broker's floor, the bookmaker, the
+bank teller, the contractor's desk. COUNTERS was the foundation for
+them, as the roadmap said.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

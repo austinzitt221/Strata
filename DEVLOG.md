@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 44 — COUNTERS (2026-09-16)
+
+The City Arc begins (Austin's first item, in my order). Every trade in
+a city is now a shop you walk into.
+
+- **Shops.** Each trade role's tower has its ground floor furnished: a
+  counter across the room at two fifths from the door (a new decor
+  power-node type, solid, its length to the room), the keeper POSTED a
+  pace behind it facing the door (they no longer wander; they turn to
+  you when you come to the counter and walk back if something pushes
+  them), the first three things the keeper sells on pedestals — two by
+  the side walls before the counter, one on the back wall (display
+  only: right click says "ask at the counter"), two torches, and a sign
+  by the door with the trade and the keeper's name. Right click on the
+  counter talks past it to the keeper.
+- **The mayor's hall.** A stone hall north of the obelisk with its door
+  on the plaza, two windows, a desk, the city's strongbox, the mayor
+  behind the desk. TOWN HALL, the city and the mayor on the sign. The
+  mayor's record moved from the plaza corner to the hall door, so
+  markers point at the door.
+- **The booth.** A ticket clerk (a new role, hireable like any city
+  hand) stands behind the station kiosk; right click sells the same
+  tickets the kiosk does. The kiosk still works without them.
+- Pedestrians keep wandering the avenues by day and never trade (as
+  before, kept on purpose).
+- **Cities from before** get all of this the next time you are near:
+  the record's keepers are re-spawned at their posts. A city stamped
+  from now on gets it at once.
+- Tests: `b44test.js` (stamped counts, signs, posts, keepers at their
+  posts, right click on a keeper past the counter opens the trade, the
+  clerk opens the station, displays refuse, walkers do not trade, the
+  migration path), screenshots of a shop, the hall and the booth;
+  smoke, b8a, b32, b35, b38, b41 regressions.
+
 ## Build 43 — THROUGHPUT (2026-09-15)
 
 Austin's PC playtest of Build 42: 180 fps in the country, 20 fps while a

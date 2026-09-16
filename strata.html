@@ -8320,7 +8320,7 @@ const pnodeSys = {
     }
     return this.mats;
   },
-  model(t){
+  model(t, n){
     const M = this.ensureMats();
     const g = new THREE.Group();
     if (t === 'lever'){
@@ -8667,6 +8667,17 @@ const pnodeSys = {
       for (const z of [-1.0, 1.0]){ const pole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.46, 0.07), M.bark); pole.position.set(0, 0.73, z); g.add(pole); }
       const roll = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 1.6), new THREE.MeshBasicMaterial({ color: 0x6a5a4a })); roll.position.set(0.25, 0.1, 0.05);
       g.add(back, ridge, roll);
+    } else if (t === 'counter'){
+      // a shop counter: a plank top on a panelled front, a brass rail, its
+      // length along x (n.len); the keeper stands behind it (-z)
+      const L = (n && n.len) || 3;
+      const front = new THREE.Mesh(new THREE.BoxGeometry(L, 0.92, 0.12), M.wood); front.position.set(0, 0.46, 0.34);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(L + 0.1, 0.1, 0.84), pixMat(PROP_TEX.tableTop)); top.position.y = 0.97;
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(L - 0.2, 0.05, 0.05), M.copper); rail.position.set(0, 1.06, 0.36);
+      const endA = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.8), M.wood); endA.position.set(-L / 2 + 0.06, 0.46, 0);
+      const endB = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.8), M.wood); endB.position.set(L / 2 - 0.06, 0.46, 0);
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(L - 0.3, 0.06, 0.6), M.wood); shelf.position.set(0, 0.5, -0.05);
+      g.add(front, top, rail, endA, endB, shelf);
     } else if (t === 'sign'){
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), M.bark);
       post.position.y = 0.55;
@@ -8729,7 +8740,7 @@ const pnodeSys = {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.items = [];
     for (const n of game.pnodes || []){
-      const g = this.model(n.t);
+      const g = this.model(n.t, n);
       g.position.set(n.x, n.y, n.z);
       g.rotation.y = n.yaw || 0;
       if (n.t === 'lever' && g.userData.arm) g.userData.arm.rotation.z = n.on ? -0.7 : 0.7;
@@ -8858,7 +8869,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -10664,6 +10675,8 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.5, hy: 0.42, hz: 0.36 });
     else if (n.t === 'gen2')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.48, z: n.z, hx: 0.63, hy: 0.5, hz: 0.45 });
+    else if (n.t === 'counter')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.5, z: n.z, hx: (n.len || 3) / 2 + 0.05, hy: 0.52, hz: 0.42 });
     else if (n.t === 'hopper')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.6, z: n.z, hx: 0.5, hy: 0.55, hz: 0.5 });
     else if (n.t === 'crafter')
@@ -10786,6 +10799,7 @@ const VROLE = {
   spark:   { name: 'electrician',  coat: 0x3f7a3f, hat: 0x245224 },
   food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
   mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
+  clerk:   { name: 'ticket clerk', coat: 0x35506a, hat: 0x1e2e3e },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -13882,6 +13896,7 @@ const missionSys = {
 const tradeSys = {
   TIER: r => r >= 25 ? 'partner' : r >= 10 ? 'regular' : 'stranger',
   offers(role){
+    if (role === 'clerk') return [];          // the booth sells tickets, not wares
     if (role === 'broker') return [
       { sell: { k: 'coal', n: 5 }, price: 10, rep: 0 },
       { sell: { k: 'ironore', n: 5 }, price: 15, rep: 0 },
@@ -17223,6 +17238,81 @@ const citySys = {
     game.torches.push([sp.x - 7, g + 1.0, sp.z], [sp.x + 7, g + 1.0, sp.z]);
     rec.station = { x: sp.x, y: sp.y, z: sp.z, id: st.id };
   },
+  // Build 44 COUNTERS: every trade is a shop. The keeper's tower gets its
+  // ground floor furnished -- a counter across the room, the keeper posted
+  // behind it facing the door, wares on pedestals along the walls, a torch,
+  // a sign by the door with the trade and the name. The mayor gets a hall
+  // on the plaza's north side with a desk and the city's strongbox. The
+  // station gets a clerk behind its kiosk who sells the same tickets.
+  // Runs once per city (rec.counters); cities stamped before get it too.
+  stampCounters(c, rec){
+    const MAT = CORE.MAT, g = rec.gy != null ? rec.gy : this.slabLevel(c);
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);       // a mesh's forward is (-sin yaw, -cos yaw)
+    const fy = g + 0.35;                                  // the ground floor
+    for (const hrec of rec.houses || []){
+      if (hrec.post) continue;
+      const [fx, fz] = hrec.face;
+      if (hrec.role === 'mayor'){
+        // the hall: north of the obelisk, its door on the plaza
+        const hx = c.x, hz = c.z - 14;
+        EB(1, hx, g + 2.5, hz, 11, 5.0, 7, MAT.STONEBRICK);
+        EB(0, hx, fy + 4.0 / 2, hz, 9.4, 4.0, 5.4, 0, 1);
+        EB(0, hx, g + 1.9, hz + 3.5, 2.2, 3.0, 2.0, 0, 1);                     // the door, south
+        for (const wx of [-3.4, 3.4]) EB(0, hx + wx, g + 2.6, hz + 3.5, 1.6, 1.2, 1.0, 0, 1);   // windows either side
+        EB(1, hx, g + 5.2, hz, 12, 0.5, 8, MAT.STONEBRICK);
+        pnodeSys.add('counter', hx, fy, hz - 0.6, 0, { len: 4 });
+        const strong = pnodeSys.addQuiet('chest', hx + 3.6, fy + 0.6, hz - 1.8, Math.PI / 2, { sc: 0.6 });
+        strong.inv = new Array(chestSlots(0.6)).fill(null);
+        strong.inv[0] = { kind: 'coin', count: 40 + (c.seed % 30) };
+        pnodeSys.add('sign', hx + 2.4, g, hz + 4.4, yawTo(0, 1), { text: 'TOWN HALL\n' + (rec.name || 'THE CITY') + '\n' + hrec.vname + ', mayor' });
+        game.torches.push([hx - 4.2, fy + 1.9, hz - 2.2], [hx + 4.2, fy + 1.9, hz - 2.2]);
+        hrec.x = hx; hrec.z = hz + 3.5; hrec.face = [0, 1]; hrec.w = 11; hrec.d = 7;
+        hrec.post = { x: hx, z: hz - 1.8, yaw: yawTo(0, 1) };
+        continue;
+      }
+      if (hrec.role === 'clerk') continue;
+      if (!VROLE[hrec.role] || hrec.role === 'walker') continue;
+      // the shop: the tower behind the shopfront
+      const w = hrec.w || 10, tx = hrec.x - fx * (w / 2 + 2.2), tz = hrec.z - fz * (w / 2 + 2.2);
+      const px = fz, pz = -fx;                            // across the room
+      const inner = w - 1.7, len = Math.min(7, Math.max(3, inner - 3.6));
+      // the counter stands at two fifths of the room from the door, the
+      // keeper a pace behind it, the wares between door and counter
+      const dc = 0.42 * w, cx = tx + fx * (w / 2 - dc), cz = tz + fz * (w / 2 - dc);
+      pnodeSys.add('counter', cx, fy, cz, 0, { len });
+      // the counter's front is its +z side: yaw so that side meets the door
+      const ctr = game.pnodes[game.pnodes.length - 1];
+      ctr.yaw = yawTo(-fx, -fz);
+      hrec.post = { x: tx + fx * (w / 2 - dc - 1.3), z: tz + fz * (w / 2 - dc - 1.3), yaw: yawTo(fx, fz) };
+      // wares: the first things the keeper sells, on pedestals by the walls
+      const wares = tradeSys.offers(hrec.role).filter(o => o.buy && !o.crep).slice(0, 3);
+      wares.forEach((o, i) => {
+        const side = i === 2 ? 0 : (i === 0 ? 1 : -1);
+        const depth = side ? 0.22 * w : w - 1.6;          // by the side walls before the counter; the third on the back wall
+        const wx = tx + px * side * (inner / 2 - 1.1) + fx * (w / 2 - depth);
+        const wz = tz + pz * side * (inner / 2 - 1.1) + fz * (w / 2 - depth);
+        const ped = pnodeSys.add('ped', wx, fy, wz, 0, {});
+        ped.inv = [tradeSys.offerItem(o)];
+        ped.shop = 1;
+      });
+      for (const side of [-1, 1]) game.torches.push([tx + px * side * (inner / 2 - 0.6) + fx * (w / 2 - dc + 0.5), fy + 2.0, tz + pz * side * (inner / 2 - 0.6) + fz * (w / 2 - dc + 0.5)]);
+      const R = VROLE[hrec.role];
+      pnodeSys.add('sign', hrec.x + px * 2.0 - fx * 0.6, g, hrec.z + pz * 2.0 - fz * 0.6, yawTo(fx, fz), { text: R.name.toUpperCase() + '\n' + hrec.vname });
+    }
+    // the booth: a clerk behind the kiosk, selling what it sells
+    if (rec.station && !(rec.houses || []).some(h => h.role === 'clerk')){
+      const sp = rec.station;
+      rec.houses.push({ x: sp.x, z: sp.z, role: 'clerk', face: [0, 1], w: 3, d: 3, gy: g, rep: 0,
+                        vname: villageSys.nameFor((Math.imul(c.seed, 71) + 13) >>> 0),
+                        post: { x: sp.x, z: sp.z - 1.25, yaw: yawTo(0, 1) } });
+    }
+    rec.counters = 1;
+    pnodeSys.rebuild();
+  },
   harborAt(c){
     if (!game.gen.wetAt) return false;
     for (let a = 0; a < 6.28; a += 0.52){
@@ -17443,6 +17533,7 @@ const citySys = {
     rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
                       w: 6, d: 6, gy: g, rep: 0,
                       vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
+    this.stampCounters(c, rec);
     for (const ox of offs) for (const oz of offs)
       game.torches.push([c.x + ox + 4.6, g + 0.4, c.z + oz + 4.6]);
     for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13]])
@@ -17474,6 +17565,15 @@ const citySys = {
         propBatchBegin();
         try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
+      } else if (!rec.counters && rec.gy != null && rec.houses){
+        // a city from before the counters: its keepers go indoors now
+        propBatchBegin();
+        try { this.stampCounters(c, rec); } finally { propBatchEnd(); }
+        for (let i = game.entities.length - 1; i >= 0; i--){   // the old keepers at their doors: re-spawned at the posts
+          const e = game.entities[i];
+          if (e.type === 'villager' && e.ckey === key && !e.crew && !e.walker){ if (e.mesh) game.scene.remove(e.mesh); game.entities.splice(i, 1); }
+        }
+        torchSys.rebuild(); markSave();
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
@@ -17511,13 +17611,16 @@ const citySys = {
         continue;
       }
       if (pd > (rec.n || 3) * 20 + 80) continue;
-      // shopkeepers man their doors
+      // keepers stand at their counters (Build 44); a house without a post
+      // still mans its door
       (rec.houses || []).forEach((hrec, i) => {
         const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
         if (alive || hrec.crew) return;
-        const e = spawnEntity('villager', hrec.x, (hrec.gy || 0) + 0.7, hrec.z);
+        const P = hrec.post || hrec;
+        const e = spawnEntity('villager', P.x, (hrec.gy || 0) + 0.7, P.z);
         e.role = hrec.role; e.ckey = key; e.vi = i;
-        e.home = { x: hrec.x, y: (hrec.gy || 0) + 0.7, z: hrec.z };
+        e.home = { x: P.x, y: (hrec.gy || 0) + 0.7, z: P.z };
+        if (hrec.post){ e.post = { x: P.x, z: P.z, yaw: P.yaw }; e.x = P.x; e.z = P.z; if (e.mesh) e.mesh.rotation.y = P.yaw; }
       });
       // pedestrians walk the avenues by day and head in at night
       const walkers = game.entities.filter(e => e.walker && e.ckey === key);
@@ -17851,6 +17954,11 @@ function updateEntities(dt, now){
         // stop and face whoever came to talk
         sx = 0; sz = 0;
         if (e.mesh) e.mesh.rotation.y = Math.atan2(-(TP.x - e.x), -(TP.z - e.z));
+      } else if (e.post){
+        // behind the counter, facing the door; drifted (pushed, a
+        // collapse): walks back
+        sx = e.post.x - e.x; sz = e.post.z - e.z;
+        if (Math.hypot(sx, sz) < 0.25){ sx = 0; sz = 0; if (e.mesh) e.mesh.rotation.y = e.post.yaw; }
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
@@ -17962,6 +18070,24 @@ function updateEntities(dt, now){
   }
 }
 // closest entity intersecting the view ray
+// right click on a villager: your crew's panel, the clerk's booth, a
+// walker's word, a keeper's counter
+function talkTo(vent){
+  if (vent.crew){ crewSys.open(vent); return; }
+  if (vent.role === 'clerk'){
+    // the booth: the clerk sells the tickets the kiosk does
+    const crec = (game.cities || {})[vent.ckey];
+    const pn = crec && crec.station ? pnodeSys.byId(crec.station.id) : null;
+    if (pn){ stationSys.open(pn); return; }
+    toast('the booth is shut'); return;
+  }
+  if (vent.walker){
+    toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
+           'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
+    return;
+  }
+  tradeSys.open(vent);
+}
 function entityOnRay(maxDist){
   maxDist += game.camBack || 0;
   if (!game.entities.length) return null;
@@ -19033,6 +19159,13 @@ function bindInput(){
       const stv = stoveSys.onRay(3.5);
       if (stv){ openStove(stv); AudioSys.sfx('toggle'); return; }
       const pn = pnodeSys.onRay(3.2);
+      if (pn && pn.t === 'counter'){
+        // the counter is in the way of the keeper behind it: talk past it
+        const v = entityOnRay(4.6);
+        if (v && v.type === 'villager') talkTo(v);
+        else toast('the counter — nobody behind it');
+        return;
+      }
       if (pn){
         if (pn.t === 'tent'){ bedSys.sleep([pn.x, pn.y + 0.3, pn.z]); return; }     // a tent is a bed
         if (pn.t === 'lever'){
@@ -19111,6 +19244,12 @@ function bindInput(){
           return;
         }
         if (pn.t === 'trench'){ palisadeSys.light(pn); return; }
+        if (pn.t === 'ped' && pn.shop){
+          // a shop's display: the keeper sells it, the pedestal shows it
+          const it = pn.inv && pn.inv[0];
+          toast((it ? itemLabel(it) : 'that') + ' — ask at the counter'); AudioSys.sfx('deny');
+          return;
+        }
         if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger' || pn.t === 'repair'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
@@ -19150,16 +19289,7 @@ function bindInput(){
         }
       }
       const vent = entityOnRay(3.6);
-      if (vent && vent.type === 'villager'){
-        if (vent.crew){ crewSys.open(vent); return; }
-        if (vent.walker){
-          toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
-                 'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
-          return;
-        }
-        tradeSys.open(vent);
-        return;
-      }
+      if (vent && vent.type === 'villager'){ talkTo(vent); return; }
       if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
       if (vent && VEH[vent.type]){
         if (game.keys['KeyC']){
