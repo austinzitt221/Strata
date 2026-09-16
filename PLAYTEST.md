@@ -5,6 +5,22 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 45 — THE PRESS + THE EXCHANGE
+- [ ] On the plaza: the Herald to the west, the Exchange to the east,
+      the town hall to the north. Buy a paper (2c) and read it. Is the
+      paper worth two coins — does it read like the world you played?
+- [ ] Sleep or wait for dawn: was the paper's weather right?
+- [ ] The Exchange: buy a few shares of something, sell something you
+      sold ore to the broker for, come back the next dawn. Did the
+      Herald's tip come true, and did the mining company move?
+- [ ] Buy a car: HARROW MOTORS should jump at once.
+- [ ] Hold OLD TOWN HOLDINGS overnight: a dividend waits at the counter.
+- [ ] Do something the paper should print (fell a warlord, break a
+      siege, find a village) and buy tomorrow's paper.
+- Feedback I want: are the tips readable as tips; is the market fun to
+  play against with what the world gives you; what the paper should
+  print that it does not.
+
 ## Build 44 — COUNTERS
 - [ ] Walk into a city you know. The five keepers are gone from the
       pavements; each shop has a sign by its door. Go in: a counter,

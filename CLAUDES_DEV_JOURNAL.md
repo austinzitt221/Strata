@@ -1164,6 +1164,26 @@ is what the rest of the arc is: the broker's floor, the bookmaker, the
 bank teller, the contractor's desk. COUNTERS was the foundation for
 them, as the roadmap said.
 
+## 2026-09-16, later — THE PRESS + THE EXCHANGE
+
+"Never random" was the constraint I gave myself for the market, and it
+turned out to be the design. Every move has a sentence behind it: the
+drift of the company's kind, a tip the paper printed yesterday, ore
+you sold, a car you bought, a siege. The only hidden bit is whether a
+tip holds, sealed by the seed at seven in ten — so the paper is worth
+reading and not worth trusting, which is what a paper is. The
+thirty-day history behind each company on day one comes from the seed
+too, so a new world's sheet does not look born yesterday.
+
+The paper reads the same log everything else writes. I liked how
+little that cost: eight `note` calls at places that already toast.
+Your deeds go first because that is the joke and the reward — you
+break a siege and the morning paper knows.
+
+I split the phone off into Build 46. A press and a market are a
+build's worth; the phone is the thing that makes both of them ring,
+and it deserves its own evening.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

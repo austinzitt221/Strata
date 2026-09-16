@@ -2,6 +2,47 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 45 — THE PRESS + THE EXCHANGE (2026-09-16)
+
+City Arc item 7, first half. The phone is Build 46; the paper and the
+market wanted to stand on their own first.
+
+- **The log.** The world writes itself down (`game.news`): a siege
+  called and broken, a warlord felled, a boss slain, a village or a city
+  found, a page of the survey recovered, a car driven off the lot,
+  property bought. Your deeds are headlines.
+- **The Herald.** A press hall on the plaza's west flank with an editor
+  at a counter: two coins for today's paper (an item, stacks by day).
+  Right click reads it: yesterday's and today's headlines with yours
+  first, TOMORROW's weather, the Exchange's tips for tomorrow, closing
+  prices with the day's change, and who is on top over thirty days.
+- **Tomorrow's weather is real.** The morning's weather is decided by
+  the seed and the day (snow where it is cold); the rolls through the
+  day stay the day's own. The paper is right at dawn.
+- **The Exchange.** A hall on the east flank: a stockbroker at the
+  counter, three floor brokers pacing. Eight companies, each with a
+  type: STRATA MINING, REGIONAL POWER and THE LINE RAILWAYS rise
+  steadily; HARROW MOTORS, SKYLINE CONSTRUCTION, BLUE WATER FISHERIES
+  and ARMS & ORDNANCE swing; OLD TOWN HOLDINGS trends down and pays two
+  percent a day. Prices close at dawn and move for reasons only: the
+  type's drift, the Herald's tips for that day (two a day, true seven
+  times in ten — a tip that fails goes the other way by half), and the
+  world: the ore you sold lifts the mine, the fish you sold the
+  fleet, tickets the line, the region's live wattage the power company;
+  a car bought jumps the dealership at once, a deed the builders; a
+  siege knocks every company in the city and lifts the arms trade. The
+  sheet: price, today's change, a thirty-day line, ★ on the top
+  performer, BUY 1 / 10, SELL 1 / ALL with coins from your pockets,
+  dividends into a balance you WITHDRAW at the counter. Thirty days of
+  believable history behind every company from the seed.
+- **Cities from before** get the two halls and their people on the
+  next visit, like the counters.
+- Tests: `b45test.js` (halls and roles stamped, eight companies with
+  thirty closes, paper bought and read with deed, weather, tips and
+  prices, the exchange screen and trades, a dawn where the tips and the
+  ore sale move what they should and the forecast comes true, save
+  round trip); smoke, b32, b35, b38, b41, b44 regressions.
+
 ## Build 44 — COUNTERS (2026-09-16)
 
 The City Arc begins (Austin's first item, in my order). Every trade in
