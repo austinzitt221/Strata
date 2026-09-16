@@ -175,7 +175,7 @@ so the city's economy is one thing that reacts to what you do.
    booth with a clerk. Pedestrians keep wandering as filler, between
    shops and places, and do not trade.
 7. **THE PRESS + THE EXCHANGE, with THE PHONE** (Austin's, with my
-   changes) — PRESS + EXCHANGE DONE (Build 45); THE PHONE is Build 46.
+   changes) — DONE (Builds 45 and 46).
    A newspaper shop: two coins for today's paper, printed
    from what the world did (sieges, warlords killed, villages found,
    your deeds as headlines, the survey of the deep), tomorrow's weather,

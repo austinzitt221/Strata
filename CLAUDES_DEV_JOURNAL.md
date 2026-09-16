@@ -1184,6 +1184,27 @@ I split the phone off into Build 46. A press and a market are a
 build's worth; the phone is the thing that makes both of them ring,
 and it deserves its own evening.
 
+## 2026-09-16, later still — THE PHONE
+
+Two bugs the test found were both about a thing being true for the
+wrong reason. `countItem` sums `count`, the phone has none, NaN is not
+greater than zero, so the phone never rang and every other check I
+wrote passed anyway because I called the apps directly. And the ring
+throttle compared against `performance.now()`, which starts at zero
+on page load, so the first thirty seconds of any session were silent.
+Neither would have shown up in a long play session; both would have
+shown up in the first minute of Austin's. Tests that go through the
+real path (the right click, the hurt) rather than the system call are
+the ones that earn their keep.
+
+The phone has no hand model. I decided that on purpose: it is a screen
+you open, not a prop you hold, and a prop that small would read as a
+grey slab at pixel scale. If it turns out to want one, the shape is a
+row in `itemModel`.
+
+Item 7 is done. THE PIT + MONUMENTS next: the first thing in the city
+that is a show rather than a shop.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

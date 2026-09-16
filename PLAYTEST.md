@@ -5,6 +5,24 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 46 — THE PHONE
+- [ ] Craft a phone at a table (3 iron ingots, 2 wire, 1 crystal).
+      Right click with it in hand. E closes it. Does it read like a
+      phone and not like another menu?
+- [ ] STOCKS with no account: the sheet, no buttons. Open an account at
+      an Exchange counter, then trade a share from the phone.
+- [ ] Get a siege going, or fell something the paper prints: the ☎
+      toast, then the ring at the top of NEWS.
+- [ ] Take a crew member into a fight and let them get low: the phone
+      should ring once, then not again for half a minute.
+- [ ] CALL → COME on a crew member you left 200 m behind: six seconds,
+      and they step out of a cab beside you. Is six seconds right?
+- [ ] CALL → A CAB from the country, 15 coins. Watch it arrive and
+      wait. Right click it, pick a city: the fade and the plaza.
+- Feedback I want: what else should ring; whether the cab should cost
+  by distance; whether the phone wants a hand model (it has none — it
+  is a screen, not a prop, on purpose for now).
+
 ## Build 45 — THE PRESS + THE EXCHANGE
 - [ ] On the plaza: the Herald to the west, the Exchange to the east,
       the town hall to the north. Buy a paper (2c) and read it. Is the

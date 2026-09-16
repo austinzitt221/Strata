@@ -378,6 +378,17 @@ body.pad{cursor:none;}
     <div id="stationlist"></div>
   </div>
 </div>
+<div id="phonescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:340px; max-width:400px; border-radius:18px; border-color:#111; background:#0d0d12; padding:16px 18px 20px 18px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <h2 id="phonetitle" style="margin:0; font-size:18px; letter-spacing:3px;">PHONE</h2>
+      <span class="btn small" id="phonehome">HOME</span>
+    </div>
+    <div id="phonebody" style="min-height:280px; max-height:60vh; overflow:auto;"></div>
+    <div class="sub" id="phonesub" style="margin-top:8px;">E to close</div>
+  </div>
+</div>
+<div id="fade" style="position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .45s; z-index:90;"></div>
 <div id="exchangescreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
     <h2 id="exchangetitle">THE EXCHANGE</h2>
@@ -3175,6 +3186,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'grapple', station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'wool', n: 2 }] });
   RECIPES.push({ kind: 'ped', yields: 1, costs: [{ mat: MAT.STONEBRICK, n: 6 }] });
   RECIPES.push({ kind: 'sign', yields: 2, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });
+  // THE PHONE (Build 46): a slab of iron, a coil of wire, a crystal for the screen
+  RECIPES.push({ kind: 'phone', yields: 1, station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'wire', n: 2 }, { mat: MAT.CRYSTAL, n: 1 }] });
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'wtable', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }, { item: 'coin', n: 40 }] });
   RECIPES.push({ kind: 'rounds', yields: 24, costs: [{ item: 'ironingot', n: 1 }, { item: 'coal', n: 1 }] });
@@ -3356,6 +3369,7 @@ function craft(slots, r, free){
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
                   : r.kind === 'wings' ? { kind: 'wings' }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
+                  : r.kind === 'phone' ? { kind: 'phone' }
                   : r.kind === 'mender' ? { kind: 'mender', charge: 100 }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
                   : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
@@ -10425,6 +10439,9 @@ function itemModel(it){
     m.rotation.z = 0.2;
   } else if (K === 'wool'){
     box(0.3, 0.24, 0.3, pixMat(PROP_TEX.wool), 0, 0.12, 0);
+  } else if (K === 'phone'){
+    box(0.16, 0.3, 0.03, basic('#16161c'), 0, 0.15, 0);
+    box(0.12, 0.2, 0.012, basic('#59c8d8'), 0, 0.17, 0.02);
   } else if (K === 'coin'){
     const m = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.05, 12),
       basic('#c9a13c'));
@@ -12843,6 +12860,7 @@ const crewSys = {
     e.hp -= dmg; e.flash = 0.2;
     e.vx += (kx || 0) * 0.6; e.vz += (kz || 0) * 0.6; e.vy += 1.5;
     if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('hurt');
+    if (e.hp > 0 && e.hp < 24 && (e.rangAt == null || performance.now() - e.rangAt > 30000)){ e.rangAt = performance.now(); const h = villageSys.villagerRec(e); phoneSys.ring((h && h.vname ? h.vname : 'a crew member') + ' is in trouble' + (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 40 ? ' — ' + Math.round(Math.hypot(e.x - game.pos.x, e.z - game.pos.z)) + ' m away' : ''), 'call'); }
     if (e.hp <= 0) this.die(e);
   },
   // a crew member who dies is gone: their things fall where they fell,
@@ -17166,6 +17184,158 @@ const wreckSys = {
 // floor/facade modules -- hollow shells, real floor slabs, window bands
 // punched through the walls, a street door, and a corner rope shaft that
 // makes every floor climbable. The center block is a plaza.
+// ---------- THE PHONE (Build 46) ----------
+// One craftable slab with four apps -- STOCKS (the sheet, and trades if
+// you have opened an account at an Exchange), NEWS (the log, and every
+// ring), BUSINESS (what you hold; your shops come with OWNERSHIP), CALL
+// (a crew member to you; a cab to you, and from the cab to any city you
+// know) -- and it rings: a siege starting, crew in trouble, a headline
+// about you
+const phoneSys = {
+  have(){ return game.slots.some(s => s && s.kind === 'phone'); },
+  ring(text, app){
+    if (!this.have() || netSys.guest) return;
+    (game.phoneLog = game.phoneLog || []).unshift({ d: game.day || 0, t: text, app: app || 'news' });
+    if (game.phoneLog.length > 40) game.phoneLog.length = 40;
+    toast('\u260e ' + text);
+    AudioSys.sfx('click');
+    markSave();
+  },
+  open(){
+    if (game.ui !== 'none') return;
+    game.ui = 'phone';
+    this.app('home');
+    show('phonescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+    const hb = $('phonehome'); if (hb && !hb._wired){ hb._wired = true; hb.addEventListener('click', () => this.app('home')); }
+  },
+  row(parent, html, onClick, style){
+    const d = document.createElement('div'); d.className = 'craftrow'; d.innerHTML = html;
+    if (style) d.style.cssText += style;
+    if (onClick) d.addEventListener('click', onClick);
+    parent.appendChild(d); return d;
+  },
+  app(name){
+    const body = $('phonebody'); body.innerHTML = '';
+    const M = econSys.M();
+    $('phonetitle').textContent = name === 'home' ? 'PHONE' : name.toUpperCase();
+    if (name === 'home'){
+      const rings = (game.phoneLog || []).length;
+      const tile = (label, sub, app) => this.row(body, '<div class="cname">' + label + '<div class="sub">' + sub + '</div></div>', () => this.app(app));
+      tile('STOCKS', 'the sheet' + (M.acct ? ' · trade from here' : ' · open an account at an Exchange to trade'), 'stocks');
+      tile('NEWS', (rings ? rings + ' rings · ' : '') + 'what the world did', 'news');
+      tile('BUSINESS', 'shares worth ' + econSys.value().toFixed(0) + ' · dividends ' + M.cash.toFixed(0), 'business');
+      tile('CALL', 'crew to you · a cab to you', 'call');
+      return;
+    }
+    if (name === 'stocks'){
+      const coins = CORE.countItem(game.slots, 'coin');
+      const T = econSys.top();
+      for (const C of COMPANIES){
+        const c = M.co[C.id], ch = econSys.change(C.id), have = M.port[C.id] || 0;
+        const r = this.row(body, '<div class="cname" style="min-width:150px;">' + (T === C ? '★ ' : '') + C.name + '<div class="sub">' + (have ? 'you hold ' + have : C.kind) + '</div></div>' +
+          '<div style="min-width:80px; text-align:right;">' + c.p.toFixed(2) + '<div class="sub" style="color:' + (ch >= 0 ? '#8bff9e' : '#ff7a5c') + '">' + (ch >= 0 ? '+' : '') + (ch * 100).toFixed(1) + '%</div></div>');
+        if (M.acct){
+          const bt = document.createElement('div'); bt.style.cssText = 'display:flex; gap:4px; margin-left:auto;';
+          const mk = (label, fn, ok) => { const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label; if (!ok) b.style.opacity = '0.4'; b.addEventListener('click', ev => { ev.stopPropagation(); if (ok){ fn(); this.app('stocks'); } else AudioSys.sfx('deny'); }); bt.appendChild(b); };
+          mk('BUY', () => econSys.trade(C.id, 1), coins >= c.p);
+          mk('SELL', () => econSys.trade(C.id, -1), have >= 1);
+          r.appendChild(bt);
+        }
+      }
+      const tips = M.tips.filter(t => t.d === (game.day || 0) + 1);
+      if (tips.length) this.row(body, '<div class="sub">the Herald hears for tomorrow: ' + tips.map(t => econSys.co(t.id).name + ' — ' + t.text).join(' · ') + '</div>');
+      return;
+    }
+    if (name === 'news'){
+      const L = game.phoneLog || [];
+      if (L.length){ this.row(body, '<div class="sub">RINGS</div>'); for (const r of L.slice(0, 8)) this.row(body, '<div class="cname">\u260e ' + r.t + '<div class="sub">day ' + r.d + '</div></div>'); }
+      const N = (game.news || []).slice(-10).reverse();
+      this.row(body, '<div class="sub">THE WIRE</div>');
+      if (!N.length) this.row(body, '<div class="sub">a quiet region</div>');
+      for (const n of N) this.row(body, '<div class="cname">' + n.t + '<div class="sub">day ' + n.d + (n.c && game.cities && game.cities[n.c] ? ' · ' + game.cities[n.c].name : '') + '</div></div>');
+      return;
+    }
+    if (name === 'business'){
+      this.row(body, '<div class="cname">SHARES<div class="sub">worth ' + econSys.value().toFixed(0) + ' coins' + (Object.keys(M.port).length ? ' · ' + Object.keys(M.port).map(id => M.port[id] + ' ' + econSys.co(id).name).join(', ') : ' · none') + '</div></div>');
+      this.row(body, '<div class="cname">DIVIDENDS<div class="sub">' + M.cash.toFixed(0) + ' coins waiting at any Exchange counter</div></div>');
+      this.row(body, '<div class="cname">SHOPS<div class="sub">none of your own yet — buy one from a keeper who trusts you (the OWNERSHIP build)</div></div>');
+      return;
+    }
+    if (name === 'call'){
+      const crew = crewSys.all();
+      if (!crew.length) this.row(body, '<div class="sub">no crew to call — hire someone at a village or a city</div>');
+      for (const e of crew){
+        const h = villageSys.villagerRec(e), d = Math.round(Math.hypot(e.x - game.pos.x, e.z - game.pos.z));
+        this.row(body, '<div class="cname">' + ((h && h.vname) || 'crew') + '<div class="sub">' + d + ' m away · ' + (e.crew.mode || 'follow') + '</div></div><span class="btn small" style="margin-left:auto;">COME</span>', () => this.callCrew(e));
+      }
+      const fare = 15;
+      this.row(body, '<div class="cname">A CAB<div class="sub">' + fare + ' coins · it drives to you; from it, any city you know</div></div><span class="btn small" style="margin-left:auto;">CALL</span>', () => this.callCab(fare));
+      return;
+    }
+  },
+  callCrew(e){
+    const C = e.crew; if (!C) return;
+    crewSys.order(e, 'follow');
+    const d = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    const h = villageSys.villagerRec(e), nm = (h && h.vname) || 'crew';
+    if (d > 60){
+      // too far to walk: they take a cab, and step out beside you
+      toast(nm + ' is taking a cab to you');
+      const at = performance.now();
+      e.cabbing = at;
+      setTimeout(() => {
+        if (e.cabbing !== at || !game.entities.includes(e) || !e.crew) return;
+        e.cabbing = 0;
+        const a = game.yaw + Math.PI + (Math.random() - 0.5);
+        e.x = game.pos.x - Math.sin(a) * 2.5; e.z = game.pos.z - Math.cos(a) * 2.5;
+        e.y = Math.max(game.gen.height(e.x, e.z), game.pos.y) + 0.5;
+        if (e.mesh) e.mesh.position.set(e.x, e.y, e.z);
+        toast(nm + ' steps out of a cab beside you');
+      }, 6000);
+    } else toast(nm + ' is coming');
+    AudioSys.sfx('click');
+    this.app('call');
+  },
+  callCab(fare){
+    if (game.entities.some(e => e.type === 'cab' && e.called)){ toast('a cab is already on its way'); AudioSys.sfx('deny'); return; }
+    if (CORE.countItem(game.slots, 'coin') < fare){ toast('the fare is ' + fare + ' coins'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', fare);
+    const a = game.yaw + 0.6, dist = 26;
+    const x = game.pos.x - Math.sin(a) * dist, z = game.pos.z - Math.cos(a) * dist;
+    const e = spawnEntity('cab', x, Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7, z);
+    e.called = true; e.calledT = 0;
+    toast('a cab is on its way');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    closeOverlay();
+  },
+  // in the cab: pick a city you know; the road blurs; the plaza
+  ride(cab){
+    if (game.ui !== 'none') return;
+    const cities = Object.values(game.cities || {}).filter(r => r.stamped);
+    if (!cities.length){ toast('the driver knows no city yet — find one first'); return; }
+    game.ui = 'phone';
+    $('phonetitle').textContent = 'THE CAB';
+    const body = $('phonebody'); body.innerHTML = '';
+    this.row(body, '<div class="sub">where to?</div>');
+    for (const r of cities){
+      const d = Math.round(Math.hypot(r.x - game.pos.x, r.z - game.pos.z));
+      this.row(body, '<div class="cname">' + r.name + '<div class="sub">' + d + ' m · the plaza</div></div>', () => {
+        closeOverlay();
+        this.fade(() => {
+          game.pos.set(r.x + 6, (r.gy || game.gen.height(r.x + 6, r.z)) + 1.2, r.z + 6);
+          game.vel.set(0, 0, 0); game.forceStream = true;
+          killEntity(cab, false);
+          toast('the plaza of ' + r.name);
+        });
+      });
+    }
+    show('phonescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  fade(mid){
+    const f = $('fade'); f.style.opacity = '1';
+    setTimeout(() => { try { mid(); } finally { setTimeout(() => { f.style.opacity = '0'; }, 500); } }, 500);
+  },
+};
 // ---------- THE PRESS + THE EXCHANGE (Build 45) ----------
 // One log of what the world did (game.news), one market of eight
 // companies (game.market) whose prices close at dawn and move only for
@@ -17215,6 +17385,7 @@ const econSys = {
     game.news = game.news || [];
     game.news.push({ d: game.day || 0, t: text, tags: tags || [], c: cityKey || null, me: !!me });
     if (game.news.length > 120) game.news.splice(0, game.news.length - 120);
+    if (me || (tags || []).includes('siege')) phoneSys.ring(text, 'news');
     markSave();
   },
   // an immediate move, and a shock to every company of a city
@@ -18222,6 +18393,14 @@ function updateEntities(dt, now){
         const wt1 = waterTopAt(e.x, e.z, e.y);
         if (wt1 != null){ e.y += (wt1 - VEH[e.type].draft - e.y) * Math.min(1, 4 * dt); e.vy = 0; if (e.mesh) e.mesh.position.y = e.y; }
       }
+    } else if (e.type === 'cab' && e.called){
+      // a cab you called: comes to you and waits (Build 46)
+      const dx = TP.x - e.x, dz = TP.z - e.z, d = Math.hypot(dx, dz);
+      if (d > 3.4){ sx = dx; sz = dz; e.waiting = 0; }
+      else { sx = 0; sz = 0; if (!e.waiting){ e.waiting = 1; toast('your cab is here — right click it'); } }
+      if (e.mesh) e.mesh.rotation.y = Math.atan2(-dx, -dz);
+      e.calledT = (e.calledT || 0) + dt;
+      if (e.calledT > 240){ killEntity(e, false); toast('the cab gave up waiting'); }
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -19594,7 +19773,7 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){ talkTo(vent); return; }
-      if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
+      if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
       if (vent && VEH[vent.type]){
         if (game.keys['KeyC']){
           // crouch-grab folds it back into a kit, charge intact
@@ -19628,6 +19807,7 @@ function bindInput(){
       const selIt = selectedItem();
       if (selIt && (selIt.kind === 'page' || selIt.kind === 'survey')){ expeditionSys.read(selIt); return; }
       if (selIt && selIt.kind === 'paper'){ econSys.readPaper(selIt); return; }
+      if (selIt && selIt.kind === 'phone'){ phoneSys.open(); return; }
       if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' || selIt.kind === 'fish' || selIt.kind === 'cookedfish' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
         tryEat();
@@ -19776,7 +19956,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -23088,6 +23268,12 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'phone'){
+    // a dark slab, a lit screen, a home button
+    c.fillStyle = '#16161c'; c.fillRect(4, 1, 8, 14);
+    c.fillStyle = '#59c8d8'; c.fillRect(5, 3, 6, 9);
+    c.fillStyle = '#dff6ff'; c.fillRect(6, 4, 2, 1); c.fillRect(6, 6, 4, 1); c.fillRect(6, 8, 3, 1);
+    c.fillStyle = '#44444c'; c.fillRect(7, 13, 2, 1);
   } else if (it.kind === 'paper'){
     // a folded newspaper: masthead, columns
     c.fillStyle = '#ece4cf'; c.fillRect(2, 3, 12, 10);
@@ -23658,6 +23844,7 @@ function itemLabel(it){
   if (it.kind === 'cookedfish') return 'cooked fish';
   if (it.kind === 'ticket') return 'ticket to ' + it.to;
   if (it.kind === 'paper') return 'the ' + (it.city || 'city') + ' herald · day ' + (it.day || 0);
+  if (it.kind === 'phone') return 'phone';
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'coral') return 'coral';
@@ -23959,7 +24146,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -24883,6 +25070,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
          : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'phone'){
+    html = '<div class="t1">phone</div><div class="t2">right click to open · STOCKS, NEWS, BUSINESS, CALL · it rings when the world has something for you</div>';
   } else if (it.kind === 'paper'){
     html = '<div class="t1">THE ' + (it.city || 'CITY') + ' HERALD · day ' + (it.day || 0) + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">what the world did yesterday, tomorrow\'s weather, and the Herald\'s stock tips · right click to read</div>';
   } else if (it.kind === 'ticket'){
@@ -25723,7 +25912,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -25999,7 +26188,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [],
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -26062,7 +26251,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null;
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || [];
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -27979,7 +28168,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

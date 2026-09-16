@@ -2,6 +2,45 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 46 — THE PHONE (2026-09-16)
+
+City Arc item 7, second half. One item that makes the press and the
+market ring.
+
+- **The item.** `phone`, crafted at a table: three iron ingots, two
+  wire, one crystal. A gadget in the inventory; right click with it in
+  hand opens it. E closes it.
+- **Four apps.** STOCKS is the Exchange's sheet in your pocket — price,
+  today's change, ★ on the top performer, the Herald's tips for
+  tomorrow, and BUY / SELL one share at a time once you have opened an
+  account at any Exchange counter. NEWS is the rings first, then the
+  wire (the last ten things the world wrote down). BUSINESS is what
+  your shares are worth, the dividends waiting at a counter, and a
+  placeholder for shops of your own (OWNERSHIP). CALL lists your crew
+  with how far they are and a COME button, and A CAB for fifteen
+  coins.
+- **It rings.** A headline about you, a siege anywhere, or a crew
+  member under 24 hp (once per thirty seconds per person) puts a ☎
+  toast on screen and a line in the phone's log (`game.phoneLog`,
+  last forty, saved). Without a phone in your slots nothing rings.
+- **COME.** A crew member within sixty metres walks; further away they
+  take a cab and step out beside you six seconds later.
+- **A CAB.** Fifteen coins spawns a cab twenty-six metres off that
+  drives to you and waits (four minutes, then it gives up). Right click
+  it: a list of every city you have found; pick one, the screen fades,
+  and you are on that plaza. One called cab at a time.
+- Fixes found by the test: the phone carries no `count`, so
+  `countItem` said NaN and the phone never rang (now `slots.some`);
+  the crew ring's throttle compared against page time, so nothing rang
+  in the first thirty seconds after loading.
+- Tests: `b46test.js` (recipe present, rings only with the phone and
+  only for me or a siege, opened by right click, four apps render with
+  the ring and the wire, a cab called from four hundred metres drives
+  to me and waits, a second call refused, the ride fades and lands me
+  eight metres from the plaza with the cab gone, a hurt crew member
+  rings, COME from three hundred metres cabs them to my side, the log
+  saves); smoke, b32, b35, b41, b44, b45 regressions.
+
 ## Build 45 — THE PRESS + THE EXCHANGE (2026-09-16)
 
 City Arc item 7, first half. The phone is Build 46; the paper and the
