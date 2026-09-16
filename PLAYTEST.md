@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 53 — THE CARTOGRAPHER
+- [ ] In the Herald, the desk at the back. Buy the sheet for the
+      direction you have not been. Open the map: the country, the
+      marks. Walk to one of them. Was it there?
+- [ ] Sell your survey after a long walk. Is the rate worth the walk?
+- Feedback I want: whether the marks should name villages (they do)
+  and cities (they do) or stay anonymous until you get there; whether
+  bought country should look different from walked country on the map.
+
 ## Build 52 — THE CONTRACTOR
 - [ ] The mayor: THE CITY WORKS at the bottom of the screen. Take the
       pit. Find the yellow box. Dig it with whatever drill you have.

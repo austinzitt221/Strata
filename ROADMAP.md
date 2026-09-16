@@ -217,7 +217,7 @@ so the city's economy is one thing that reacts to what you do.
    foundation pit, a canal between two points, a road cut through a
    rise. Scored by volume against the requested shape (the SDF measures
    it exactly), paid by tier. The job only this game can offer.
-14. **THE CARTOGRAPHER** (mine) — buy maps of country you have not
+14. **THE CARTOGRAPHER** (mine) — DONE (Build 53). Buy maps of country you have not
    walked, marked with falls, villages and forts; sell your own survey
    for coin.
 15. **THE MAIL CAR** (mine, on THE LINE) — one car on the train carries

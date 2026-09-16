@@ -422,6 +422,13 @@ body.pad{cursor:none;}
     <div id="racelist" style="max-height:58vh; overflow:auto;"></div>
   </div>
 </div>
+<div id="chartscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:600px; max-width:780px;">
+    <h2 id="charttitle">THE CARTOGRAPHER</h2>
+    <div class="sub" id="chartsub" style="margin-bottom:8px;"></div>
+    <div id="chartlist" style="max-height:60vh; overflow:auto;"></div>
+  </div>
+</div>
 <div id="exchangescreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
     <h2 id="exchangetitle">THE EXCHANGE</h2>
@@ -10926,6 +10933,7 @@ const VROLE = {
   banker:  { name: 'banker',       coat: 0x1f3a2a, hat: 0xd9d9c0 },
   croupier:{ name: 'croupier',     coat: 0x2a1a2e, hat: 0xd94a63 },
   steward: { name: 'race steward', coat: 0x3a3a2a, hat: 0xf0f0e8 },
+  chart:   { name: 'cartographer',  coat: 0x4a5a3a, hat: 0x9a7a4a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -18184,6 +18192,99 @@ const contractSys = {
     AudioSys.sfx('craft'); refreshHotbar(); markSave();
   },
 };
+// ---------- THE CARTOGRAPHER (Build 53) ----------
+// Sheets of country you have not walked, priced by the cells they add
+// to your map, marked with what the generators know is there: falls,
+// villages, forts, spires, ziggurats, other cities. And the survey you
+// walked yourself, sold by the cell.
+const CHART_COL = { village: '#9ad07a', fort: '#ff7a5c', falls: '#7fd0ff', spire: '#e8c878', zig: '#d9a63a', city: '#ffd75e' };
+const chartSys = {
+  CELL: 0.05, SURVEY: 0.4,
+  sheets(rec){
+    const q = 640, cx = rec.x, cz = rec.z;
+    return [
+      { id: 'ne', name: 'the north-east sheet', x0: cx, z0: cz - q, x1: cx + q, z1: cz },
+      { id: 'nw', name: 'the north-west sheet', x0: cx - q, z0: cz - q, x1: cx, z1: cz },
+      { id: 'se', name: 'the south-east sheet', x0: cx, z0: cz, x1: cx + q, z1: cz + q },
+      { id: 'sw', name: 'the south-west sheet', x0: cx - q, z0: cz, x1: cx, z1: cz + q },
+      { id: 'country', name: 'the country round ' + (rec.name || 'the city'), x0: cx - 800, z0: cz - 800, x1: cx + 800, z1: cz + 800 },
+    ];
+  },
+  cells(S){
+    const ex = game.explored || (game.explored = new Set());
+    const c0x = Math.floor(S.x0 / MAP_CELL), c1x = Math.ceil(S.x1 / MAP_CELL), c0z = Math.floor(S.z0 / MAP_CELL), c1z = Math.ceil(S.z1 / MAP_CELL);
+    let n = 0, fresh = 0;
+    for (let cx = c0x; cx < c1x; cx++) for (let cz = c0z; cz < c1z; cz++){ n++; if (!ex.has(cx + ',' + cz)) fresh++; }
+    return { n, fresh, c0x, c1x, c0z, c1z };
+  },
+  price(S){ return Math.ceil(this.cells(S).fresh * this.CELL); },
+  inside(S, x, z){ return x >= S.x0 && x < S.x1 && z >= S.z0 && z < S.z1; },
+  marks(S){
+    const cx = (S.x0 + S.x1) / 2, cz = (S.z0 + S.z1) / 2, r = Math.hypot(S.x1 - S.x0, S.z1 - S.z0) / 2 + 40;
+    const out = [], push = (k, x, z, name) => { if (this.inside(S, x, z)) out.push({ k, x: Math.round(x), z: Math.round(z), name: name || '' }); };
+    try { for (const v of villageSys.candidatesNear(cx, cz, r)) if (v) push('village', v.x, v.z, villageSys.nameFor ? villageSys.nameFor(v.seed) : 'village'); } catch (e){}
+    try { for (const f of raidBaseSys.candidatesNear(cx, cz, r)) if (f) push('fort', f.x, f.z, (f.seed % 5) === 0 ? 'citadel' : 'fort'); } catch (e){}
+    try { if (game.gen.fallsNear) for (const f of game.gen.fallsNear(cx, cz, r)) push('falls', f.x, f.z, 'falls'); } catch (e){}
+    try { for (const sp of spireSys.candidatesNear(cx, cz, r)) if (sp) push('spire', sp.x, sp.z, 'spire'); } catch (e){}
+    try { for (const zg of zigSys.candidatesNear(cx, cz, r)) if (zg) push('zig', zg.x, zg.z, 'ziggurat'); } catch (e){}
+    try { for (const ct of citySys.candidatesNear(cx, cz, r)) if (ct) push('city', ct.x, ct.z, citySys.nameFor(ct.seed)); } catch (e){}
+    return out;
+  },
+  walked(){ return Math.max(0, (game.explored ? game.explored.size : 0) - (game.surveyBought || 0) - (game.surveySold || 0)); },
+  open(rec){
+    if (!rec) return;
+    if (netSys.guest){ toast('the cartographer deals with the host'); return; }
+    if (game.ui !== 'none') return;
+    game.activeChart = rec.key; game.ui = 'chart';
+    $('charttitle').textContent = 'THE CARTOGRAPHER · ' + rec.name;
+    this.refresh();
+    show('chartscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  refresh(){
+    const rec = (game.cities || {})[game.activeChart]; if (!rec) return;
+    const coins = CORE.countItem(game.slots, 'coin'), list = $('chartlist'); list.innerHTML = '';
+    $('chartsub').textContent = 'coins ' + coins + ' · a sheet fills your map with country you have not walked, and marks what is out there · E to close';
+    for (const S of this.sheets(rec)){
+      const C = this.cells(S), price = this.price(S), M = this.marks(S);
+      const counts = {}; for (const m of M) counts[m.k] = (counts[m.k] || 0) + 1;
+      const what = Object.keys(counts).map(k => counts[k] + ' ' + (counts[k] > 1 ? { village: 'villages', fort: 'forts', falls: 'falls', spire: 'spires', zig: 'ziggurats', city: 'cities' }[k] : k)).join(', ');
+      const r = phoneSys.row(list, '<div class="cname" style="min-width:220px;">' + S.name.toUpperCase() + '<div class="sub">' + (S.x1 - S.x0) + ' m square · ' + Math.round((1 - C.fresh / C.n) * 100) + '% walked · ' + (what || 'nothing marked') + '</div></div>');
+      const b = document.createElement('span'); b.className = 'btn small'; b.style.marginLeft = 'auto';
+      b.textContent = price > 0 ? 'BUY ' + price + 'c' : 'walked';
+      if (price <= 0 || coins < price) b.style.opacity = '0.4';
+      b.addEventListener('click', ev => { ev.stopPropagation(); if (price > 0 && coins >= price) this.buy(rec, S); else AudioSys.sfx('deny'); });
+      r.appendChild(b);
+    }
+    const w = this.walked(), pay = Math.floor(w * this.SURVEY);
+    const r2 = phoneSys.row(list, '<div class="cname" style="min-width:220px;">YOUR SURVEY<div class="sub">' + w + ' cells walked on foot and not yet sold · ' + this.SURVEY + 'c a cell</div></div>');
+    const b2 = document.createElement('span'); b2.className = 'btn small'; b2.style.marginLeft = 'auto'; b2.textContent = 'SELL ' + pay + 'c';
+    if (pay <= 0) b2.style.opacity = '0.4';
+    b2.addEventListener('click', ev => { ev.stopPropagation(); if (pay > 0) this.sell(); else AudioSys.sfx('deny'); });
+    r2.appendChild(b2);
+  },
+  buy(rec, S){
+    const price = this.price(S); if (price <= 0 || CORE.countItem(game.slots, 'coin') < price) return;
+    CORE.consumeItem(game.slots, 'coin', price);
+    const C = this.cells(S), ex = game.explored;
+    let added = 0;
+    for (let cx = C.c0x; cx < C.c1x; cx++) for (let cz = C.c0z; cz < C.c1z; cz++){ const k = cx + ',' + cz; if (!ex.has(k)){ ex.add(k); added++; } }
+    game.surveyBought = (game.surveyBought || 0) + added;
+    const L = game.charts || (game.charts = []), have = new Set(L.map(m => m.k + ':' + m.x + ',' + m.z));
+    let marks = 0;
+    for (const m of this.marks(S)){ const key = m.k + ':' + m.x + ',' + m.z; if (!have.has(key)){ have.add(key); L.push(m); marks++; } }
+    game.mapRiverCache = null;
+    toast(S.name + ' — ' + added + ' cells and ' + marks + ' marks on your map (M)');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave(); this.refresh();
+  },
+  sell(){
+    const w = this.walked(), pay = Math.floor(w * this.SURVEY); if (pay <= 0) return;
+    game.surveySold = (game.surveySold || 0) + w;
+    addStackItem('coin', pay);
+    toast('your survey sold — ' + pay + ' coins for ' + w + ' cells');
+    econSys.note('A TRAVELLER SELLS A SURVEY OF ' + w + ' CELLS TO THE CARTOGRAPHER', ['deal'], game.activeChart, true);
+    AudioSys.sfx('craft'); refreshHotbar(); markSave(); this.refresh();
+  },
+};
 const MONUMENTS = {
   champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
   siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
@@ -18868,6 +18969,14 @@ const citySys = {
       }
       rec.arc10 = 1;
     }
+    // THE CARTOGRAPHER (Build 53): a desk at the back of the Herald, a sign by the door
+    if (!rec.arc12 && rec.arc7){
+      const hx = c.x - 14, hz = c.z, yaw = yawTo(1, 0);
+      pnodeSys.add('sign', hx + 4.4, g, hz - 2.4, yaw, { text: 'MAPS\nthe cartographer\nsheets \u00b7 surveys' });
+      (rec.houses = rec.houses || []).push({ x: hx + 3.5, z: hz, role: 'chart', face: [1, 0], w: 1, d: 1, gy: g, rep: 0,
+        vname: villageSys.nameFor((Math.imul(c.seed, 211) + 37) >>> 0), post: { x: hx - 1.8, z: hz + 3.4, yaw } });
+      rec.arc12 = 1;
+    }
     rec.counters = 1;
     pnodeSys.rebuild();
   },
@@ -19263,7 +19372,7 @@ const citySys = {
         propBatchBegin();
         try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
-      } else if ((!rec.counters || !rec.arc7 || !rec.arc8 || !rec.arc9 || !rec.arc10) && rec.gy != null && rec.houses){
+      } else if ((!rec.counters || !rec.arc7 || !rec.arc8 || !rec.arc9 || !rec.arc10 || !rec.arc12) && rec.gy != null && rec.houses){
         // a city from before the counters: its keepers go indoors now
         propBatchBegin();
         try { this.stampCounters(c, rec); } finally { propBatchEnd(); }
@@ -19806,6 +19915,7 @@ function talkTo(vent){
   if (vent.role === 'stock'){ econSys.openExchange((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'promoter'){ pitSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'banker'){ bankSys.open((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'chart'){ chartSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'steward'){ trackSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'croupier'){ toast(['the wheel pays the car about once in sixty spins', 'the dealer stands on seventeen', 'seven pays four to one on the dice', 'the house takes its cut in OLD TOWN shares'][(Math.random() * 4) | 0]); return; }
   if (vent.role === 'floor'){
@@ -21206,7 +21316,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino' || game.ui === 'race')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino' || game.ui === 'race' || game.ui === 'chart')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -27007,6 +27117,14 @@ function drawMap(){
     if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) return;
     c.fillStyle = col; c.fillRect(sx - s / 2, sy - s / 2, s, s);
   };
+  // bought sheets: their marks, named at zoom (Build 53)
+  for (const m of game.charts || []){
+    const sx = W / 2 + (m.x / MAP_CELL - pcx) * px, sy = H / 2 + (m.z / MAP_CELL - pcz) * px;
+    if (sx < 4 || sx > W - 4 || sy < 4 || sy > H - 4) continue;
+    const col = CHART_COL[m.k] || '#ffffff';
+    c.fillStyle = col; c.fillRect(sx - 2.5, sy - 2.5, 5, 5);
+    if (V.zoom >= 2 && m.name){ c.font = '10px monospace'; c.fillStyle = col; c.fillText(m.name, sx + 5, sy + 3); }
+  }
   // the rivers by name, once each, on the middle of their explored reach
   if (game.gen && game.gen.riverAt){
     const rc = game.mapRiverCache || (game.mapRiverCache = new Map());
@@ -27175,7 +27293,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -27451,7 +27569,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null, charts: game.charts || [], surveyBought: game.surveyBought || 0, surveySold: game.surveySold || 0,
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -27514,7 +27632,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null;
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null; game.charts = data.charts || []; game.surveyBought = data.surveyBought || 0; game.surveySold = data.surveySold || 0;
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -29435,7 +29553,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

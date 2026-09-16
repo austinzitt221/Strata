@@ -1314,6 +1314,17 @@ THE CARTOGRAPHER and THE MAIL CAR are the last two City Arc items.
 Then the slotted ones — FARMING first, I think, because it touches
 the most of the game.
 
+## 2026-09-17, evening — THE CARTOGRAPHER
+
+The map already knew how to draw any cell from the generator; it only
+drew the ones you had stood on. A sheet is a rectangle of keys. The
+whole build is that sentence plus a desk, and the interesting part is
+the price: it is what you do not know, cell by cell, so the sheet gets
+cheaper as you walk and free when you are done. I like a price that
+is a fact about the player.
+
+One City Arc item left: THE MAIL CAR. Then the slotted builds.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

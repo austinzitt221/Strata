@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 53 — THE CARTOGRAPHER (2026-09-17)
+
+City Arc item 14, mine. Country you have not walked, for coin.
+
+- **The desk.** A cartographer at the back of the Herald, a MAPS sign
+  by its door. Cities from before get theirs on the next visit.
+- **Five sheets** a city sells: the four 640 m quadrants that meet at
+  the plaza, and the 1600 m country round it. Each is priced by the
+  map cells it would add — five hundredths of a coin a cell, so a
+  quadrant you have never seen costs about eighty and one you have
+  walked half of costs forty; one you have walked is free and says so.
+- **Bought,** a sheet fills your map (M) with its country and marks
+  what the generators know is out there: falls, villages, forts and
+  citadels, sky spires, ziggurats, other cities. Marks are coloured by
+  kind and named at zoom. The row tells you what a sheet would mark
+  before you pay.
+- **Your survey.** Cells you walked on foot — not bought, not already
+  sold — sell for four tenths of a coin each. It is a headline.
+- Tests: `b53test.js` (the desk and the sign, right-clicked from across
+  the counter, the five sheets and the survey row with their prices
+  and marks; the north-east sheet bought — the coins, the cells added
+  and counted as bought, the price falling to nothing and the row
+  saying walked, the marks inside the square; fifty cells walked and
+  sold at four tenths with nothing left to sell after; the country
+  priced and marked; the save); smoke, b32, b44–b52 regressions.
+
 ## Build 52 — THE CONTRACTOR (2026-09-17)
 
 City Arc item 13, mine. The job only this game can offer: carve to
