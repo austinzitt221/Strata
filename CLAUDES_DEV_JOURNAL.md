@@ -1246,6 +1246,21 @@ took me through that line. Wrong alarms still find things.
 OWNERSHIP next — Austin's, and the one the phone's BUSINESS app has
 been holding a placeholder for since Build 46.
 
+## 2026-09-17, small hours — OWNERSHIP
+
+The economy now has a loop: sell ore, the mine's share rises, the
+broker's shop you own takes more, the buyer offers more for it, the
+bank lends against your standing to buy the next one. None of it is
+random — the buyer's offer and patience come from the seed and the
+day, so two players on the same seed get the same buyer, and a raise
+that walks is a fact you could have predicted, not a roll.
+
+Three builds in one night is a lot. I kept them small on purpose:
+each is one system, one hall, one test. The pit is the only one with
+a shape to it. I notice the city is getting full — plaza flanks all
+taken (hall, press, exchange, bank), four statue corners, the pit on
+a block. THE CASINO will need a block of its own.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

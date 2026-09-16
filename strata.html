@@ -7347,7 +7347,7 @@ const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
 function updateDayNight(dt){
   if (game.ui === 'none' && !game.photo){
     const t2 = game.timeOfDay + dt / DAY_CYCLE;
-    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); econSys.onNewDay(); bankSys.onNewDay(); }
+    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); econSys.onNewDay(); bankSys.onNewDay(); shopSys.onNewDay(); }
     game.timeOfDay = t2 % 1;
   }
   const phase = game.timeOfDay * Math.PI * 2;
@@ -14213,6 +14213,7 @@ const tradeSys = {
       list.appendChild(row);
     });
     if (T.e.role === 'mayor' && crec) blueprintMarket.rows(list, crec);
+    if (crec && SHOP_DEF[T.e.role]) shopSys.rows(list, hrec, crec, T.e.vi);
   },
   execute(o){
     const T = game.activeTrade;
@@ -15120,6 +15121,7 @@ const siegeSys = {
   start(rec){
     const N = 6 + (rec.n || 3) * 2;
     rec.siege = { n: N, pending: N, kills: 0, spawnT: 0.5, guardT: 0, holes: 0 };
+    rec.lastSiege = game.day || 0;
     rec.damage = rec.damage || [];
     toast('SIEGE — raiders at the walls of ' + rec.name + ' (' + N + ' inbound) — the guard is out');
     econSys.note('SIEGE AT ' + rec.name + ' — ' + N + ' raiders at the walls, the guard called out', ['siege'], rec.key);
@@ -17503,6 +17505,155 @@ const bankSys = {
     for (const e of game.entities) if (e.collector && e.big && e.mesh && !e.dressed) pitSys.dress(e, e.big, e.hue);
   },
 };
+// ---------- OWNERSHIP (Build 49) ----------
+// A keeper who trusts you (20 goodwill) sells you the shop and stays on
+// as staff. Each dawn the till takes what the city gives -- the trade's
+// sector on the Exchange, a siege, your stock -- less wages and
+// supplies. Stock runs down; you restock from the phone. Each dawn a
+// buyer makes an offer, from the seed and the day: accept, raise (they
+// hold for a counter or two, then walk), or decline. Managed from the
+// phone's BUSINESS app; bought and sold at the counter too.
+const SHOP_DEF = {
+  broker: { name: "the ore broker's",  price: 1200, take: 70, co: 'mine' },
+  arms:   { name: "the arms dealer's", price: 1500, take: 90, co: 'arms' },
+  tool:   { name: "the toolsmith's",   price: 900,  take: 55, co: 'build' },
+  spark:  { name: 'the electrics shop', price: 1100, take: 65, co: 'power' },
+  food:   { name: "the grocer's",      price: 700,  take: 45, co: 'fish' },
+};
+const shopSys = {
+  GOODWILL: 20, WAGES: 12,
+  list(){ return game.shops || (game.shops = []); },
+  of(key, vi){ return this.list().find(S => S.city === key && S.vi === vi); },
+  size(rec){ return 0.7 + (rec && rec.n ? rec.n : 3) * 0.1; },
+  price(rec, role){ return Math.round(SHOP_DEF[role].price * this.size(rec)); },
+  label(S){ const rec = (game.cities || {})[S.city]; return SHOP_DEF[S.role].name + ' in ' + ((rec && rec.name) || 'the city'); },
+  // the sector's health: its share against thirty days ago, held to a band
+  sector(role){
+    const M = econSys.M(), c = M.co[SHOP_DEF[role].co];
+    if (!c || !c.hist || !c.hist.length) return 1;
+    return Math.max(0.5, Math.min(1.5, c.p / c.hist[0]));
+  },
+  siegeFactor(rec){
+    const day = game.day || 0;
+    if (!rec) return 1;
+    if (rec.siege) return 0.2;
+    if (rec.lastSiege != null && day - rec.lastSiege < 3) return 0.6;
+    return 1;
+  },
+  rows(list, hrec, rec, vi){
+    const D = SHOP_DEF[hrec.role]; if (!D || netSys.guest) return;
+    const S = this.of(rec.key, vi), coins = CORE.countItem(game.slots, 'coin');
+    const head = document.createElement('div'); head.className = 'invlabel'; head.textContent = 'THE SHOP'; list.appendChild(head);
+    const row = document.createElement('div'); row.className = 'craftrow';
+    const nm = document.createElement('div'); nm.className = 'cname';
+    const cost = document.createElement('div'); cost.style.marginLeft = 'auto';
+    if (S){
+      nm.innerHTML = 'yours since day ' + S.day + '<div class="sub">' + hrec.vname + ' keeps it for you · till ' + Math.floor(S.till) + 'c · stock ' + S.stock + '%</div>';
+      cost.textContent = S.till >= 1 ? 'COLLECT' : 'the till is empty'; cost.style.color = S.till >= 1 ? '#8bff9e' : '#8a8494';
+      row.addEventListener('click', () => { if (S.till >= 1){ this.collect(S); tradeSys.refresh(); } else AudioSys.sfx('deny'); });
+    } else {
+      const price = this.price(rec, hrec.role), locked = (hrec.rep || 0) < this.GOODWILL;
+      if (locked) row.style.opacity = 0.45;
+      nm.innerHTML = 'buy ' + D.name + '<div class="sub">' + hrec.vname + ' stays on as staff · the till takes about ' + Math.round(D.take * this.size(rec)) + 'c a day less wages and supplies</div>';
+      cost.textContent = locked ? 'needs goodwill ' + this.GOODWILL : price + 'c'; cost.style.color = locked ? '#8a8494' : coins >= price ? '#8bff9e' : '#ff7a5c';
+      row.addEventListener('click', () => { if (!locked && coins >= price){ this.buy(rec, hrec, vi); tradeSys.refresh(); } else { toast(locked ? hrec.vname + ' would sell to a partner (' + this.GOODWILL + ' goodwill)' : 'the price is ' + price + ' coins'); AudioSys.sfx('deny'); } });
+    }
+    row.appendChild(nm); row.appendChild(cost); list.appendChild(row);
+  },
+  buy(rec, hrec, vi){
+    const price = this.price(rec, hrec.role);
+    if (this.of(rec.key, vi)) return;
+    if (CORE.countItem(game.slots, 'coin') < price){ toast('the price is ' + price + ' coins'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', price);
+    const day = game.day || 0;
+    this.list().push({ city: rec.key, vi, role: hrec.role, day, price, till: 0, stock: 100, lastDay: day, offer: null, log: null });
+    hrec.owner = 1;
+    citySys.cred(rec, 5);
+    econSys.move('build', 0.03);
+    econSys.note('A STRANGER BUYS ' + SHOP_DEF[hrec.role].name.toUpperCase() + ' IN ' + rec.name, ['deed', 'deal'], rec.key, true);
+    toast(SHOP_DEF[hrec.role].name + ' is yours · ' + hrec.vname + ' keeps it');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  onNewDay(){
+    if (netSys.guest) return;
+    const day = game.day || 0;
+    for (const S of this.list()){
+      const rec = (game.cities || {})[S.city]; if (!rec) continue;
+      if (S.lastDay >= day) continue;
+      S.lastDay = day;
+      const D = SHOP_DEF[S.role];
+      const gross = Math.round(D.take * this.size(rec) * this.sector(S.role) * this.siegeFactor(rec) * (S.stock / 100));
+      const cost = this.WAGES + Math.round(gross * 0.1);
+      S.till += gross - cost;
+      S.stock = Math.max(0, S.stock - 15);
+      S.log = { day, gross, cost };
+      S.offer = this.makeOffer(rec, S, day);
+      if (S.stock <= 30) phoneSys.ring(this.label(S) + ' is down to ' + S.stock + '% stock', 'business');
+      else if (S.till < 0) phoneSys.ring(this.label(S) + ' lost money yesterday', 'business');
+    }
+    markSave();
+  },
+  makeOffer(rec, S, day){
+    const rng = CORE.mulberry32((game.seed ^ Math.imul(day + 1, 0x9E3779B1) ^ Math.imul(S.vi + 1, 0x85EBCA6B) ^ (S.role.length * 7919)) >>> 0);
+    const health = this.sector(S.role) * this.siegeFactor(rec) * (0.6 + S.stock / 250);
+    const price = Math.round(S.price * (0.55 + health * 0.35) * (0.92 + rng() * 0.16));
+    return { day, price, patience: rng() < 0.5 ? 2 : 1, buyer: villageSys.nameFor((Math.imul(day + 3, 977) ^ S.vi) >>> 0), gone: 0 };
+  },
+  live(S){ const o = S.offer; return o && !o.gone && o.day === (game.day || 0) ? o : null; },
+  raise(S){
+    const o = this.live(S); if (!o) return;
+    if (o.patience <= 0){ o.gone = 1; toast(o.buyer + ' walks'); AudioSys.sfx('deny'); }
+    else { o.patience--; o.price = Math.round(o.price * 1.1); toast(o.buyer + ' will go to ' + o.price + (o.patience ? '' : ' — and no further')); AudioSys.sfx('click'); }
+    markSave();
+  },
+  decline(S){ const o = this.live(S); if (!o) return; o.gone = 1; toast(o.buyer + ' goes away'); markSave(); },
+  sell(S){
+    const o = this.live(S); if (!o) return;
+    const rec = (game.cities || {})[S.city], hrec = rec && rec.houses[S.vi];
+    addStackItem('coin', o.price + Math.floor(S.till));
+    const i = this.list().indexOf(S); if (i >= 0) this.list().splice(i, 1);
+    if (hrec) hrec.owner = 0;
+    econSys.note(SHOP_DEF[S.role].name.toUpperCase() + ' IN ' + ((rec && rec.name) || 'THE CITY') + ' CHANGES HANDS FOR ' + o.price, ['deed', 'deal'], S.city, true);
+    toast('sold to ' + o.buyer + ' for ' + o.price + ' coins');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  collect(S){
+    const n = Math.floor(S.till); if (n < 1) return;
+    S.till -= n; addStackItem('coin', n);
+    toast(n + ' coins from the till'); AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  restockCost(S){ return Math.round((100 - S.stock) * 1.5); },
+  restock(S){
+    const c = this.restockCost(S); if (c <= 0) return;
+    if (CORE.countItem(game.slots, 'coin') < c){ toast('restocking costs ' + c + ' coins'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', c); S.stock = 100;
+    toast(this.label(S) + ' restocked'); AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  phoneRows(body){
+    const L = this.list(), coins = CORE.countItem(game.slots, 'coin');
+    if (!L.length){ phoneSys.row(body, '<div class="cname">SHOPS<div class="sub">none of your own — a keeper at ' + this.GOODWILL + ' goodwill will sell you theirs</div></div>'); return; }
+    for (const S of L){
+      const rec = (game.cities || {})[S.city];
+      const r = phoneSys.row(body, '<div class="cname">' + this.label(S).toUpperCase() + '<div class="sub">till ' + Math.floor(S.till) + 'c · stock ' + S.stock + '%' +
+        (S.log ? ' · yesterday +' + S.log.gross + ' −' + S.log.cost : '') + (rec && rec.siege ? ' · UNDER SIEGE' : '') + '</div></div>');
+      r.style.flexWrap = 'wrap';
+      const bt = document.createElement('div'); bt.style.cssText = 'display:flex; gap:4px; width:100%; margin-top:4px; justify-content:flex-end; flex-wrap:wrap;';
+      const mk = (label, ok, fn) => { const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label; if (!ok) b.style.opacity = '0.4'; b.addEventListener('click', ev => { ev.stopPropagation(); if (ok){ fn(); phoneSys.app('business'); } else AudioSys.sfx('deny'); }); bt.appendChild(b); };
+      mk('COLLECT', S.till >= 1, () => this.collect(S));
+      mk('RESTOCK ' + this.restockCost(S) + 'c', S.stock < 100 && coins >= this.restockCost(S), () => this.restock(S));
+      r.appendChild(bt);
+      const o = this.live(S);
+      if (o){
+        const r2 = phoneSys.row(body, '<div class="sub" style="width:100%;">' + o.buyer + ' offers ' + o.price + 'c for it' + (o.patience ? '' : ' — final') + '</div>');
+        r2.style.flexWrap = 'wrap';
+        const bt2 = document.createElement('div'); bt2.style.cssText = 'display:flex; gap:4px; width:100%; margin-top:4px; justify-content:flex-end;';
+        const mk2 = (label, fn) => { const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label; b.addEventListener('click', ev => { ev.stopPropagation(); fn(); phoneSys.app('business'); }); bt2.appendChild(b); };
+        mk2('ACCEPT', () => this.sell(S)); mk2('RAISE', () => this.raise(S)); mk2('DECLINE', () => this.decline(S));
+        r2.appendChild(bt2);
+      }
+    }
+  },
+};
 const MONUMENTS = {
   champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
   siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
@@ -17621,7 +17772,7 @@ const phoneSys = {
         bt.addEventListener('click', ev => { ev.stopPropagation(); bankSys.repay(1e9); this.app('business'); });
         br.appendChild(bt);
       }
-      this.row(body, '<div class="cname">SHOPS<div class="sub">none of your own yet — buy one from a keeper who trusts you (the OWNERSHIP build)</div></div>');
+      shopSys.phoneRows(body);
       return;
     }
     if (name === 'call'){
@@ -26644,7 +26795,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [],
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -26707,7 +26858,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null;
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || [];
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -28626,7 +28777,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

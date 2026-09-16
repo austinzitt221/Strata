@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 49 — OWNERSHIP
+- [ ] Trade with a keeper until goodwill 20 (the grocer is cheapest to
+      befriend). The row at the bottom of their screen: buy it. Does
+      the price feel like a stretch worth a loan?
+- [ ] Sleep a few nights. Open the phone: BUSINESS. Collect, restock
+      when it rings. Is the take worth the coins you put in?
+- [ ] Let a siege happen to that city: the till should show it.
+- [ ] Sell it: raise the buyer twice and watch them walk; take the
+      next day's offer.
+- Feedback I want: does owning a shop change how you feel about the
+  city; what should the shop do while you are in it (wares on the
+  pedestals from your own stock?); the numbers.
+
 ## Build 48 — THE BANK
 - [ ] The bank on the plaza's south side. Put coins in, sleep a night,
       look again. Is one percent a day worth the walk?

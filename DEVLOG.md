@@ -2,6 +2,44 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 49 — OWNERSHIP (2026-09-16)
+
+City Arc item 10, Austin's. The phone's BUSINESS app stops holding a
+placeholder.
+
+- **Buying.** Any of the five keepers (broker, arms, tool, electrics,
+  grocer) sells you the shop once their goodwill is 20 — a row at the
+  bottom of their trade screen, priced by the trade and the city's size
+  (the grocer's in a small city about 700, the arms dealer's in a big
+  one about 2100). The keeper stays on as staff; you get five standing;
+  the paper prints it; the builders' share moves.
+- **The till.** Each dawn the shop takes what the city gives: the
+  trade's base take, scaled by the city's size, by its sector's health
+  on the Exchange (the share against thirty days ago, held between half
+  and one and a half — the grocer follows the fisheries, the arms
+  dealer the ordnance company, the electrician the power company, the
+  toolsmith the builders, the broker the mine), by a siege (a fifth
+  while it lasts, six tenths for two days after), and by your stock.
+  Wages (12) and supplies (a tenth of the take) come out. Stock runs
+  down fifteen points a day; RESTOCK costs one and a half a point. At
+  thirty percent stock the phone rings; so does a day in the red.
+- **Selling.** Each dawn a buyer, named from the seed and the day,
+  offers a price from the shop's cost and its health. ACCEPT takes it
+  and the till with it. RAISE counters ten percent up; the buyer holds
+  once or twice, then walks for the day. DECLINE sends them off. Never
+  a die.
+- **From the phone.** BUSINESS lists every shop you own with the till,
+  the stock, yesterday's take and cost, UNDER SIEGE when it is, and the
+  day's buyer with the three answers; COLLECT and RESTOCK from anywhere.
+  The counter still does COLLECT and the buying.
+- Tests: `b49test.js` (the row locked at 0 goodwill, bought at 25, the
+  record, the keeper marked, standing, the headline; two dawns and the
+  same dawn twice; a siege cutting the take below four tenths; restock
+  and collect at their prices; the phone's rows and buttons; a raise
+  held twice then walked; the next buyer raised and accepted for the
+  price plus the till, the shop gone, the keeper freed, the save);
+  smoke, b32, b44, b45, b46, b47, b48 regressions.
+
 ## Build 48 — THE BANK (2026-09-16)
 
 City Arc item 9. Coins that outlive you, and a reason to owe someone.

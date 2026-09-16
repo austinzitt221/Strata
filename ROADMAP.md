@@ -201,7 +201,7 @@ so the city's economy is one thing that reacts to what you do.
 9. **THE BANK** (mine) — DONE (Build 48). Deposits that survive death, interest by the
    day, loans to buy a shop or a car. Default and the collectors come,
    as a raid.
-10. **OWNERSHIP** (Austin's) — buy a shop once the keeper's goodwill is
+10. **OWNERSHIP** (Austin's) — DONE (Build 49). Buy a shop once the keeper's goodwill is
    high enough: income at the till, supplies and wages out, read from
    the city economy so a siege hurts your shop too. Sell once a day to
    a buyer who makes an offer you can raise, lower or decline. Managed
