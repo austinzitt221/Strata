@@ -2,6 +2,57 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 47 — THE PIT + MONUMENTS (2026-09-16)
+
+City Arc item 8. The first thing in a city that is a show, not a shop.
+
+- **The pit.** Every city gives its park or lot nearest the plaza to
+  the arena: a block of stone with three steps of stands, a bowl cut
+  out of the middle (a sphere out of the ground, a sand floor three
+  metres down, the walls curving up to the mouth), a cut through the
+  stands on the plaza side with steps down the wall, four torches on
+  the top ring, a sign. The promoter stands at a counter in a niche
+  beside the mouth. Cities from before get theirs on the next visit:
+  whatever the lot held is cleared and the arena carved in.
+- **Five bouts,** from what already hunts you, in order, each unlocked
+  by the last: THE PENS (three lurkers), THE PACK (four stalkers), THE
+  WALL (two husks and two lurkers), THE WARLORD (a fort warlord at his
+  size and his guard), THE CHAMPION (a husk half again as big, 420 hp).
+  Purses 40 / 80 / 150 / 300 / 600 and standing 4 / 6 / 8 / 10 / 12.
+  The night shift fights by day in the pit: no burning, no fleeing the
+  sun or the torches, no slinking off at dawn. The bowl holds them —
+  one that climbs out is set back on the floor.
+- **The stake.** None, 25, 100 or 250 coins on yourself at the bout's
+  odds (1.5, 2, 3, 4, 6 to one). A win pays the purse and the stake at
+  the odds. Five seconds out of the bowl, or your death, forfeits: the
+  house keeps the stake. One bout at a time; a bout does not survive a
+  save.
+- **The belt.** The champion's bout, won, puts the belt of that city in
+  your pocket (an item, a trophy), twenty standing on top, a headline,
+  and the first monument.
+- **Monuments.** A marble figure with one fist up on a plinth with a
+  plaque, at a corner of the plaza, with two torches. Three deeds earn
+  one: the belt, a siege broken with the guard (four in ten of the
+  raiders yours), the last note of the survey brought up (raised in the
+  nearest city you know, or held until you find one). Once per deed per
+  city; right click the plinth to read the plaque; the paper prints the
+  raising.
+- Fixed along the way: any entity's chosen size was reset by the walk
+  animation every frame, so the fort warlord has been drawn at one
+  scale since Build 9 — a dressed entity keeps its size now.
+- Tests: `b47test.js` (the block, the house, the sign and counter,
+  seven SDF probes of the shape — bowl air, sand floor, top ring, a
+  step, the mouth, a stair; the promoter right-clicked from across the
+  counter and the sheet's five rows; THE PENS with 25 riding: three
+  lurkers alive and held in the bowl through ten seconds of day, paid
+  on their deaths, standing and headline; THE PACK by day: four
+  stalkers closing in after fifteen seconds, the forfeit on leaving
+  with the stake gone; THE CHAMPION: hp, size, the belt, the statue at
+  the corner, the plaque, the headlines; the other two deeds, no
+  duplicate, three statues saved with their text; the old-city
+  migration re-carving the arena; the shape probes again after);
+  smoke, b32, b44, b45, b46 and b7b regressions.
+
 ## Build 46 — THE PHONE (2026-09-16)
 
 City Arc item 7, second half. One item that makes the press and the

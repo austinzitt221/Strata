@@ -191,7 +191,7 @@ so the city's economy is one thing that reacts to what you do.
    The phone: one craftable item with apps -- STOCKS, NEWS, BUSINESS,
    CALL (a crew member to you, a cab to you) -- and it rings you: a
    siege starting, crew in trouble, a headline about you.
-8. **THE PIT + MONUMENTS** (Austin's, with mine) — a gladiator arena, a
+8. **THE PIT + MONUMENTS** (Austin's, with mine) — DONE (Build 47). A gladiator arena, a
    bowl with stands, tiers of opponents from what already exists
    (lurkers, husks, stalkers, fort minibosses, scaled up), a bookmaker
    so you can bet on yourself, a champion's belt worth a lot of coin

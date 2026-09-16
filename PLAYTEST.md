@@ -5,6 +5,25 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 47 — THE PIT + MONUMENTS
+- [ ] Find the pit in a city (a block off the plaza; the sign on the
+      stands says THE PIT). Walk the stands, go down the steps into the
+      bowl, climb out. Does the bowl read as a bowl and the stands as
+      stands? Is climbing out too easy, or too hard?
+- [ ] The promoter in the niche by the mouth: right click. Put 25 on
+      yourself and fight THE PENS. Does the fight feel fair in the
+      bowl? Try walking out mid-bout: the countdown, the forfeit.
+- [ ] Work up the card. THE PACK by day — the stalkers should come at
+      you, not cower. THE WARLORD. THE CHAMPION: is 420 hp at that size
+      a fight or a chore?
+- [ ] The belt in your inventory; the statue in the plaza corner
+      (right click the plinth); the morning paper.
+- [ ] Break a siege with the guard in a city you have the belt of: a
+      second statue.
+- Feedback I want: are the purses and odds worth it against what the
+  bouts cost you in ammo and food; should the crowd exist (villagers
+  in the stands during a bout); what a sixth bout should be.
+
 ## Build 46 — THE PHONE
 - [ ] Craft a phone at a table (3 iron ingots, 2 wire, 1 crystal).
       Right click with it in hand. E closes it. Does it read like a

@@ -389,6 +389,14 @@ body.pad{cursor:none;}
   </div>
 </div>
 <div id="fade" style="position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .45s; z-index:90;"></div>
+<div id="pitscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:560px; max-width:760px;">
+    <h2 id="pittitle">THE PIT</h2>
+    <div class="sub" id="pitsub" style="margin-bottom:8px;"></div>
+    <div id="pitstake" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;"></div>
+    <div id="pitlist" style="max-height:58vh; overflow:auto;"></div>
+  </div>
+</div>
 <div id="exchangescreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
     <h2 id="exchangetitle">THE EXCHANGE</h2>
@@ -8672,6 +8680,15 @@ const pnodeSys = {
         p2.position.set(px, py, -0.07);
         g.add(p2);
       }
+    } else if (t === 'statue'){
+      // a figure in marble on a plinth, one fist up (the plaque is text: rebuild)
+      if (!M.marble) M.marble = pixMat(PixTex.make('statueMarble', (c, w, h, rng) => { pxSpeckle(c, rng, '#d8d6cf', '#c4c2ba', '#e9e7e0', 24); c.fillStyle = '#b9b7ae'; c.fillRect(0, 7, 16, 1); c.fillRect(9, 0, 1, 7); }));
+      const S = M.marble;
+      const bx = (w, hh, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), S); m.position.set(x, y, z); g.add(m); };
+      bx(1.6, 1.0, 1.6, 0, 0.5, 0); bx(1.3, 0.2, 1.3, 0, 1.1, 0);
+      bx(0.28, 0.9, 0.3, -0.18, 1.65, 0); bx(0.28, 0.9, 0.3, 0.18, 1.65, 0);
+      bx(0.7, 0.9, 0.4, 0, 2.55, 0); bx(0.42, 0.42, 0.42, 0, 3.22, 0);
+      bx(0.22, 0.8, 0.22, -0.5, 2.55, 0); bx(0.22, 0.8, 0.22, 0.5, 3.1, 0); bx(0.28, 0.28, 0.28, 0.5, 3.6, 0);
     } else if (t === 'ped'){
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), M.steel);
       base.position.y = 0.06;
@@ -8817,6 +8834,20 @@ const pnodeSys = {
         face.rotation.y = Math.PI;
         g.add(face);
       }
+      if (n.t === 'statue' && n.text){
+        const cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 64;
+        const c2 = cv.getContext('2d');
+        c2.fillStyle = '#4a3a22'; c2.fillRect(0, 0, 128, 64);
+        c2.fillStyle = '#e8c878'; c2.font = 'bold 10px monospace'; c2.textAlign = 'center';
+        String(n.text).split('\n').slice(0, 4).forEach((ln, i) => c2.fillText(ln.slice(0, 21), 64, 17 + i * 14));
+        const tex = new THREE.CanvasTexture(cv);
+        tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+        const face = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
+        face.position.set(0, 0.55, -0.81);
+        face.rotation.y = Math.PI;
+        g.add(face);
+      }
       if (n.t === 'acrank' && n.animal){
         const am = entMesh(n.animal);
         const ag = am.g || am;
@@ -8907,7 +8938,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench' || n.t === 'statue') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -10844,6 +10875,7 @@ const VROLE = {
   press:   { name: 'editor',       coat: 0x5a4a3a, hat: 0x2e2418 },
   stock:   { name: 'stockbroker',  coat: 0x2a2a30, hat: 0x8a8a96 },
   floor:   { name: 'floor broker', coat: 0x3a3a44, hat: 0x6a6a76 },
+  promoter:{ name: 'fight promoter', coat: 0x7a2f5a, hat: 0xd9b25a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -12341,6 +12373,7 @@ const expeditionSys = {
       else $('pagesub').textContent = 'E to close';
       if (i > (E.read || 0)) econSys.note('A PAGE OF THE ' + E.L.toUpperCase() + ' SURVEY RECOVERED' + (i === 9 ? ' — THE LAST NOTE' : ''), ['deed', 'survey'], null, true);
       E.read = Math.max(E.read || 0, i);
+      if (i === 9 && !E.monument){ E.monument = 1; monumentSys.raise(null, 'survey'); }
     } else {
       $('pagetitle').textContent = ('the ' + E.L + ' survey').toUpperCase();
       let body = 'A map in a careful hand: ' + E.C + ' at the edge, and eight camps walked out from it, a day apart, each marked with its day.\n\n';
@@ -15092,6 +15125,7 @@ const siegeSys = {
     if (why === 'far'){ markSave(); return; }
     const share = S.kills / Math.max(1, S.n);
     if (share >= 0.4){
+      monumentSys.raise(rec, 'siege');
       const coins = 20 * S.kills + 40;
       addStackItem('coin', coins);
       citySys.cred(rec, 8 + Math.round(share * 8));
@@ -16261,7 +16295,7 @@ const raidBaseSys = {
           e.fortKey = key;
         } else {
           const e = spawnEntity('lurker', rec.x, gy + 0.7, rec.z + 6);
-          e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260;
+          e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260; e.big = 1.65;
           if (e.mesh){
             e.mesh.scale.setScalar(1.65);
             e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = o.material.clone(); });
@@ -17191,6 +17225,197 @@ const wreckSys = {
 // (a crew member to you; a cab to you, and from the cab to any city you
 // know) -- and it rings: a siege starting, crew in trouble, a headline
 // about you
+// ---------- THE PIT + MONUMENTS (Build 47) ----------
+// A bowl in every city with a promoter in the mouth: five bouts of what
+// already hunts you, scaled up, a stake at odds on yourself, a purse and
+// standing for each, the belt for the last. Leave the bowl and the
+// house keeps the stake. The city raises a statue with a plaque for the
+// belt, for a siege you broke, for the last note of the survey.
+const PIT_TIERS = [
+  { name: 'THE PENS',     foes: [['lurker', 3]],                 purse: 40,  odds: 1.5, line: 'three from the pens' },
+  { name: 'THE PACK',     foes: [['stalker', 4]],                purse: 80,  odds: 2,   line: 'four stalkers with no light to fear' },
+  { name: 'THE WALL',     foes: [['husk', 2], ['lurker', 2]],    purse: 150, odds: 3,   line: 'two husks and their handlers' },
+  { name: 'THE WARLORD',  foes: [['warlord', 1], ['lurker', 2]], purse: 300, odds: 4,   line: 'a warlord taken in the wilds, and his guard' },
+  { name: 'THE CHAMPION', foes: [['champion', 1]],               purse: 600, odds: 6,   line: 'the reigning champion of the pit' },
+];
+const pitSys = {
+  STAKES: [0, 25, 100, 250],
+  stake: 0,
+  rec(){ return game.activePit ? (game.cities || {})[game.activePit] : null; },
+  open(rec){
+    if (!rec || !rec.pit){ toast('this city has no pit'); return; }
+    if (netSys.guest){ toast('the promoter deals with the host'); return; }
+    if (game.ui !== 'none') return;
+    game.activePit = rec.key; game.ui = 'pit';
+    $('pittitle').textContent = 'THE PIT OF ' + rec.name;
+    this.refresh();
+    show('pitscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  refresh(){
+    const rec = this.rec(); if (!rec || !rec.pit) return;
+    const P = rec.pit, coins = CORE.countItem(game.slots, 'coin'), list = $('pitlist'); list.innerHTML = '';
+    if (this.stake > coins) this.stake = 0;
+    const st = $('pitstake'); st.innerHTML = '';
+    st.appendChild(Object.assign(document.createElement('span'), { className: 'sub', textContent: 'your stake, on yourself:' }));
+    for (const s of this.STAKES){
+      const b = document.createElement('span'); b.className = 'btn small'; b.textContent = s ? s + 'c' : 'none';
+      if (s === this.stake) b.style.borderColor = '#ffd25a';
+      if (s > coins) b.style.opacity = '0.4';
+      b.addEventListener('click', () => { if (s <= coins){ this.stake = s; this.refresh(); } else AudioSys.sfx('deny'); });
+      st.appendChild(b);
+    }
+    $('pitsub').textContent = (P.belt ? 'you hold the belt of ' + rec.name + ' · ' : '') + 'coins ' + coins +
+      ' · a bout won pays its purse and your stake at the odds · leave the bowl and the house keeps the stake · E to close';
+    PIT_TIERS.forEach((T, i) => {
+      const won = i < (P.won || 0), open = i <= (P.won || 0);
+      const r = phoneSys.row(list, '<div class="cname" style="min-width:170px;">' + (won ? '✓ ' : '') + T.name + '<div class="sub">' + T.line + '</div></div>' +
+        '<div class="sub" style="min-width:170px;">purse ' + T.purse + 'c · odds ' + T.odds + ':1' + (this.stake ? ' · a win pays ' + (T.purse + Math.round(this.stake * T.odds)) + 'c' : '') + '</div>');
+      const b = document.createElement('span'); b.className = 'btn small'; b.style.marginLeft = 'auto';
+      b.textContent = !open ? 'LOCKED' : won ? 'AGAIN' : 'FIGHT';
+      if (!open) b.style.opacity = '0.4';
+      b.addEventListener('click', ev => { ev.stopPropagation(); if (open) this.fight(rec, i); else AudioSys.sfx('deny'); });
+      r.appendChild(b);
+    });
+  },
+  fight(rec, ti){
+    const P = rec.pit, T = PIT_TIERS[ti];
+    if (!P || !T) return;
+    if (game.bout){ toast('a bout is on'); return; }
+    if (this.stake > CORE.countItem(game.slots, 'coin')){ toast('you cannot cover that stake'); AudioSys.sfx('deny'); return; }
+    if (this.stake) CORE.consumeItem(game.slots, 'coin', this.stake);
+    closeOverlay(); game.ui = 'none';
+    const fx = P.fx, fz = P.fz, fy = P.gy - 3;
+    game.pos.set(P.x + fx * 5, fy + 1.2, P.z + fz * 5); game.vel.set(0, 0, 0); game.fly = false;
+    game.yaw = Math.atan2(fx, fz); game.pitch = -0.1;   // facing the far wall
+    if (game.driving) exitCar();
+    const bout = game.bout = { key: rec.key, tier: ti, stake: this.stake, out: 0, t: 0, n: 0, left: 0 };
+    let k = 0, total = 0;
+    for (const [, n] of T.foes) total += n;
+    for (const [type, n] of T.foes) for (let j = 0; j < n; j++){
+      const a = Math.atan2(-fz, -fx) + (k - (total - 1) / 2) * 0.55; k++;    // across the floor from you
+      const x = P.x + Math.cos(a) * 5.5, z = P.z + Math.sin(a) * 5.5;
+      const e = spawnEntity(type === 'warlord' ? 'lurker' : type === 'champion' ? 'husk' : type, x, fy + 0.7, z);
+      e.pit = rec.key; e.noburn = true; e.tt = 0; e.pitTier = ti;
+      if (type === 'warlord'){ e.warlord = true; e.raider = true; e.hp = 260; this.dress(e, 1.65, 0.06); }
+      if (type === 'champion'){ e.champion = true; e.hp = 420; this.dress(e, 1.45, -0.2); }
+      if (type === 'lurker' && ti >= 2) e.raider = true;
+      bout.n++;
+    }
+    bout.left = bout.n;
+    toast(T.name + ' — ' + bout.n + ' in the pit' + (bout.stake ? ' · ' + bout.stake + 'c riding on you' : ''));
+    AudioSys.sfx('boom'); refreshHotbar(); markSave();
+  },
+  dress(e, scale, hue){
+    e.big = scale; e.hue = hue;
+    if (!e.mesh) return;                                   // meshes are built when seen: tick() finishes it
+    e.dressed = 1;
+    e.mesh.scale.setScalar(scale);
+    e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color){ o.material = o.material.clone(); o.material.color.offsetHSL(hue, 0.15, 0.06); } });
+  },
+  foes(){ const B = game.bout; return B ? game.entities.filter(e => e.pit === B.key) : []; },
+  tick(dt){
+    const B = game.bout;
+    this.k = (this.k || 0) + 1;
+    if (!B){
+      // strays from a bout that is over (a load mid-fight): gone
+      if (this.k % 120 === 0) for (const e of [...game.entities]) if (e.pit) killEntity(e, false);
+      return;
+    }
+    const rec = (game.cities || {})[B.key], P = rec && rec.pit;
+    if (!P){ game.bout = null; return; }
+    B.t += dt;
+    const foes = this.foes();
+    if (foes.length < B.left){ B.left = foes.length; if (B.left > 0) toast(B.left + ' left'); }
+    if (!foes.length && B.t > 1){ this.win(rec, B); return; }
+    // the bowl holds them
+    for (const e of foes){
+      if (e.big && e.mesh && !e.dressed) this.dress(e, e.big, e.hue);
+      if (Math.hypot(e.x - P.x, e.z - P.z) > 11 || e.y > P.gy + 0.8){
+        const a = Math.atan2(e.z - P.z, e.x - P.x);
+        e.x = P.x + Math.cos(a) * 6; e.z = P.z + Math.sin(a) * 6; e.y = P.gy - 2.3; e.vx = 0; e.vz = 0; e.vy = 0;
+        if (e.mesh) e.mesh.position.set(e.x, e.y, e.z);
+      }
+    }
+    // and you: five seconds out of it and the bout is forfeit
+    const pd = Math.hypot(game.pos.x - P.x, game.pos.z - P.z);
+    if (pd > 60){ this.forfeit('you left the pit'); return; }
+    if (pd > 11.5 || game.pos.y > P.gy + 1.0){
+      const was = Math.floor(B.out); B.out += dt;
+      if (B.out > 5){ this.forfeit('you left the bowl'); return; }
+      if (Math.floor(B.out) !== was) toast('back in the bowl — ' + Math.ceil(5 - B.out));
+    } else B.out = 0;
+  },
+  win(rec, B){
+    const T = PIT_TIERS[B.tier], P = rec.pit;
+    const pay = T.purse + Math.round(B.stake * T.odds);
+    addStackItem('coin', pay);
+    game.bout = null;
+    P.won = Math.max(P.won || 0, B.tier + 1);
+    citySys.cred(rec, 4 + 2 * B.tier);
+    toast(T.name + ' is yours — ' + pay + ' coins');
+    AudioSys.sfx('craft');
+    econSys.note('A STRANGER TAKES ' + T.name + ' IN THE PIT OF ' + rec.name, ['deed', 'pit'], rec.key, true);
+    if (B.tier === PIT_TIERS.length - 1 && !P.belt){
+      P.belt = 1;
+      giveItem({ kind: 'belt', city: rec.name }, 1);
+      citySys.cred(rec, 20);
+      econSys.note('CHAMPION OF THE PIT: A STRANGER TAKES THE BELT OF ' + rec.name, ['deed', 'pit'], rec.key, true);
+      toast('the belt of ' + rec.name + ' is yours');
+      monumentSys.raise(rec, 'champion');
+    }
+    refreshHotbar(); markSave();
+  },
+  forfeit(why){
+    const B = game.bout; if (!B) return;
+    game.bout = null;
+    for (const e of [...game.entities]) if (e.pit) killEntity(e, false);
+    toast('the bout is forfeit — ' + why + (B.stake ? ' · the house keeps ' + B.stake + 'c' : ''));
+    AudioSys.sfx('deny'); markSave();
+  },
+};
+const MONUMENTS = {
+  champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
+  siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
+  survey:   { title: 'THE SURVEY OF THE DEEP',  line: 'who brought the last note up' },
+};
+const monumentSys = {
+  // a statue in the plaza for a deed, once per deed per city; with no
+  // city known yet the deed waits for the first
+  raise(rec, deed){
+    if (netSys.guest || !MONUMENTS[deed]) return;
+    if (!rec){
+      let best = null, bd = 1e9;
+      for (const r of Object.values(game.cities || {})){
+        if (!r.stamped || r.gy == null) continue;
+        const d = Math.hypot(r.x - game.pos.x, r.z - game.pos.z);
+        if (d < bd){ bd = d; best = r; }
+      }
+      if (!best){ (game.monPending = game.monPending || []).push(deed); markSave(); return; }
+      rec = best;
+    }
+    rec.monuments = rec.monuments || {};
+    if (rec.monuments[deed]) return;
+    const slots = [[-11, -11], [11, -11], [-11, 11], [11, 11]];
+    const used = Object.keys(rec.monuments).length;
+    if (used >= slots.length) return;
+    rec.monuments[deed] = 1;
+    const [ox, oz] = slots[used], g = rec.gy, M = MONUMENTS[deed];
+    const x = rec.x + ox, z = rec.z + oz;
+    const yaw = Math.atan2(ox, oz);                       // faces the obelisk
+    propBatchBegin();
+    try { pnodeSys.add('statue', x, g, z, yaw, { text: M.title + '\n' + M.line + '\nraised by ' + (rec.name || 'the city') + '\nday ' + (game.day || 0), deed }); }
+    finally { propBatchEnd(); }
+    game.torches.push([x - 1.3, g + 1.1, z], [x + 1.3, g + 1.1, z]); torchSys.rebuild();
+    toast(rec.name + ' raises a statue: ' + M.title.toLowerCase());
+    econSys.note(rec.name + ' RAISES A STATUE TO THE STRANGER — ' + M.title, ['deed', 'monument'], rec.key, true);
+    AudioSys.sfx('craft'); markSave();
+  },
+  settle(rec){
+    const L = game.monPending;
+    if (!L || !L.length || !rec || !rec.stamped) return;
+    this.raise(rec, L.shift());
+  },
+};
 const phoneSys = {
   have(){ return game.slots.some(s => s && s.kind === 'phone'); },
   ring(text, app){
@@ -17773,8 +17998,64 @@ const citySys = {
                         vname: villageSys.nameFor((Math.imul(c.seed, 71) + 13) >>> 0),
                         post: { x: sp.x, z: sp.z - 1.25, yaw: yawTo(0, 1) } });
     }
+    // THE PIT (Build 47): a city from before the arena gets one now, on
+    // the same block a new city would -- whatever the lot held goes
+    if (!rec.arc8){
+      const T = rec.towers || [];
+      let t = T.find(b => b.kind === 'pit');
+      if (!t){
+        const pb = this.plan(c).blocks.find(b => b.kind === 'pit');
+        if (pb){ const m = T.find(b => b.bx === pb.bx && b.bz === pb.bz); if (m) m.kind = 'pit'; t = m || pb; }
+      }
+      if (t && !rec.pit){
+        const ax = c.x + t.bx * 36, az = c.z + t.bz * 36;
+        const cy = CORE.makeEdit(0, 2, +ax.toFixed(1), +(g + 12).toFixed(1), +az.toFixed(1), 34, 0, 0); cy.sy = 24; applyEdit(cy);
+        game.torches = game.torches.filter(tt => Math.hypot(tt[0] - ax, tt[2] - az) > 15);
+        this.stampPit(c, rec, g, ax, az, t);
+      }
+      rec.arc8 = 1;
+    }
     rec.counters = 1;
     pnodeSys.rebuild();
+  },
+  // THE PIT (Build 47): a bowl sunk three metres into a block with three
+  // steps of stands around it, a cut through the stands on the plaza
+  // side with steps down, the promoter at a counter in the mouth, four
+  // torches on the top ring. The floor is sand.
+  stampPit(c, rec, g, ax, az, t){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);
+    const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0, fz = fx === 0 ? -Math.sign(t.bz) : 0;   // toward the plaza
+    const px = fz ? 1 : 0, pz = fx ? 1 : 0;                                              // across the mouth
+    // the stands: a block of stone, three steps cut down toward the bowl
+    EB(1, ax, g + 1.5, az, 28, 3.0, 28, MAT.STONEBRICK);
+    EB(0, ax, g + 2.5, az, 25.5, 1.0, 25.5, 0);
+    EB(0, ax, g + 2.0, az, 23, 2.0, 23, 0);
+    EB(0, ax, g + 1.5, az, 20.5, 3.0, 20.5, 0);
+    // the bowl: a sphere out of the ground; a sand floor three metres down
+    applyEdit(CORE.makeEdit(0, 0, +ax.toFixed(1), +(g + 8).toFixed(1), +az.toFixed(1), 26, 0, 0));
+    EB(1, ax, g - 4.3, az, 20, 2.6, 20, MAT.SAND);
+    // the way in: a cut through the stands, steps down the bowl wall
+    EB(0, ax + fx * 11, g + 2.25, az + fz * 11, fx ? 8 : 7, 4.5, fx ? 7 : 8, 0);
+    for (let k = 0; k < 3; k++){
+      const r = 9.3 - k * 0.9;
+      EB(1, ax + fx * r, g - 1.25 - 0.75 * k, az + fz * r, fx ? 1.2 : 3.2, 1.0, fx ? 3.2 : 1.2, MAT.STONEBRICK, 1);
+    }
+    // the promoter's niche beside the mouth: counter, post, sign on the stands
+    EB(0, ax + fx * 12.5 + px * 4.6, g + 1.5, az + fz * 12.5 + pz * 4.6, fx ? 3.0 : 2.6, 3.0, fx ? 2.6 : 3.0, 0, 1);
+    pnodeSys.add('counter', ax + fx * 12.5 + px * 3.6, g + 0.35, az + fz * 12.5 + pz * 3.6, 0, { len: 2.4 });
+    game.pnodes[game.pnodes.length - 1].yaw = yawTo(-px, -pz);
+    const post = { x: ax + fx * 12.5 + px * 4.9, z: az + fz * 12.5 + pz * 4.9, yaw: yawTo(-px, -pz) };
+    pnodeSys.add('sign', ax + fx * 13.4 - px * 4.5, g + 3.0, az + fz * 13.4 - pz * 4.5, yawTo(fx, fz), { text: 'THE PIT\n' + (rec.name || 'THE CITY') + '\nbouts \u00b7 bets' });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) game.torches.push([ax + sx * 13.2, g + 3.0, az + sz * 13.2]);
+    (rec.houses = rec.houses || []).push({ x: post.x, z: post.z, role: 'promoter', face: [-px, -pz], w: 1, d: 1, gy: g, rep: 0,
+                      vname: villageSys.nameFor((Math.imul(c.seed, 131) + 5) >>> 0), post });
+    rec.pit = { x: +ax.toFixed(1), z: +az.toFixed(1), gy: g, fx, fz, won: 0, belt: 0 };
+    rec.arc8 = 1;
   },
   harborAt(c){
     if (!game.gen.wetAt) return false;
@@ -17810,6 +18091,10 @@ const citySys = {
       const kind = kr < D.kinds[0] ? 'tower' : kr < D.kinds[1] ? 'park' : kr < D.kinds[2] ? 'market' : 'lot';
       out.push({ bx, bz, w, floors, mat, shop, kind, district });
     }
+    // THE PIT (Build 47): the park or lot nearest the plaza gives way to the arena
+    let pit = null;
+    for (const b of out) if ((b.kind === 'park' || b.kind === 'lot') && (!pit || Math.abs(b.bx) + Math.abs(b.bz) < Math.abs(pit.bx) + Math.abs(pit.bz))) pit = b;
+    if (pit) pit.kind = 'pit';
     return { n, blocks: out, harbor };
   },
   stamp(c, rec){
@@ -17849,6 +18134,7 @@ const citySys = {
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
       const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      if (t.kind === 'pit'){ this.stampPit(c, rec, g, tx, tz, t); continue; }
       if (t.kind === 'park'){
         // a lawn painted onto the pavement, benches, one lamp
         const pk = CORE.makeEdit(2, 1, +tx.toFixed(1), +(g - 0.4).toFixed(1), +tz.toFixed(1), 24, MAT.GRASS, 0);
@@ -17981,7 +18267,7 @@ const citySys = {
       const pick = pool.length ? pool[0] : (all.find(i => !used.has(i)) != null ? all.find(i => !used.has(i)) : (all[0] || 0));
       used.add(pick); idxs.push(pick);
     }
-    rec.houses = [];
+    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter');   // the pit's promoter is already on the list
     for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
@@ -18028,7 +18314,7 @@ const citySys = {
         propBatchBegin();
         try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
-      } else if ((!rec.counters || !rec.arc7) && rec.gy != null && rec.houses){
+      } else if ((!rec.counters || !rec.arc7 || !rec.arc8) && rec.gy != null && rec.houses){
         // a city from before the counters: its keepers go indoors now
         propBatchBegin();
         try { this.stampCounters(c, rec); } finally { propBatchEnd(); }
@@ -18040,6 +18326,7 @@ const citySys = {
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
+        monumentSys.settle(rec);
         toast('the towers of ' + rec.name + ' rise ahead');
         econSys.note('A STRANGER AT THE GATES OF ' + rec.name, ['found'], rec.key, true);
         AudioSys.sfx('boom');
@@ -18282,7 +18569,7 @@ function updateEntities(dt, now){
         Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
         killEntity(e, false); continue;
       }
-      if (e.type === 'stalker' && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+      if (e.type === 'stalker' && !e.pit && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
     }
     // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
     if ((e.type === 'lurker' || e.type === 'husk') && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
@@ -18320,8 +18607,8 @@ function updateEntities(dt, now){
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
       e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
-      if (game.dayF > 0.45){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
-      else if (ld < 9){
+      if (game.dayF > 0.45 && !e.pit){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
+      else if (ld < 9 && !e.pit){
         // find the light and run from it
         let lx = e.x, lz = e.z, bd = 1e9;
         for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
@@ -18534,7 +18821,7 @@ function updateEntities(dt, now){
     for (let li = 0; li < legs.length; li++){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
-    e.mesh.scale.setScalar((e.bountyTag ? 1.25 : 1) * (e.flash > 0 ? 1.1 : 1));
+    e.mesh.scale.setScalar((e.big || (e.bountyTag ? 1.25 : 1)) * (e.flash > 0 ? 1.1 : 1));
     if (e.crew && ud.hpbar){
       const f = Math.max(0, Math.min(1, e.hp / 60)), hurt = f < 0.99;
       ud.hpbar.bg.visible = ud.hpbar.fg.visible = hurt;
@@ -18560,6 +18847,7 @@ function talkTo(vent){
   }
   if (vent.role === 'press'){ econSys.buyPaper((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'stock'){ econSys.openExchange((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'promoter'){ pitSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'floor'){
     toast(['buy low, sell high, stranger', 'OLD TOWN pays its dividend whatever the price does', 'the Herald knows tomorrow — seven times in ten', 'a siege knocks every company in the city'][(Math.random() * 4) | 0]);
     return;
@@ -19741,6 +20029,7 @@ function bindInput(){
           openSign(pn); AudioSys.sfx('toggle');
           return;
         }
+        if (pn.t === 'statue'){ toast((pn.text || '').replace(/\n/g, ' \u00b7 ')); return; }
         if (pn.t === 'board'){
           const rec = game.villages[pn.vkey];
           if (rec) boardSys.open(rec);
@@ -19956,7 +20245,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -21314,7 +21603,7 @@ const wrenchProps = {
       const r = Object.assign({ k, t: ref.t, yaw: ref.yaw || 0, oldId: ref.id }, P3(ref.x, ref.y, ref.z));
       if (ref.t === 'chest' && ref.sc) r.sc = ref.sc;
       if (ref.t === 'staple'){ r.n = [ref.nx || 0, ref.ny == null ? 1 : ref.ny, ref.nz || 0]; if (ref.rot) r.rot = ref.rot; }
-      if (ref.t === 'sign' && ref.text) r.text = ref.text;
+      if ((ref.t === 'sign' || ref.t === 'statue') && ref.text) r.text = ref.text;
       return r;
     }
     return null;
@@ -23268,6 +23557,12 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'belt'){
+    // a gold band, a bright buckle, a red stone
+    c.fillStyle = '#d9a63a'; c.fillRect(1, 6, 14, 4);
+    c.fillStyle = '#8a6420'; c.fillRect(1, 9, 14, 1);
+    c.fillStyle = '#ffe680'; c.fillRect(5, 4, 6, 8);
+    c.fillStyle = '#e0304a'; c.fillRect(7, 6, 2, 4);
   } else if (it.kind === 'phone'){
     // a dark slab, a lit screen, a home button
     c.fillStyle = '#16161c'; c.fillRect(4, 1, 8, 14);
@@ -23845,6 +24140,7 @@ function itemLabel(it){
   if (it.kind === 'ticket') return 'ticket to ' + it.to;
   if (it.kind === 'paper') return 'the ' + (it.city || 'city') + ' herald · day ' + (it.day || 0);
   if (it.kind === 'phone') return 'phone';
+  if (it.kind === 'belt') return 'champion\'s belt of ' + (it.city || 'the pit');
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'coral') return 'coral';
@@ -25070,6 +25366,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
          : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'belt'){
+    html = '<div class="t1">THE BELT OF ' + (it.city || 'THE PIT') + '</div><div class="t2">champion of the pit \u00b7 the city raised a statue \u00b7 keep it somewhere it can be seen</div>';
   } else if (it.kind === 'phone'){
     html = '<div class="t1">phone</div><div class="t2">right click to open · STOCKS, NEWS, BUSINESS, CALL · it rings when the world has something for you</div>';
   } else if (it.kind === 'paper'){
@@ -25342,6 +25640,7 @@ function damagePlayer(dmg, kx, kz){
   if (game.hp <= 0) die();
 }
 function die(){
+  if (game.bout) pitSys.forfeit('you fell');
   // everything drops where you fell; you keep a mercy stone drill
   game.deathCache = {
     x: game.pos.x, y: game.pos.y + 0.6, z: game.pos.z,
@@ -25912,7 +26211,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -26188,7 +26487,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [],
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [],
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -26251,7 +26550,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || [];
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || [];
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -26468,6 +26767,8 @@ const farShapeSys = {
         } else if (t.kind === 'market'){
           out.push({ x: tx, y: g + 2.8, z: tz, sx: 20, sy: 5.6, sz: 14, yaw: 0, mat: t.mat });
           out.push({ x: tx, y: g + 5.8, z: tz, sx: 21, sy: 0.5, sz: 15, yaw: 0, mat: t.mat });
+        } else if (t.kind === 'pit'){
+          out.push({ x: tx, y: g + 1.5, z: tz, sx: 28, sy: 3, sz: 28, yaw: 0, mat: M.STONEBRICK });
         } else if (t.kind === 'lot' && t.district === 'industrial'){
           out.push({ x: tx + 6, y: g + 9, z: tz - 6, sx: 3.2, sy: 18, sz: 3.2, yaw: 0, mat: M.BASALT });
           out.push({ x: tx - 5, y: g + 2.2, z: tz + 4, sx: 10, sy: 4.4, sz: 8, yaw: 0, mat: M.ROCK });
@@ -27929,7 +28230,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest) citySys.tick(dt);
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -28168,7 +28469,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

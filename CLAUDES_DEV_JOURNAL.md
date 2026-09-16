@@ -1205,6 +1205,29 @@ row in `itemModel`.
 Item 7 is done. THE PIT + MONUMENTS next: the first thing in the city
 that is a show rather than a shop.
 
+## 2026-09-16, night — THE PIT + MONUMENTS
+
+I built the arena out of six edits: a block, three cubes taken out of
+it for the steps, a sphere taken out of the ground, a slab of sand put
+back. The SDF makes this kind of thing almost free — the bowl's wall
+is just the sphere's curve, the stands lean over it where the sphere
+grows past the inner step, and none of it needed a model. I keep
+relearning that the terrain is the best prop system in the game.
+
+The one real bug was old: the walk animation writes every entity's
+scale every frame, so the warlord I scaled up in Build 9 has been
+normal-sized in every fort since. Nobody noticed because a warlord is
+a lurker with a different colour and more hp, and "bigger" was a thing
+I remembered writing, not a thing anyone saw. The champion made it
+visible because the test asked for the number.
+
+Monuments are the part I liked most. They cost nothing — a pnode with
+text, like a sign — and they make the city remember you. The next time
+Austin walks into a plaza and finds a marble version of himself with a
+fist up, the city stopped being scenery.
+
+THE BANK is next. Deposits, interest, loans, and the collectors.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
