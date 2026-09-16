@@ -310,7 +310,7 @@ body.pad{cursor:none;}
 <div id="pagescreen" class="screen hidden dim">
   <div class="panel" style="min-width:520px; max-width:640px;">
     <h2 id="pagetitle">A PAGE</h2>
-    <div id="pagebody" style="white-space:pre-wrap; line-height:1.5; font-size:14px; padding:8px 4px 12px 4px;"></div>
+    <div id="pagebody" style="white-space:pre-wrap; line-height:1.5; font-size:14px; padding:8px 4px 12px 4px; max-height:68vh; overflow:auto;"></div>
     <div class="sub" id="pagesub">E to close</div>
   </div>
 </div>
@@ -376,6 +376,41 @@ body.pad{cursor:none;}
     <h2 id="stationtitle">STATION</h2>
     <div class="sub" style="margin-bottom:8px;">tickets for the line · board a car while the train stands · your own rails that reach the platform · E to close</div>
     <div id="stationlist"></div>
+  </div>
+</div>
+<div id="phonescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:340px; max-width:400px; border-radius:18px; border-color:#111; background:#0d0d12; padding:16px 18px 20px 18px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+      <h2 id="phonetitle" style="margin:0; font-size:18px; letter-spacing:3px;">PHONE</h2>
+      <span class="btn small" id="phonehome">HOME</span>
+    </div>
+    <div id="phonebody" style="min-height:280px; max-height:60vh; overflow:auto;"></div>
+    <div class="sub" id="phonesub" style="margin-top:8px;">E to close</div>
+  </div>
+</div>
+<div id="fade" style="position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .45s; z-index:90;"></div>
+<div id="pitscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:560px; max-width:760px;">
+    <h2 id="pittitle">THE PIT</h2>
+    <div class="sub" id="pitsub" style="margin-bottom:8px;"></div>
+    <div id="pitstake" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:8px;"></div>
+    <div id="pitlist" style="max-height:58vh; overflow:auto;"></div>
+  </div>
+</div>
+<div id="bankscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:560px; max-width:760px;">
+    <h2 id="banktitle">THE BANK</h2>
+    <div class="sub" id="banksub" style="margin-bottom:8px;"></div>
+    <div id="banklist" style="max-height:60vh; overflow:auto;"></div>
+  </div>
+</div>
+<div id="exchangescreen" class="screen hidden dim">
+  <div class="panel" style="min-width:560px; max-width:760px;">
+    <h2 id="exchangetitle">THE EXCHANGE</h2>
+    <div class="sub" id="exchangesub" style="margin-bottom:8px;">shares in the eight companies of the region · prices close at dawn · E to close</div>
+    <div id="exchangecash" class="sub" style="margin-bottom:6px;"></div>
+    <div id="exchangelist" style="max-height:58vh; overflow:auto;"></div>
+    <div id="exchangetips" class="sub" style="margin-top:8px;"></div>
   </div>
 </div>
 <div id="bossbar" class="hidden">
@@ -2943,6 +2978,7 @@ function stackableWith(A, B){
   if (A.kind === 'mat') return A.mat === B.mat;
   if (A.kind === 'fish') return A.fish === B.fish;
   if (A.kind === 'ticket') return A.link === B.link;
+  if (A.kind === 'paper') return A.day === B.day && A.city === B.city;
   return STACKABLE_KINDS.includes(A.kind);
 }
 
@@ -3165,6 +3201,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'grapple', station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'wool', n: 2 }] });
   RECIPES.push({ kind: 'ped', yields: 1, costs: [{ mat: MAT.STONEBRICK, n: 6 }] });
   RECIPES.push({ kind: 'sign', yields: 2, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });
+  // THE PHONE (Build 46): a slab of iron, a coil of wire, a crystal for the screen
+  RECIPES.push({ kind: 'phone', yields: 1, station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'wire', n: 2 }, { mat: MAT.CRYSTAL, n: 1 }] });
   RECIPES.push({ kind: 'gun', station: true, costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 12 }] });
   RECIPES.push({ kind: 'wtable', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 6 }, { item: 'coin', n: 40 }] });
   RECIPES.push({ kind: 'rounds', yields: 24, costs: [{ item: 'ironingot', n: 1 }, { item: 'coal', n: 1 }] });
@@ -3346,6 +3384,7 @@ function craft(slots, r, free){
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
                   : r.kind === 'wings' ? { kind: 'wings' }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
+                  : r.kind === 'phone' ? { kind: 'phone' }
                   : r.kind === 'mender' ? { kind: 'mender', charge: 100 }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
                   : r.kind === 'bike' ? { kind: 'bike', charge: 100 }
@@ -4935,6 +4974,7 @@ const game = {
   forts: {},
   cities: {},
   bossKills: {},
+  news: [], market: null,
   dispSlot: null,                     // the one special dispenser slot
   tool: { shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 },  // shared across all tools
   undoStack: [], orbFlash: 0,
@@ -7307,7 +7347,7 @@ const AMB_NIGHT = new THREE.Color(0.10, 0.11, 0.17);
 function updateDayNight(dt){
   if (game.ui === 'none' && !game.photo){
     const t2 = game.timeOfDay + dt / DAY_CYCLE;
-    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); }
+    if (t2 >= 1){ game.day = (game.day || 0) + 1; seasonSys.onNewDay(); econSys.onNewDay(); bankSys.onNewDay(); }
     game.timeOfDay = t2 % 1;
   }
   const phase = game.timeOfDay * Math.PI * 2;
@@ -7461,6 +7501,19 @@ const WEATHER = {
   fog:   { dark: 0.86, fog: 0.1 },
 };
 const weatherSys = {
+  // the morning's weather is decided by the seed and the day, so the
+  // Herald can print tomorrow's (Build 45); the rolls through the day stay
+  // the day's own
+  forecast(day){
+    const r = CORE.mulberry32((game.seed ^ Math.imul(day + 1, 0x9E3779B1)) >>> 0)();
+    return r < 0.52 ? 'clear' : r < 0.74 ? 'rain' : r < 0.82 ? 'storm' : r < 0.9 ? 'fog' : 'clear';
+  },
+  dawn(day){
+    let k = this.forecast(day);
+    const snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
+    if (snowy && (k === 'rain' || k === 'storm')) k = 'snow';
+    this.set(k, 200 + CORE.mulberry32((game.seed ^ Math.imul(day + 7, 0x85EBCA77)) >>> 0)() * 300);
+  },
   cur: WEATHER.clear, kind: 'clear', t: 240, flashT: 0, boltT: 0, dripT: 0, snowT: 0, painted: 0, fires: [], pts: null, thunder: [], puddles: [],
   set(kind, dur){
     this.kind = kind; this.cur = WEATHER[kind] || WEATHER.clear; this.t = dur; this.painted = 0;
@@ -8320,7 +8373,7 @@ const pnodeSys = {
     }
     return this.mats;
   },
-  model(t){
+  model(t, n){
     const M = this.ensureMats();
     const g = new THREE.Group();
     if (t === 'lever'){
@@ -8634,6 +8687,15 @@ const pnodeSys = {
         p2.position.set(px, py, -0.07);
         g.add(p2);
       }
+    } else if (t === 'statue'){
+      // a figure in marble on a plinth, one fist up (the plaque is text: rebuild)
+      if (!M.marble) M.marble = pixMat(PixTex.make('statueMarble', (c, w, h, rng) => { pxSpeckle(c, rng, '#d8d6cf', '#c4c2ba', '#e9e7e0', 24); c.fillStyle = '#b9b7ae'; c.fillRect(0, 7, 16, 1); c.fillRect(9, 0, 1, 7); }));
+      const S = M.marble;
+      const bx = (w, hh, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), S); m.position.set(x, y, z); g.add(m); };
+      bx(1.6, 1.0, 1.6, 0, 0.5, 0); bx(1.3, 0.2, 1.3, 0, 1.1, 0);
+      bx(0.28, 0.9, 0.3, -0.18, 1.65, 0); bx(0.28, 0.9, 0.3, 0.18, 1.65, 0);
+      bx(0.7, 0.9, 0.4, 0, 2.55, 0); bx(0.42, 0.42, 0.42, 0, 3.22, 0);
+      bx(0.22, 0.8, 0.22, -0.5, 2.55, 0); bx(0.22, 0.8, 0.22, 0.5, 3.1, 0); bx(0.28, 0.28, 0.28, 0.5, 3.6, 0);
     } else if (t === 'ped'){
       const base = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), M.steel);
       base.position.y = 0.06;
@@ -8667,6 +8729,17 @@ const pnodeSys = {
       for (const z of [-1.0, 1.0]){ const pole = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.46, 0.07), M.bark); pole.position.set(0, 0.73, z); g.add(pole); }
       const roll = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 1.6), new THREE.MeshBasicMaterial({ color: 0x6a5a4a })); roll.position.set(0.25, 0.1, 0.05);
       g.add(back, ridge, roll);
+    } else if (t === 'counter'){
+      // a shop counter: a plank top on a panelled front, a brass rail, its
+      // length along x (n.len); the keeper stands behind it (-z)
+      const L = (n && n.len) || 3;
+      const front = new THREE.Mesh(new THREE.BoxGeometry(L, 0.92, 0.12), M.wood); front.position.set(0, 0.46, 0.34);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(L + 0.1, 0.1, 0.84), pixMat(PROP_TEX.tableTop)); top.position.y = 0.97;
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(L - 0.2, 0.05, 0.05), M.copper); rail.position.set(0, 1.06, 0.36);
+      const endA = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.8), M.wood); endA.position.set(-L / 2 + 0.06, 0.46, 0);
+      const endB = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.8), M.wood); endB.position.set(L / 2 - 0.06, 0.46, 0);
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(L - 0.3, 0.06, 0.6), M.wood); shelf.position.set(0, 0.5, -0.05);
+      g.add(front, top, rail, endA, endB, shelf);
     } else if (t === 'sign'){
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), M.bark);
       post.position.y = 0.55;
@@ -8729,7 +8802,7 @@ const pnodeSys = {
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.items = [];
     for (const n of game.pnodes || []){
-      const g = this.model(n.t);
+      const g = this.model(n.t, n);
       g.position.set(n.x, n.y, n.z);
       g.rotation.y = n.yaw || 0;
       if (n.t === 'lever' && g.userData.arm) g.userData.arm.rotation.z = n.on ? -0.7 : 0.7;
@@ -8765,6 +8838,20 @@ const pnodeSys = {
         const face = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.56),
           new THREE.MeshBasicMaterial({ map: tex }));
         face.position.set(0, 1.25, -0.04);
+        face.rotation.y = Math.PI;
+        g.add(face);
+      }
+      if (n.t === 'statue' && n.text){
+        const cv = document.createElement('canvas');
+        cv.width = 128; cv.height = 64;
+        const c2 = cv.getContext('2d');
+        c2.fillStyle = '#4a3a22'; c2.fillRect(0, 0, 128, 64);
+        c2.fillStyle = '#e8c878'; c2.font = 'bold 10px monospace'; c2.textAlign = 'center';
+        String(n.text).split('\n').slice(0, 4).forEach((ln, i) => c2.fillText(ln.slice(0, 21), 64, 17 + i * 14));
+        const tex = new THREE.CanvasTexture(cv);
+        tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+        const face = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshBasicMaterial({ map: tex }));
+        face.position.set(0, 0.55, -0.81);
         face.rotation.y = Math.PI;
         g.add(face);
       }
@@ -8858,7 +8945,7 @@ const pnodeSys = {
     if (k === 'n'){
       const n = this.byId(num);
       if (!n) return null;
-      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench') return null;   // decor doesn't wire
+      if (n.t === 'astand' || n.t === 'ped' || n.t === 'sign' || n.t === 'counter' || n.t === 'board' || n.t === 'repair' || n.t === 'cannon' || n.t === 'windsock' || n.t === 'station' || n.t === 'claymore' || n.t === 'spikes' || n.t === 'bell' || n.t === 'tent' || n.t === 'trench' || n.t === 'statue') return null;   // decor doesn't wire
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
@@ -10390,6 +10477,9 @@ function itemModel(it){
     m.rotation.z = 0.2;
   } else if (K === 'wool'){
     box(0.3, 0.24, 0.3, pixMat(PROP_TEX.wool), 0, 0.12, 0);
+  } else if (K === 'phone'){
+    box(0.16, 0.3, 0.03, basic('#16161c'), 0, 0.15, 0);
+    box(0.12, 0.2, 0.012, basic('#59c8d8'), 0, 0.17, 0.02);
   } else if (K === 'coin'){
     const m = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.05, 12),
       basic('#c9a13c'));
@@ -10664,6 +10754,8 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.5, hy: 0.42, hz: 0.36 });
     else if (n.t === 'gen2')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.48, z: n.z, hx: 0.63, hy: 0.5, hz: 0.45 });
+    else if (n.t === 'counter')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.5, z: n.z, hx: (n.len || 3) / 2 + 0.05, hy: 0.52, hz: 0.42 });
     else if (n.t === 'hopper')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.6, z: n.z, hx: 0.5, hy: 0.55, hz: 0.5 });
     else if (n.t === 'crafter')
@@ -10786,6 +10878,12 @@ const VROLE = {
   spark:   { name: 'electrician',  coat: 0x3f7a3f, hat: 0x245224 },
   food:    { name: 'grocer',       coat: 0xb06a9a, hat: 0x7a4468 },
   mayor:   { name: 'mayor',        coat: 0x2f2f38, hat: 0xd9b25a },
+  clerk:   { name: 'ticket clerk', coat: 0x35506a, hat: 0x1e2e3e },
+  press:   { name: 'editor',       coat: 0x5a4a3a, hat: 0x2e2418 },
+  stock:   { name: 'stockbroker',  coat: 0x2a2a30, hat: 0x8a8a96 },
+  floor:   { name: 'floor broker', coat: 0x3a3a44, hat: 0x6a6a76 },
+  promoter:{ name: 'fight promoter', coat: 0x7a2f5a, hat: 0xd9b25a },
+  banker:  { name: 'banker',       coat: 0x1f3a2a, hat: 0xd9d9c0 },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
 };
@@ -11583,7 +11681,9 @@ function spawnEntity(type, x, y, z){
   return e;
 }
 function killEntity(e, byPlayer){
+  if (e.bossType && byPlayer && ENT_DEF[e.bossType]){ econSys.note(ENT_DEF[e.bossType].boss + ' IS SLAIN', ['deed', 'boss'], null, true); econSys.move('arms', 0.03); }
   if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
+  if (e.collector && byPlayer) bankSys.collectorKilled(e);
   if (e.type === 'lurker' && byPlayer) boardSys.lurkerKilled(e.x, e.z);
   if (e.siege && byPlayer){ const sr = game.cities && game.cities[e.siege]; if (sr && sr.siege) sr.siege.kills = (sr.siege.kills || 0) + 1; }
   if (game.carried === e) game.carried = null;
@@ -11723,6 +11823,7 @@ function killEntity(e, byPlayer){
       if (rec) rec.bossDead = true;
       addStackItem('vkey', 1); addStackItem('coin', 40);
       toast('the WARLORD falls — +1 VAULT KEY  ·  +40 coins');
+      econSys.note('A LONE MINER FELLS A WARLORD IN THE WILDS', ['deed'], null, true);
       markSave();
     }
     else {
@@ -12001,6 +12102,7 @@ const villageSys = {
         try { this.stamp(v, rec); } finally { propBatchEnd(); }
         this.footbridge(v, rec);
         toast('you found ' + rec.name + ' — a village');
+        econSys.note('THE VILLAGE OF ' + rec.name.toUpperCase() + ' FOUND BY A TRAVELLER', ['found'], null, true);
         AudioSys.sfx('craft');
         markSave();
       }
@@ -12278,7 +12380,9 @@ const expeditionSys = {
       $('pagebody').textContent = this.text(i);
       if (i < 8 && !E.camps[i].known){ E.camps[i].known = true; $('pagesub').textContent = 'the next camp is marked · E to close'; }
       else $('pagesub').textContent = 'E to close';
+      if (i > (E.read || 0)) econSys.note('A PAGE OF THE ' + E.L.toUpperCase() + ' SURVEY RECOVERED' + (i === 9 ? ' — THE LAST NOTE' : ''), ['deed', 'survey'], null, true);
       E.read = Math.max(E.read || 0, i);
+      if (i === 9 && !E.monument){ E.monument = 1; monumentSys.raise(null, 'survey'); }
     } else {
       $('pagetitle').textContent = ('the ' + E.L + ' survey').toUpperCase();
       let body = 'A map in a careful hand: ' + E.C + ' at the edge, and eight camps walked out from it, a day apart, each marked with its day.\n\n';
@@ -12798,6 +12902,7 @@ const crewSys = {
     e.hp -= dmg; e.flash = 0.2;
     e.vx += (kx || 0) * 0.6; e.vz += (kz || 0) * 0.6; e.vy += 1.5;
     if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 40) AudioSys.sfx('hurt');
+    if (e.hp > 0 && e.hp < 24 && (e.rangAt == null || performance.now() - e.rangAt > 30000)){ e.rangAt = performance.now(); const h = villageSys.villagerRec(e); phoneSys.ring((h && h.vname ? h.vname : 'a crew member') + ' is in trouble' + (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 40 ? ' — ' + Math.round(Math.hypot(e.x - game.pos.x, e.z - game.pos.z)) + ' m away' : ''), 'call'); }
     if (e.hp <= 0) this.die(e);
   },
   // a crew member who dies is gone: their things fall where they fell,
@@ -13882,6 +13987,7 @@ const missionSys = {
 const tradeSys = {
   TIER: r => r >= 25 ? 'partner' : r >= 10 ? 'regular' : 'stranger',
   offers(role){
+    if (role === 'clerk' || role === 'press' || role === 'stock' || role === 'floor') return [];   // they sell tickets, papers, shares -- not wares
     if (role === 'broker') return [
       { sell: { k: 'coal', n: 5 }, price: 10, rep: 0 },
       { sell: { k: 'ironore', n: 5 }, price: 15, rep: 0 },
@@ -14143,6 +14249,7 @@ const tradeSys = {
         addStackItem(item.kind, item.count);
       }
       toast('bought ' + itemLabel(item) + (item.count > 1 ? ' ×' + item.count : '') + ' — ' + o.price + 'c');
+      econSys.bought(o.buy.make || o.buy.k, o.price, T.e.ckey);
     } else {
       const have = CORE.countItem(game.slots, o.sell.k);
       if (have < o.sell.n){
@@ -14153,6 +14260,7 @@ const tradeSys = {
       CORE.consumeItem(game.slots, o.sell.k, o.sell.n);
       addStackItem('coin', o.price);
       toast('sold — +' + o.price + ' coins');
+      econSys.sold(o.sell.k, o.price);
     }
     hrec.rep = Math.min(40, (hrec.rep || 0) + 1);
     if (T.e.ckey) citySys.cred(game.cities[T.e.ckey], 1);
@@ -14932,6 +15040,7 @@ const stationSys = {
     if (CORE.countItem(game.slots, 'coin') < lk.fare){ toast('not enough coins for the fare'); AudioSys.sfx('deny'); return; }
     CORE.consumeItem(game.slots, 'coin', lk.fare);
     giveItem({ kind: 'ticket', link: lk.L.key, to: lk.name, from: rec.name || 'the city', count: 1 }, 1);
+    econSys.bought('ticket', lk.fare, rec.key);
     const R = lineSys.route(lk.L), w = lineSys.wait(R, lk.fromA ? 'a' : 'b', lineSys.clock());
     toast('ticket to ' + lk.name + ' · ' + lk.fare + 'c — ' + (w <= 0 ? 'the train is standing: right click a car' : 'next train in ' + Math.ceil(w) + 's'));
     AudioSys.sfx('craft');
@@ -15013,6 +15122,8 @@ const siegeSys = {
     rec.siege = { n: N, pending: N, kills: 0, spawnT: 0.5, guardT: 0, holes: 0 };
     rec.damage = rec.damage || [];
     toast('SIEGE — raiders at the walls of ' + rec.name + ' (' + N + ' inbound) — the guard is out');
+    econSys.note('SIEGE AT ' + rec.name + ' — ' + N + ' raiders at the walls, the guard called out', ['siege'], rec.key);
+    econSys.shock(rec.key, -0.05); econSys.move('arms', 0.08);
     AudioSys.sfx('boom');
     markSave();
   },
@@ -15023,6 +15134,7 @@ const siegeSys = {
     if (why === 'far'){ markSave(); return; }
     const share = S.kills / Math.max(1, S.n);
     if (share >= 0.4){
+      monumentSys.raise(rec, 'siege');
       const coins = 20 * S.kills + 40;
       addStackItem('coin', coins);
       citySys.cred(rec, 8 + Math.round(share * 8));
@@ -15032,6 +15144,8 @@ const siegeSys = {
       addStackItem('coin', 10 * S.kills);
       toast(rec.name + ' holds — you took ' + S.kills + ' of ' + S.n + ' · +' + 10 * S.kills + ' coins');
     } else toast(why === 'dawn' ? 'dawn breaks the siege of ' + rec.name : 'the siege of ' + rec.name + ' is over');
+    econSys.note(why === 'dawn' ? 'DAWN BREAKS THE SIEGE OF ' + rec.name : 'THE SIEGE OF ' + rec.name + ' IS BROKEN' + (why === 'held' || why === 'kills' ? ' — a stranger stood with the guard' : ''), ['siege'], rec.key, why !== 'dawn');
+    econSys.move('build', 0.04);
     refreshHotbar(); markSave();
   },
   // the nearest tower wall point to a raider
@@ -16190,7 +16304,7 @@ const raidBaseSys = {
           e.fortKey = key;
         } else {
           const e = spawnEntity('lurker', rec.x, gy + 0.7, rec.z + 6);
-          e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260;
+          e.raider = true; e.noburn = true; e.warlord = true; e.fortKey = key; e.hp = 260; e.big = 1.65;
           if (e.mesh){
             e.mesh.scale.setScalar(1.65);
             e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color) o.material = o.material.clone(); });
@@ -17113,6 +17227,705 @@ const wreckSys = {
 // floor/facade modules -- hollow shells, real floor slabs, window bands
 // punched through the walls, a street door, and a corner rope shaft that
 // makes every floor climbable. The center block is a plaza.
+// ---------- THE PHONE (Build 46) ----------
+// One craftable slab with four apps -- STOCKS (the sheet, and trades if
+// you have opened an account at an Exchange), NEWS (the log, and every
+// ring), BUSINESS (what you hold; your shops come with OWNERSHIP), CALL
+// (a crew member to you; a cab to you, and from the cab to any city you
+// know) -- and it rings: a siege starting, crew in trouble, a headline
+// about you
+// ---------- THE PIT + MONUMENTS (Build 47) ----------
+// A bowl in every city with a promoter in the mouth: five bouts of what
+// already hunts you, scaled up, a stake at odds on yourself, a purse and
+// standing for each, the belt for the last. Leave the bowl and the
+// house keeps the stake. The city raises a statue with a plaque for the
+// belt, for a siege you broke, for the last note of the survey.
+const PIT_TIERS = [
+  { name: 'THE PENS',     foes: [['lurker', 3]],                 purse: 40,  odds: 1.5, line: 'three from the pens' },
+  { name: 'THE PACK',     foes: [['stalker', 4]],                purse: 80,  odds: 2,   line: 'four stalkers with no light to fear' },
+  { name: 'THE WALL',     foes: [['husk', 2], ['lurker', 2]],    purse: 150, odds: 3,   line: 'two husks and their handlers' },
+  { name: 'THE WARLORD',  foes: [['warlord', 1], ['lurker', 2]], purse: 300, odds: 4,   line: 'a warlord taken in the wilds, and his guard' },
+  { name: 'THE CHAMPION', foes: [['champion', 1]],               purse: 600, odds: 6,   line: 'the reigning champion of the pit' },
+];
+const pitSys = {
+  STAKES: [0, 25, 100, 250],
+  stake: 0,
+  rec(){ return game.activePit ? (game.cities || {})[game.activePit] : null; },
+  open(rec){
+    if (!rec || !rec.pit){ toast('this city has no pit'); return; }
+    if (netSys.guest){ toast('the promoter deals with the host'); return; }
+    if (game.ui !== 'none') return;
+    game.activePit = rec.key; game.ui = 'pit';
+    $('pittitle').textContent = 'THE PIT OF ' + rec.name;
+    this.refresh();
+    show('pitscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  refresh(){
+    const rec = this.rec(); if (!rec || !rec.pit) return;
+    const P = rec.pit, coins = CORE.countItem(game.slots, 'coin'), list = $('pitlist'); list.innerHTML = '';
+    if (this.stake > coins) this.stake = 0;
+    const st = $('pitstake'); st.innerHTML = '';
+    st.appendChild(Object.assign(document.createElement('span'), { className: 'sub', textContent: 'your stake, on yourself:' }));
+    for (const s of this.STAKES){
+      const b = document.createElement('span'); b.className = 'btn small'; b.textContent = s ? s + 'c' : 'none';
+      if (s === this.stake) b.style.borderColor = '#ffd25a';
+      if (s > coins) b.style.opacity = '0.4';
+      b.addEventListener('click', () => { if (s <= coins){ this.stake = s; this.refresh(); } else AudioSys.sfx('deny'); });
+      st.appendChild(b);
+    }
+    $('pitsub').textContent = (P.belt ? 'you hold the belt of ' + rec.name + ' · ' : '') + 'coins ' + coins +
+      ' · a bout won pays its purse and your stake at the odds · leave the bowl and the house keeps the stake · E to close';
+    PIT_TIERS.forEach((T, i) => {
+      const won = i < (P.won || 0), open = i <= (P.won || 0);
+      const r = phoneSys.row(list, '<div class="cname" style="min-width:170px;">' + (won ? '✓ ' : '') + T.name + '<div class="sub">' + T.line + '</div></div>' +
+        '<div class="sub" style="min-width:170px;">purse ' + T.purse + 'c · odds ' + T.odds + ':1' + (this.stake ? ' · a win pays ' + (T.purse + Math.round(this.stake * T.odds)) + 'c' : '') + '</div>');
+      const b = document.createElement('span'); b.className = 'btn small'; b.style.marginLeft = 'auto';
+      b.textContent = !open ? 'LOCKED' : won ? 'AGAIN' : 'FIGHT';
+      if (!open) b.style.opacity = '0.4';
+      b.addEventListener('click', ev => { ev.stopPropagation(); if (open) this.fight(rec, i); else AudioSys.sfx('deny'); });
+      r.appendChild(b);
+    });
+  },
+  fight(rec, ti){
+    const P = rec.pit, T = PIT_TIERS[ti];
+    if (!P || !T) return;
+    if (game.bout){ toast('a bout is on'); return; }
+    if (this.stake > CORE.countItem(game.slots, 'coin')){ toast('you cannot cover that stake'); AudioSys.sfx('deny'); return; }
+    if (this.stake) CORE.consumeItem(game.slots, 'coin', this.stake);
+    closeOverlay(); game.ui = 'none';
+    const fx = P.fx, fz = P.fz, fy = P.gy - 3;
+    game.pos.set(P.x + fx * 5, fy + 1.2, P.z + fz * 5); game.vel.set(0, 0, 0); game.fly = false;
+    game.yaw = Math.atan2(fx, fz); game.pitch = -0.1;   // facing the far wall
+    if (game.driving) exitCar();
+    const bout = game.bout = { key: rec.key, tier: ti, stake: this.stake, out: 0, t: 0, n: 0, left: 0 };
+    let k = 0, total = 0;
+    for (const [, n] of T.foes) total += n;
+    for (const [type, n] of T.foes) for (let j = 0; j < n; j++){
+      const a = Math.atan2(-fz, -fx) + (k - (total - 1) / 2) * 0.55; k++;    // across the floor from you
+      const x = P.x + Math.cos(a) * 5.5, z = P.z + Math.sin(a) * 5.5;
+      const e = spawnEntity(type === 'warlord' ? 'lurker' : type === 'champion' ? 'husk' : type, x, fy + 0.7, z);
+      e.pit = rec.key; e.noburn = true; e.tt = 0; e.pitTier = ti;
+      if (type === 'warlord'){ e.warlord = true; e.raider = true; e.hp = 260; this.dress(e, 1.65, 0.06); }
+      if (type === 'champion'){ e.champion = true; e.hp = 420; this.dress(e, 1.45, -0.2); }
+      if (type === 'lurker' && ti >= 2) e.raider = true;
+      bout.n++;
+    }
+    bout.left = bout.n;
+    toast(T.name + ' — ' + bout.n + ' in the pit' + (bout.stake ? ' · ' + bout.stake + 'c riding on you' : ''));
+    AudioSys.sfx('boom'); refreshHotbar(); markSave();
+  },
+  dress(e, scale, hue){
+    e.big = scale; e.hue = hue;
+    if (!e.mesh) return;                                   // meshes are built when seen: tick() finishes it
+    e.dressed = 1;
+    e.mesh.scale.setScalar(scale);
+    e.mesh.traverse(o => { if (o.isMesh && o.material && o.material.color){ o.material = o.material.clone(); o.material.color.offsetHSL(hue, 0.15, 0.06); } });
+  },
+  foes(){ const B = game.bout; return B ? game.entities.filter(e => e.pit === B.key) : []; },
+  tick(dt){
+    const B = game.bout;
+    this.k = (this.k || 0) + 1;
+    if (!B){
+      // strays from a bout that is over (a load mid-fight): gone
+      if (this.k % 120 === 0) for (const e of [...game.entities]) if (e.pit) killEntity(e, false);
+      return;
+    }
+    const rec = (game.cities || {})[B.key], P = rec && rec.pit;
+    if (!P){ game.bout = null; return; }
+    B.t += dt;
+    const foes = this.foes();
+    if (foes.length < B.left){ B.left = foes.length; if (B.left > 0) toast(B.left + ' left'); }
+    if (!foes.length && B.t > 1){ this.win(rec, B); return; }
+    // the bowl holds them
+    for (const e of foes){
+      if (e.big && e.mesh && !e.dressed) this.dress(e, e.big, e.hue);
+      if (Math.hypot(e.x - P.x, e.z - P.z) > 11 || e.y > P.gy + 0.8){
+        const a = Math.atan2(e.z - P.z, e.x - P.x);
+        e.x = P.x + Math.cos(a) * 6; e.z = P.z + Math.sin(a) * 6; e.y = P.gy - 2.3; e.vx = 0; e.vz = 0; e.vy = 0;
+        if (e.mesh) e.mesh.position.set(e.x, e.y, e.z);
+      }
+    }
+    // and you: five seconds out of it and the bout is forfeit
+    const pd = Math.hypot(game.pos.x - P.x, game.pos.z - P.z);
+    if (pd > 60){ this.forfeit('you left the pit'); return; }
+    if (pd > 11.5 || game.pos.y > P.gy + 1.0){
+      const was = Math.floor(B.out); B.out += dt;
+      if (B.out > 5){ this.forfeit('you left the bowl'); return; }
+      if (Math.floor(B.out) !== was) toast('back in the bowl — ' + Math.ceil(5 - B.out));
+    } else B.out = 0;
+  },
+  win(rec, B){
+    const T = PIT_TIERS[B.tier], P = rec.pit;
+    const pay = T.purse + Math.round(B.stake * T.odds);
+    addStackItem('coin', pay);
+    game.bout = null;
+    P.won = Math.max(P.won || 0, B.tier + 1);
+    citySys.cred(rec, 4 + 2 * B.tier);
+    toast(T.name + ' is yours — ' + pay + ' coins');
+    AudioSys.sfx('craft');
+    econSys.note('A STRANGER TAKES ' + T.name + ' IN THE PIT OF ' + rec.name, ['deed', 'pit'], rec.key, true);
+    if (B.tier === PIT_TIERS.length - 1 && !P.belt){
+      P.belt = 1;
+      giveItem({ kind: 'belt', city: rec.name }, 1);
+      citySys.cred(rec, 20);
+      econSys.note('CHAMPION OF THE PIT: A STRANGER TAKES THE BELT OF ' + rec.name, ['deed', 'pit'], rec.key, true);
+      toast('the belt of ' + rec.name + ' is yours');
+      monumentSys.raise(rec, 'champion');
+    }
+    refreshHotbar(); markSave();
+  },
+  forfeit(why){
+    const B = game.bout; if (!B) return;
+    game.bout = null;
+    for (const e of [...game.entities]) if (e.pit) killEntity(e, false);
+    toast('the bout is forfeit — ' + why + (B.stake ? ' · the house keeps ' + B.stake + 'c' : ''));
+    AudioSys.sfx('deny'); markSave();
+  },
+};
+// ---------- THE BANK (Build 48) ----------
+// One account for the whole world, kept at every bank: deposits that
+// survive death and earn one percent a day; loans against your standing
+// at four percent a day, due in a week. Past due, the collectors come
+// for you each dawn -- more of them each day -- until you pay, and the
+// city that lent remembers. Killing one goes on the bill.
+const bankSys = {
+  RATE: 0.01, LOAN_RATE: 0.04, TERM: 7, BILL: 40,
+  B(){ return game.bank || (game.bank = { bal: 0, debt: 0, due: 0, city: null, overdue: 0, lastDay: game.day || 0 }); },
+  limit(rec){ return 200 + Math.max(0, (rec && rec.rep) || 0) * 20; },
+  rec(){ return game.activeBank ? (game.cities || {})[game.activeBank] : null; },
+  open(rec){
+    if (!rec) return;
+    if (netSys.guest){ toast('the banker deals with the host'); return; }
+    if (game.ui !== 'none') return;
+    game.activeBank = rec.key; game.ui = 'bank';
+    $('banktitle').textContent = 'THE BANK OF ' + rec.name;
+    this.refresh();
+    show('bankscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  btn(parent, label, ok, fn){
+    const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label;
+    if (!ok) b.style.opacity = '0.4';
+    b.addEventListener('click', ev => { ev.stopPropagation(); if (ok){ fn(); this.refresh(); } else AudioSys.sfx('deny'); });
+    parent.appendChild(b); return b;
+  },
+  refresh(){
+    const rec = this.rec(); if (!rec) return;
+    const B = this.B(), coins = CORE.countItem(game.slots, 'coin'), day = game.day || 0, list = $('banklist'); list.innerHTML = '';
+    $('banksub').textContent = 'coins ' + coins + ' · one account, every bank · deposits earn ' + (this.RATE * 100).toFixed(0) + '% a day and survive your death · E to close';
+    const r1 = phoneSys.row(list, '<div class="cname" style="min-width:170px;">ON DEPOSIT<div class="sub">' + B.bal.toFixed(0) + ' coins</div></div>');
+    const d1 = document.createElement('div'); d1.style.cssText = 'display:flex; gap:4px; margin-left:auto; flex-wrap:wrap;';
+    for (const n of [25, 100, 'ALL']) this.btn(d1, 'IN ' + n, coins > 0 && (n === 'ALL' || coins >= n), () => this.deposit(n === 'ALL' ? coins : n));
+    for (const n of [25, 100, 'ALL']) this.btn(d1, 'OUT ' + n, B.bal > 0 && (n === 'ALL' || B.bal >= n), () => this.withdraw(n === 'ALL' ? Math.floor(B.bal) : n));
+    r1.appendChild(d1);
+    const lim = this.limit(rec), room = Math.max(0, Math.floor(lim - B.debt));
+    const r2 = phoneSys.row(list, '<div class="cname" style="min-width:170px;">A LOAN<div class="sub">' + (B.debt > 0
+      ? 'owing ' + B.debt.toFixed(0) + ' · due day ' + B.due + (day > B.due ? ' · OVERDUE · the collectors are out' : ' · ' + (B.due - day) + ' days')
+      : 'none') + '<br>' + rec.name + ' lends you up to ' + lim + ' at ' + (this.LOAN_RATE * 100).toFixed(0) + '% a day, due in ' + this.TERM + ' days · ' + (rec.rep || 0) + ' standing</div></div>');
+    const d2 = document.createElement('div'); d2.style.cssText = 'display:flex; gap:4px; margin-left:auto; flex-wrap:wrap;';
+    for (const n of [100, 500, 'MAX']) this.btn(d2, 'BORROW ' + n, room > 0 && (n === 'MAX' || room >= n), () => this.borrow(rec, n === 'MAX' ? room : n));
+    for (const n of [100, 'ALL']) this.btn(d2, 'REPAY ' + n, B.debt > 0 && coins > 0 && (n === 'ALL' || coins >= n), () => this.repay(n === 'ALL' ? 1e9 : n));
+    r2.appendChild(d2);
+    if (B.overdue) phoneSys.row(list, '<div class="sub">a loan past due: ' + (3 + B.overdue) + ' collectors at the next dawn, ' + rec.name + ' remembers, and every one you kill goes on the bill (' + this.BILL + 'c)</div>');
+  },
+  deposit(n){
+    n = Math.min(n, CORE.countItem(game.slots, 'coin')); if (n <= 0) return;
+    CORE.consumeItem(game.slots, 'coin', n); this.B().bal += n;
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  withdraw(n){
+    const B = this.B(); n = Math.min(n, Math.floor(B.bal)); if (n <= 0) return;
+    B.bal -= n; addStackItem('coin', n);
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  borrow(rec, n){
+    const B = this.B(), room = Math.floor(this.limit(rec) - B.debt);
+    n = Math.min(n, room); if (n <= 0){ toast('the bank will lend you no more'); AudioSys.sfx('deny'); return; }
+    if (B.debt <= 0){ B.due = (game.day || 0) + this.TERM; B.city = rec.key; B.overdue = 0; }
+    B.debt += n; addStackItem('coin', n);
+    toast(n + ' coins lent · due day ' + B.due);
+    econSys.move('build', 0.01);
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  repay(n){
+    const B = this.B(), coins = CORE.countItem(game.slots, 'coin');
+    n = Math.min(n, coins, Math.ceil(B.debt)); if (n <= 0) return;
+    CORE.consumeItem(game.slots, 'coin', n); B.debt = Math.max(0, B.debt - n);
+    if (B.debt < 0.5){ B.debt = 0; B.overdue = 0; toast('the loan is settled'); this.dismiss(); }
+    else toast(n + ' repaid · ' + B.debt.toFixed(0) + ' owing');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  onNewDay(){
+    if (netSys.guest || !game.bank) return;
+    const B = this.B(), day = game.day || 0;
+    if (B.lastDay >= day) return;
+    const days = Math.min(30, day - B.lastDay); B.lastDay = day;
+    for (let i = 0; i < days; i++){
+      if (B.bal > 0) B.bal = +(B.bal * (1 + this.RATE)).toFixed(2);
+      if (B.debt > 0) B.debt = +(B.debt * (1 + this.LOAN_RATE)).toFixed(2);
+    }
+    if (B.debt > 0 && day > B.due){
+      B.overdue = (B.overdue || 0) + 1;
+      const rec = (game.cities || {})[B.city];
+      if (rec) citySys.cred(rec, -5, 'a loan past due');
+      this.collectors(3 + B.overdue);
+      if (B.overdue === 1) econSys.note('A LOAN DEFAULTED AT THE BANK OF ' + ((rec && rec.name) || 'THE CITY') + ' — THE COLLECTORS ARE OUT', ['deed', 'bank'], B.city, true);
+      else phoneSys.ring('the collectors are out again — ' + B.debt.toFixed(0) + ' owing', 'business');
+    }
+    markSave();
+  },
+  // they come for you where you stand, at dawn, in coats, and do not burn
+  collectors(n){
+    if (game.ui === 'dead') return;
+    const have = game.entities.filter(e => e.collector).length;
+    for (let i = have; i < n; i++){
+      const a = Math.random() * Math.PI * 2, d = 26 + Math.random() * 8;
+      const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
+      const e = spawnEntity('lurker', x, Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7, z);
+      e.collector = true; e.raider = true; e.noburn = true; e.hp = 55; e.big = 1.15; e.hue = 0.55;
+    }
+    toast('the collectors are out — pay the bank');
+    AudioSys.sfx('boom');
+  },
+  collectorKilled(e){
+    const B = this.B(); if (B.debt <= 0) return;
+    B.debt += this.BILL; toast('the bank bills you for its man — +' + this.BILL + ' owing'); markSave();
+  },
+  dismiss(){
+    let n = 0;
+    for (const e of [...game.entities]) if (e.collector){ killEntity(e, false); n++; }
+    if (n) toast('the collectors go home');
+  },
+  tick(dt){
+    this.k = (this.k || 0) + 1;
+    if (this.k % 60) return;
+    const B = game.bank;
+    if ((!B || B.debt <= 0) && game.entities.some(e => e.collector)) this.dismiss();
+    for (const e of game.entities) if (e.collector && e.big && e.mesh && !e.dressed) pitSys.dress(e, e.big, e.hue);
+  },
+};
+const MONUMENTS = {
+  champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
+  siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
+  survey:   { title: 'THE SURVEY OF THE DEEP',  line: 'who brought the last note up' },
+};
+const monumentSys = {
+  // a statue in the plaza for a deed, once per deed per city; with no
+  // city known yet the deed waits for the first
+  raise(rec, deed){
+    if (netSys.guest || !MONUMENTS[deed]) return;
+    if (!rec){
+      let best = null, bd = 1e9;
+      for (const r of Object.values(game.cities || {})){
+        if (!r.stamped || r.gy == null) continue;
+        const d = Math.hypot(r.x - game.pos.x, r.z - game.pos.z);
+        if (d < bd){ bd = d; best = r; }
+      }
+      if (!best){ (game.monPending = game.monPending || []).push(deed); markSave(); return; }
+      rec = best;
+    }
+    rec.monuments = rec.monuments || {};
+    if (rec.monuments[deed]) return;
+    const slots = [[-11, -11], [11, -11], [-11, 11], [11, 11]];
+    const used = Object.keys(rec.monuments).length;
+    if (used >= slots.length) return;
+    rec.monuments[deed] = 1;
+    const [ox, oz] = slots[used], g = rec.gy, M = MONUMENTS[deed];
+    const x = rec.x + ox, z = rec.z + oz;
+    const yaw = Math.atan2(ox, oz);                       // faces the obelisk
+    propBatchBegin();
+    try { pnodeSys.add('statue', x, g, z, yaw, { text: M.title + '\n' + M.line + '\nraised by ' + (rec.name || 'the city') + '\nday ' + (game.day || 0), deed }); }
+    finally { propBatchEnd(); }
+    game.torches.push([x - 1.3, g + 1.1, z], [x + 1.3, g + 1.1, z]); torchSys.rebuild();
+    toast(rec.name + ' raises a statue: ' + M.title.toLowerCase());
+    econSys.note(rec.name + ' RAISES A STATUE TO THE STRANGER — ' + M.title, ['deed', 'monument'], rec.key, true);
+    AudioSys.sfx('craft'); markSave();
+  },
+  settle(rec){
+    const L = game.monPending;
+    if (!L || !L.length || !rec || !rec.stamped) return;
+    this.raise(rec, L.shift());
+  },
+};
+const phoneSys = {
+  have(){ return game.slots.some(s => s && s.kind === 'phone'); },
+  ring(text, app){
+    if (!this.have() || netSys.guest) return;
+    (game.phoneLog = game.phoneLog || []).unshift({ d: game.day || 0, t: text, app: app || 'news' });
+    if (game.phoneLog.length > 40) game.phoneLog.length = 40;
+    toast('\u260e ' + text);
+    AudioSys.sfx('click');
+    markSave();
+  },
+  open(){
+    if (game.ui !== 'none') return;
+    game.ui = 'phone';
+    this.app('home');
+    show('phonescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+    const hb = $('phonehome'); if (hb && !hb._wired){ hb._wired = true; hb.addEventListener('click', () => this.app('home')); }
+  },
+  row(parent, html, onClick, style){
+    const d = document.createElement('div'); d.className = 'craftrow'; d.innerHTML = html;
+    if (style) d.style.cssText += style;
+    if (onClick) d.addEventListener('click', onClick);
+    parent.appendChild(d); return d;
+  },
+  app(name){
+    const body = $('phonebody'); body.innerHTML = '';
+    const M = econSys.M();
+    $('phonetitle').textContent = name === 'home' ? 'PHONE' : name.toUpperCase();
+    if (name === 'home'){
+      const rings = (game.phoneLog || []).length;
+      const tile = (label, sub, app) => this.row(body, '<div class="cname">' + label + '<div class="sub">' + sub + '</div></div>', () => this.app(app));
+      tile('STOCKS', 'the sheet' + (M.acct ? ' · trade from here' : ' · open an account at an Exchange to trade'), 'stocks');
+      tile('NEWS', (rings ? rings + ' rings · ' : '') + 'what the world did', 'news');
+      tile('BUSINESS', 'shares worth ' + econSys.value().toFixed(0) + ' · dividends ' + M.cash.toFixed(0), 'business');
+      tile('CALL', 'crew to you · a cab to you', 'call');
+      return;
+    }
+    if (name === 'stocks'){
+      const coins = CORE.countItem(game.slots, 'coin');
+      const T = econSys.top();
+      for (const C of COMPANIES){
+        const c = M.co[C.id], ch = econSys.change(C.id), have = M.port[C.id] || 0;
+        const r = this.row(body, '<div class="cname" style="min-width:150px;">' + (T === C ? '★ ' : '') + C.name + '<div class="sub">' + (have ? 'you hold ' + have : C.kind) + '</div></div>' +
+          '<div style="min-width:80px; text-align:right;">' + c.p.toFixed(2) + '<div class="sub" style="color:' + (ch >= 0 ? '#8bff9e' : '#ff7a5c') + '">' + (ch >= 0 ? '+' : '') + (ch * 100).toFixed(1) + '%</div></div>');
+        if (M.acct){
+          const bt = document.createElement('div'); bt.style.cssText = 'display:flex; gap:4px; margin-left:auto;';
+          const mk = (label, fn, ok) => { const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label; if (!ok) b.style.opacity = '0.4'; b.addEventListener('click', ev => { ev.stopPropagation(); if (ok){ fn(); this.app('stocks'); } else AudioSys.sfx('deny'); }); bt.appendChild(b); };
+          mk('BUY', () => econSys.trade(C.id, 1), coins >= c.p);
+          mk('SELL', () => econSys.trade(C.id, -1), have >= 1);
+          r.appendChild(bt);
+        }
+      }
+      const tips = M.tips.filter(t => t.d === (game.day || 0) + 1);
+      if (tips.length) this.row(body, '<div class="sub">the Herald hears for tomorrow: ' + tips.map(t => econSys.co(t.id).name + ' — ' + t.text).join(' · ') + '</div>');
+      return;
+    }
+    if (name === 'news'){
+      const L = game.phoneLog || [];
+      if (L.length){ this.row(body, '<div class="sub">RINGS</div>'); for (const r of L.slice(0, 8)) this.row(body, '<div class="cname">\u260e ' + r.t + '<div class="sub">day ' + r.d + '</div></div>'); }
+      const N = (game.news || []).slice(-10).reverse();
+      this.row(body, '<div class="sub">THE WIRE</div>');
+      if (!N.length) this.row(body, '<div class="sub">a quiet region</div>');
+      for (const n of N) this.row(body, '<div class="cname">' + n.t + '<div class="sub">day ' + n.d + (n.c && game.cities && game.cities[n.c] ? ' · ' + game.cities[n.c].name : '') + '</div></div>');
+      return;
+    }
+    if (name === 'business'){
+      this.row(body, '<div class="cname">SHARES<div class="sub">worth ' + econSys.value().toFixed(0) + ' coins' + (Object.keys(M.port).length ? ' · ' + Object.keys(M.port).map(id => M.port[id] + ' ' + econSys.co(id).name).join(', ') : ' · none') + '</div></div>');
+      this.row(body, '<div class="cname">DIVIDENDS<div class="sub">' + M.cash.toFixed(0) + ' coins waiting at any Exchange counter</div></div>');
+      const B = bankSys.B();
+      const br = this.row(body, '<div class="cname">THE BANK<div class="sub">' + B.bal.toFixed(0) + ' coins on deposit at ' + (bankSys.RATE * 100).toFixed(0) + '% a day' +
+        (B.debt > 0 ? ' \u00b7 owing ' + B.debt.toFixed(0) + ', due day ' + B.due + ((game.day || 0) > B.due ? ' \u00b7 OVERDUE, the collectors are out' : '') : ' \u00b7 no loan') + '</div></div>');
+      if (B.debt > 0 && CORE.countItem(game.slots, 'coin') > 0){
+        const bt = document.createElement('span'); bt.className = 'btn small'; bt.style.marginLeft = 'auto'; bt.textContent = 'REPAY';
+        bt.addEventListener('click', ev => { ev.stopPropagation(); bankSys.repay(1e9); this.app('business'); });
+        br.appendChild(bt);
+      }
+      this.row(body, '<div class="cname">SHOPS<div class="sub">none of your own yet — buy one from a keeper who trusts you (the OWNERSHIP build)</div></div>');
+      return;
+    }
+    if (name === 'call'){
+      const crew = crewSys.all();
+      if (!crew.length) this.row(body, '<div class="sub">no crew to call — hire someone at a village or a city</div>');
+      for (const e of crew){
+        const h = villageSys.villagerRec(e), d = Math.round(Math.hypot(e.x - game.pos.x, e.z - game.pos.z));
+        this.row(body, '<div class="cname">' + ((h && h.vname) || 'crew') + '<div class="sub">' + d + ' m away · ' + (e.crew.mode || 'follow') + '</div></div><span class="btn small" style="margin-left:auto;">COME</span>', () => this.callCrew(e));
+      }
+      const fare = 15;
+      this.row(body, '<div class="cname">A CAB<div class="sub">' + fare + ' coins · it drives to you; from it, any city you know</div></div><span class="btn small" style="margin-left:auto;">CALL</span>', () => this.callCab(fare));
+      return;
+    }
+  },
+  callCrew(e){
+    const C = e.crew; if (!C) return;
+    crewSys.order(e, 'follow');
+    const d = Math.hypot(e.x - game.pos.x, e.z - game.pos.z);
+    const h = villageSys.villagerRec(e), nm = (h && h.vname) || 'crew';
+    if (d > 60){
+      // too far to walk: they take a cab, and step out beside you
+      toast(nm + ' is taking a cab to you');
+      const at = performance.now();
+      e.cabbing = at;
+      setTimeout(() => {
+        if (e.cabbing !== at || !game.entities.includes(e) || !e.crew) return;
+        e.cabbing = 0;
+        const a = game.yaw + Math.PI + (Math.random() - 0.5);
+        e.x = game.pos.x - Math.sin(a) * 2.5; e.z = game.pos.z - Math.cos(a) * 2.5;
+        e.y = Math.max(game.gen.height(e.x, e.z), game.pos.y) + 0.5;
+        if (e.mesh) e.mesh.position.set(e.x, e.y, e.z);
+        toast(nm + ' steps out of a cab beside you');
+      }, 6000);
+    } else toast(nm + ' is coming');
+    AudioSys.sfx('click');
+    this.app('call');
+  },
+  callCab(fare){
+    if (game.entities.some(e => e.type === 'cab' && e.called)){ toast('a cab is already on its way'); AudioSys.sfx('deny'); return; }
+    if (CORE.countItem(game.slots, 'coin') < fare){ toast('the fare is ' + fare + ' coins'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', fare);
+    const a = game.yaw + 0.6, dist = 26;
+    const x = game.pos.x - Math.sin(a) * dist, z = game.pos.z - Math.cos(a) * dist;
+    const e = spawnEntity('cab', x, Math.max(game.gen.height(x, z), CORE.BEDROCK_Y + 1) + 0.7, z);
+    e.called = true; e.calledT = 0;
+    toast('a cab is on its way');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    closeOverlay();
+  },
+  // in the cab: pick a city you know; the road blurs; the plaza
+  ride(cab){
+    if (game.ui !== 'none') return;
+    const cities = Object.values(game.cities || {}).filter(r => r.stamped);
+    if (!cities.length){ toast('the driver knows no city yet — find one first'); return; }
+    game.ui = 'phone';
+    $('phonetitle').textContent = 'THE CAB';
+    const body = $('phonebody'); body.innerHTML = '';
+    this.row(body, '<div class="sub">where to?</div>');
+    for (const r of cities){
+      const d = Math.round(Math.hypot(r.x - game.pos.x, r.z - game.pos.z));
+      this.row(body, '<div class="cname">' + r.name + '<div class="sub">' + d + ' m · the plaza</div></div>', () => {
+        closeOverlay();
+        this.fade(() => {
+          game.pos.set(r.x + 6, (r.gy || game.gen.height(r.x + 6, r.z)) + 1.2, r.z + 6);
+          game.vel.set(0, 0, 0); game.forceStream = true;
+          killEntity(cab, false);
+          toast('the plaza of ' + r.name);
+        });
+      });
+    }
+    show('phonescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  fade(mid){
+    const f = $('fade'); f.style.opacity = '1';
+    setTimeout(() => { try { mid(); } finally { setTimeout(() => { f.style.opacity = '0'; }, 500); } }, 500);
+  },
+};
+// ---------- THE PRESS + THE EXCHANGE (Build 45) ----------
+// One log of what the world did (game.news), one market of eight
+// companies (game.market) whose prices close at dawn and move only for
+// reasons: the type's drift, the world (ore you sold, the region's
+// wattage, a car bought, a siege), and the Herald's tips -- events the
+// paper prints the day before, true seven times in ten. Never a die.
+const COMPANIES = [
+  { id: 'mine',   name: 'STRATA MINING',       kind: 'steady',   p0: 40,  drift: 0.004 },
+  { id: 'power',  name: 'REGIONAL POWER',      kind: 'steady',   p0: 55,  drift: 0.003 },
+  { id: 'rail',   name: 'THE LINE RAILWAYS',   kind: 'steady',   p0: 32,  drift: 0.003 },
+  { id: 'motors', name: 'HARROW MOTORS',       kind: 'volatile', p0: 120, drift: 0.0 },
+  { id: 'build',  name: 'SKYLINE CONSTRUCTION', kind: 'volatile', p0: 70,  drift: 0.002 },
+  { id: 'fish',   name: 'BLUE WATER FISHERIES', kind: 'volatile', p0: 24,  drift: 0.0 },
+  { id: 'arms',   name: 'ARMS & ORDNANCE',     kind: 'volatile', p0: 88,  drift: 0.001 },
+  { id: 'old',    name: 'OLD TOWN HOLDINGS',   kind: 'dog',      p0: 150, drift: -0.012, div: 0.02 },
+];
+const TIP_LINES = {
+  mine:   [['a new seam struck under the ridge', 'the deep mine floods'], ['ore prices firm on the coast', 'the smelters idle for want of coal']],
+  power:  [['a second turbine for the region', 'a substation fire in the industrial district'], ['the grid signs the harbor', 'a week of brownouts expected']],
+  rail:   [['a third daily service announced', 'a bridge closed for repair'], ['record fares on the line', 'a landslide on the cutting']],
+  motors: [['the new roadster unveiled', 'a recall on the coupe'], ['the dealership sells out', 'a strike at the works']],
+  build:  [['a tower contract for the plaza', 'a crane comes down in the harbor'], ['the mayor tenders a new hall', 'the stone quarry shuts']],
+  fish:   [['the shoals run early this year', 'the reef fleet comes home empty'], ['a market for the catch inland', 'a storm scatters the boats']],
+  arms:   [['the garrison orders a thousand rounds', 'the city guard cuts its powder'], ['forts arm against the raids', 'a peace on the northern road']],
+  old:    [['the old town lets its last floors', 'another tenant leaves the old town'], ['the holdings sell a warehouse', 'damp in the old town cellars']],
+};
+const econSys = {
+  M(){
+    if (game.market && game.market.co) return game.market;
+    // a believable thirty days behind every company, from the seed
+    const M = { day: game.day || 0, co: {}, tips: [], port: {}, cash: 0, sold: {}, acct: 0 };
+    for (const C of COMPANIES){
+      const rng = CORE.mulberry32((game.seed ^ Math.imul(C.id.length * 977 + C.p0, 0x9E3779B1)) >>> 0);
+      let p = C.p0 * (0.85 + rng() * 0.3);
+      const hist = [];
+      for (let i = 0; i < 30; i++){ p *= 1 + C.drift + (rng() - 0.5) * (C.kind === 'volatile' ? 0.08 : C.kind === 'dog' ? 0.03 : 0.02); hist.push(+p.toFixed(2)); }
+      M.co[C.id] = { p: +p.toFixed(2), hist, open: +p.toFixed(2), prev: hist[hist.length - 2] || +p.toFixed(2) };
+    }
+    game.market = M;
+    this.plan(M, (game.day || 0) + 1);
+    return M;
+  },
+  co(id){ return COMPANIES.find(C => C.id === id); },
+  // the log
+  note(text, tags, cityKey, me){
+    if (netSys.guest) return;
+    game.news = game.news || [];
+    game.news.push({ d: game.day || 0, t: text, tags: tags || [], c: cityKey || null, me: !!me });
+    if (game.news.length > 120) game.news.splice(0, game.news.length - 120);
+    if (me || (tags || []).includes('siege')) phoneSys.ring(text, 'news');
+    markSave();
+  },
+  // an immediate move, and a shock to every company of a city
+  move(id, pct){
+    const M = this.M(), c = M.co[id];
+    if (!c) return;
+    c.p = Math.max(1, +(c.p * (1 + pct)).toFixed(2));
+    markSave();
+  },
+  shock(cityKey, pct){ const M = this.M(); for (const id in M.co) this.move(id, pct); },
+  sold(kind, coins){
+    const M = this.M();
+    const bucket = /ore|ingot|coal|diamond|aether/.test(kind) ? 'ore' : kind === 'fish' || kind === 'cookedfish' ? 'fish' : null;
+    if (!bucket) return;
+    M.sold[bucket] = (M.sold[bucket] || 0) + coins;
+    markSave();
+  },
+  bought(what, coins, cityKey){
+    if (what === 'car' || what === 'sportscar' || what === 'bike' || what === 'hover'){ this.move('motors', what === 'sportscar' ? 0.08 : 0.04); this.note('A ' + (what === 'sportscar' ? 'SPORTS CAR' : what === 'car' ? 'NEW CAR' : what.toUpperCase()) + ' LEAVES THE DEALERSHIP', ['deal'], cityKey || null, true); }
+    else if (what === 'deed'){ this.move('build', 0.04); this.note('A NEWCOMER BUYS PROPERTY IN THE CITY', ['deal'], cityKey || null, true); }
+    else if (what === 'ticket'){ const M = this.M(); M.sold.rail = (M.sold.rail || 0) + coins; }
+  },
+  watts(){ let w = 0; for (const g of powerSys.gridSites || []) w += g.w; return w; },
+  // the Herald's tips for a day: two companies, a direction, a size, a
+  // line -- and, sealed until the day comes, whether it is true
+  plan(M, day){
+    const rng = CORE.mulberry32((game.seed ^ Math.imul(day + 3, 0xC2B2AE3D)) >>> 0);
+    const pick = [];
+    while (pick.length < 2){ const C = COMPANIES[(rng() * COMPANIES.length) | 0]; if (!pick.includes(C)) pick.push(C); }
+    M.tips = M.tips.filter(t => t.d >= day - 1);
+    for (const C of pick){
+      const up = rng() < 0.55, mag = +(0.04 + rng() * (C.kind === 'volatile' ? 0.12 : 0.05)).toFixed(3);
+      const L = TIP_LINES[C.id][(rng() * 2) | 0];
+      M.tips.push({ d: day, id: C.id, up, mag, text: up ? L[0] : L[1], ok: rng() < 0.7 });
+    }
+  },
+  // dawn: yesterday's tips come true (or not), the world's signals land,
+  // the dividend is paid, the next day's tips are planned, and the
+  // Herald's weather arrives
+  onNewDay(){
+    if (netSys.guest || !game.gen) return;
+    const M = this.M(), day = game.day || 0;
+    if (M.day >= day) return;
+    const w = this.watts();
+    for (const C of COMPANIES){
+      const c = M.co[C.id];
+      let r = C.drift;
+      for (const t of M.tips) if (t.d === day && t.id === C.id) r += t.ok ? (t.up ? t.mag : -t.mag) : (t.up ? -t.mag : t.mag) * 0.5;
+      if (C.id === 'mine')  r += Math.min(0.06, (M.sold.ore || 0) / 400);
+      if (C.id === 'fish')  r += Math.min(0.08, (M.sold.fish || 0) / 120);
+      if (C.id === 'rail')  r += Math.min(0.04, (M.sold.rail || 0) / 100);
+      if (C.id === 'power') r += Math.min(0.05, w / 4000);
+      c.prev = c.hist[c.hist.length - 1] || c.p;          // yesterday's close: what today's change reads against
+      c.p = Math.max(1, +(c.p * (1 + r)).toFixed(2));
+      c.hist.push(c.p); if (c.hist.length > 30) c.hist.splice(0, c.hist.length - 30);
+      c.open = c.p;
+      if (C.div && M.port[C.id]) M.cash = +(M.cash + M.port[C.id] * c.p * C.div).toFixed(2);
+    }
+    M.sold = {};
+    M.day = day;
+    this.plan(M, day + 1);
+    weatherSys.dawn(day);
+    markSave();
+  },
+  change(id){ const c = this.M().co[id]; const prev = c.prev || c.hist[c.hist.length - 2] || c.p; return (c.p - prev) / prev; },
+  top(){ let best = null, bv = -1e9; for (const C of COMPANIES){ const c = this.M().co[C.id]; const v = c.p / (c.hist[0] || c.p); if (v > bv){ bv = v; best = C; } } return best; },
+  // ---- the press ----
+  buyPaper(rec){
+    if (!rec) return;
+    const day = game.day || 0;
+    if (CORE.countItem(game.slots, 'coin') < 2){ toast('two coins for the Herald'); AudioSys.sfx('deny'); return; }
+    CORE.consumeItem(game.slots, 'coin', 2);
+    // printed once: the paper keeps the day's prices even when read later
+    const E = this.edition(day, rec.name || 'THE CITY');
+    giveItem({ kind: 'paper', day, city: rec.name || 'THE CITY', count: 1, body: E.body }, 1);
+    toast('the ' + (rec.name || 'city') + ' Herald, day ' + day + ' — right click to read');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+  },
+  edition(day, city){
+    const M = this.M();
+    const news = (game.news || []).filter(n => n.d === day - 1 || n.d === day);
+    const lines = [];
+    const heads = news.filter(n => n.me).concat(news.filter(n => !n.me)).slice(0, 6);
+    if (!heads.length) lines.push('A QUIET DAY IN THE REGION — nothing the wires would carry.');
+    for (const n of heads) lines.push(n.t + (n.c && game.cities && game.cities[n.c] ? '  (' + game.cities[n.c].name + ')' : ''));
+    lines.push('');
+    const fc = weatherSys.forecast(day + 1);
+    lines.push('TOMORROW: ' + (fc === 'clear' ? 'clear skies' : fc === 'rain' ? 'rain by morning' : fc === 'storm' ? 'a storm rolling in' : fc === 'fog' ? 'fog on the ground at dawn' : fc) + (seasonSys.winter ? ' (snow on the heights)' : ''));
+    lines.push('');
+    lines.push('THE EXCHANGE — the Herald hears:');
+    for (const t of M.tips.filter(t => t.d === day + 1)){
+      const C = this.co(t.id);
+      lines.push('  ' + C.name + ' — ' + t.text + ' (' + (t.up ? 'buy' : 'sell') + ')');
+    }
+    lines.push('');
+    lines.push('CLOSING PRICES');
+    for (const C of COMPANIES){
+      const c = M.co[C.id], ch = this.change(C.id);
+      lines.push('  ' + C.name.padEnd(22) + String(c.p.toFixed(2)).padStart(8) + '  ' + (ch >= 0 ? '+' : '') + (ch * 100).toFixed(1) + '%' + (C.div ? '  pays ' + (C.div * 100).toFixed(0) + '%/day' : ''));
+    }
+    const T = this.top(); if (T) lines.push('  on top over thirty days: ' + T.name);
+    return { title: 'THE ' + (city || 'CITY') + ' HERALD — DAY ' + day, body: lines.join('\n') };
+  },
+  readPaper(it){
+    if (game.ui !== 'none') return;
+    const E = this.edition(it.day || 0, it.city);
+    $('pagetitle').textContent = E.title;
+    $('pagebody').textContent = it.body || E.body;
+    $('pagesub').textContent = 'two coins at the press · E to close';
+    game.ui = 'page'; show('pagescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  // ---- the exchange ----
+  openExchange(rec){
+    if (!rec) return;
+    const M = this.M(); M.acct = 1;
+    game.activeExchange = rec;
+    game.ui = 'exchange';
+    $('exchangetitle').textContent = (rec.name || 'THE CITY') + ' EXCHANGE';
+    this.refreshExchange();
+    show('exchangescreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
+  },
+  value(){ const M = this.M(); let v = 0; for (const id in M.port) v += (M.port[id] || 0) * M.co[id].p; return v; },
+  refreshExchange(){
+    const M = this.M(), coins = CORE.countItem(game.slots, 'coin'), list = $('exchangelist');
+    $('exchangecash').innerHTML = 'coins ' + coins + ' · shares worth ' + this.value().toFixed(0) + ' · dividends waiting ' + M.cash.toFixed(0) +
+      (M.cash >= 1 ? ' <span class="btn small" id="exwithdraw" style="margin-left:8px;">WITHDRAW</span>' : '');
+    const wd = $('exwithdraw'); if (wd) wd.addEventListener('click', () => { const n = Math.floor(M.cash); if (n > 0){ addStackItem('coin', n); M.cash = +(M.cash - n).toFixed(2); toast('+' + n + ' coins in dividends'); AudioSys.sfx('craft'); refreshHotbar(); markSave(); this.refreshExchange(); } });
+    list.innerHTML = '';
+    const T = this.top();
+    for (const C of COMPANIES){
+      const c = M.co[C.id], ch = this.change(C.id), have = M.port[C.id] || 0;
+      const row = document.createElement('div'); row.className = 'craftrow'; row.style.alignItems = 'center'; row.style.gap = '8px';
+      const nm = document.createElement('div'); nm.className = 'cname'; nm.style.minWidth = '190px';
+      nm.innerHTML = (T === C ? '★ ' : '') + C.name + '<div class="sub">' + (C.kind === 'dog' ? 'pays ' + (C.div * 100).toFixed(0) + '%/day' : C.kind) + (have ? ' · you hold ' + have : '') + '</div>';
+      const pr = document.createElement('div'); pr.style.minWidth = '96px'; pr.style.textAlign = 'right';
+      pr.innerHTML = c.p.toFixed(2) + '<div class="sub" style="color:' + (ch >= 0 ? '#8bff9e' : '#ff7a5c') + '">' + (ch >= 0 ? '+' : '') + (ch * 100).toFixed(1) + '%</div>';
+      const cv = document.createElement('canvas'); cv.width = 120; cv.height = 28; cv.style.cssText = 'width:120px;height:28px;image-rendering:pixelated;';
+      this.spark(cv, c.hist.concat([c.p]), ch >= 0 ? '#8bff9e' : '#ff7a5c');
+      const bt = document.createElement('div'); bt.style.cssText = 'display:flex; gap:4px; margin-left:auto;';
+      const mk = (label, fn, ok) => { const b = document.createElement('span'); b.className = 'btn small'; b.textContent = label; if (!ok) b.style.opacity = '0.4'; b.addEventListener('click', () => { if (ok) fn(); else AudioSys.sfx('deny'); }); bt.appendChild(b); };
+      mk('BUY 1', () => this.trade(C.id, 1), coins >= c.p);
+      mk('BUY 10', () => this.trade(C.id, 10), coins >= c.p * 10);
+      mk('SELL 1', () => this.trade(C.id, -1), have >= 1);
+      mk('SELL ALL', () => this.trade(C.id, -have), have >= 1);
+      row.appendChild(nm); row.appendChild(pr); row.appendChild(cv); row.appendChild(bt);
+      list.appendChild(row);
+    }
+    const tips = M.tips.filter(t => t.d === (game.day || 0) + 1);
+    $('exchangetips').textContent = tips.length ? 'the Herald hears for tomorrow: ' + tips.map(t => this.co(t.id).name + ' — ' + t.text).join(' · ') : '';
+  },
+  spark(cv, H, col){
+    const c = cv.getContext('2d'); c.clearRect(0, 0, cv.width, cv.height);
+    const lo = Math.min(...H), hi = Math.max(...H), span = Math.max(1e-6, hi - lo);
+    c.strokeStyle = col; c.lineWidth = 1.5; c.beginPath();
+    H.forEach((v, i) => { const x = i / (H.length - 1) * (cv.width - 2) + 1, y = cv.height - 2 - (v - lo) / span * (cv.height - 4); if (i) c.lineTo(x, y); else c.moveTo(x, y); });
+    c.stroke();
+  },
+  trade(id, n){
+    const M = this.M(), c = M.co[id], C = this.co(id);
+    if (n > 0){
+      const cost = Math.ceil(c.p * n);
+      if (CORE.countItem(game.slots, 'coin') < cost){ toast('not enough coins'); AudioSys.sfx('deny'); return; }
+      CORE.consumeItem(game.slots, 'coin', cost);
+      M.port[id] = (M.port[id] || 0) + n;
+      toast('bought ' + n + ' ' + C.name + ' at ' + c.p.toFixed(2));
+    } else {
+      const k = Math.min(M.port[id] || 0, -n);
+      if (k <= 0) return;
+      M.port[id] -= k; if (!M.port[id]) delete M.port[id];
+      const got = Math.floor(c.p * k);
+      addStackItem('coin', got);
+      toast('sold ' + k + ' ' + C.name + ' — +' + got + ' coins');
+    }
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    this.refreshExchange();
+  },
+};
 const citySys = {
   accT: 0, scanT: 99, known: [],
   nameFor(seed){
@@ -17223,6 +18036,183 @@ const citySys = {
     game.torches.push([sp.x - 7, g + 1.0, sp.z], [sp.x + 7, g + 1.0, sp.z]);
     rec.station = { x: sp.x, y: sp.y, z: sp.z, id: st.id };
   },
+  // Build 44 COUNTERS: every trade is a shop. The keeper's tower gets its
+  // ground floor furnished -- a counter across the room, the keeper posted
+  // behind it facing the door, wares on pedestals along the walls, a torch,
+  // a sign by the door with the trade and the name. The mayor gets a hall
+  // on the plaza's north side with a desk and the city's strongbox. The
+  // station gets a clerk behind its kiosk who sells the same tickets.
+  // Runs once per city (rec.counters); cities stamped before get it too.
+  stampCounters(c, rec){
+    const MAT = CORE.MAT, g = rec.gy != null ? rec.gy : this.slabLevel(c);
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);       // a mesh's forward is (-sin yaw, -cos yaw)
+    const fy = g + 0.35;                                  // the ground floor
+    for (const hrec of rec.houses || []){
+      if (hrec.post) continue;
+      const [fx, fz] = hrec.face;
+      if (hrec.role === 'mayor'){
+        // the hall: north of the obelisk, its door on the plaza
+        const hx = c.x, hz = c.z - 14;
+        EB(1, hx, g + 2.5, hz, 11, 5.0, 7, MAT.STONEBRICK);
+        EB(0, hx, fy + 4.0 / 2, hz, 9.4, 4.0, 5.4, 0, 1);
+        EB(0, hx, g + 1.9, hz + 3.5, 2.2, 3.0, 2.0, 0, 1);                     // the door, south
+        for (const wx of [-3.4, 3.4]) EB(0, hx + wx, g + 2.6, hz + 3.5, 1.6, 1.2, 1.0, 0, 1);   // windows either side
+        EB(1, hx, g + 5.2, hz, 12, 0.5, 8, MAT.STONEBRICK);
+        pnodeSys.add('counter', hx, fy, hz - 0.6, 0, { len: 4 });
+        const strong = pnodeSys.addQuiet('chest', hx + 3.6, fy + 0.6, hz - 1.8, Math.PI / 2, { sc: 0.6 });
+        strong.inv = new Array(chestSlots(0.6)).fill(null);
+        strong.inv[0] = { kind: 'coin', count: 40 + (c.seed % 30) };
+        pnodeSys.add('sign', hx + 2.4, g, hz + 4.4, yawTo(0, 1), { text: 'TOWN HALL\n' + (rec.name || 'THE CITY') + '\n' + hrec.vname + ', mayor' });
+        game.torches.push([hx - 4.2, fy + 1.9, hz - 2.2], [hx + 4.2, fy + 1.9, hz - 2.2]);
+        hrec.x = hx; hrec.z = hz + 3.5; hrec.face = [0, 1]; hrec.w = 11; hrec.d = 7;
+        hrec.post = { x: hx, z: hz - 1.8, yaw: yawTo(0, 1) };
+        continue;
+      }
+      if (hrec.role === 'clerk') continue;
+      if (!VROLE[hrec.role] || hrec.role === 'walker') continue;
+      // the shop: the tower behind the shopfront
+      const w = hrec.w || 10, tx = hrec.x - fx * (w / 2 + 2.2), tz = hrec.z - fz * (w / 2 + 2.2);
+      const px = fz, pz = -fx;                            // across the room
+      const inner = w - 1.7, len = Math.min(7, Math.max(3, inner - 3.6));
+      // the counter stands at two fifths of the room from the door, the
+      // keeper a pace behind it, the wares between door and counter
+      const dc = 0.42 * w, cx = tx + fx * (w / 2 - dc), cz = tz + fz * (w / 2 - dc);
+      pnodeSys.add('counter', cx, fy, cz, 0, { len });
+      // the counter's front is its +z side: yaw so that side meets the door
+      const ctr = game.pnodes[game.pnodes.length - 1];
+      ctr.yaw = yawTo(-fx, -fz);
+      hrec.post = { x: tx + fx * (w / 2 - dc - 1.3), z: tz + fz * (w / 2 - dc - 1.3), yaw: yawTo(fx, fz) };
+      // wares: the first things the keeper sells, on pedestals by the walls
+      const wares = tradeSys.offers(hrec.role).filter(o => o.buy && !o.crep).slice(0, 3);
+      wares.forEach((o, i) => {
+        const side = i === 2 ? 0 : (i === 0 ? 1 : -1);
+        const depth = side ? 0.22 * w : w - 1.6;          // by the side walls before the counter; the third on the back wall
+        const wx = tx + px * side * (inner / 2 - 1.1) + fx * (w / 2 - depth);
+        const wz = tz + pz * side * (inner / 2 - 1.1) + fz * (w / 2 - depth);
+        const ped = pnodeSys.add('ped', wx, fy, wz, 0, {});
+        ped.inv = [tradeSys.offerItem(o)];
+        ped.shop = 1;
+      });
+      for (const side of [-1, 1]) game.torches.push([tx + px * side * (inner / 2 - 0.6) + fx * (w / 2 - dc + 0.5), fy + 2.0, tz + pz * side * (inner / 2 - 0.6) + fz * (w / 2 - dc + 0.5)]);
+      const R = VROLE[hrec.role];
+      pnodeSys.add('sign', hrec.x + px * 2.0 - fx * 0.6, g, hrec.z + pz * 2.0 - fz * 0.6, yawTo(fx, fz), { text: R.name.toUpperCase() + '\n' + hrec.vname });
+    }
+    // THE PRESS (west) and THE EXCHANGE (east): halls on the plaza's
+    // flanks like the town hall, doors on the plaza (Build 45)
+    if (!rec.arc7){
+      const hall = (hx, hz, fx, role, signText, extra) => {
+        const yaw = yawTo(fx, 0);                        // faces the plaza
+        EB(1, hx, g + 2.5, hz, 7, 5.0, 11, MAT.STONEBRICK);
+        EB(0, hx, fy + 4.0 / 2, hz, 5.4, 4.0, 9.4, 0, 1);
+        EB(0, hx + fx * 3.5, g + 1.9, hz, 2.0, 3.0, 2.2, 0, 1);                       // the door
+        for (const wz of [-3.4, 3.4]) EB(0, hx + fx * 3.5, g + 2.6, hz + wz, 1.0, 1.2, 1.6, 0, 1);
+        EB(1, hx, g + 5.2, hz, 8, 0.5, 12, MAT.STONEBRICK);
+        pnodeSys.add('counter', hx - fx * 0.6, fy, hz, 0, { len: 4 });
+        game.pnodes[game.pnodes.length - 1].yaw = yawTo(-fx, 0);
+        pnodeSys.add('sign', hx + fx * 4.4, g, hz + 2.4, yaw, { text: signText });
+        game.torches.push([hx - fx * 2.2, fy + 1.9, hz - 4.2], [hx - fx * 2.2, fy + 1.9, hz + 4.2]);
+        rec.houses.push(Object.assign({ x: hx + fx * 3.5, z: hz, role, face: [fx, 0], w: 7, d: 11, gy: g, rep: 0,
+          vname: villageSys.nameFor((Math.imul(c.seed, role === 'press' ? 89 : 97) + 17) >>> 0),
+          post: { x: hx - fx * 1.8, z: hz, yaw } }, extra || {}));
+        return { hx, hz, yaw };
+      };
+      hall(c.x - 14, c.z, 1, 'press', 'THE HERALD\n' + (rec.name || 'THE CITY') + '\n2c a paper');
+      const ex = hall(c.x + 14, c.z, -1, 'stock', 'THE EXCHANGE\n' + (rec.name || 'THE CITY') + '\nshares · dividends');
+      // the floor: three brokers pacing the hall
+      for (let i = 0; i < 3; i++)
+        rec.houses.push({ x: ex.hx - 3.5, z: ex.hz, role: 'floor', face: [-1, 0], w: 1, d: 1, gy: g, rep: 0,
+          vname: villageSys.nameFor((Math.imul(c.seed, 113) + i * 31) >>> 0),
+          post: { x: ex.hx - 1.2, z: ex.hz + (i - 1) * 2.6, yaw: ex.yaw }, roam: 2.0 });
+      rec.arc7 = 1;
+    }
+    // the booth: a clerk behind the kiosk, selling what it sells
+    if (rec.station && !(rec.houses || []).some(h => h.role === 'clerk')){
+      const sp = rec.station;
+      rec.houses.push({ x: sp.x, z: sp.z, role: 'clerk', face: [0, 1], w: 3, d: 3, gy: g, rep: 0,
+                        vname: villageSys.nameFor((Math.imul(c.seed, 71) + 13) >>> 0),
+                        post: { x: sp.x, z: sp.z - 1.25, yaw: yawTo(0, 1) } });
+    }
+    // THE PIT (Build 47): a city from before the arena gets one now, on
+    // the same block a new city would -- whatever the lot held goes
+    if (!rec.arc8){
+      const T = rec.towers || [];
+      let t = T.find(b => b.kind === 'pit');
+      if (!t){
+        const pb = this.plan(c).blocks.find(b => b.kind === 'pit');
+        if (pb){ const m = T.find(b => b.bx === pb.bx && b.bz === pb.bz); if (m) m.kind = 'pit'; t = m || pb; }
+      }
+      if (t && !rec.pit){
+        const ax = c.x + t.bx * 36, az = c.z + t.bz * 36;
+        const cy = CORE.makeEdit(0, 2, +ax.toFixed(1), +(g + 12).toFixed(1), +az.toFixed(1), 34, 0, 0); cy.sy = 24; applyEdit(cy);
+        game.torches = game.torches.filter(tt => Math.hypot(tt[0] - ax, tt[2] - az) > 15);
+        this.stampPit(c, rec, g, ax, az, t);
+      }
+      rec.arc8 = 1;
+    }
+    // THE BANK (Build 48): a hall on the plaza's south flank, its door
+    // north like the town hall's is south; the banker at the counter
+    if (!rec.arc9){
+      const hx = c.x, hz = c.z + 14;
+      EB(1, hx, g + 2.5, hz, 11, 5.0, 7, MAT.STONEBRICK);
+      EB(0, hx, fy + 4.0 / 2, hz, 9.4, 4.0, 5.4, 0, 1);
+      EB(0, hx, g + 1.9, hz - 3.5, 2.2, 3.0, 2.0, 0, 1);                     // the door, north
+      for (const wx of [-3.4, 3.4]) EB(0, hx + wx, g + 2.6, hz - 3.5, 1.6, 1.2, 1.0, 0, 1);
+      EB(1, hx, g + 5.2, hz, 12, 0.5, 8, MAT.STONEBRICK);
+      pnodeSys.add('counter', hx, fy, hz + 0.6, 0, { len: 4 });
+      const vault = pnodeSys.addQuiet('chest', hx - 3.6, fy + 0.6, hz + 1.8, Math.PI / 2, { sc: 0.6 });
+      vault.inv = new Array(chestSlots(0.6)).fill(null);
+      pnodeSys.add('sign', hx + 2.4, g, hz - 4.4, yawTo(0, -1), { text: 'THE BANK\n' + (rec.name || 'THE CITY') + '\ndeposits \u00b7 loans' });
+      game.torches.push([hx - 4.2, fy + 1.9, hz + 2.2], [hx + 4.2, fy + 1.9, hz + 2.2]);
+      (rec.houses = rec.houses || []).push({ x: hx, z: hz - 3.5, role: 'banker', face: [0, -1], w: 11, d: 7, gy: g, rep: 0,
+        vname: villageSys.nameFor((Math.imul(c.seed, 151) + 23) >>> 0), post: { x: hx, z: hz + 1.8, yaw: yawTo(0, -1) } });
+      rec.arc9 = 1;
+    }
+    rec.counters = 1;
+    pnodeSys.rebuild();
+  },
+  // THE PIT (Build 47): a bowl sunk three metres into a block with three
+  // steps of stands around it, a cut through the stands on the plaza
+  // side with steps down, the promoter at a counter in the mouth, four
+  // torches on the top ring. The floor is sand.
+  stampPit(c, rec, g, ax, az, t){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (fx, fz) => Math.atan2(-fx, -fz);
+    const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0, fz = fx === 0 ? -Math.sign(t.bz) : 0;   // toward the plaza
+    const px = fz ? 1 : 0, pz = fx ? 1 : 0;                                              // across the mouth
+    // the stands: a block of stone, three steps cut down toward the bowl
+    EB(1, ax, g + 1.5, az, 28, 3.0, 28, MAT.STONEBRICK);
+    EB(0, ax, g + 2.5, az, 25.5, 1.0, 25.5, 0);
+    EB(0, ax, g + 2.0, az, 23, 2.0, 23, 0);
+    EB(0, ax, g + 1.5, az, 20.5, 3.0, 20.5, 0);
+    // the bowl: a sphere out of the ground; a sand floor three metres down
+    applyEdit(CORE.makeEdit(0, 0, +ax.toFixed(1), +(g + 8).toFixed(1), +az.toFixed(1), 26, 0, 0));
+    EB(1, ax, g - 4.3, az, 20, 2.6, 20, MAT.SAND);
+    // the way in: a cut through the stands, steps down the bowl wall
+    EB(0, ax + fx * 11, g + 2.25, az + fz * 11, fx ? 8 : 7, 4.5, fx ? 7 : 8, 0);
+    for (let k = 0; k < 3; k++){
+      const r = 9.3 - k * 0.9;
+      EB(1, ax + fx * r, g - 1.25 - 0.75 * k, az + fz * r, fx ? 1.2 : 3.2, 1.0, fx ? 3.2 : 1.2, MAT.STONEBRICK, 1);
+    }
+    // the promoter's niche beside the mouth: counter, post, sign on the stands
+    EB(0, ax + fx * 12.5 + px * 4.6, g + 1.5, az + fz * 12.5 + pz * 4.6, fx ? 3.0 : 2.6, 3.0, fx ? 2.6 : 3.0, 0, 1);
+    pnodeSys.add('counter', ax + fx * 12.5 + px * 3.6, g + 0.35, az + fz * 12.5 + pz * 3.6, 0, { len: 2.4 });
+    game.pnodes[game.pnodes.length - 1].yaw = yawTo(-px, -pz);
+    const post = { x: ax + fx * 12.5 + px * 4.9, z: az + fz * 12.5 + pz * 4.9, yaw: yawTo(-px, -pz) };
+    pnodeSys.add('sign', ax + fx * 13.4 - px * 4.5, g + 3.0, az + fz * 13.4 - pz * 4.5, yawTo(fx, fz), { text: 'THE PIT\n' + (rec.name || 'THE CITY') + '\nbouts \u00b7 bets' });
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) game.torches.push([ax + sx * 13.2, g + 3.0, az + sz * 13.2]);
+    (rec.houses = rec.houses || []).push({ x: post.x, z: post.z, role: 'promoter', face: [-px, -pz], w: 1, d: 1, gy: g, rep: 0,
+                      vname: villageSys.nameFor((Math.imul(c.seed, 131) + 5) >>> 0), post });
+    rec.pit = { x: +ax.toFixed(1), z: +az.toFixed(1), gy: g, fx, fz, won: 0, belt: 0 };
+    rec.arc8 = 1;
+  },
   harborAt(c){
     if (!game.gen.wetAt) return false;
     for (let a = 0; a < 6.28; a += 0.52){
@@ -17257,6 +18247,10 @@ const citySys = {
       const kind = kr < D.kinds[0] ? 'tower' : kr < D.kinds[1] ? 'park' : kr < D.kinds[2] ? 'market' : 'lot';
       out.push({ bx, bz, w, floors, mat, shop, kind, district });
     }
+    // THE PIT (Build 47): the park or lot nearest the plaza gives way to the arena
+    let pit = null;
+    for (const b of out) if ((b.kind === 'park' || b.kind === 'lot') && (!pit || Math.abs(b.bx) + Math.abs(b.bz) < Math.abs(pit.bx) + Math.abs(pit.bz))) pit = b;
+    if (pit) pit.kind = 'pit';
     return { n, blocks: out, harbor };
   },
   stamp(c, rec){
@@ -17296,6 +18290,7 @@ const citySys = {
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
       const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      if (t.kind === 'pit'){ this.stampPit(c, rec, g, tx, tz, t); continue; }
       if (t.kind === 'park'){
         // a lawn painted onto the pavement, benches, one lamp
         const pk = CORE.makeEdit(2, 1, +tx.toFixed(1), +(g - 0.4).toFixed(1), +tz.toFixed(1), 24, MAT.GRASS, 0);
@@ -17428,7 +18423,7 @@ const citySys = {
       const pick = pool.length ? pool[0] : (all.find(i => !used.has(i)) != null ? all.find(i => !used.has(i)) : (all[0] || 0));
       used.add(pick); idxs.push(pick);
     }
-    rec.houses = [];
+    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter');   // the pit's promoter is already on the list
     for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
@@ -17443,6 +18438,7 @@ const citySys = {
     rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
                       w: 6, d: 6, gy: g, rep: 0,
                       vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
+    this.stampCounters(c, rec);
     for (const ox of offs) for (const oz of offs)
       game.torches.push([c.x + ox + 4.6, g + 0.4, c.z + oz + 4.6]);
     for (const [tx2, tz2] of [[-13, -13], [13, -13], [-13, 13], [13, 13]])
@@ -17474,10 +18470,21 @@ const citySys = {
         propBatchBegin();
         try { this.stampStation(c, rec, rec.gy, (rec.n || 3) * 36 + 8); } finally { propBatchEnd(); }
         torchSys.rebuild(); pnodeSys.rebuild(); markSave();
+      } else if ((!rec.counters || !rec.arc7 || !rec.arc8 || !rec.arc9) && rec.gy != null && rec.houses){
+        // a city from before the counters: its keepers go indoors now
+        propBatchBegin();
+        try { this.stampCounters(c, rec); } finally { propBatchEnd(); }
+        for (let i = game.entities.length - 1; i >= 0; i--){   // the old keepers at their doors: re-spawned at the posts
+          const e = game.entities[i];
+          if (e.type === 'villager' && e.ckey === key && !e.crew && !e.walker){ if (e.mesh) game.scene.remove(e.mesh); game.entities.splice(i, 1); }
+        }
+        torchSys.rebuild(); markSave();
       }
       if (!rec.announced && Math.hypot(c.x - game.pos.x, c.z - game.pos.z) < 340){
         rec.announced = true;
+        monumentSys.settle(rec);
         toast('the towers of ' + rec.name + ' rise ahead');
+        econSys.note('A STRANGER AT THE GATES OF ' + rec.name, ['found'], rec.key, true);
         AudioSys.sfx('boom');
       }
     }
@@ -17511,13 +18518,16 @@ const citySys = {
         continue;
       }
       if (pd > (rec.n || 3) * 20 + 80) continue;
-      // shopkeepers man their doors
+      // keepers stand at their counters (Build 44); a house without a post
+      // still mans its door
       (rec.houses || []).forEach((hrec, i) => {
         const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
         if (alive || hrec.crew) return;
-        const e = spawnEntity('villager', hrec.x, (hrec.gy || 0) + 0.7, hrec.z);
+        const P = hrec.post || hrec;
+        const e = spawnEntity('villager', P.x, (hrec.gy || 0) + 0.7, P.z);
         e.role = hrec.role; e.ckey = key; e.vi = i;
-        e.home = { x: hrec.x, y: (hrec.gy || 0) + 0.7, z: hrec.z };
+        e.home = { x: P.x, y: (hrec.gy || 0) + 0.7, z: P.z };
+        if (hrec.post){ e.post = { x: P.x, z: P.z, yaw: P.yaw }; e.x = P.x; e.z = P.z; if (hrec.roam) e.roam = hrec.roam; if (e.mesh) e.mesh.rotation.y = P.yaw; }
       });
       // pedestrians walk the avenues by day and head in at night
       const walkers = game.entities.filter(e => e.walker && e.ckey === key);
@@ -17612,7 +18622,7 @@ function updateEntities(dt, now){
     const def = ENT_DEF[e.type];
     // creative gets living animals and villagers too; only free-roaming
     // lurkers stay a survival thing (bounty targets still tick for hunts)
-    if (!survival && e.type === 'lurker' && !e.bountyTag) continue;
+    if (!survival && e.type === 'lurker' && !e.bountyTag && !e.pit && !e.collector) continue;   // the pit's and the bank's still fight in creative
     if (e.carried){
       // Riding overhead, slightly forward so you can see your passenger --
       // but only once you have lifted it. For the first beat of the grab your
@@ -17703,7 +18713,7 @@ function updateEntities(dt, now){
     if (e === game.driving) continue;            // driveCar owns it this frame
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (!VEH[e.type] && !e.crew && pd > (e.ckey ? 180 : 70)){
+    if (!VEH[e.type] && !e.crew && pd > (e.ckey || e.collector ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -17715,7 +18725,7 @@ function updateEntities(dt, now){
         Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
         killEntity(e, false); continue;
       }
-      if (e.type === 'stalker' && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+      if (e.type === 'stalker' && !e.pit && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
     }
     // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
     if ((e.type === 'lurker' || e.type === 'husk') && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
@@ -17740,7 +18750,7 @@ function updateEntities(dt, now){
     } else if (e.type === 'lurker' && (crewSys.prey(e, 15) || e.raider)){
       if (e.raider) sp *= 1.15;
       // a raider with no one in reach goes for the hum that called it
-      const P0 = crewSys.prey(e, 15), G = !P0 && e.raider ? breachSys.lure(e, 70) : null;
+      const P0 = crewSys.prey(e, 15), G = !P0 && e.raider && !e.collector ? breachSys.lure(e, 70) : null;
       const P = P0 || (G ? { x: G.x, y: G.y, z: G.z, d: 99, ent: null, thing: 1 } : netSys.preyFor(e, pd));
       sx = P.x - e.x; sz = P.z - e.z;
       const d3 = Math.hypot(e.x - P.x, e.y - P.y, e.z - P.z);
@@ -17753,8 +18763,8 @@ function updateEntities(dt, now){
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
       e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
-      if (game.dayF > 0.45){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
-      else if (ld < 9){
+      if (game.dayF > 0.45 && !e.pit){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
+      else if (ld < 9 && !e.pit){
         // find the light and run from it
         let lx = e.x, lz = e.z, bd = 1e9;
         for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
@@ -17826,6 +18836,14 @@ function updateEntities(dt, now){
         const wt1 = waterTopAt(e.x, e.z, e.y);
         if (wt1 != null){ e.y += (wt1 - VEH[e.type].draft - e.y) * Math.min(1, 4 * dt); e.vy = 0; if (e.mesh) e.mesh.position.y = e.y; }
       }
+    } else if (e.type === 'cab' && e.called){
+      // a cab you called: comes to you and waits (Build 46)
+      const dx = TP.x - e.x, dz = TP.z - e.z, d = Math.hypot(dx, dz);
+      if (d > 3.4){ sx = dx; sz = dz; e.waiting = 0; }
+      else { sx = 0; sz = 0; if (!e.waiting){ e.waiting = 1; toast('your cab is here — right click it'); } }
+      if (e.mesh) e.mesh.rotation.y = Math.atan2(-dx, -dz);
+      e.calledT = (e.calledT || 0) + dt;
+      if (e.calledT > 240){ killEntity(e, false); toast('the cab gave up waiting'); }
     } else if (e.type === 'cab'){
       // drives its avenue end to end, flips at the edge, brakes for you
       const R = e.cabHome || { x: e.x, z: e.z };
@@ -17851,6 +18869,16 @@ function updateEntities(dt, now){
         // stop and face whoever came to talk
         sx = 0; sz = 0;
         if (e.mesh) e.mesh.rotation.y = Math.atan2(-(TP.x - e.x), -(TP.z - e.z));
+      } else if (e.post && e.roam){
+        // the floor: paces a few metres around the post
+        if (e.tt <= 0){ e.tt = 2.5 + Math.random() * 4; const a = Math.random() * 6.2832, r = Math.random() * e.roam; e.tx = e.post.x + Math.cos(a) * r; e.tz = e.post.z + Math.sin(a) * r; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.4){ sx = 0; sz = 0; }
+      } else if (e.post){
+        // behind the counter, facing the door; drifted (pushed, a
+        // collapse): walks back
+        sx = e.post.x - e.x; sz = e.post.z - e.z;
+        if (Math.hypot(sx, sz) < 0.25){ sx = 0; sz = 0; if (e.mesh) e.mesh.rotation.y = e.post.yaw; }
       } else {
         if (e.tt <= 0){
           e.tt = 5 + Math.random() * 6;
@@ -17949,7 +18977,7 @@ function updateEntities(dt, now){
     for (let li = 0; li < legs.length; li++){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
-    e.mesh.scale.setScalar((e.bountyTag ? 1.25 : 1) * (e.flash > 0 ? 1.1 : 1));
+    e.mesh.scale.setScalar((e.big || (e.bountyTag ? 1.25 : 1)) * (e.flash > 0 ? 1.1 : 1));
     if (e.crew && ud.hpbar){
       const f = Math.max(0, Math.min(1, e.hp / 60)), hurt = f < 0.99;
       ud.hpbar.bg.visible = ud.hpbar.fg.visible = hurt;
@@ -17962,6 +18990,32 @@ function updateEntities(dt, now){
   }
 }
 // closest entity intersecting the view ray
+// right click on a villager: your crew's panel, the clerk's booth, a
+// walker's word, a keeper's counter
+function talkTo(vent){
+  if (vent.crew){ crewSys.open(vent); return; }
+  if (vent.role === 'clerk'){
+    // the booth: the clerk sells the tickets the kiosk does
+    const crec = (game.cities || {})[vent.ckey];
+    const pn = crec && crec.station ? pnodeSys.byId(crec.station.id) : null;
+    if (pn){ stationSys.open(pn); return; }
+    toast('the booth is shut'); return;
+  }
+  if (vent.role === 'press'){ econSys.buyPaper((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'stock'){ econSys.openExchange((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'promoter'){ pitSys.open((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'banker'){ bankSys.open((game.cities || {})[vent.ckey]); return; }
+  if (vent.role === 'floor'){
+    toast(['buy low, sell high, stranger', 'OLD TOWN pays its dividend whatever the price does', 'the Herald knows tomorrow — seven times in ten', 'a siege knocks every company in the city'][(Math.random() * 4) | 0]);
+    return;
+  }
+  if (vent.walker){
+    toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
+           'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
+    return;
+  }
+  tradeSys.open(vent);
+}
 function entityOnRay(maxDist){
   maxDist += game.camBack || 0;
   if (!game.entities.length) return null;
@@ -19033,6 +20087,13 @@ function bindInput(){
       const stv = stoveSys.onRay(3.5);
       if (stv){ openStove(stv); AudioSys.sfx('toggle'); return; }
       const pn = pnodeSys.onRay(3.2);
+      if (pn && pn.t === 'counter'){
+        // the counter is in the way of the keeper behind it: talk past it
+        const v = entityOnRay(4.6);
+        if (v && v.type === 'villager') talkTo(v);
+        else toast('the counter — nobody behind it');
+        return;
+      }
       if (pn){
         if (pn.t === 'tent'){ bedSys.sleep([pn.x, pn.y + 0.3, pn.z]); return; }     // a tent is a bed
         if (pn.t === 'lever'){
@@ -19111,6 +20172,12 @@ function bindInput(){
           return;
         }
         if (pn.t === 'trench'){ palisadeSys.light(pn); return; }
+        if (pn.t === 'ped' && pn.shop){
+          // a shop's display: the keeper sells it, the pedestal shows it
+          const it = pn.inv && pn.inv[0];
+          toast((it ? itemLabel(it) : 'that') + ' — ask at the counter'); AudioSys.sfx('deny');
+          return;
+        }
         if (pn.t === 'hopper' || pn.t === 'chest' || pn.t === 'astand' || pn.t === 'ped' || pn.t === 'charger' || pn.t === 'repair'){
           openMachine(pn); AudioSys.sfx('toggle');
           return;
@@ -19119,6 +20186,7 @@ function bindInput(){
           openSign(pn); AudioSys.sfx('toggle');
           return;
         }
+        if (pn.t === 'statue'){ toast((pn.text || '').replace(/\n/g, ' \u00b7 ')); return; }
         if (pn.t === 'board'){
           const rec = game.villages[pn.vkey];
           if (rec) boardSys.open(rec);
@@ -19150,17 +20218,8 @@ function bindInput(){
         }
       }
       const vent = entityOnRay(3.6);
-      if (vent && vent.type === 'villager'){
-        if (vent.crew){ crewSys.open(vent); return; }
-        if (vent.walker){
-          toast(['fine towers, eh?', 'the mayor pays good coin for lightbulbs',
-                 'watch out for the cabs', 'they say the vaults out in the wilds are worth a fortune'][(Math.random() * 4) | 0]);
-          return;
-        }
-        tradeSys.open(vent);
-        return;
-      }
-      if (vent && vent.type === 'cab'){ toast('the cab is taken — get your own wheels'); return; }
+      if (vent && vent.type === 'villager'){ talkTo(vent); return; }
+      if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
       if (vent && VEH[vent.type]){
         if (game.keys['KeyC']){
           // crouch-grab folds it back into a kit, charge intact
@@ -19193,6 +20252,8 @@ function bindInput(){
       }
       const selIt = selectedItem();
       if (selIt && (selIt.kind === 'page' || selIt.kind === 'survey')){ expeditionSys.read(selIt); return; }
+      if (selIt && selIt.kind === 'paper'){ econSys.readPaper(selIt); return; }
+      if (selIt && selIt.kind === 'phone'){ phoneSys.open(); return; }
       if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' || selIt.kind === 'fish' || selIt.kind === 'cookedfish' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
         tryEat();
@@ -19341,7 +20402,7 @@ function bindInput(){
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
   if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station')) closeOverlay();
+      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank')) closeOverlay();
       else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
@@ -20699,7 +21760,7 @@ const wrenchProps = {
       const r = Object.assign({ k, t: ref.t, yaw: ref.yaw || 0, oldId: ref.id }, P3(ref.x, ref.y, ref.z));
       if (ref.t === 'chest' && ref.sc) r.sc = ref.sc;
       if (ref.t === 'staple'){ r.n = [ref.nx || 0, ref.ny == null ? 1 : ref.ny, ref.nz || 0]; if (ref.rot) r.rot = ref.rot; }
-      if (ref.t === 'sign' && ref.text) r.text = ref.text;
+      if ((ref.t === 'sign' || ref.t === 'statue') && ref.text) r.text = ref.text;
       return r;
     }
     return null;
@@ -22653,6 +23714,24 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'belt'){
+    // a gold band, a bright buckle, a red stone
+    c.fillStyle = '#d9a63a'; c.fillRect(1, 6, 14, 4);
+    c.fillStyle = '#8a6420'; c.fillRect(1, 9, 14, 1);
+    c.fillStyle = '#ffe680'; c.fillRect(5, 4, 6, 8);
+    c.fillStyle = '#e0304a'; c.fillRect(7, 6, 2, 4);
+  } else if (it.kind === 'phone'){
+    // a dark slab, a lit screen, a home button
+    c.fillStyle = '#16161c'; c.fillRect(4, 1, 8, 14);
+    c.fillStyle = '#59c8d8'; c.fillRect(5, 3, 6, 9);
+    c.fillStyle = '#dff6ff'; c.fillRect(6, 4, 2, 1); c.fillRect(6, 6, 4, 1); c.fillRect(6, 8, 3, 1);
+    c.fillStyle = '#44444c'; c.fillRect(7, 13, 2, 1);
+  } else if (it.kind === 'paper'){
+    // a folded newspaper: masthead, columns
+    c.fillStyle = '#ece4cf'; c.fillRect(2, 3, 12, 10);
+    c.fillStyle = '#2b2b2b'; c.fillRect(3, 4, 10, 2);
+    c.fillStyle = '#6a6a6a'; for (let y = 7; y < 12; y += 2){ c.fillRect(3, y, 4, 1); c.fillRect(8, y, 5, 1); }
+    c.fillStyle = '#c9b98a'; c.fillRect(2, 13, 12, 1);
   } else if (it.kind === 'ticket'){
     // a paper ticket, a punched stub
     c.fillStyle = '#efe6c8'; c.fillRect(2, 5, 12, 7);
@@ -23216,6 +24295,9 @@ function itemLabel(it){
   if (it.kind === 'fish') return CORE.FISH_NAME[it.fish] || 'fish';
   if (it.kind === 'cookedfish') return 'cooked fish';
   if (it.kind === 'ticket') return 'ticket to ' + it.to;
+  if (it.kind === 'paper') return 'the ' + (it.city || 'city') + ' herald · day ' + (it.day || 0);
+  if (it.kind === 'phone') return 'phone';
+  if (it.kind === 'belt') return 'champion\'s belt of ' + (it.city || 'the pit');
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'coral') return 'coral';
@@ -23517,7 +24599,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -24441,6 +25523,12 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
          : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'belt'){
+    html = '<div class="t1">THE BELT OF ' + (it.city || 'THE PIT') + '</div><div class="t2">champion of the pit \u00b7 the city raised a statue \u00b7 keep it somewhere it can be seen</div>';
+  } else if (it.kind === 'phone'){
+    html = '<div class="t1">phone</div><div class="t2">right click to open · STOCKS, NEWS, BUSINESS, CALL · it rings when the world has something for you</div>';
+  } else if (it.kind === 'paper'){
+    html = '<div class="t1">THE ' + (it.city || 'CITY') + ' HERALD · day ' + (it.day || 0) + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">what the world did yesterday, tomorrow\'s weather, and the Herald\'s stock tips · right click to read</div>';
   } else if (it.kind === 'ticket'){
     html = '<div class="t1">ticket to ' + it.to + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">from ' + it.from + ' · when the train stands at the platform, right click a car to board · space steps off at a station</div>';
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
@@ -24709,6 +25797,7 @@ function damagePlayer(dmg, kx, kz){
   if (game.hp <= 0) die();
 }
 function die(){
+  if (game.bout) pitSys.forfeit('you fell');
   // everything drops where you fell; you keep a mercy stone drill
   game.deathCache = {
     x: game.pos.x, y: game.pos.y + 0.6, z: game.pos.z,
@@ -25279,7 +26368,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen');
+  hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -25555,6 +26644,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null,
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -25617,6 +26707,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null;
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -25833,6 +26924,8 @@ const farShapeSys = {
         } else if (t.kind === 'market'){
           out.push({ x: tx, y: g + 2.8, z: tz, sx: 20, sy: 5.6, sz: 14, yaw: 0, mat: t.mat });
           out.push({ x: tx, y: g + 5.8, z: tz, sx: 21, sy: 0.5, sz: 15, yaw: 0, mat: t.mat });
+        } else if (t.kind === 'pit'){
+          out.push({ x: tx, y: g + 1.5, z: tz, sx: 28, sy: 3, sz: 28, yaw: 0, mat: M.STONEBRICK });
         } else if (t.kind === 'lot' && t.district === 'industrial'){
           out.push({ x: tx + 6, y: g + 9, z: tz - 6, sx: 3.2, sy: 18, sz: 3.2, yaw: 0, mat: M.BASALT });
           out.push({ x: tx - 5, y: g + 2.2, z: tz + 4, sx: 10, sy: 4.4, sz: 8, yaw: 0, mat: M.ROCK });
@@ -27294,7 +28387,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest) citySys.tick(dt);
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -27533,7 +28626,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

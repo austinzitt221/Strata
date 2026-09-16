@@ -168,14 +168,15 @@ economy index (sieges, your businesses, what you buy and sell, the
 region's wattage) that prices, shop income and the exchange all read,
 so the city's economy is one thing that reacts to what you do.
 
-6. **COUNTERS** (Austin's) — traders stop wandering: every trade is a
+6. **COUNTERS** (Austin's) — DONE (Build 44). Traders stop wandering: every trade is a
    real shop with an interior, a counter and a named keeper behind it
    (the electrics shop with its wares on display, the arms dealer, the
    tool shop), the mayor gets an office, the station gets a ticket
    booth with a clerk. Pedestrians keep wandering as filler, between
    shops and places, and do not trade.
 7. **THE PRESS + THE EXCHANGE, with THE PHONE** (Austin's, with my
-   changes) — a newspaper shop: two coins for today's paper, printed
+   changes) — DONE (Builds 45 and 46).
+   A newspaper shop: two coins for today's paper, printed
    from what the world did (sieges, warlords killed, villages found,
    your deeds as headlines, the survey of the deep), tomorrow's weather,
    and stock tips. An exchange building, a busy floor of brokers, and a
@@ -190,14 +191,14 @@ so the city's economy is one thing that reacts to what you do.
    The phone: one craftable item with apps -- STOCKS, NEWS, BUSINESS,
    CALL (a crew member to you, a cab to you) -- and it rings you: a
    siege starting, crew in trouble, a headline about you.
-8. **THE PIT + MONUMENTS** (Austin's, with mine) — a gladiator arena, a
+8. **THE PIT + MONUMENTS** (Austin's, with mine) — DONE (Build 47). A gladiator arena, a
    bowl with stands, tiers of opponents from what already exists
    (lurkers, husks, stalkers, fort minibosses, scaled up), a bookmaker
    so you can bet on yourself, a champion's belt worth a lot of coin
    and city rep. Monuments: the city raises a statue to your deeds in
    the plaza with a plaque (champion, siege breaker, the survey of the
    deep), and the paper prints it. The show-off for a city completed.
-9. **THE BANK** (mine) — deposits that survive death, interest by the
+9. **THE BANK** (mine) — DONE (Build 48). Deposits that survive death, interest by the
    day, loans to buy a shop or a car. Default and the collectors come,
    as a raid.
 10. **OWNERSHIP** (Austin's) — buy a shop once the keeper's goodwill is

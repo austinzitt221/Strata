@@ -2,6 +2,204 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 48 — THE BANK (2026-09-16)
+
+City Arc item 9. Coins that outlive you, and a reason to owe someone.
+
+- **The hall.** On the plaza's south flank, the mirror of the town
+  hall: door on the plaza, the banker at a counter, a vault chest, a
+  sign, two torches. Cities from before get theirs on the next visit.
+- **One account.** Every bank keeps the same account. IN 25 / 100 /
+  ALL and OUT 25 / 100 / ALL from your pockets. Deposits earn one
+  percent a day at dawn, compounding, and are not in your slots — a
+  death drops your pockets and leaves the balance where it was.
+- **A loan** against your standing in that city: two hundred coins,
+  plus twenty a point. Four percent a day, due in seven days. BORROW
+  100 / 500 / MAX; REPAY 100 / ALL at any counter, or from the phone's
+  BUSINESS app. Borrowing nudges the builders' share price.
+- **Default.** Past the due day the collectors come at dawn where you
+  stand — three the first day, one more each day after — big lurkers
+  in coats that do not burn, are not drawn off by your generators, and
+  do not lose you at seventy metres. The lending city takes five
+  standing a day. Every collector you kill goes on the bill (40c).
+  Paid up, they go home at once. The first default is a headline; every
+  dawn after, the phone rings.
+- Lurkers in the pit and collectors now act in creative mode too (the
+  creative gate skipped every free lurker, which had left THE PENS
+  standing still for a creative fighter).
+- Tests: `b48test.js` (the hall, the banker right-clicked and the
+  sheet's eleven buttons, deposits and a withdrawal, interest at dawn
+  and none twice in a day, the loan capped at the limit, a repayment,
+  death keeping the balance and the debt, the default: four collectors
+  at dawn closing in and alive by day, five the next, the bill, the
+  ring, the standing, settled and gone; the phone's row and REPAY; the
+  save); smoke, b32, b44, b45, b46, b47 regressions.
+
+## Build 47 — THE PIT + MONUMENTS (2026-09-16)
+
+City Arc item 8. The first thing in a city that is a show, not a shop.
+
+- **The pit.** Every city gives its park or lot nearest the plaza to
+  the arena: a block of stone with three steps of stands, a bowl cut
+  out of the middle (a sphere out of the ground, a sand floor three
+  metres down, the walls curving up to the mouth), a cut through the
+  stands on the plaza side with steps down the wall, four torches on
+  the top ring, a sign. The promoter stands at a counter in a niche
+  beside the mouth. Cities from before get theirs on the next visit:
+  whatever the lot held is cleared and the arena carved in.
+- **Five bouts,** from what already hunts you, in order, each unlocked
+  by the last: THE PENS (three lurkers), THE PACK (four stalkers), THE
+  WALL (two husks and two lurkers), THE WARLORD (a fort warlord at his
+  size and his guard), THE CHAMPION (a husk half again as big, 420 hp).
+  Purses 40 / 80 / 150 / 300 / 600 and standing 4 / 6 / 8 / 10 / 12.
+  The night shift fights by day in the pit: no burning, no fleeing the
+  sun or the torches, no slinking off at dawn. The bowl holds them —
+  one that climbs out is set back on the floor.
+- **The stake.** None, 25, 100 or 250 coins on yourself at the bout's
+  odds (1.5, 2, 3, 4, 6 to one). A win pays the purse and the stake at
+  the odds. Five seconds out of the bowl, or your death, forfeits: the
+  house keeps the stake. One bout at a time; a bout does not survive a
+  save.
+- **The belt.** The champion's bout, won, puts the belt of that city in
+  your pocket (an item, a trophy), twenty standing on top, a headline,
+  and the first monument.
+- **Monuments.** A marble figure with one fist up on a plinth with a
+  plaque, at a corner of the plaza, with two torches. Three deeds earn
+  one: the belt, a siege broken with the guard (four in ten of the
+  raiders yours), the last note of the survey brought up (raised in the
+  nearest city you know, or held until you find one). Once per deed per
+  city; right click the plinth to read the plaque; the paper prints the
+  raising.
+- Fixed along the way: any entity's chosen size was reset by the walk
+  animation every frame, so the fort warlord has been drawn at one
+  scale since Build 9 — a dressed entity keeps its size now.
+- Tests: `b47test.js` (the block, the house, the sign and counter,
+  seven SDF probes of the shape — bowl air, sand floor, top ring, a
+  step, the mouth, a stair; the promoter right-clicked from across the
+  counter and the sheet's five rows; THE PENS with 25 riding: three
+  lurkers alive and held in the bowl through ten seconds of day, paid
+  on their deaths, standing and headline; THE PACK by day: four
+  stalkers closing in after fifteen seconds, the forfeit on leaving
+  with the stake gone; THE CHAMPION: hp, size, the belt, the statue at
+  the corner, the plaque, the headlines; the other two deeds, no
+  duplicate, three statues saved with their text; the old-city
+  migration re-carving the arena; the shape probes again after);
+  smoke, b32, b44, b45, b46 and b7b regressions.
+
+## Build 46 — THE PHONE (2026-09-16)
+
+City Arc item 7, second half. One item that makes the press and the
+market ring.
+
+- **The item.** `phone`, crafted at a table: three iron ingots, two
+  wire, one crystal. A gadget in the inventory; right click with it in
+  hand opens it. E closes it.
+- **Four apps.** STOCKS is the Exchange's sheet in your pocket — price,
+  today's change, ★ on the top performer, the Herald's tips for
+  tomorrow, and BUY / SELL one share at a time once you have opened an
+  account at any Exchange counter. NEWS is the rings first, then the
+  wire (the last ten things the world wrote down). BUSINESS is what
+  your shares are worth, the dividends waiting at a counter, and a
+  placeholder for shops of your own (OWNERSHIP). CALL lists your crew
+  with how far they are and a COME button, and A CAB for fifteen
+  coins.
+- **It rings.** A headline about you, a siege anywhere, or a crew
+  member under 24 hp (once per thirty seconds per person) puts a ☎
+  toast on screen and a line in the phone's log (`game.phoneLog`,
+  last forty, saved). Without a phone in your slots nothing rings.
+- **COME.** A crew member within sixty metres walks; further away they
+  take a cab and step out beside you six seconds later.
+- **A CAB.** Fifteen coins spawns a cab twenty-six metres off that
+  drives to you and waits (four minutes, then it gives up). Right click
+  it: a list of every city you have found; pick one, the screen fades,
+  and you are on that plaza. One called cab at a time.
+- Fixes found by the test: the phone carries no `count`, so
+  `countItem` said NaN and the phone never rang (now `slots.some`);
+  the crew ring's throttle compared against page time, so nothing rang
+  in the first thirty seconds after loading.
+- Tests: `b46test.js` (recipe present, rings only with the phone and
+  only for me or a siege, opened by right click, four apps render with
+  the ring and the wire, a cab called from four hundred metres drives
+  to me and waits, a second call refused, the ride fades and lands me
+  eight metres from the plaza with the cab gone, a hurt crew member
+  rings, COME from three hundred metres cabs them to my side, the log
+  saves); smoke, b32, b35, b41, b44, b45 regressions.
+
+## Build 45 — THE PRESS + THE EXCHANGE (2026-09-16)
+
+City Arc item 7, first half. The phone is Build 46; the paper and the
+market wanted to stand on their own first.
+
+- **The log.** The world writes itself down (`game.news`): a siege
+  called and broken, a warlord felled, a boss slain, a village or a city
+  found, a page of the survey recovered, a car driven off the lot,
+  property bought. Your deeds are headlines.
+- **The Herald.** A press hall on the plaza's west flank with an editor
+  at a counter: two coins for today's paper (an item, stacks by day).
+  Right click reads it: yesterday's and today's headlines with yours
+  first, TOMORROW's weather, the Exchange's tips for tomorrow, closing
+  prices with the day's change, and who is on top over thirty days.
+- **Tomorrow's weather is real.** The morning's weather is decided by
+  the seed and the day (snow where it is cold); the rolls through the
+  day stay the day's own. The paper is right at dawn.
+- **The Exchange.** A hall on the east flank: a stockbroker at the
+  counter, three floor brokers pacing. Eight companies, each with a
+  type: STRATA MINING, REGIONAL POWER and THE LINE RAILWAYS rise
+  steadily; HARROW MOTORS, SKYLINE CONSTRUCTION, BLUE WATER FISHERIES
+  and ARMS & ORDNANCE swing; OLD TOWN HOLDINGS trends down and pays two
+  percent a day. Prices close at dawn and move for reasons only: the
+  type's drift, the Herald's tips for that day (two a day, true seven
+  times in ten — a tip that fails goes the other way by half), and the
+  world: the ore you sold lifts the mine, the fish you sold the
+  fleet, tickets the line, the region's live wattage the power company;
+  a car bought jumps the dealership at once, a deed the builders; a
+  siege knocks every company in the city and lifts the arms trade. The
+  sheet: price, today's change, a thirty-day line, ★ on the top
+  performer, BUY 1 / 10, SELL 1 / ALL with coins from your pockets,
+  dividends into a balance you WITHDRAW at the counter. Thirty days of
+  believable history behind every company from the seed.
+- **Cities from before** get the two halls and their people on the
+  next visit, like the counters.
+- Tests: `b45test.js` (halls and roles stamped, eight companies with
+  thirty closes, paper bought and read with deed, weather, tips and
+  prices, the exchange screen and trades, a dawn where the tips and the
+  ore sale move what they should and the forecast comes true, save
+  round trip); smoke, b32, b35, b38, b41, b44 regressions.
+
+## Build 44 — COUNTERS (2026-09-16)
+
+The City Arc begins (Austin's first item, in my order). Every trade in
+a city is now a shop you walk into.
+
+- **Shops.** Each trade role's tower has its ground floor furnished: a
+  counter across the room at two fifths from the door (a new decor
+  power-node type, solid, its length to the room), the keeper POSTED a
+  pace behind it facing the door (they no longer wander; they turn to
+  you when you come to the counter and walk back if something pushes
+  them), the first three things the keeper sells on pedestals — two by
+  the side walls before the counter, one on the back wall (display
+  only: right click says "ask at the counter"), two torches, and a sign
+  by the door with the trade and the keeper's name. Right click on the
+  counter talks past it to the keeper.
+- **The mayor's hall.** A stone hall north of the obelisk with its door
+  on the plaza, two windows, a desk, the city's strongbox, the mayor
+  behind the desk. TOWN HALL, the city and the mayor on the sign. The
+  mayor's record moved from the plaza corner to the hall door, so
+  markers point at the door.
+- **The booth.** A ticket clerk (a new role, hireable like any city
+  hand) stands behind the station kiosk; right click sells the same
+  tickets the kiosk does. The kiosk still works without them.
+- Pedestrians keep wandering the avenues by day and never trade (as
+  before, kept on purpose).
+- **Cities from before** get all of this the next time you are near:
+  the record's keepers are re-spawned at their posts. A city stamped
+  from now on gets it at once.
+- Tests: `b44test.js` (stamped counts, signs, posts, keepers at their
+  posts, right click on a keeper past the counter opens the trade, the
+  clerk opens the station, displays refuse, walkers do not trade, the
+  migration path), screenshots of a shop, the hall and the booth;
+  smoke, b8a, b32, b35, b38, b41 regressions.
+
 ## Build 43 — THROUGHPUT (2026-09-15)
 
 Austin's PC playtest of Build 42: 180 fps in the country, 20 fps while a

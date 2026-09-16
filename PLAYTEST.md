@@ -5,6 +5,89 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 48 — THE BANK
+- [ ] The bank on the plaza's south side. Put coins in, sleep a night,
+      look again. Is one percent a day worth the walk?
+- [ ] Die with a balance. Is the relief real, or does it make death
+      cheap?
+- [ ] Borrow the maximum, buy something you could not afford, and pay
+      it back inside the week from the phone. Then do it again and do
+      not pay: the collectors at dawn. Are they a threat, a nuisance,
+      or a coin farm (each one you kill costs you 40)?
+- Feedback I want: whether the loan limit (200 + 20 a standing point)
+  is enough to matter for a car or a shop; whether the collectors
+  should also take coins from your pockets when they hit you.
+
+## Build 47 — THE PIT + MONUMENTS
+- [ ] Find the pit in a city (a block off the plaza; the sign on the
+      stands says THE PIT). Walk the stands, go down the steps into the
+      bowl, climb out. Does the bowl read as a bowl and the stands as
+      stands? Is climbing out too easy, or too hard?
+- [ ] The promoter in the niche by the mouth: right click. Put 25 on
+      yourself and fight THE PENS. Does the fight feel fair in the
+      bowl? Try walking out mid-bout: the countdown, the forfeit.
+- [ ] Work up the card. THE PACK by day — the stalkers should come at
+      you, not cower. THE WARLORD. THE CHAMPION: is 420 hp at that size
+      a fight or a chore?
+- [ ] The belt in your inventory; the statue in the plaza corner
+      (right click the plinth); the morning paper.
+- [ ] Break a siege with the guard in a city you have the belt of: a
+      second statue.
+- Feedback I want: are the purses and odds worth it against what the
+  bouts cost you in ammo and food; should the crowd exist (villagers
+  in the stands during a bout); what a sixth bout should be.
+
+## Build 46 — THE PHONE
+- [ ] Craft a phone at a table (3 iron ingots, 2 wire, 1 crystal).
+      Right click with it in hand. E closes it. Does it read like a
+      phone and not like another menu?
+- [ ] STOCKS with no account: the sheet, no buttons. Open an account at
+      an Exchange counter, then trade a share from the phone.
+- [ ] Get a siege going, or fell something the paper prints: the ☎
+      toast, then the ring at the top of NEWS.
+- [ ] Take a crew member into a fight and let them get low: the phone
+      should ring once, then not again for half a minute.
+- [ ] CALL → COME on a crew member you left 200 m behind: six seconds,
+      and they step out of a cab beside you. Is six seconds right?
+- [ ] CALL → A CAB from the country, 15 coins. Watch it arrive and
+      wait. Right click it, pick a city: the fade and the plaza.
+- Feedback I want: what else should ring; whether the cab should cost
+  by distance; whether the phone wants a hand model (it has none — it
+  is a screen, not a prop, on purpose for now).
+
+## Build 45 — THE PRESS + THE EXCHANGE
+- [ ] On the plaza: the Herald to the west, the Exchange to the east,
+      the town hall to the north. Buy a paper (2c) and read it. Is the
+      paper worth two coins — does it read like the world you played?
+- [ ] Sleep or wait for dawn: was the paper's weather right?
+- [ ] The Exchange: buy a few shares of something, sell something you
+      sold ore to the broker for, come back the next dawn. Did the
+      Herald's tip come true, and did the mining company move?
+- [ ] Buy a car: HARROW MOTORS should jump at once.
+- [ ] Hold OLD TOWN HOLDINGS overnight: a dividend waits at the counter.
+- [ ] Do something the paper should print (fell a warlord, break a
+      siege, find a village) and buy tomorrow's paper.
+- Feedback I want: are the tips readable as tips; is the market fun to
+  play against with what the world gives you; what the paper should
+  print that it does not.
+
+## Build 44 — COUNTERS
+- [ ] Walk into a city you know. The five keepers are gone from the
+      pavements; each shop has a sign by its door. Go in: a counter,
+      the keeper behind it, wares on pedestals. Right click the keeper
+      (or the counter) — the same trade screen as before.
+- [ ] Try to take something off a pedestal.
+- [ ] The town hall on the plaza's north side: the mayor at the desk
+      inside, the deeds and civic work in the same screen as before.
+- [ ] The station: a clerk behind the kiosk. Right click them — tickets.
+      The kiosk itself still sells them too.
+- [ ] Pedestrians still walk the avenues and still only talk.
+- [ ] Hire a keeper: the shop stands empty, the sign stays.
+- [ ] A brand-new city: everything above from the first visit.
+- Feedback I want: do the shops read as shops from the street; is the
+  counter in the right place for the room; anything the keeper does
+  that looks wrong (stuck in the counter, facing a wall).
+
 ## Build 43 — THROUGHPUT (PC)
 The build for the city report: faster meshing, merged draws, no stamp
 freeze. Nothing should look different except a hair of shading noise.

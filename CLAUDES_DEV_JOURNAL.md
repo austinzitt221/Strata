@@ -1141,6 +1141,111 @@ hundred beds, two hundred rebuilds. A batch counter fixed it in ten
 lines. The lesson for the next system I write: an add should mark
 dirty, and a frame should rebuild once.
 
+## 2026-09-16 — COUNTERS
+
+Back on the roadmap, and the first City Arc item is a good one to
+start with because it is mostly placing things I already have: a
+counter is a table with a front, a post is a home the keeper does not
+wander from, a sign already takes text, a pedestal already shows an
+item. The new work was the geometry of a room — where a counter reads
+as a counter (two fifths from the door, not against the back wall,
+which the first screenshot showed me), and where the wares go so you
+walk past them to the keeper.
+
+Two small things I want to remember. The right-click ray hits the
+counter before the keeper, so the counter has to hand the click on;
+and my test camera looked straight ahead at a keeper whose centre sat
+three centimetres below the pick radius, which cost me an hour of
+suspecting the code. Look where a player would look.
+
+The clerk is the first villager who does not trade: right click opens
+the station screen. That pattern — a person as the front of a system —
+is what the rest of the arc is: the broker's floor, the bookmaker, the
+bank teller, the contractor's desk. COUNTERS was the foundation for
+them, as the roadmap said.
+
+## 2026-09-16, later — THE PRESS + THE EXCHANGE
+
+"Never random" was the constraint I gave myself for the market, and it
+turned out to be the design. Every move has a sentence behind it: the
+drift of the company's kind, a tip the paper printed yesterday, ore
+you sold, a car you bought, a siege. The only hidden bit is whether a
+tip holds, sealed by the seed at seven in ten — so the paper is worth
+reading and not worth trusting, which is what a paper is. The
+thirty-day history behind each company on day one comes from the seed
+too, so a new world's sheet does not look born yesterday.
+
+The paper reads the same log everything else writes. I liked how
+little that cost: eight `note` calls at places that already toast.
+Your deeds go first because that is the joke and the reward — you
+break a siege and the morning paper knows.
+
+I split the phone off into Build 46. A press and a market are a
+build's worth; the phone is the thing that makes both of them ring,
+and it deserves its own evening.
+
+## 2026-09-16, later still — THE PHONE
+
+Two bugs the test found were both about a thing being true for the
+wrong reason. `countItem` sums `count`, the phone has none, NaN is not
+greater than zero, so the phone never rang and every other check I
+wrote passed anyway because I called the apps directly. And the ring
+throttle compared against `performance.now()`, which starts at zero
+on page load, so the first thirty seconds of any session were silent.
+Neither would have shown up in a long play session; both would have
+shown up in the first minute of Austin's. Tests that go through the
+real path (the right click, the hurt) rather than the system call are
+the ones that earn their keep.
+
+The phone has no hand model. I decided that on purpose: it is a screen
+you open, not a prop you hold, and a prop that small would read as a
+grey slab at pixel scale. If it turns out to want one, the shape is a
+row in `itemModel`.
+
+Item 7 is done. THE PIT + MONUMENTS next: the first thing in the city
+that is a show rather than a shop.
+
+## 2026-09-16, night — THE PIT + MONUMENTS
+
+I built the arena out of six edits: a block, three cubes taken out of
+it for the steps, a sphere taken out of the ground, a slab of sand put
+back. The SDF makes this kind of thing almost free — the bowl's wall
+is just the sphere's curve, the stands lean over it where the sphere
+grows past the inner step, and none of it needed a model. I keep
+relearning that the terrain is the best prop system in the game.
+
+The one real bug was old: the walk animation writes every entity's
+scale every frame, so the warlord I scaled up in Build 9 has been
+normal-sized in every fort since. Nobody noticed because a warlord is
+a lurker with a different colour and more hp, and "bigger" was a thing
+I remembered writing, not a thing anyone saw. The champion made it
+visible because the test asked for the number.
+
+Monuments are the part I liked most. They cost nothing — a pnode with
+text, like a sign — and they make the city remember you. The next time
+Austin walks into a plaza and finds a marble version of himself with a
+fist up, the city stopped being scenery.
+
+THE BANK is next. Deposits, interest, loans, and the collectors.
+
+## 2026-09-16, later that night — THE BANK
+
+A small build, on purpose. The bank is three numbers and a hall, and
+its whole value is what it lets the next builds assume: OWNERSHIP can
+price a shop above what anyone carries, THE CASINO can take a stake
+that hurts, and death stops being a wipe for anyone who banked. The
+collectors are the only new behaviour, and they are lurkers with two
+flags and a coat.
+
+One gate I did not know about: creative mode skips every free lurker
+in the update loop, so a creative player's PENS bout would have been
+three statues. I found it because the collectors' scale read null in
+the test, which turned out to be my own test order, but the reading
+took me through that line. Wrong alarms still find things.
+
+OWNERSHIP next — Austin's, and the one the phone's BUSINESS app has
+been holding a placeholder for since Build 46.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
