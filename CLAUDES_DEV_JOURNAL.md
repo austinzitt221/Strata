@@ -1371,6 +1371,22 @@ camera.
 
 THE MENAGERIE next: spawners and the grabber gun.
 
+## 2026-09-18, morning — THE MENAGERIE
+
+The hard part was never the beam. It was "the same one that went in":
+a villager is a house record plus an entity, and taking the entity
+leaves a house that wants to raise another. One flag on the house —
+bottled — and every place that respawns a villager or restores a crew
+member checks it. The record rides in the item as plain fields, which
+is why crew members keep their bag: the bag was already on the house
+record, not on the entity.
+
+The test cost me an hour on the camera: the beam aims from the
+camera, the camera only follows the player when the game loop runs,
+and hiring opens a screen that stops the loop. Three separate wrong
+answers before the right one. Every one of them a fact about the
+game I now know.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

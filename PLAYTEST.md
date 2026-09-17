@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 57 — THE MENAGERIE
+- [ ] Creative: the catalog's spawners. Set a Magma Tyrant loose in a
+      city plaza. (Sorry, city.)
+- [ ] Survival: craft the grabber gun. Take a sheep, a lurker at
+      night, and — if you dare — a boss. Does twelve seconds under a
+      boss feel like a fight or a chore?
+- [ ] Take a crew member, walk a kilometre, set them loose: still
+      yours, still carrying what you gave them?
+- Feedback I want: what the beam should look like (a line now); whether
+  a bottled boss should come out with full hp.
+
 ## Build 56 — THE CREW D
 - [ ] With a follower beside you, get in a car. They should be in the
       passenger seat. Drive the highway; look over.

@@ -233,7 +233,7 @@ Slotted between the city builds as the mood takes me:
 - **THE CREW D** — DONE (Build 56). Crew in vehicles: a follower takes the passenger
   seat of your car, boat or plane; give them a vehicle and they drive
   their own behind you; other crew ride with them. A squad on the road.
-- **THE MENAGERIE** (Austin's) — creature spawners. In creative,
+- **THE MENAGERIE** (Austin's) — DONE (Build 57). Creature spawners. In creative,
   craft a "<creature> spawner" for any living thing and set it down. In
   survival, a creature grabber gun: right click any living thing and
   it becomes a spawner in your pack -- animals in a moment, enemies

@@ -3231,6 +3231,7 @@ const RECIPES = [];
   RECIPES.push({ kind: 'phone', yields: 1, station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'wire', n: 2 }, { mat: MAT.CRYSTAL, n: 1 }] });
   // FARMING (Build 55): the hoe and the can; the meals
   RECIPES.push({ kind: 'hoe', yields: 1, station: true, costs: [{ item: 'ironingot', n: 2 }, { item: 'stick', n: 1 }] });
+  RECIPES.push({ kind: 'grabber', yields: 1, station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'wire', n: 2 }, { mat: MAT.CRYSTAL, n: 2 }] });
   RECIPES.push({ kind: 'can', yields: 1, station: true, costs: [{ item: 'ironingot', n: 3 }] });
   RECIPES.push({ kind: 'burger', yields: 1, costs: [{ item: 'bread', n: 1 }, { item: 'cookedmeat', n: 1 }, { item: 'lettuce', n: 1 }, { item: 'tomato', n: 1 }] });
   RECIPES.push({ kind: 'spaghetti', yields: 1, costs: [{ item: 'flour', n: 2 }, { item: 'tomato', n: 2 }] });
@@ -3419,6 +3420,7 @@ function craft(slots, r, free){
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'phone' ? { kind: 'phone' }
                   : r.kind === 'hoe' ? { kind: 'hoe' }
+                  : r.kind === 'grabber' ? { kind: 'grabber' }
                   : r.kind === 'can' ? { kind: 'can', water: 0 }
                   : r.kind === 'mender' ? { kind: 'mender', charge: 100 }
                   : r.kind === 'car' ? { kind: 'car', charge: 100 }
@@ -12195,7 +12197,7 @@ const villageSys = {
       if (Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z) > 60) continue;
       for (let i = 0; i < rec.houses.length; i++){
         const hrec = rec.houses[i];
-        if (hrec.crew) continue;                          // hired: the crew keeps them alive
+        if (hrec.crew || hrec.bottled) continue;          // hired: the crew keeps them alive; bottled: they are in a spawner
         const alive = game.entities.some(e => e.type === 'villager' && e.vkey === key && e.vi === i);
         if (alive) continue;
         const hy = (hrec.gy != null ? hrec.gy : game.gen.height(hrec.x, hrec.z)) + 0.7;
@@ -13163,7 +13165,7 @@ const crewSys = {
       for (let i = 0; i < rec.houses.length; i++){
         const hrec = rec.houses[i];
         const C = hrec.crew;
-        if (!C) continue;
+        if (!C || hrec.bottled) continue;
         if (!C.bag) this.fix(C);
         const e = game.entities.find(o => o.type === 'villager' && (city ? o.ckey : o.vkey) === key && o.vi === i);
         if (e){ C.pos = [+e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2)]; if (!e.crew) e.crew = C; continue; }
@@ -18725,6 +18727,113 @@ const farmSys = {
     if (dirty){ pnodeSys.rebuild(); markSave(); }
   },
 };
+// ---------- THE MENAGERIE (Build 57) ----------
+// A spawner is a creature in your pocket. In creative the catalog has
+// one for every living thing. In survival the grabber gun's beam takes
+// one: animals in a moment, hostiles over seconds, bosses over a long
+// while under fire, villagers only at hiring goodwill. What comes out
+// is the one that went in: its record rides inside the item -- the
+// villager's house and crew, a boss's kind, an animal's hp.
+const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian'];
+const MENAGERIE_NAME = { grazer: 'grazer', sheep: 'sheep', lurker: 'lurker', stalker: 'stalker', husk: 'husk', wisp: 'wisp', angel: 'angel', guard: 'city guard', villager: 'villager',
+  burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian' };
+const MENAGERIE_COL = { grazer: '#c8a24b', sheep: '#eceae2', lurker: '#3a5a3a', stalker: '#2c3444', husk: '#6a5040', wisp: '#9fe8ff', angel: '#e8e0ff', guard: '#2f4f7a', villager: '#d9b25a',
+  burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a' };
+const menagerieSys = {
+  beam: null, hold: null,
+  secs(e){
+    if (e.crew) return 0.2;
+    if (e.bossType) return 12;
+    if (e.type === 'villager') return 1.5;
+    if (e.type === 'grazer' || e.type === 'sheep') return 0.4;
+    return 3;
+  },
+  // what the beam may take, and why not
+  canTake(e){
+    if (!e || !ENT_DEF[e.type] || VEH[e.type] || e.type === 'drop' || e.type === 'cab') return 'not a living thing';
+    if (e.racer || e.convoy || e.posse || e.mailRaid) return 'not that one';
+    if (e.type === 'villager' && !e.crew){
+      const h = villageSys.villagerRec(e);
+      if (!h) return 'a stranger with no home';
+      if ((h.rep || 0) < crewSys.HIRE_REP) return crewSys.nameOf(e) + ' would go with you at ' + crewSys.HIRE_REP + ' goodwill';
+    }
+    return null;
+  },
+  // the record that rides in the spawner: everything but the mesh and the world's references
+  bottle(e){
+    const rec = {};
+    for (const k in e){ const v = e[k]; if (k === 'mesh' || k === 'crew' || k === 'ride' || k === 'stroll' || k === 'trail' || k === 'grabFrom') continue; if (v == null || typeof v !== 'object' || Array.isArray(v)) rec[k] = v; }
+    delete rec.x; delete rec.y; delete rec.z; delete rec.vx; delete rec.vy; delete rec.vz; delete rec.tx; delete rec.tz; delete rec.nid; delete rec.tmp;
+    if (e.home) rec.home = { x: e.home.x, y: e.home.y, z: e.home.z };
+    return rec;
+  },
+  take(e){
+    const rec = this.bottle(e);
+    const it = { kind: 'spawner', ent: e.bossType || e.type, rec, name: e.type === 'villager' ? crewSys.nameOf(e) : null };
+    if (e.type === 'villager'){
+      const h = villageSys.villagerRec(e); if (h) h.bottled = 1;
+      it.hkey = e.ckey || e.vkey; it.city = !!e.ckey; it.vi = e.vi; it.crew = !!e.crew;
+    }
+    if (!giveItem(it, 1)){ toast('no room in your pack'); AudioSys.sfx('deny'); return false; }
+    if (game.carried === e) game.carried = null;
+    const i = game.entities.indexOf(e); if (i >= 0) game.entities.splice(i, 1);
+    if (e.mesh){ game.scene.remove(e.mesh); e.mesh = null; }
+    Particles.burst(e.x, e.y + 0.8, e.z, 0.6, [0x7fe87f, 0x59c8d8], 14, 1.4);
+    toast(itemLabel(it) + ' — in your pack');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    return true;
+  },
+  release(it){
+    const h = surfaceHit(); if (!h){ toast('aim at the ground'); return; }
+    const type = it.ent, x = h[0], y = h[1] + 0.6, z = h[2];
+    if (!ENT_DEF[type] && !ENT_DEF[MENAGERIE_TYPES.find(t => t === type)]){ toast('nothing in it'); return; }
+    let e;
+    if (ENT_DEF[type] && ENT_DEF[type].boss){ e = bossSys.spawn(type, x, y, z); }
+    else e = spawnEntity(type, x, y, z);
+    if (it.rec) for (const k in it.rec){ if (k === 'type' || k === 'bossType') continue; e[k] = it.rec[k]; }
+    if (type === 'villager'){
+      if (it.hkey){
+        const store = it.city ? (game.cities || {}) : game.villages, rec = store[it.hkey], hh = rec && rec.houses && rec.houses[it.vi];
+        if (hh){ hh.bottled = 0; if (it.city) e.ckey = it.hkey; else e.vkey = it.hkey; e.vi = it.vi; e.role = hh.role; if (hh.crew){ e.crew = hh.crew; crewSys.remesh(e); } }
+      }
+      e.home = { x, y, z };
+    }
+    if (type === 'wisp' || type === 'angel') e.y = y + 1.5;
+    if (e.mesh) e.mesh.position.set(e.x, e.y, e.z);
+    const i = game.slots.indexOf(it); if (i >= 0) game.slots[i] = null;
+    Particles.burst(x, y + 0.8, z, 0.6, [0x7fe87f, 0x59c8d8], 14, 1.4);
+    toast((it.name ? it.name : MENAGERIE_NAME[type] || type) + ' — loose');
+    AudioSys.sfx('boom'); refreshHotbar(); markSave();
+  },
+  tick(dt){
+    const it = selectedItem();
+    const on = it && it.kind === 'grabber' && game.mouseR && game.ui === 'none' && !netSys.guest;
+    if (!on){ this.stop(); return; }
+    const e = entityOnRay(14);
+    const why = this.canTake(e);
+    if (!e || why){ if (why && e && (!this.saidT || performance.now() - this.saidT > 1500)){ this.saidT = performance.now(); toast(why); } this.stop(); return; }
+    if (!this.hold || this.hold.e !== e) this.hold = { e, t: 0, need: this.secs(e), told: -1 };
+    const H = this.hold; H.t += dt;
+    this.draw(e);
+    const pct = Math.min(100, Math.round(H.t / H.need * 100));
+    if (pct !== H.told && pct % 25 === 0 && H.need > 1){ H.told = pct; toast('taking ' + (e.type === 'villager' ? crewSys.nameOf(e) : (MENAGERIE_NAME[e.bossType || e.type] || e.type)) + ' — ' + pct + '%'); }
+    if (H.t >= H.need){ this.stop(); this.take(e); }
+  },
+  draw(e){
+    if (!this.beam){
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      this.beam = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0x7fe87f, transparent: true, opacity: 0.85, depthTest: false }));
+      this.beam.renderOrder = 6; this.beam.frustumCulled = false; game.scene.add(this.beam);
+    }
+    const o = game.camera.position, dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const right = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const a = o.clone().addScaledVector(right, 0.35).addScaledVector(dir, 0.6); a.y -= 0.25;
+    const P = this.beam.geometry.attributes.position.array;
+    P[0] = a.x; P[1] = a.y; P[2] = a.z; P[3] = e.x; P[4] = e.y + (ENT_DEF[e.type] ? ENT_DEF[e.type].h * 0.5 : 0.8); P[5] = e.z;
+    this.beam.geometry.attributes.position.needsUpdate = true; this.beam.visible = true;
+  },
+  stop(){ this.hold = null; if (this.beam) this.beam.visible = false; },
+};
 const MONUMENTS = {
   champion: { title: 'CHAMPION OF THE PIT',     line: 'who took the belt' },
   siege:    { title: 'THE SIEGE BREAKER',       line: 'who stood with the guard' },
@@ -19871,7 +19980,7 @@ const citySys = {
       // still mans its door
       (rec.houses || []).forEach((hrec, i) => {
         const alive = game.entities.some(e => e.type === 'villager' && e.ckey === key && e.vi === i);
-        if (alive || hrec.crew) return;
+        if (alive || hrec.crew || hrec.bottled) return;
         const P = hrec.post || hrec;
         const e = spawnEntity('villager', P.x, (hrec.gy || 0) + 0.7, P.z);
         e.role = hrec.role; e.ckey = key; e.vi = i;
@@ -21614,6 +21723,8 @@ function bindInput(){
       if (selIt && selIt.kind === 'paper'){ econSys.readPaper(selIt); return; }
       if (selIt && selIt.kind === 'phone'){ phoneSys.open(); return; }
       if (selIt && (selIt.kind === 'hoe' || selIt.kind === 'can') && farmSys.rmb(selIt)) return;
+      if (selIt && selIt.kind === 'spawner'){ menagerieSys.release(selIt); return; }
+      if (selIt && selIt.kind === 'grabber') return;   // the beam runs while the button is held
       if (selIt && (selIt.kind === 'meat' || selIt.kind === 'cookedmeat' || selIt.kind === 'fish' || selIt.kind === 'cookedfish' ||
           (selIt.kind === 'mat' && selIt.mat === CORE.MAT.GLOWSHROOM && !game.dispSlot))){
         tryEat();
@@ -25077,6 +25188,15 @@ function itemIconURL(it){
     c.fillStyle = '#9aa0ab'; c.fillRect(4, 8, 8, 2); c.fillRect(10, 5, 1, 4);
     c.fillStyle = '#2f9de0'; c.fillRect(5, 6, 4, 2);
     c.fillStyle = '#1c1c22'; c.fillRect(2, 6, 4, 1);
+  } else if (it.kind === 'spawner'){
+    // a cage with the creature's colour inside
+    c.fillStyle = '#9aa0ab'; c.fillRect(2, 3, 12, 11); c.fillStyle = '#16161c'; c.fillRect(3, 4, 10, 9);
+    c.fillStyle = '#9aa0ab'; for (const x of [5, 8, 11]) c.fillRect(x, 4, 1, 9);
+    c.fillStyle = MENAGERIE_COL[it.ent] || '#ffffff'; c.fillRect(4, 7, 8, 4);
+    c.fillStyle = '#9aa0ab'; c.fillRect(6, 1, 4, 2);
+  } else if (it.kind === 'grabber'){
+    c.fillStyle = '#3a3a44'; c.fillRect(2, 7, 9, 4); c.fillRect(3, 11, 3, 3);
+    c.fillStyle = '#59c8d8'; c.fillRect(11, 8, 3, 2); c.fillStyle = '#7fe87f'; c.fillRect(12, 6, 2, 1); c.fillRect(12, 11, 2, 1);
   } else if (it.kind === 'hoe'){
     c.fillStyle = '#7a5a3a'; c.fillRect(3, 2, 2, 11);
     c.fillStyle = '#9aa0ab'; c.fillRect(2, 12, 10, 2); c.fillRect(10, 10, 2, 4);
@@ -25702,6 +25822,8 @@ function itemLabel(it){
   if (it.kind === 'phone') return 'phone';
   if (it.kind === 'belt') return 'champion\'s belt of ' + (it.city || 'the pit');
   if (it.kind === 'hoe') return 'hoe';
+  if (it.kind === 'grabber') return 'grabber gun';
+  if (it.kind === 'spawner') return (it.name ? it.name + ' the ' : '') + (MENAGERIE_NAME[it.ent] || it.ent || 'creature') + ' spawner';
   if (it.kind === 'can') return 'watering can' + (it.water > 0 ? ' (' + it.water + ')' : ' (empty)');
   if (it.kind === 'tomatoseed') return 'tomato seeds';
   if (it.kind === 'wheatseed') return 'wheat seeds';
@@ -26011,7 +26133,7 @@ function sortInventory(){
 // One shared taxonomy behind both the creative catalog and the crafting
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
-const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can'];
+const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
@@ -26097,6 +26219,8 @@ function catalogEntries(){
   out.push({ kind: 'mender', charge: 100 });
   for (let t = 0; t < 3; t++) out.push({ kind: 'battery', tier: t, charge: CORE.BATTERY_CAP[t] });
   out.push({ kind: 'sportscar', charge: 100 });
+  out.push({ kind: 'grabber' });
+  for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
@@ -26935,6 +27059,10 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
          : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+  } else if (it.kind === 'grabber'){
+    html = '<div class="t1">grabber gun</div><div class="t2">hold right click on any living thing: animals in a moment, enemies over a few seconds, bosses over a long and dangerous while, villagers only at ' + crewSys.HIRE_REP + ' goodwill \u00b7 it comes back out the same one that went in</div>';
+  } else if (it.kind === 'spawner'){
+    html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">right click the ground to set it loose' + (it.rec ? ' \u00b7 the same one that went in, with everything it had' : '') + '</div>';
   } else if (FARM_TIP[it.kind]){
     html = '<div class="t1">' + itemLabel(it) + (it.count > 1 ? ' \u00d7' + it.count : '') + '</div><div class="t2">' + FARM_TIP[it.kind] + '</div>';
   } else if (it.kind === 'belt'){
@@ -29812,7 +29940,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); }
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); menagerieSys.tick(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -30051,7 +30179,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

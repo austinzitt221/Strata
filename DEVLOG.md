@@ -2,6 +2,39 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 57 — THE MENAGERIE (2026-09-18)
+
+Austin's. A creature in your pocket.
+
+- **Spawners.** An item that holds one living thing. In creative the
+  catalog has one for every kind — grazer, sheep, lurker, stalker,
+  husk, wisp, angel, city guard, villager, and the seven bosses. Right
+  click the ground to set it loose.
+- **The grabber gun** (three ingots, two wire, two crystal, at a
+  table). Hold right click on a living thing and a green beam takes it:
+  animals in under half a second, hostiles in three, a boss in twelve
+  under whatever it is doing to you meanwhile, a crew member at once,
+  a villager only at hiring goodwill — the stranger's own words say
+  so. Vehicles, cabs, racers, the posse and the mail raiders refuse the
+  beam. Losing the target drops the hold.
+- **The same one comes out.** The spawner carries the creature's
+  record: a boss's kind and hp, a lurker's every flag, and for a
+  villager their house and place in it — the house holds their place
+  and does not raise another while they are bottled, and their crew
+  record with its bag, tool and armor rides along. Set loose, they are
+  themselves again at your feet: the mayor with his goodwill, the crew
+  member following.
+- Tests: `b57test.js` (sixteen spawners in the catalog; a grazer at 13
+  hp taken in a moment and set loose with 13 hp; a lurker held two
+  seconds then taken at three with its flags; a Burrower still there at
+  ten seconds and gone at thirteen; a villager refused at no goodwill
+  with the reason, taken at twelve, the house holding their place
+  through two village ticks, set loose with the same name and goodwill
+  and the house unbottled; a crew member taken at once with the crew
+  restore not bringing them back, the spawner in the save, and set
+  loose still following with their torches); smoke, b32, b38, b44–b56
+  regressions.
+
 ## Build 56 — THE CREW D (2026-09-17)
 
 The squad on the road.
