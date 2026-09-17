@@ -220,7 +220,7 @@ so the city's economy is one thing that reacts to what you do.
 14. **THE CARTOGRAPHER** (mine) — DONE (Build 53). Buy maps of country you have not
    walked, marked with falls, villages and forts; sell your own survey
    for coin.
-15. **THE MAIL CAR** (mine, on THE LINE) — one car on the train carries
+15. **THE MAIL CAR** (mine, on THE LINE) — DONE (Build 54). One car on the train carries
    coin and ore. Guard it for pay, or rob it and answer for it with the
    city.
 

@@ -2,6 +2,48 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 54 — THE MAIL CAR (2026-09-17)
+
+City Arc item 15, mine, on THE LINE. The last of the arc.
+
+- **The car.** The first car behind the locomotive is the mail car —
+  dark green, brass-barred, a brass stripe. Passengers ride the two box
+  cars behind it. Every run carries a manifest from the seed and the
+  run's number: coin (120–300) and a lot of ore (iron, ruby, coal, or a
+  diamond or two).
+- **Raids.** Half the runs are raided a third to two thirds of the way
+  along the line. If anyone is within five hundred metres when the
+  train reaches the spot, it halts for thirty-five seconds and four
+  raiders come out of the country for the car. Kill them all and the
+  mail is safe — the line pays thirty coins for standing with the
+  train, and it is a headline; leave them on the car fourteen seconds,
+  or let the halt run out with any alive, and they have it. Raided
+  with no one near, it simply happened. A halted run runs late until
+  its next station, where the timetable takes over again.
+- **The guard's contract,** at the ticket kiosk: a free pass for the
+  next departure, eighty coins and a tenth of the manifest for a raid
+  held off or a quiet run ridden to the far end, four standing either
+  way; the mail lost on your watch, or a train you never boarded,
+  costs four.
+- **Cracking it.** While the train stands at a platform, crouch, right
+  click the mail car and stay at it six seconds: the manifest is yours, the
+  city that watched takes twenty standing, the railway's share falls,
+  the paper prints it, and four of the city guard come for you — for
+  four minutes, or until you are a hundred and seventy metres gone.
+- The phone rings for a raid on the line (it is a siege), and a train
+  halted by raiders reads as one in the paper.
+- Tests: `b54test.js` (the line and its train with the mail car
+  distinct, manifests repeatable, a raided run and a quiet one found;
+  the guard's contract taken while the train stands, the train ridden
+  to the raid point and halted, four raiders about the car, the halt
+  holding, the raiders killed and the run guarded and paid with the
+  contract cleared and the train moving again; a raid unseen from the
+  platform marked as happened; a quiet guarded run paid at the far
+  end; the car cracked at the platform — six seconds, the manifest,
+  twenty standing, four guards closing, the car empty after, the
+  headline; raiders and the posse kept out of the save); smoke, b32,
+  b38, b44–b53 regressions.
+
 ## Build 53 — THE CARTOGRAPHER (2026-09-17)
 
 City Arc item 14, mine. Country you have not walked, for coin.

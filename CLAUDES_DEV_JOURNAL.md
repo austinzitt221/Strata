@@ -1325,6 +1325,27 @@ is a fact about the player.
 
 One City Arc item left: THE MAIL CAR. Then the slotted builds.
 
+## 2026-09-17, night — THE MAIL CAR, and the arc closed
+
+The timetable was a pure function of time — the loco is where the
+clock says it is, always, which is why the trains never needed
+saving. A raid has to stop the train, so the function grew a halt: for
+a window it answers the halt's place, afterwards it answers as if
+time had slipped by the hold, until the next station, where it snaps
+back. The hold is shorter than the dwell, so the snap happens while
+the train is standing and nobody sees it. I like that the trains are
+still not saved.
+
+Two bugs from the test, both parity: a run's arrival dwell is the next
+run's number, so the guard was never paid on arrival; and the raid
+point was measured from one end whichever way the train ran. The test
+found both because it drove the clock by hand to the exact second.
+
+That is the City Arc: COUNTERS, the press and the exchange, the phone,
+the pit and the monuments, the bank, ownership, the casino, the track,
+the contractor, the cartographer, the mail car. Eleven builds in two
+days. Next: the slotted ones. FARMING first.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

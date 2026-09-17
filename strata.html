@@ -15073,6 +15073,7 @@ const stationSys = {
       row.addEventListener('click', () => this.buy(rec, lk));
       list.appendChild(row);
     }
+    for (const lk of links) mailSys.guardRow(list, rec, lk);
     // your own rails at the platform
     for (const L of game.rails || []){
       for (const end of [0, 1]){
@@ -16955,6 +16956,18 @@ const lineSys = {
   },
   // the timetable: where the locomotive is at world second T
   state(R, T){
+    const H = R.halt;
+    if (H){
+      if (T >= H.t0 && T < H.t0 + H.hold){ const b = this.state0(R, H.t0); return { s: H.s, dir: b.dir, stop: null, halt: true, left: H.t0 + H.hold - T, period: b.period }; }
+      if (T >= H.t0 + H.hold){
+        const b = this.state0(R, T - H.hold);
+        if ((b.stop && b.stop !== H.from) || T - H.t0 > H.hold + (R.sMax - R.sMin) / LINE_SPD + LINE_DWELL) R.halt = null;
+        else return b;
+      }
+    }
+    return this.state0(R, T);
+  },
+  state0(R, T){
     const travel = (R.sMax - R.sMin) / LINE_SPD, period = 2 * (LINE_DWELL + travel);
     const phase = ((T % period) + period) % period;
     if (phase < LINE_DWELL) return { s: R.sMin, dir: 1, stop: 'a', left: LINE_DWELL - phase, period };
@@ -17082,12 +17095,13 @@ const lineSys = {
     return m;
   },
   // ---- the train: a locomotive and three box cars ----
-  carMesh(loco){
+  carMesh(loco, mail){
     // unlit, like every prop: the scene has no lamp for lit materials to see
     const M = this.carMats || (this.carMats = {
       loco: new THREE.MeshBasicMaterial({ color: 0x35584a }), car: new THREE.MeshBasicMaterial({ color: 0x9a4a33 }),
       roof: new THREE.MeshBasicMaterial({ color: 0x2a2a30 }), dark: new THREE.MeshBasicMaterial({ color: 0x1a1a1e }),
-      stripe: new THREE.MeshBasicMaterial({ color: 0xe0c060 }), glass: new THREE.MeshBasicMaterial({ color: 0x9fd0ff }) });
+      stripe: new THREE.MeshBasicMaterial({ color: 0xe0c060 }), glass: new THREE.MeshBasicMaterial({ color: 0x9fd0ff }),
+      mail: new THREE.MeshBasicMaterial({ color: 0x2f4f3a }), brass: new THREE.MeshBasicMaterial({ color: 0xc9a24a }) });
     const g = new THREE.Group();
     const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
     for (const z of [-3.2, 3.2]) for (const x of [-1.1, 1.1]) add(new THREE.BoxGeometry(0.3, 0.9, 0.9), M.dark, x, 0.45, z);
@@ -17100,10 +17114,11 @@ const lineSys = {
       add(new THREE.BoxGeometry(3.0, 0.25, 9.4), M.stripe, 0, 1.0, 0);
       add(new THREE.BoxGeometry(0.4, 0.9, 1.6), M.dark, 0, 4.0, 0);
     } else {
-      add(new THREE.BoxGeometry(2.9, 2.8, 9.0), M.car, 0, 2.3, 0);
+      add(new THREE.BoxGeometry(2.9, 2.8, 9.0), mail ? M.mail : M.car, 0, 2.3, 0);
       add(new THREE.BoxGeometry(3.1, 0.2, 9.2), M.roof, 0, 3.8, 0);
-      for (const x of [-1.47, 1.47]) add(new THREE.BoxGeometry(0.06, 2.3, 2.0), M.dark, x, 2.1, 0);
-      add(new THREE.BoxGeometry(3.0, 0.2, 9.2), M.stripe, 0, 1.0, 0);
+      if (mail){ for (const x of [-1.47, 1.47]) for (const z of [-2.6, 0, 2.6]) add(new THREE.BoxGeometry(0.06, 0.9, 0.7), M.brass, x, 2.4, z); add(new THREE.BoxGeometry(0.08, 1.2, 1.2), M.dark, 1.5, 1.9, 0); }
+      else for (const x of [-1.47, 1.47]) add(new THREE.BoxGeometry(0.06, 2.3, 2.0), M.dark, x, 2.1, 0);
+      add(new THREE.BoxGeometry(3.0, 0.2, 9.2), mail ? M.brass : M.stripe, 0, 1.0, 0);
     }
     g.traverse(o => { o.userData.noShadow = true; });
     return g;
@@ -17113,7 +17128,7 @@ const lineSys = {
     if (T) return T;
     const group = new THREE.Group();
     const cars = [];
-    for (let k = 0; k <= LINE_CARS; k++){ const c = this.carMesh(k === 0); group.add(c); cars.push(c); }
+    for (let k = 0; k <= LINE_CARS; k++){ const c = this.carMesh(k === 0, k === 1); group.add(c); cars.push(c); }
     game.scene.add(group);
     T = { R, group, cars, wasStop: null };
     this.trains.set(R.key, T);
@@ -17153,6 +17168,7 @@ const lineSys = {
       const R = this.routes.get(k); if (!R) continue;
       const T = this.trainFor(R), st = this.state(R, now);
       this.place(T, st);
+      mailSys.watch(T, R, st, now);
       const loco = T.cars[0].position, d = Math.hypot(loco.x - px, loco.z - pz);
       T.group.visible = d < 900;
       // the horn as it pulls out, heard from four hundred metres
@@ -17175,6 +17191,7 @@ const lineSys = {
     for (const [k, T] of this.trains){
       const st = this.state(T.R, now);
       if (!st.stop) continue;
+      if ((game.keys || {})['KeyC'] && mailSys.tryRob(T, st)) return true;
       for (let c = 1; c <= LINE_CARS; c++){
         const p = T.cars[c].position;
         if (Math.hypot(p.x - game.pos.x, p.z - game.pos.z) > 5.5 || Math.abs(p.y + 1.0 - game.pos.y) > 3.5) continue;
@@ -17183,7 +17200,7 @@ const lineSys = {
         const it = game.slots[si];
         if ((it.count || 1) > 1) it.count--; else game.slots[si] = null;
         const dest = st.stop === 'a' ? citySys.nameFor(L.b.seed) : citySys.nameFor(L.a.seed);
-        game.riding = { train: true, R: T.R, T, car: c, dest, told: false };
+        game.riding = { train: true, R: T.R, T, car: Math.max(2, c), dest, told: false };   // passengers ride the box cars
         game.vel.set(0, 0, 0);
         toast('aboard — for ' + dest + ' · leaves in ' + Math.ceil(st.left) + 's · space steps off while it stands');
         AudioSys.sfx('toggle'); refreshHotbar(); markSave();
@@ -18283,6 +18300,191 @@ const chartSys = {
     toast('your survey sold — ' + pay + ' coins for ' + w + ' cells');
     econSys.note('A TRAVELLER SELLS A SURVEY OF ' + w + ' CELLS TO THE CARTOGRAPHER', ['deal'], game.activeChart, true);
     AudioSys.sfx('craft'); refreshHotbar(); markSave(); this.refresh();
+  },
+};
+// ---------- THE MAIL CAR (Build 54) ----------
+// The first car behind the locomotive carries the line's coin and ore:
+// a manifest per run from the seed. Half the runs are raided somewhere
+// in the middle of the line -- the train halts, raiders come for the
+// car -- if anyone is near enough to see it. Take the guard's contract
+// at the kiosk and ride it: hold them off and the line pays. Or crack
+// the car yourself while it stands at a platform, and the city that
+// watched you do it sends its guard after you.
+const MAIL_HOLD = 35, MAIL_CRACK = 6;
+const mailSys = {
+  raid: null, crack: null,
+  hash(key){ let h = 7; for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x9E3779B1) >>> 0; return h; },
+  runIdx(R, T){ const travel = (R.sMax - R.sMin) / LINE_SPD, period = 2 * (LINE_DWELL + travel), phase = ((T % period) + period) % period; return Math.floor(T / period) * 2 + (phase < LINE_DWELL + travel ? 0 : 1); },
+  runStart(R, run){ const travel = (R.sMax - R.sMin) / LINE_SPD, period = 2 * (LINE_DWELL + travel); return Math.floor(run / 2) * period + (run % 2 ? LINE_DWELL + travel : 0); },
+  manifest(R, run){
+    const g = CORE.mulberry32((game.seed ^ this.hash(R.key) ^ Math.imul(run + 1, 0x85EBCA6B)) >>> 0);
+    const coin = 120 + ((g() * 180) | 0);
+    const kinds = ['ironore', 'rubyore', 'coal', 'diamond'], kind = kinds[(g() * kinds.length) | 0];
+    const n = kind === 'diamond' ? 1 + ((g() * 2) | 0) : 8 + ((g() * 16) | 0);
+    return { coin, kind, n, raid: g() < 0.5, at: 0.35 + g() * 0.3 };
+  },
+  M(){ return game.mail || (game.mail = {}); },
+  key(R, run){ return R.key + ':' + run; },
+  // ---- the guard's contract ----
+  guardRow(list, rec, lk){
+    if (netSys.guest) return;
+    const R = lineSys.route(lk.L), T = lineSys.clock(), end = lk.fromA ? 'a' : 'b';
+    const G = game.guardRun, mine = G && G.key === R.key;
+    const row = document.createElement('div'); row.className = 'craftrow'; row.style.borderLeft = '3px solid #c9a24a';
+    const nm = document.createElement('div'); nm.className = 'cname';
+    nm.innerHTML = (mine ? 'guarding the mail car → ' + G.dest : 'guard the mail car → ' + lk.name) + '<div class="sub">ride the next departure; hold off a raid on the line · 80c and a tenth of the manifest · the mail lost on your watch costs standing</div>';
+    const cost = document.createElement('div'); cost.style.marginLeft = 'auto'; cost.textContent = mine ? 'yours' : 'free pass'; cost.style.color = mine ? '#8a8494' : '#8bff9e';
+    row.appendChild(nm); row.appendChild(cost);
+    row.addEventListener('click', () => { if (!mine) this.takeGuard(rec, lk); else { toast('you hold the contract — board when it stands'); AudioSys.sfx('click'); } });
+    list.appendChild(row);
+  },
+  takeGuard(rec, lk){
+    const R = lineSys.route(lk.L), T = lineSys.clock(), end = lk.fromA ? 'a' : 'b';
+    const st = lineSys.state(R, T);
+    const run = st.stop === end ? this.runIdx(R, T) : this.runIdx(R, T + lineSys.wait(R, end, T) + 1);
+    game.guardRun = { key: R.key, run, city: rec.key, dest: lk.name, pay: 80, end };
+    if (lineSys.ticketFor(lk.L) < 0) giveItem({ kind: 'ticket', link: lk.L.key, to: lk.name, from: rec.name || 'the city', count: 1 }, 1);
+    toast('the guard’s contract — board the mail train for ' + lk.name + ' when it stands');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    if (game.activeStation) stationSys.open(game.activeStation);
+  },
+  guardPay(G, man, quiet){
+    const pay = G.pay + Math.round(man.coin * 0.1);
+    addStackItem('coin', pay);
+    const rec = (game.cities || {})[G.city]; if (rec) citySys.cred(rec, 4);
+    toast('guard pay ' + pay + 'c' + (quiet ? ' — a quiet run' : ' — the mail came through'));
+    game.guardRun = null; refreshHotbar(); markSave();
+  },
+  guardFail(G, why){
+    const rec = (game.cities || {})[G.city]; if (rec) citySys.cred(rec, -4, why || 'the mail lost on your watch');
+    game.guardRun = null; markSave();
+  },
+  // ---- the line, watched every frame per train ----
+  watch(T, R, st, now){
+    if (netSys.guest) return;
+    const run = this.runIdx(R, now), key = this.key(R, run), M = this.M();
+    const G0 = game.guardRun && game.guardRun.key === R.key ? game.guardRun : null;
+    const G = G0 && G0.run === run ? G0 : null;
+    if (st.stop){
+      // a guarded run that reached the far end unraided (its arrival dwell counts as the next run): paid if you rode it
+      if (G0 && run === G0.run + 1 && st.stop !== G0.end && !M[this.key(R, G0.run)]){
+        const G = G0; M[this.key(R, G0.run)] = 'quiet';
+        if (game.riding && game.riding.train && game.riding.R === R) this.guardPay(G, this.manifest(R, run), true);
+        else { toast('the mail train arrived without you'); this.guardFail(G, 'the guard who never boarded'); }
+      }
+      return;
+    }
+    if (this.raid || M[key]) return;
+    const man = this.manifest(R, run);
+    if (!man.raid) return;
+    const sRaid = st.dir > 0 ? R.sMin + (R.sMax - R.sMin) * man.at : R.sMax - (R.sMax - R.sMin) * man.at;   // a way into the run, whichever way it runs
+    if (st.dir > 0 ? st.s < sRaid : st.s > sRaid) return;
+    const loco = T.cars[0].position, d = Math.hypot(loco.x - game.pos.x, loco.z - game.pos.z);
+    if (d > 500){
+      // nobody to see it: it happened
+      M[key] = 'robbed';
+      if (G){ toast('the mail car was hit on the line — you were not there'); this.guardFail(G, 'the mail lost on your watch'); }
+      markSave(); return;
+    }
+    R.halt = { t0: now, hold: MAIL_HOLD, s: st.s, from: st.dir > 0 ? 'a' : 'b' };
+    lineSys.place(T, lineSys.state(R, now));
+    const car = T.cars[1].position, yaw = T.cars[1].rotation.y, nx = Math.cos(yaw), nz = -Math.sin(yaw);
+    for (let i = 0; i < 4; i++){
+      const side = i % 2 ? 1 : -1, along = (i - 1.5) * 4;
+      const x = car.x + nx * side * 9 - nz * along, z = car.z + nz * side * 9 + nx * along;
+      const e = spawnEntity('lurker', x, Math.max(game.gen.height(x, z), car.y - 1) + 0.7, z);
+      e.raider = true; e.noburn = true; e.mailRaid = key; e.hp = 45; e.big = 1.1; e.hue = 0.08;
+    }
+    this.raid = { key, R, T, run, loot: 0, t: 0, G };
+    toast(G ? 'RAID — they are coming for the mail car · hold them off' : 'raiders on the line — the train halts');
+    AudioSys.sfx('boom');
+    econSys.note('RAIDERS STOP THE ' + citySys.nameFor(R.L.a.seed) + ' TRAIN ON THE LINE', ['siege', 'mail'], null, false);
+    markSave();
+  },
+  update(dt){
+    if (netSys.guest) return;
+    this.k = (this.k || 0) + 1;
+    this.crackTick(dt);
+    const Rd = this.raid;
+    if (!Rd){
+      if (this.k % 120 === 0) for (const e of [...game.entities]) if (e.mailRaid) killEntity(e, false);
+      return;
+    }
+    Rd.t += dt;
+    const car = Rd.T.cars[1].position;
+    const alive = game.entities.filter(e => e.mailRaid === Rd.key);
+    for (const e of alive){
+      if (e.big && e.mesh && !e.dressed) pitSys.dress(e, e.big, e.hue);
+      if (Math.hypot(e.x - car.x, e.z - car.z) < 7) Rd.loot += dt;
+    }
+    if (!alive.length) return this.end('guarded');
+    if (Rd.loot >= 14) return this.end('robbed');
+    if (Rd.t >= MAIL_HOLD) return this.end('robbed');
+  },
+  end(outcome){
+    const Rd = this.raid; if (!Rd) return;
+    this.raid = null;
+    const M = this.M(); M[Rd.key] = outcome;
+    for (const e of [...game.entities]) if (e.mailRaid === Rd.key) killEntity(e, false);
+    if (Rd.R.halt) Rd.R.halt.hold = Math.min(MAIL_HOLD, Math.max(1, lineSys.clock() - Rd.R.halt.t0 + 1.5));   // the train pulls out now
+    const man = this.manifest(Rd.R, Rd.run);
+    if (outcome === 'guarded'){
+      if (Rd.G) this.guardPay(Rd.G, man, false);
+      else { addStackItem('coin', 30); toast('the mail car is safe — 30 coins from the line for standing with the train'); refreshHotbar(); }
+      econSys.note('A STRANGER HOLDS OFF A RAID ON THE MAIL CAR', ['deed', 'mail'], null, true);
+      econSys.move('rail', 0.02);
+      AudioSys.sfx('craft');
+    } else {
+      toast('they got the mail car');
+      if (Rd.G) this.guardFail(Rd.G, 'the mail lost on your watch');
+      econSys.move('rail', -0.03);
+      AudioSys.sfx('deny');
+    }
+    markSave();
+  },
+  // ---- cracking it at the platform ----
+  tryRob(T, st){
+    if (!st.stop) return false;
+    const car = T.cars[1].position;
+    if (Math.hypot(car.x - game.pos.x, car.z - game.pos.z) > 3.2 || Math.abs(car.y + 1.0 - game.pos.y) > 3.5) return false;
+    const run = this.runIdx(T.R, lineSys.clock()), key = this.key(T.R, run);
+    if (this.M()[key] === 'cracked' || this.M()[key] === 'robbed'){ toast('the mail car is empty'); AudioSys.sfx('deny'); return true; }
+    if (this.crack && this.crack.key === key){ toast('cracking it — stay at it'); return true; }
+    this.crack = { key, R: T.R, T, run, t: 0, stop: st.stop };
+    toast('cracking the mail car \u2014 ' + MAIL_CRACK + ' seconds, stay crouched at it \u00b7 the city will know');
+    AudioSys.sfx('click');
+    return true;
+  },
+  crackTick(dt){
+    const C = this.crack; if (!C) return;
+    const st = lineSys.state(C.R, lineSys.clock()), car = C.T.cars[1].position;
+    if (!st.stop || Math.hypot(car.x - game.pos.x, car.z - game.pos.z) > 4.5){ this.crack = null; toast('you leave the mail car be'); return; }
+    const was = Math.floor(C.t); C.t += dt;
+    if (Math.floor(C.t) !== was && C.t < MAIL_CRACK) toast('cracking… ' + (MAIL_CRACK - Math.floor(C.t)));
+    if (C.t < MAIL_CRACK) return;
+    this.crack = null;
+    const man = this.manifest(C.R, C.run); this.M()[C.key] = 'cracked';
+    addStackItem('coin', man.coin); giveItem({ kind: man.kind, count: man.n }, man.n);
+    const c = C.stop === 'a' ? C.R.L.a : C.R.L.b, rec = (game.cities || {})['c' + c.key];
+    toast('the mail car — ' + man.coin + ' coins and ' + man.n + ' ' + itemLabel({ kind: man.kind, count: man.n }));
+    if (rec){ citySys.cred(rec, -20, 'the mail car robbed at its platform'); this.posse(rec, car); }
+    econSys.note('THE MAIL CAR ROBBED AT ' + (rec ? rec.name : 'THE PLATFORM'), ['siege', 'mail'], rec && rec.key, true);
+    econSys.move('rail', -0.04);
+    AudioSys.sfx('boom'); refreshHotbar(); markSave();
+  },
+  posse(rec, at){
+    for (let i = 0; i < 4; i++){
+      const a = i * 1.57 + 0.4, x = at.x + Math.cos(a) * 14, z = at.z + Math.sin(a) * 14;
+      const e = spawnEntity('guard', x, Math.max(game.gen.height(x, z), at.y) + 0.7, z);
+      e.posse = 1; e.ckey = rec.key; e.role = 'guard'; e.noburn = true; e.hp = 90; e.posseT = 0;
+    }
+    toast('the city guard is on you — run');
+  },
+  posseTarget(e, dt, pd){
+    e.posseT = (e.posseT || 0) + dt;
+    if (e.posseT > 240 || pd > 170){ killEntity(e, false); return [0, 0]; }
+    if (pd < 1.9 && e.atkT <= 0){ e.atkT = 1.1; damagePlayer(9, (game.pos.x - e.x) * 2, (game.pos.z - e.z) * 2); }
+    return [game.pos.x - e.x, game.pos.z - e.z];
   },
 };
 const MONUMENTS = {
@@ -19649,7 +19851,7 @@ function updateEntities(dt, now){
     let sx = 0, sz = 0, sp = def.speed;
     if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
     if (e.type === 'guard'){
-      const tg = siegeSys.guardTarget(e, dt);
+      const tg = e.posse ? mailSys.posseTarget(e, dt, pd) : siegeSys.guardTarget(e, dt);
       sx = tg[0]; sz = tg[1];
     } else if (e.type === 'lurker' && e.siege){
       // a siege raider: the walls first, you if you get close
@@ -27569,7 +27771,7 @@ function buildSaveData(){
     armor: game.armor,
     villages: game.villages,
     ledger: game.ledger || null,
-    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null, charts: game.charts || [], surveyBought: game.surveyBought || 0, surveySold: game.surveySold || 0,
+    news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null, charts: game.charts || [], surveyBought: game.surveyBought || 0, surveySold: game.surveySold || 0, mail: game.mail || {}, guardRun: game.guardRun || null,
     guests: game.guests || {},
     forts: game.forts || {},
     spires: game.spires || {},
@@ -27601,7 +27803,7 @@ function buildSaveData(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag && !e.racer)
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && !e.bountyTag && !e.racer && !e.mailRaid && !e.posse)
       .map(e => e.type === 'drop'
         ? ['drop', +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), 1, 0, 0, e.item, Math.round(e.ttl || 0)]
         : [e.type, e.x, e.y, e.z, e.hp,
@@ -27632,7 +27834,7 @@ function startWorldData(id, data){
   game.armor = Object.assign({ head: null, chest: null, feet: null, back: null }, data.armor || {});
   game.villages = data.villages || {};
   game.ledger = data.ledger || ledgerSys.fresh();
-  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null; game.charts = data.charts || []; game.surveyBought = data.surveyBought || 0; game.surveySold = data.surveySold || 0;
+  game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null; game.charts = data.charts || []; game.surveyBought = data.surveyBought || 0; game.surveySold = data.surveySold || 0; game.mail = data.mail || {}; game.guardRun = data.guardRun || null;
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
@@ -29314,7 +29516,7 @@ function frame(now){
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); }
+  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); }
   cityLightSys.tick(dt);
   hearthSys.tick(dt);
   boreSys.tick(dt);
@@ -29553,7 +29755,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

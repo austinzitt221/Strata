@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 54 — THE MAIL CAR
+- [ ] At the kiosk: take the guard's contract, board when the train
+      stands. Ride. If the run is raided the train stops in the
+      country and four come for the green car: hold them off from the
+      box car or the ground. Is thirty-five seconds a fight?
+- [ ] Ride a quiet run to the end: the pay.
+- [ ] Crack the car at a platform (crouch, right click it, stay six
+      seconds).
+      Then run. Do the guards catch you? Should they?
+- Feedback I want: whether raids should also happen when you are on
+  the platform (they happen a third of the way out); whether the
+  manifest is worth the standing.
+
 ## Build 53 — THE CARTOGRAPHER
 - [ ] In the Herald, the desk at the back. Buy the sheet for the
       direction you have not been. Open the map: the country, the
