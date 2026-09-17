@@ -230,7 +230,7 @@ Slotted between the city builds as the mood takes me:
   system: a burger or a plate of spaghetti gives speed, dig speed,
   jump, invisibility, for a while. The grain mill (a wheel by a fall)
   comes with it.
-- **THE CREW D** — crew in vehicles: a follower takes the passenger
+- **THE CREW D** — DONE (Build 56). Crew in vehicles: a follower takes the passenger
   seat of your car, boat or plane; give them a vehicle and they drive
   their own behind you; other crew ride with them. A squad on the road.
 - **THE MENAGERIE** (Austin's) — creature spawners. In creative,

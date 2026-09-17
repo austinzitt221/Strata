@@ -2,6 +2,37 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 56 — THE CREW D (2026-09-17)
+
+The squad on the road.
+
+- **The passenger seat.** When you drive, a following crew member
+  within seven metres takes the free seat of a two-seater — car, sports
+  car, boat, motorboat, plane — and sits there through every turn.
+  Step out and they step out on the passenger side and follow on foot.
+  Bikes and hoverbikes carry one.
+- **Their own wheels.** A follower with a land or water vehicle in
+  their pack — a car you gave them at the crew panel, a sports car, a
+  bike, a hoverbike, a boat — takes the wheel of it when you drive off,
+  and drives it behind you on your trail (the last ninety metres of
+  where you went), the first a car-length back, each after that nine
+  metres further. Other followers ride with them, two to a car. The
+  driver's car sits on the ground under it — road, slab, bare country —
+  or on the water for a boat. Nobody can take a crew member's car.
+  When you park, they stop, step out a moment later, and the vehicle
+  goes back in the pack.
+- The phone's CALL app says who is riding with you and who is driving
+  what.
+- Tests: `b56test.js` (three crew and a car: the first takes the
+  passenger seat at the seat's exact place on the right, the second
+  takes the wheel of the car in their pack with the third beside them,
+  the convoy car refuses you; twelve seconds north at ten metres a
+  second with the convoy behind at a steady gap on your heading and on
+  the ground; the save carrying no convoy; stepping out puts the
+  passenger beside the car, the convoy car away after a moment, the
+  driver and the third on foot with the car still in the pack); smoke,
+  b32, b38, b44–b55 regressions.
+
 ## Build 55 — FARMING (2026-09-17)
 
 The first of the slotted builds, Austin's. Crops, and meals that are

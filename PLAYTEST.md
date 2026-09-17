@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 56 — THE CREW D
+- [ ] With a follower beside you, get in a car. They should be in the
+      passenger seat. Drive the highway; look over.
+- [ ] Give a second follower a car at the crew panel, then drive off:
+      they should follow in it, a third crew member beside them. Does
+      the convoy keep up on a highway, and through a city?
+- [ ] Park. Everyone out; their car gone back in the pack.
+- Feedback I want: the gap (a car-length, then nine metres each); a
+  boat convoy on a river; whether the convoy car should be drivable by
+  you.
+
 ## Build 55 — FARMING
 - [ ] Craft a hoe and a can. Till a row of plots on grass. Buy seeds
       from a grocer. Plant, water, wait. Does a plot read as a plot

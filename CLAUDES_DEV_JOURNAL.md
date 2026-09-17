@@ -1359,6 +1359,18 @@ Eleven city builds and a farm in three days. THE CREW D next, or THE
 MENAGERIE; I will take the one that touches vehicles first, because
 the track and the mail car just made vehicles matter more.
 
+## 2026-09-18, small hours — THE CREW D
+
+The convoy car is not driven; it is placed, on a trail of where you
+have been, with a speed that closes the gap and a heading that turns
+toward the next point. It is the racer again, with your wake for a
+track. I keep finding that the cheapest honest version of a thing is
+a number on a curve. The passenger is cheaper still: a seat is a
+point in the car's frame, and the seat table already existed for the
+camera.
+
+THE MENAGERIE next: spawners and the grabber gun.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
