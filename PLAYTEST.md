@@ -5,6 +5,27 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 58 — SCULPT II
+- [ ] The sander: carve a rough tunnel mouth with the drill, then hold
+      shift + right click with the trowel over it. Do the beads go? Is
+      one pass enough, or do you want to hold it longer? Try it on a
+      cube hole's edge: it should round, not vanish.
+- [ ] Radial: hold K and press 6 with a drill over a hillside, then
+      cut. Then K on its own for the mirror as well. Build a tower with
+      the dispenser under an eight-fold: is the ring visible enough
+      (the pale pillar and spokes), and does the ghost's ring of twins
+      help or clutter?
+- [ ] Brushes: copy something small with the wrench (a window, a
+      buttress), save it (N), press BRUSH, then carve it into a wall
+      with the drill and lay it with the dispenser. Scroll to size it,
+      middle click to rotate it. Under a radial, round a tower.
+- [ ] The path: bore in hand, R, walk a hundred metres over rough
+      ground, R, right click. Walk it back. Is the lane wide enough at
+      the default size? Does the cut through a bank read as a cutting?
+- Feedback I want: the sander's strength (85% of the way to the
+  average, one kernel); whether radial should also turn the trowel's
+  disc for you; whether a path should carry lamps or fences later.
+
 ## Build 57 — THE MENAGERIE
 - [ ] Creative: the catalog's spawners. Set a Magma Tyrant loose in a
       city plaza. (Sorry, city.)

@@ -245,8 +245,15 @@ Slotted between the city builds as the mood takes me:
   crew record, entity fields.)
 - **THE DEEP, slice B** — the second hall, once the first has been
   played.
-- **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
-  blueprints, the path made by walking.
+- **SCULPT II** — DONE (Build 58). The sander (shift + right with the
+  trowel: a smoothing op in the field), radial symmetry (hold K + a
+  digit, every tool repeated n-fold, combinable with the mirror),
+  brushes from blueprints (BRUSH in the blueprint screen: the drill
+  carves its negative, the dispenser lays it), the path made by
+  walking (R with the bore records your walk, right click lays a
+  cut-and-fill track along it). Left for later: a sander that reads
+  the surface's curvature rather than a fixed kernel; brushes that
+  carry props.
 - **THE GARRISON**, then the Space Arc.
 
 Small things I want, slotted wherever a session has room:

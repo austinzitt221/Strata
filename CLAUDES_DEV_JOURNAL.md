@@ -1387,6 +1387,37 @@ and hiring opens a screen that stops the loop. Three separate wrong
 answers before the right one. Every one of them a fact about the
 game I now know.
 
+## 2026-09-18, later — SCULPT II
+
+Back to the field. Four pieces I had owed SCULPT since the trowel, and
+the one I was afraid of was the sander: a smoothing stroke is a blur,
+a blur reads the field at other points, and the mesher builds its
+field as an array edit by edit, not by calling the field function.
+Two paths — the array and the analytic function — that have to agree
+at every shared sample or the chunk seams open. The answer that made
+it tractable: a stroke blurs the field BEFORE ANY STROKE. Then the
+raw field is one more array beside the live one, every stroke reads
+the same thing, and the only subtlety left was that the array applies
+an edit only inside its box rounded to the lattice, so the analytic
+raw function has to do exactly that too. I wrote the seam test wrong
+first (comparing emitted vertices, which legitimately differ) and
+right second (comparing the shared cells' vertices, which must not).
+Measure the thing that has to be equal, not the thing that is easy to
+list.
+
+The radial fell out of the mirror once I stopped thinking of the
+mirror as one twin and made it a list of transforms; every tool that
+took "the twin" now takes the list, and the two symmetries compose
+for free. The brush was the bore's job with a different edit list.
+The path was the bore with the player's feet laying the points. Three
+of the four pieces were the existing pieces seen from a different
+side, which is what a good architecture is supposed to feel like.
+
+I keep coming back to the standing note: carving is the identity.
+This build is the first in a while that made the carving better
+rather than putting something beside it, and it felt like the right
+kind of work. Next: THE DEEP, slice B, or THE GARRISON.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

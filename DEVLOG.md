@@ -2,6 +2,80 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 58 — SCULPT II (2026-09-18)
+
+Mine. The four pieces SCULPT still owed, and the carving is the identity.
+
+- **The sander.** Shift + right click with the trowel. A new edit op
+  (5, "smooth"): inside the disc's sphere the field is pulled toward
+  its own average over a kernel — half a metre, a metre on a big disc,
+  six taps along the axes — fully at the centre and not at all at the
+  rim. Beads from a chain of drill cuts, the steps of a stair, the
+  crumbs at the edge of a cube hole all melt into one surface; a flat
+  plane stays flat to the bit. It moves nothing in or out of your pack
+  and undoes as one. What a stroke blurs is the field BEFORE ANY
+  STROKE, so a stroke never depends on another stroke's taps: the
+  mesher keeps that raw field as a second array beside the live one,
+  reads its six taps from it inside the chunk and evaluates them at
+  the neighbour's samples outside it, and the two chunks agree bit for
+  bit at every shared sample (proved: two stacked strokes across a
+  chunk edge, every shared sample and every shared cell's vertex the
+  same). The cull pad grows by the kernel around a stroke so the
+  neighbour's edits come along. Coarse rings skip it.
+- **Radial symmetry.** Hold K and press 2 to 9 (0 for ten): an n-fold
+  about a vertical axis through the ghost; K + 1 clears it. K alone,
+  on release, is still the mirror, and the two combine — a six-fold
+  under a mirror is twelve copies. Every tool repeats: drill cuts,
+  dispenser shapes (the yaw adds with each turn, so a tilted slab
+  leans round the ring), trowel strokes and flattens and sandings
+  (the disc shows every copy), bore and lathe jobs, the brushes below.
+  One undo takes the ring. A pale pillar with a spoke per fold stands
+  on the axis; the ghost has a twin at every copy. CORE gained
+  `rotateEditY` (the centre orbits, the yaw adds; proved on a
+  stretched, tilted cube at a thousand points).
+- **Brushes from blueprints.** In the blueprint screen (N) every saved
+  blueprint has a BRUSH button beside STAMP. It becomes the drill's
+  and the dispenser's shape: the drill carves its negative (solids
+  become holes, holes become posts of the ground's own material), the
+  dispenser lays it in the loaded material. The wheel sizes it (its
+  longest side is the tool size), the rotate mode turns it, the grid
+  snaps it, the mirror and the radial repeat it, so an ornament drawn
+  once goes round a tower in one click. Its outlines stand in for the
+  ghost (holes red, solids green). Stamped as a job — one cut per
+  frame by tier, diamond in a single frame — and undone as one. Right
+  click returns to the sphere. The brush saves with the tool state.
+- **The path made by walking.** R with the bore in hand records where
+  your feet go, a point every three metres, sixty-four at most; R
+  again (or a right click) stops it. Then a right click lays a track
+  along the walk: the ground cut down to the walked line (a smooth
+  carve, two and a half metres of headroom, banks rounded) and built
+  up to it (a smooth fill), a lane as wide as the tool, paved in stone
+  brick, or with shift in the ground's own material. Cuts yield, fills
+  cost, the lot undoes as one. The bore's points went from 32 to 64
+  for it.
+- Small: the bore's jobs can now mix cuts and fills (a path, a brush),
+  and the finishing toast lists both what came in and what went out.
+- Tests: `b58core.js` under node (a turned cube's field matches at a
+  thousand points; a flat plane unchanged by the sander; a dimple's
+  floor rises and a bead's waist opens; nothing moves outside the
+  stroke; the cull pad grows only around a stroke; k and w round-trip;
+  two chunks under two stacked strokes agree at every shared sample
+  and every shared cell vertex) and `b58test.js` in the browser (three
+  beads sanded on the ground: the crease opens, the floor rises, the
+  pack untouched through the stroke and its undo; K + 6 sets a
+  six-fold without touching the mirror or the hotbar, five cuts on a
+  ring of four metres with yaws a sixth apart, five ghost twins, one
+  undo group, then a K tap adds the mirror for eleven transforms and
+  ten cuts, K + 1 and a K tap clear both; the trowel under a four-fold
+  makes four strokes and three extra discs; a box-with-a-hole brush
+  carved by the drill leaves the box open and a post standing, laid
+  by the dispenser leaves the box solid and the hole open, the ghost
+  outlines stand in for the shapes, right click clears it; a walk of
+  seven points laid as a stone-brick path with solid bed, open
+  headroom and one undo group; radial and brush in the save); smoke,
+  b22, b23 (updated for K on release and the disc pool), b32, b38,
+  b44–b57 regressions.
+
 ## Build 57 — THE MENAGERIE (2026-09-18)
 
 Austin's. A creature in your pocket.
