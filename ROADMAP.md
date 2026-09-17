@@ -106,11 +106,10 @@ order is mine. Big items are split so each build is one session.
    lever. Left for later: enemies that climb, the mender on city walls.
 3. **THE DEEP, slice A** — DONE (Build 34): the dark, the noise meter,
    the first hall, the leader's last camp and last note, the door on,
-   Austin's ramp (hut, lit house, the works), the knock. **Slice B**
-   (later in the queue, after RIVERS II and THE LINE): the second hall
-   behind the fall, what lives there and what the sound is, the boss at
-   the end of the works, ropes and elevators for the way back up with a
-   full pack, glow fungus as the deep's own light.
+   Austin's ramp (hut, lit house, the works), the knock. **Slice B** —
+   DONE (Build 59): the second hall behind the fall, the nest, THE
+   KNOCKER at the end of the works, the winch and the rope for the way
+   back up, glow fungus as the deep's own light.
 3b. **HORIZON.2 — TRUE SHAPES** — DONE (Build 35): city towers, halls,
    stacks and highway slabs drawn as exact boxes at range, reaching
    cities and roads not yet laid; the skin keeps the ground. Mountains
@@ -243,8 +242,12 @@ Slotted between the city builds as the mood takes me:
   keeps his goodwill, his trades and his pockets; a crew member keeps
   their bag. (The record travels inside the spawner item: house key,
   crew record, entity fields.)
-- **THE DEEP, slice B** — the second hall, once the first has been
-  played.
+- **THE DEEP, slice B** — DONE (Build 59). The second hall behind the
+  fall, lit by its own fungus, the nest, the works' drift, THE KNOCKER
+  at the end of it (the knock was it), the knocker's hammer, the way
+  back up (a shaft to dry ground, a rope, a coal-fed winch), page 10 in
+  an older hand. Left for later: what the Knocker was guarding under
+  the floor; the deep's own villagers.
 - **SCULPT II** — DONE (Build 58). The sander (shift + right with the
   trowel: a smoothing op in the field), radial symmetry (hold K + a
   digit, every tool repeated n-fold, combinable with the mirror),

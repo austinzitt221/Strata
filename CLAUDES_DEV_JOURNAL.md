@@ -1418,6 +1418,36 @@ This build is the first in a while that made the carving better
 rather than putting something beside it, and it felt like the right
 kind of work. Next: THE DEEP, slice B, or THE GARRISON.
 
+## 2026-09-18, evening — THE DEEP B
+
+The story build. Build 34 left a rubble wall and a sign that said WORK
+QUIETLY, and every knock since has been a promise. Today I paid it: the
+second hall, the nest, the works, and at the end of them the thing
+that knocks. I named it the Knocker before I knew what it looked like,
+after the mine spirits, and the design followed from the name: it
+knocks because that is what it does, so its attack is a pound, so the
+dodge is a jump, so the arena is a floor it wrecks as it goes. The
+knock in the hills stops when it dies. I like that the world changes
+in a way you can hear.
+
+Two lessons from the laying. First: the ground is not flat, and a
+cavern laid at the first hall's height had its roof in a valley. The
+fix that felt right was not a smaller cavern but a deeper one, with
+the approach going down to it at a slope, which reads as a descent
+anyway. Second: dry land is not guaranteed either; the shaft to the
+surface hunted outward in rings for ground above the water and, on
+seed 7, found it eighty metres off at the end of a bore. The fallback
+after that is the mouth itself. I wrote the geometry before the
+search and had to add the search twice. Next time: place, then check
+what is over it and under it, before drawing.
+
+The suite killed me in the boss fight -- survival mode, ninety
+updates six metres from it -- and the hammer scenario then quietly
+did nothing because you cannot swing a hammer dead. A good bug to
+have found in a test and not in Austin's hands.
+
+Next: THE GARRISON, or the small things.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -1465,9 +1495,8 @@ PeerJS's cloud signalling loaded on demand; `window.__netLoopback`
 switches the transport to a BroadcastChannel for two-page tests.
 The guest never saves and runs no world simulation.
 
-**Queue, in my order:** the City Arc (COUNTERS, THE
-PRESS + THE EXCHANGE with the phone, THE PIT + MONUMENTS, THE BANK,
-OWNERSHIP, THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER,
-THE MAIL CAR), with FARMING, CREW D, MENAGERIE, DEEP B, SCULPT II and
-GARRISON slotted between as the mood takes me. Austin said yes to all
-of it on 2026-09-10.
+**Queue, in my order:** the City Arc is done (Builds 44–54), and so
+are FARMING, CREW D, MENAGERIE, SCULPT II and DEEP B (55–59). What is
+left of the 2026-09-10 plan: THE GARRISON, then the Space Arc, with
+the small things (shadow cascades, place names on the map, footsteps
+by material, the frame-rate pass) wherever a session has room.

@@ -2,6 +2,73 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 59 — THE DEEP B: the second hall (2026-09-18)
+
+The pages said find what makes the sound. This is it.
+
+- **The second hall, behind the fall.** Laid with the world (old worlds
+  get it the first time they load): past the rubble the door tunnel
+  goes on -- level, or down at no more than one in three if the ground
+  ahead is lower, since the whole of it sits under the lowest ground
+  over its footprint with eight metres of roof to spare -- to a lumpy
+  cavern forty-four metres across with a flat floor in the middle and
+  a bowl at the edges. It grows its own light: glowshroom mounds along
+  the foot of its walls and clumps on its roof. Off the left wall, the
+  nest -- a pocket with the bones -- and once you are in the second
+  hall the meter's waves come from there. From the far wall the works
+  run on: a drift stepping down a metre and a half every twelve,
+  posted and lintelled in stonebrick by the hands that built the first
+  hall, to a round chamber at the end, floored in stonebrick and lit by
+  the same fungus in its walls.
+- **THE KNOCKER.** It sleeps in the chamber and wakes when you reach
+  it: a hunched thing of grey stone and moss, a low head with eyes the
+  green of the fungus, two arms that end in hammers. It walks you down
+  and swings; every five and a half seconds it pounds the floor -- a
+  real crater under it (the works are wrecked as you fight) and a ring
+  that throws anyone standing within twelve metres and hurts them by
+  how close they stood. Jump as it lands and the ring passes under you;
+  the first throw says so. At half its strength it calls, and three
+  from the nest answer. Leave its chamber and it goes home and mends.
+  Its pounds are the knock: while it lives the deep still knocks, and
+  when it dies the knock stops for good, under the mouth and in the
+  hills, and the paper says so.
+- **The knocker's hammer** (first kill; two hundred coins and four
+  diamonds after). A slam: where it lands, a smooth crater three metres
+  across, the rock into your pack, and everything within four and a
+  half metres thrown and hurt -- forty to a boss. Nothing in reach and
+  it slams the ground at your feet. Loud, in the deep. The sword's
+  prop, grey and half again as big, swings for it.
+- **The way back up.** From the chamber a shaft goes straight to the
+  surface -- to dry ground: the nearest ring around the chamber with a
+  spot above the water and well above the works, reached by a level
+  bore when it lies outside the chamber, and beside the mouth at the
+  end of a long bore when nowhere within a hundred and twenty-five
+  metres is dry. A rope hangs the whole way from a ring of stone at the
+  top, and at the foot the winch: an elevator with a generator wired to
+  it and ten coal in the generator. Stand on it and hold space.
+- **An older hand.** The foreman's chest by the drift's end holds page
+  10 -- not the survey's hand: who built the hall, what they dug
+  toward, and the choice they never had -- with coal, rails, ingots,
+  torches and a ruby drill; his sign beside it. THE SECOND HALL is
+  marked once the first is found, THE WORKS once the second is, until
+  the knock stops.
+- The Knocker is in the menagerie and the hammer in the creative
+  catalog.
+- Tests: `b59test.js` (the tunnel past the fall air along its slope,
+  the cavern, its floor, roof eight metres under the lowest ground,
+  forty-six fungus samples on a ring, the nest, the drift, a post, the
+  chamber's floor and its depth, the side bore and the shaft dry, the
+  ring, page 10; standing in the hall: stamped, found, THE SECOND HALL
+  before and THE WORKS after, the chest's page and drill, both signs,
+  the elevator, the generator's coal, the wire between, the rope's
+  length, seven bones on the floor, page 10 read; three from the nest
+  at the top of the meter; the winch powered and lifting on space; the
+  Knocker waking with its bar, two pounds in nine seconds with a
+  crater, a throw and a hurt, the call at half with three answering,
+  its death giving the hammer and silencing the knock; a slam cratering
+  the chamber floor for sixty-two rock; the save and the old-world
+  migration); smoke, b22, b23, b34, b58, b32, b38, b44–b57 regressions.
+
 ## Build 58 — SCULPT II (2026-09-18)
 
 Mine. The four pieces SCULPT still owed, and the carving is the identity.

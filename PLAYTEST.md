@@ -5,6 +5,25 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 59 — THE DEEP B
+- [ ] Survival, a fresh world or your old one: go down the mouth, through
+      the first hall, and dig through the fall (it will hear you). Walk
+      the tunnel on. Does the second hall read as a place when you come
+      out into it -- the light, the size, the nest?
+- [ ] Let the meter top out in the second hall. They should come from
+      the nest, not the door.
+- [ ] Walk the drift to the end. Fight THE KNOCKER. Jump when it knocks.
+      Is the throw readable, is five and a half seconds a rhythm, is the
+      call at half a spike or a wall? Did the knock stop afterwards, up
+      top too?
+- [ ] Read the page in the foreman's chest. Take the winch up with a
+      full pack (stand on it, hold space). Was the shaft's top somewhere
+      that made sense?
+- [ ] The hammer on the surface: slam a hillside, slam a lurker.
+- Feedback I want: whether the Knocker should wreck more of the chamber
+  as it fights (it craters the floor now); whether the fall should need
+  a real dig or a single cut; what the deep's own villagers would be.
+
 ## Build 58 — SCULPT II
 - [ ] The sander: carve a rough tunnel mouth with the drill, then hold
       shift + right click with the trowel over it. Do the beads go? Is
