@@ -1448,6 +1448,31 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-18, night — THE GARRISON, slice A
+
+Austin's idea from the September brainstorm, and the biggest of them:
+a base you cannot take. I sliced it three ways -- the base and the
+alarm, then the tanks, then the aircraft -- because each is a system
+of its own and the first is the one everything else hangs from.
+
+The design decision I am proudest of is the radar. Austin wanted
+bases that were peaceful until provoked and then all at once; I
+wanted a stealth route for the player who carves rather than shoots.
+The answer was already in the game: the power grid. The mast is a
+prop on a plinth wired to a generator in a hut, and the alarm asks
+the wire and the plinth whether the mast has power. Fists take a
+wire; a charge takes a plinth; either way no siren and no
+reinforcements. The same verbs the player already has, and the
+soldiers still see you if you walk up to them.
+
+A number I want Austin's eye on: eleven a rifle hit, six riflemen.
+The suite says forty-three hits in nine seconds standing in the open
+in the yard. That is death in three seconds without cover, which is
+the point of walls, but it may be too fast to be fun. The knobs are
+in one table.
+
+Next: the tanks, then the aircraft. Then the sky.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

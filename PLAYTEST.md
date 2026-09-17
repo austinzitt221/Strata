@@ -5,6 +5,23 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 60 — THE GARRISON A
+- [ ] Drive a highway until the GARRISON toast. Park up the road and
+      look at it. Does it read as military from the outside — walls,
+      towers, the mast, the sign?
+- [ ] Walk in the gate in survival with a rifle and armour. How long do
+      you last? Is the siren readable, and does the reinforcement
+      stream feel like a base or like a spawner?
+- [ ] Stealth: come at night, over the wall away from the gate, and cut
+      the mast's wire with your fists (or blow the plinth). Then walk
+      in. Only the ones who see you should move, and no siren.
+- [ ] Take one: commander first, or last? Open the vault. Which part
+      did you get?
+- Feedback I want: the soldiers' accuracy and damage (eleven a rifle
+  hit, worse with distance); whether the roster (ten, plus fourteen)
+  is a fight or a grind; whether a taken base should sell things now
+  or wait for the jet fuel.
+
 ## Build 59 — THE DEEP B
 - [ ] Survival, a fresh world or your old one: go down the mouth, through
       the first hall, and dig through the fall (it will hear you). Walk

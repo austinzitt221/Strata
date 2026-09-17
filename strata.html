@@ -3067,7 +3067,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
@@ -6967,7 +6967,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8586,6 +8586,16 @@ const pnodeSys = {
       g.add(pole, panel, screen);
       g.userData.meter = { cv, tex };
       this.drawMeter(g.userData.meter, null);
+    } else if (t === 'radar'){
+      // the garrison's mast: a dish that turns while it has power, a red lamp
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.3, 1.0), M.dark); foot.position.y = 0.15; g.add(foot);
+      const mast = new THREE.Mesh(new THREE.BoxGeometry(0.32, 3.4, 0.32), M.steel); mast.position.y = 1.9; g.add(mast);
+      const yoke = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 1.1), M.dark); yoke.position.set(0, 3.55, 0); g.add(yoke);
+      const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 1.25, 0.55, 14, 1, true), M.steel);
+      dish.rotation.x = Math.PI / 2 + 0.45; dish.position.set(0, 3.7, -0.55); g.add(dish);
+      const horn = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.9), M.copper); horn.rotation.x = 0.45; horn.position.set(0, 3.9, -0.95); g.add(horn);
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), new THREE.MeshBasicMaterial({ color: 0xff3030 })); lamp.position.y = 3.75; g.add(lamp);
+      g.userData.dish = dish;
     } else if (t === 'elev'){
       const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 1.8), M.dark);
       base.position.y = 0.05;
@@ -9695,7 +9705,7 @@ const powerSys = {
       let best = null, bd = 24;
       const mx = n.x, my = n.y + 0.95, mz = n.z;
       for (const e of game.entities){
-        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel';
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly);
         if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
         const def = ENT_DEF[e.type]; if (!def) continue;
         const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
@@ -11028,6 +11038,7 @@ const ENT_DEF = {
   villager: { hp: 60, speed: 1.15, r: 0.4, h: 1.7, cap: 0 },
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
   guard:    { hp: 90, speed: 3.6, r: 0.42, h: 1.8, cap: 0 },   // the city's own: they fight the sieges
+  soldier:  { hp: 70, speed: 3.4, r: 0.42, h: 1.8, cap: 0 },   // THE GARRISON: a base's own, with rifles
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
@@ -11065,6 +11076,8 @@ const VROLE = {
   chart:   { name: 'cartographer',  coat: 0x4a5a3a, hat: 0x9a7a4a },
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
+  soldier: { name: 'soldier',      coat: 0x556b3a, hat: 0x3c4a2c },
+  commander:{ name: 'commander',   coat: 0x3f4a2e, hat: 0x1e2416 },
 };
 const dropTexCache = new Map();
 function entMesh(type, ent){
@@ -11584,7 +11597,7 @@ function entMesh(type, ent){
     }
     return g;
   }
-  if (type === 'villager' || type === 'guard'){
+  if (type === 'villager' || type === 'guard' || type === 'soldier'){
     const R0 = VROLE[(ent && ent.role) || 'broker'] || VROLE.broker;
     // your crew wear your colour on the hat, and carry what you gave them
     const R = ent && ent.crew ? { coat: R0.coat, hat: CREW_HAT } : R0;
@@ -11604,6 +11617,13 @@ function entMesh(type, ent){
       const e2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.06, 0.03), eyeM);
       e2.position.set(s * 0.09, 1.46, -0.22);
       g.add(e2);
+    }
+    if (type === 'soldier'){
+      // a rifle along the right arm, a tube on the shoulder for the rocketeers
+      const gun = box(0.07, 0.07, 0.72, 0x2a2a30, 0.3, 0.98, -0.12);
+      box(0.09, 0.14, 0.16, 0x4a3a2a, 0, -0.08, 0.14, gun);
+      if (ent && ent.arm === 'rocket') box(0.16, 0.16, 0.95, 0x3a3a40, -0.3, 1.3, 0);
+      if (ent && ent.commander) box(0.5, 0.06, 0.5, 0xd9b25a, 0, 1.55, 0);     // the braid on his cap
     }
     let hpbar = null;
     if (ent && ent.crew){
@@ -11878,6 +11898,7 @@ function spawnEntity(type, x, y, z){
   return e;
 }
 function killEntity(e, byPlayer){
+  if (e.type === 'soldier') baseSys.onDeath(e, byPlayer);
   if (e.bossType && byPlayer && ENT_DEF[e.bossType]){ econSys.note(ENT_DEF[e.bossType].boss + ' IS SLAIN', ['deed', 'boss'], null, true); econSys.move('arms', 0.03); }
   if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
   if (e.collector && byPlayer) bankSys.collectorKilled(e);
@@ -11958,6 +11979,19 @@ function killEntity(e, byPlayer){
       } else {
         addStackItem('aetheringot', 16); addStackItem('diamond', 6);
         toast('THE ARCHANGEL falls again — the treasury key · +16 aether ingot · +6 diamond · +200 coins');
+      }
+      markSave();
+    }
+    else if (e.type === 'soldier'){
+      if (e.commander){
+        addStackItem('bkey', 1); addStackItem('coin', 60); giveItem(CORE.makeFirearm(1), 1);
+        toast('the COMMANDER falls — his key, his Magnus, +60 coins');
+      } else if (!e.friendly){
+        const n = 6 + ((Math.random() * 12) | 0), c = 2 + ((Math.random() * 5) | 0);
+        addStackItem('rounds', n); addStackItem('coin', c);
+        const side = Math.random() < 0.15;
+        if (side) giveItem(CORE.makeFirearm(0), 1);
+        toast('+' + n + ' rounds  ·  +' + c + ' coins' + (side ? '  ·  a sidearm' : ''));
       }
       markSave();
     }
@@ -12073,6 +12107,7 @@ function hurtEntity(e, dmg, kx, kz, quiet){
   e.hp -= dmg;
   e.flash = 0.15;
   e.fleeT = 6;
+  if (e.type === 'soldier') baseSys.onHit(e);
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
   if (e.hp <= 0) killEntity(e, !quiet);
@@ -13287,7 +13322,7 @@ const crewSys = {
     killEntity(e, false);
     markSave();
   },
-  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel'); },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly)); },
   // what it costs to hire them: villagers 60, city folk 120, the mayor 400
   // -- and the mayor only leaves the office for someone the city knows
   hireCost(e, hrec){ return hrec.role === 'mayor' ? 400 : e.ckey ? 120 : this.HIRE_COST; },
@@ -15746,7 +15781,7 @@ const siegeSys = {
   guardTarget(e, dt){
     let best = null, bd = 34;
     for (const o of game.entities){
-      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk')) continue;
+      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk' || (o.type === 'soldier' && !o.friendly))) continue;
       const d = Math.hypot(o.x - e.x, o.z - e.z);
       if (d < bd){ bd = d; best = o; }
     }
@@ -17123,6 +17158,327 @@ const raidBaseSys = {
   },
 };
 
+// ---------- THE GARRISON: military bases on the highway network ----------
+// One link in two carries a base fifty metres off the road, on a levelled
+// pad: basalt walls, a gate to the road, four towers, a barracks, an
+// armoury, a generator hut with the radar mast wired to it, the command
+// post with the commander and the vault, a helipad for later. Ten
+// soldiers hold it -- riflemen, two with SMGs, two with rockets -- and
+// they are peaceful until you walk in through the gate, hit one of them,
+// or fly over in anything. Then, if the radar has power, the siren: the
+// whole base comes, and fourteen more file out of the barracks behind
+// them. Cut the mast's wire, or blow its plinth, and only the ones who see
+// you react: no siren, no reinforcements. The commander's key opens the
+// vault. Kill him and the last of them and the base is yours: its garrison
+// comes back as your guard.
+const baseSys = {
+  accT: 0, sirenT: 0, WALL: 26, ROSTER: 10, REINF: 14,
+  WEAPON: {
+    rifle:  { dmg: 11, cd: 0.55, range: 46, hold: 16, acc: 0.72 },
+    smg:    { dmg: 6,  cd: 0.17, range: 30, hold: 9,  acc: 0.6 },
+    rocket: { dmg: 26, cd: 6.5,  range: 60, hold: 26, acc: 1, rocket: 1 },
+    magnus: { dmg: 22, cd: 0.9,  range: 50, hold: 14, acc: 0.85 },
+  },
+  ARMS: ['rifle', 'rifle', 'smg', 'rifle', 'rocket', 'rifle', 'rifle', 'smg', 'rocket', 'rifle'],
+  candidatesNear(x, z, r){
+    if (!game.gen || !game.gen.cityAt) return [];
+    const out = [], sea = game.gen.seaLevel != null ? game.gen.seaLevel : -1e9;
+    for (const L of roadSys.linksNear(x, z, r + 60)){
+      const h = CORE.hashSeed(String(game.seed) + ':base:' + L.key);
+      if (h % 2 || L.len < 420) continue;                    // one link in two, long enough to be off both cities
+      const t = 0.32 + (h % 37) / 100, side = (h >> 8) & 1 ? 1 : -1;
+      const px = L.sx + (L.ex - L.sx) * t, pz = L.sz + (L.ez - L.sz) * t;
+      const nx = -L.uz * side, nz = L.ux * side;
+      const bx = Math.round(px + nx * 50), bz = Math.round(pz + nz * 50);
+      const g = game.gen.height(bx, bz);
+      if (g < sea + 3 || (game.gen.wetAt && game.gen.wetAt(bx, bz, g))) continue;
+      if (Math.hypot(bx - x, bz - z) > r) continue;
+      // the gate faces the road: along whichever axis the road mostly lies
+      const ax = Math.abs(nx) > Math.abs(nz);
+      out.push({ key: 'g' + L.key, x: bx, z: bz, seed: h, gx: ax ? -Math.sign(nx) : 0, gz: ax ? 0 : -Math.sign(nz), link: L.key });
+    }
+    return out;
+  },
+  inside(rec, x, z){ return Math.abs(x - rec.x) < this.WALL + 1 && Math.abs(z - rec.z) < this.WALL + 1; },
+  stamp(f, rec){
+    const MAT = CORE.MAT, W = this.WALL;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0); e.sy = sy; e.sz = sz; applyEdit(e); };
+    let g = 0;
+    for (const [dx, dz] of [[0, 0], [-20, -20], [20, -20], [-20, 20], [20, 20]]) g += game.gen.height(f.x + dx, f.z + dz);
+    g = +Math.max(g / 5, (game.gen.seaLevel != null ? game.gen.seaLevel : -1e9) + 3).toFixed(1);
+    rec.gy = g;
+    // the pad: filled to the level, cleared above it, and no trees on it
+    EB(1, f.x, g - 4.5, f.z, 64, 9, 64, MAT.ROCK);
+    EB(0, f.x, g + 9.2, f.z, 64, 18, 64);
+    if (game.gen.treeAt && game.removedTreeSet){
+      const TC = CORE.TREE_CELL, reach = Math.ceil(34 / TC), ccx = Math.floor(f.x / TC), ccz = Math.floor(f.z / TC);
+      let felled = 0;
+      for (let dz = -reach; dz <= reach; dz++) for (let dx = -reach; dx <= reach; dx++){
+        const k = (ccx + dx) + ',' + (ccz + dz);
+        if (game.removedTreeSet.has(k)) continue;
+        const t = game.gen.treeAt(ccx + dx, ccz + dz);
+        if (t && Math.abs(t.x - f.x) <= 33 && Math.abs(t.z - f.z) <= 33){ game.removedTreeSet.add(k); felled++; }
+      }
+      if (felled){ treeSys.lastCell = null; if (typeof farTreeSys !== 'undefined') farTreeSys.lastCell = null; }
+    }
+    EB(1, f.x, g - 0.1, f.z, 2 * W + 1, 0.4, 2 * W + 1, MAT.STONEBRICK);          // the yard
+    // walls of basalt, footing buried, six high; the gate to the road
+    EB(1, f.x, g + 1.9, f.z - W, 2 * W + 2, 6.6, 1.6, MAT.BASALT);
+    EB(1, f.x, g + 1.9, f.z + W, 2 * W + 2, 6.6, 1.6, MAT.BASALT);
+    EB(1, f.x - W, g + 1.9, f.z, 1.6, 6.6, 2 * W + 2, MAT.BASALT);
+    EB(1, f.x + W, g + 1.9, f.z, 1.6, 6.6, 2 * W + 2, MAT.BASALT);
+    const gate = { x: f.x + f.gx * W, z: f.z + f.gz * W };
+    EB(0, gate.x, g + 2.2, gate.z, f.gx ? 2.6 : 5.2, 4.2, f.gx ? 5.2 : 2.6);
+    // four towers, obsidian caps
+    for (const [sx2, sz2] of [[-W, -W], [W, -W], [-W, W], [W, W]]){
+      EB(1, f.x + sx2, g + 3.6, f.z + sz2, 6, 10.4, 6, MAT.STONEBRICK);
+      EB(1, f.x + sx2, g + 9.1, f.z + sz2, 7, 0.5, 7, MAT.OBSIDIAN);
+    }
+    // a stone room: floor a step up from the yard, a doorway on one side
+    const room = (cx, cz, w, h, d, doorZ) => {
+      EB(1, cx, g + h / 2, cz, w, h, d, MAT.STONEBRICK);
+      EB(0, cx, g + 0.25 + (h - 1.0) / 2, cz, w - 1.2, h - 1.0, d - 1.2);
+      EB(0, cx, g + 1.5, cz + doorZ * (d / 2 - 0.2), 1.6, 2.6, 1.6);
+    };
+    const chest = (x, z, yaw, sc, inv) => { const ch = pnodeSys.add('chest', +x.toFixed(2), g + 0.3, +z.toFixed(2), yaw, { sc }); ch.inv = new Array(chestSlots(sc)).fill(null); inv.forEach((it, i) => { ch.inv[i] = it; }); ch.bkey = rec.key; return ch; };
+    const rng = CORE.mulberry32(f.seed);
+    // the barracks: three chests of the rank and file
+    room(f.x - 12, f.z + 15, 16, 5, 8, -1);
+    for (const dx of [-5, 0, 5]) chest(f.x - 12 + dx, f.z + 17.6, Math.PI, 0.6, [{ kind: 'rounds', count: 12 + ((rng() * 20) | 0) }, { kind: 'coin', count: 4 + ((rng() * 10) | 0) }, rng() < 0.5 ? { kind: 'ironingot', count: 2 + ((rng() * 4) | 0) } : { kind: 'coal', count: 4 + ((rng() * 6) | 0) }]);
+    // the armoury: heavier
+    room(f.x + 14, f.z + 15, 8, 5, 8, -1);
+    chest(f.x + 12, f.z + 17.4, Math.PI, 0.7, [{ kind: 'rounds', count: 60 }, { kind: 'rockets', count: 6 }, { kind: 'mcharge', count: 3 }]);
+    chest(f.x + 16, f.z + 17.4, Math.PI, 0.7, [{ kind: 'cells', count: 40 }, CORE.makeFirearm(2 + ((rng() * 3) | 0)), { kind: 'coin', count: 20 + ((rng() * 30) | 0) }]);
+    // the generator hut and the radar mast on its plinth, wired
+    room(f.x + 17, f.z - 8, 6, 4, 6, 1);
+    const gen = pnodeSys.add('gen2', f.x + 17, g + 0.3, f.z - 9.4, Math.PI, {}); gen.fuel = { kind: 'coal', count: 30 }; gen.burn = 0; gen.bkey = rec.key;
+    EB(1, f.x + 9, g + 1.0, f.z - 17, 3, 2.0, 3, MAT.STONEBRICK);
+    const radar = pnodeSys.add('radar', f.x + 9, g + 2.02, f.z - 17, 0, {}); radar.bkey = rec.key;
+    game.wires.push({ a: 'n' + gen.id, b: 'n' + radar.id, pa: [f.x + 17, +(g + 1.2).toFixed(2), f.z - 6.2], pb: [f.x + 9, +(g + 2.3).toFixed(2), f.z - 17] });
+    // the command post: two floors, the vault at the back
+    room(f.x - 12, f.z - 13, 12, 8, 12, 1);
+    EB(1, f.x - 12, g + 3.9, f.z - 15, 10.8, 0.4, 7);                                  // a mezzanine over the back half
+    const parts = ['tank', 'heli', 'jet'];
+    const vault = chest(f.x - 12, f.z - 17.4, Math.PI, 1.0, [CORE.makeFirearm([5, 6, 8][f.seed % 3]), CORE.makeFirearm(9), { kind: 'coin', count: 300 + ((rng() * 200) | 0) }, { kind: 'diamond', count: 6 }, { kind: 'part', part: parts[Math.floor(f.seed / 16) % 3] }, { kind: 'rounds', count: 200 }, { kind: 'rockets', count: 12 }]);
+    vault.locked = true; vault.lockKind = 'bkey';
+    pnodeSys.add('sign', f.x - 12, g + 0.05, f.z - 6.3, 0, { text: 'COMMAND\nAUTHORISED\nPERSONNEL ONLY' });
+    // the helipad: an H in stone on an obsidian disc, for the gunship
+    EB(1, f.x + 12, g + 0.15, f.z + 1, 12, 0.3, 12, MAT.OBSIDIAN);
+    EB(1, f.x + 9.5, g + 0.32, f.z + 1, 1, 0.2, 7, MAT.STONEBRICK);
+    EB(1, f.x + 14.5, g + 0.32, f.z + 1, 1, 0.2, 7, MAT.STONEBRICK);
+    EB(1, f.x + 12, g + 0.32, f.z + 1, 5, 0.2, 1, MAT.STONEBRICK);
+    // torches flank the gate; the sign on the road side
+    game.torches.push([+(gate.x + f.gz * 3.2).toFixed(2), g + 0.1, +(gate.z + f.gx * 3.2).toFixed(2)]);
+    game.torches.push([+(gate.x - f.gz * 3.2).toFixed(2), g + 0.1, +(gate.z - f.gx * 3.2).toFixed(2)]);
+    pnodeSys.add('sign', +(gate.x + f.gx * 3 + f.gz * 4.5).toFixed(2), g + 0.05, +(gate.z + f.gz * 3 + f.gx * 4.5).toFixed(2), Math.atan2(-f.gx, -f.gz) + Math.PI, { text: 'GARRISON\nNO ENTRY\nTHIS MEANS YOU' });
+    torchSys.rebuild(); wireSys.rebuild();
+    // where they stand
+    rec.gate = gate;
+    rec.posts = [
+      { x: gate.x - f.gx * 3 + f.gz * 2.2, z: gate.z - f.gz * 3 + f.gx * 2.2, roam: 1.5 }, { x: gate.x - f.gx * 3 - f.gz * 2.2, z: gate.z - f.gz * 3 - f.gx * 2.2, roam: 1.5 },
+      { x: f.x - W + 5, z: f.z - W + 5, roam: 3 }, { x: f.x + W - 5, z: f.z - W + 5, roam: 3 }, { x: f.x - W + 5, z: f.z + W - 5, roam: 3 }, { x: f.x + W - 5, z: f.z + W - 5, roam: 3 },
+      { x: f.x - 12, z: f.z + 7, roam: 6 }, { x: f.x - 4, z: f.z + 4, roam: 8 }, { x: f.x + 14, z: f.z + 8, roam: 4 }, { x: f.x + 10, z: f.z - 8, roam: 5 },
+    ];
+    rec.cmdPost = { x: f.x - 12, z: f.z - 10, roam: 2 };
+  },
+  ensure(){
+    if (!game.running || !game.gen) return;
+    for (const f of this.candidatesNear(game.pos.x, game.pos.z, 130)){
+      let rec = (game.bases = game.bases || {})[f.key];
+      if (!rec){
+        rec = { key: f.key, x: f.x, z: f.z, seed: f.seed, gx: f.gx, gz: f.gz, stamped: false, taken: false, men: this.ROSTER, commanderDead: false, alarm: 0, reinf: null, looted: false };
+        game.bases[f.key] = rec;
+      }
+      if (!rec.stamped){
+        rec.stamped = true;
+        this.stamp(f, rec);
+        toast('a GARRISON on the highway — peaceful, until you are not');
+        AudioSys.sfx('boom');
+        markSave();
+      }
+    }
+  },
+  spawnSoldier(rec, post, arm, commander){
+    const gy = rec.gy != null ? rec.gy : game.gen.height(rec.x, rec.z);
+    const x = post.x + (Math.random() - 0.5) * 2, z = post.z + (Math.random() - 0.5) * 2;
+    const e = spawnEntity('soldier', +x.toFixed(2), gy + 0.6, +z.toFixed(2));
+    e.bkey = rec.key; e.role = commander ? 'commander' : 'soldier'; e.arm = commander ? 'magnus' : arm;
+    e.post = { x: post.x, z: post.z }; e.roam = post.roam || 3; e.noburn = true;
+    e.friendly = !!rec.taken;
+    if (commander){ e.commander = true; e.hp = 260; e.big = 1.25; }
+    e.alert = rec.alarm > 0 && !e.friendly;
+    return e;
+  },
+  // a base's radar has power while its mast stands on its plinth, its
+  // generator has coal and stands, and the wire between them is whole
+  radarOk(rec){
+    const P = game.pnodes || [];
+    const radar = P.find(n => n.t === 'radar' && n.bkey === rec.key);
+    const gen = P.find(n => n.t === 'gen2' && n.bkey === rec.key);
+    if (!radar || radar.broken || !gen || gen.broken) return false;
+    if (!((gen.fuel && gen.fuel.count > 0) || (gen.burn || 0) > 0)) return false;
+    if (!(game.wires || []).some(w => (w.a === 'n' + gen.id && w.b === 'n' + radar.id) || (w.b === 'n' + gen.id && w.a === 'n' + radar.id))) return false;
+    const le = nearEdits([radar.x - 1, radar.y - 2, radar.z - 1, radar.x + 1, radar.y + 1, radar.z + 1]);
+    if (CORE.evalSDF(radar.x, radar.y - 0.3, radar.z, le, game.gen) > 0.6) return false;      // the plinth is gone
+    return true;
+  },
+  // the alarm: with the radar, the siren and the whole base; without it,
+  // only the ones close enough to see you
+  raise(rec, why){
+    if (rec.taken) return;
+    if (this.radarOk(rec)){
+      if (rec.alarm <= 0){
+        toast('SIREN — ' + why + ' · the whole garrison is coming');
+        econSys.note('THE GARRISON ON THE HIGHWAY IS UNDER ATTACK', ['deed', 'siege'], null, true);
+      }
+      rec.alarm = 45;
+      if (rec.reinf == null) rec.reinf = this.REINF;
+      for (const e of game.entities) if (e.type === 'soldier' && e.bkey === rec.key && !e.friendly) e.alert = true;
+    } else {
+      let n = 0;
+      for (const e of game.entities){
+        if (e.type !== 'soldier' || e.bkey !== rec.key || e.friendly || e.alert) continue;
+        if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 20 && this.canSee(e, game.pos.x, game.pos.y + 0.9, game.pos.z)){ e.alert = true; n++; }
+      }
+      if (n && !rec.quietTold){ rec.quietTold = true; toast('they saw you — but the radar is dead: no siren, no reinforcements'); }
+    }
+  },
+  // a straight line from the soldier's eyes to a point, through nothing solid
+  canSee(e, tx, ty, tz){
+    const mx = e.x, my = e.y + 1.5, mz = e.z;
+    const L = Math.hypot(tx - mx, ty - my, tz - mz) || 1;
+    const le = nearEdits([Math.min(mx, tx) - 1, Math.min(my, ty) - 1, Math.min(mz, tz) - 1, Math.max(mx, tx) + 1, Math.max(my, ty) + 1, Math.max(mz, tz) + 1]);
+    for (let sgm = 0.6; sgm < L - 0.5; sgm += 0.6) if (CORE.evalSDF(mx + (tx - mx) / L * sgm, my + (ty - my) / L * sgm, mz + (tz - mz) / L * sgm, le, game.gen) < 0.05) return false;
+    return true;
+  },
+  onHit(e){
+    const rec = game.bases && game.bases[e.bkey];
+    if (!rec || rec.taken || e.friendly) return;
+    e.alert = true;
+    this.raise(rec, 'a soldier was hit');
+  },
+  onDeath(e, byPlayer){
+    const rec = game.bases && game.bases[e.bkey];
+    if (!rec) return;
+    if (e.commander){ rec.commanderDead = true; }
+    else if (!e.friendly) rec.men = Math.max(0, (rec.men == null ? this.ROSTER : rec.men) - 1);
+    if (!e.friendly && !rec.taken && rec.alarm <= 0) this.raise(rec, 'shots in the yard');
+    markSave();
+  },
+  take(rec){
+    rec.taken = true; rec.alarm = 0; rec.reinf = 0; rec.men = 6;
+    for (const e of [...game.entities]) if (e.type === 'soldier' && e.bkey === rec.key && !e.friendly) killEntity(e, false);
+    toast('the GARRISON is yours — its soldiers will hold it for you now');
+    econSys.note('THE GARRISON ON THE HIGHWAY HAS FALLEN', ['deed', 'siege'], null, true);
+    AudioSys.sfx('craft');
+    markSave();
+  },
+  // what a soldier does this frame: peace, alarm, or the guard of a taken base
+  soldierSteer(e, dt, pd, now){
+    const rec = game.bases && game.bases[e.bkey];
+    if (e.friendly || !rec) return siegeSys.guardTarget(e, dt);
+    if (!e.alert && rec.alarm > 0) e.alert = true;
+    if (!e.alert){
+      // the post: stand it, pace it
+      const P = e.post || e;
+      if (e.tt <= 0){ e.tt = 4 + Math.random() * 5; e.tx = P.x + (Math.random() - 0.5) * (e.roam || 3) * 2; e.tz = P.z + (Math.random() - 0.5) * (e.roam || 3) * 2; }
+      const sx = e.tx - e.x, sz = e.tz - e.z;
+      return Math.hypot(sx, sz) < 0.5 ? [0, 0] : [sx, sz, 1.6];
+    }
+    const W = this.WEAPON[e.arm] || this.WEAPON.rifle;
+    const P = crewSys.prey(e, 48);
+    if (!P){
+      e.lostT = (e.lostT || 0) + dt;
+      if (e.lostT > 20 && rec.alarm <= 0){ e.alert = false; e.lostT = 0; }
+      const H = e.post || rec, sx = H.x - e.x, sz = H.z - e.z;
+      return Math.hypot(sx, sz) < 1 ? [0, 0] : [sx, sz, 2.4];
+    }
+    e.lostT = 0;
+    const d = P.d;
+    const mx = e.x, my = e.y + 1.3, mz = e.z, tx = P.x, ty = P.y + 0.9, tz = P.z;
+    const L = Math.hypot(tx - mx, ty - my, tz - mz) || 1;
+    let clear = d < W.range;
+    if (clear){
+      const le = nearEdits([Math.min(mx, tx) - 1, Math.min(my, ty) - 1, Math.min(mz, tz) - 1, Math.max(mx, tx) + 1, Math.max(my, ty) + 1, Math.max(mz, tz) + 1]);
+      for (let sgm = 0.8; sgm < L - 0.6; sgm += 0.6){ if (CORE.evalSDF(mx + (tx - mx) / L * sgm, my + (ty - my) / L * sgm, mz + (tz - mz) / L * sgm, le, game.gen) < 0.05){ clear = false; break; } }
+    }
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(P.x - e.x), -(P.z - e.z));
+    if (d < 1.9 && e.atkT <= 0){
+      // the butt of the rifle
+      e.atkT = 1.0;
+      crewSys.hitPrey(P, 6, (P.x - e.x) * 2, (P.z - e.z) * 2);
+      if (pd < 30) AudioSys.sfx('hit');
+    } else if (clear && e.atkT <= 0){
+      e.atkT = W.cd;
+      if (W.rocket){
+        // a rocket: a beat later it lands where you were
+        const at = { x: tx, y: P.y, z: tz };
+        beamFX.add(mx, my, mz, tx, ty, tz, 0xffd080);
+        Particles.burst(mx, my, mz, 0.3, [0xffb347, 0x9a9aa5], 6, 1.5);
+        setTimeout(() => { if (game.running) explode(at.x, at.y + 0.3, at.z, 1.2, W.dmg); }, 380);
+      } else {
+        const acc = Math.max(0.12, W.acc - d / 90);
+        const miss = Math.random() >= acc;
+        beamFX.add(mx, my, mz, tx + (miss ? (Math.random() - 0.5) * 2.4 : 0), ty + (miss ? (Math.random() - 0.5) * 1.2 : 0), tz + (miss ? (Math.random() - 0.5) * 2.4 : 0), 0xffe08a);
+        if (!miss) crewSys.hitPrey(P, W.dmg, (P.x - e.x) * 0.6, (P.z - e.z) * 0.6);
+        e.shots = (e.shots || 0) + 1;
+      }
+      if (pd < 60) AudioSys.sfx('shot');
+    }
+    if (d < W.hold * 0.45) return [e.x - P.x, e.z - P.z, 3.0];
+    if (!clear || d > W.hold) return [P.x - e.x, P.z - e.z, 3.6];
+    return [0, 0];
+  },
+  tick(dt){
+    if (!game.running || !game.gen) return;
+    // the siren, every frame it sounds
+    this.sirenT -= dt;
+    this.accT += dt;
+    if (this.accT < 0.5) return;
+    const step = this.accT; this.accT = 0;
+    this.ensure();
+    const flying = game.driving && VEH[game.driving.type] && VEH[game.driving.type].fly;
+    for (const key in (game.bases || {})){
+      const rec = game.bases[key];
+      if (!rec.stamped) continue;
+      const pd = Math.hypot(rec.x - game.pos.x, rec.z - game.pos.z);
+      if (pd > 160) { if (rec.alarm > 0) rec.alarm = Math.max(0, rec.alarm - step); continue; }
+      // the radar turns while it has power
+      const radar = (game.pnodes || []).find(n => n.t === 'radar' && n.bkey === key);
+      if (radar){ const it = pnodeSys.items && pnodeSys.items.find(q => q.n === radar); if (it && it.g && this.radarOk(rec)) it.g.rotation.y += step * 0.7; }
+      if (!rec.taken){
+        // triggers: inside the walls, or over them in anything
+        const inside = this.inside(rec, game.pos.x, game.pos.z) && game.pos.y < (rec.gy || 0) + 14;
+        if (inside) this.raise(rec, 'you walked in');
+        else if (flying && pd < 60) this.raise(rec, 'you flew over');
+        if (rec.alarm > 0){
+          if (!inside && pd > 40) rec.alarm = Math.max(0, rec.alarm - step);
+          // reinforcements file out of the barracks
+          if ((rec.reinf || 0) > 0){
+            rec.reinfT = (rec.reinfT || 0) - step;
+            if (rec.reinfT <= 0){ rec.reinfT = 3; if ((rec.men || 0) < this.ROSTER){ rec.men++; rec.reinf--; } }
+          }
+          if (this.sirenT <= 0 && pd < 160 && game.ui === 'none'){
+            this.sirenT = 1.5;
+            const near = Math.max(0.15, 1 - pd / 180);
+            AudioSys.tone({ freq: 660, dur: 0.75, gain: 0.22 * near, type: 'square' });
+            setTimeout(() => AudioSys.tone({ freq: 500, dur: 0.75, gain: 0.2 * near, type: 'square' }), 750);
+          }
+        }
+        // manning: the roster stands, one a tick where they are missing
+        const mine = game.entities.filter(e => e.type === 'soldier' && e.bkey === key && !e.friendly);
+        const men = mine.filter(e => !e.commander).length;
+        if (men < (rec.men == null ? this.ROSTER : rec.men) && rec.posts) this.spawnSoldier(rec, rec.posts[(men + (rec.seed || 0)) % rec.posts.length], this.ARMS[men % this.ARMS.length], false);
+        if (!rec.commanderDead && !mine.some(e => e.commander) && rec.cmdPost) this.spawnSoldier(rec, rec.cmdPost, 'magnus', true);
+        // taken: the commander down and the last of them gone
+        if (rec.commanderDead && (rec.men || 0) <= 0 && !mine.some(e => !e.commander) && pd < 80) this.take(rec);
+      } else if (rec.posts){
+        const mine = game.entities.filter(e => e.type === 'soldier' && e.bkey === key && e.friendly).length;
+        if (mine < (rec.men || 6)) this.spawnSoldier(rec, rec.posts[(mine + 1) % rec.posts.length], this.ARMS[mine % this.ARMS.length], false);
+      }
+    }
+  },
+};
 // ---------- rails: fast travel you BUILD, not teleports ----------
 // A rail line is a chain of ground spikes. Power either end (any live
 // grid within 8m of an end post) and the line runs: right-click an end
@@ -19351,11 +19707,11 @@ const farmSys = {
 // while under fire, villagers only at hiring goodwill. What comes out
 // is the one that went in: its record rides inside the item -- the
 // villager's house and crew, a boss's kind, an animal's hp.
-const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker'];
+const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker', 'soldier'];
 const MENAGERIE_NAME = { grazer: 'grazer', sheep: 'sheep', lurker: 'lurker', stalker: 'stalker', husk: 'husk', wisp: 'wisp', angel: 'angel', guard: 'city guard', villager: 'villager',
-  burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker' };
+  burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker', soldier: 'soldier' };
 const MENAGERIE_COL = { grazer: '#c8a24b', sheep: '#eceae2', lurker: '#3a5a3a', stalker: '#2c3444', husk: '#6a5040', wisp: '#9fe8ff', angel: '#e8e0ff', guard: '#2f4f7a', villager: '#d9b25a',
-  burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78' };
+  burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78', soldier: '#556b3a' };
 const menagerieSys = {
   beam: null, hold: null,
   secs(e){
@@ -20791,7 +21147,7 @@ function updateEntities(dt, now){
     if (e.ride){ if (!e.ride.veh || !game.entities.includes(e.ride.veh)) e.ride = null; else { if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); } continue; } }
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (!VEH[e.type] && !e.crew && pd > (e.ckey || e.collector ? 180 : 70)){
+    if (!VEH[e.type] && !e.crew && pd > (e.ckey || e.collector || e.bkey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -20816,7 +21172,10 @@ function updateEntities(dt, now){
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed;
     if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
-    if (e.type === 'guard'){
+    if (e.type === 'soldier'){
+      const tg = baseSys.soldierSteer(e, dt, pd, now);
+      sx = tg[0]; sz = tg[1]; if (tg[2] != null) sp = tg[2];
+    } else if (e.type === 'guard'){
       const tg = e.posse ? mailSys.posseTarget(e, dt, pd) : siegeSys.guardTarget(e, dt);
       sx = tg[0]; sz = tg[1];
     } else if (e.type === 'lurker' && e.siege){
@@ -22233,6 +22592,22 @@ function bindInput(){
             openMachine(pn);
           } else {
             toast('sealed — THE ARCHANGEL at the top holds the key');
+            AudioSys.sfx('deny');
+          }
+          return;
+        }
+        if (pn.t === 'chest' && pn.locked && pn.lockKind === 'bkey'){
+          if (CORE.countItem(game.slots, 'bkey') >= 1){
+            CORE.consumeItem(game.slots, 'bkey', 1);
+            pn.locked = false;
+            const br = game.bases && game.bases[pn.bkey];
+            if (br) br.looted = true;
+            toast('the vault opens');
+            AudioSys.sfx('craft');
+            refreshHotbar(); markSave();
+            openMachine(pn);
+          } else {
+            toast('sealed — the COMMANDER in the command post holds the key');
             AudioSys.sfx('deny');
           }
           return;
@@ -23681,7 +24056,7 @@ const wrenchProps = {
                   claymore: [0.22, 0.32, 0.24, 0.16], spikes: [0.25, 1.05, 0.3, 0.55], bell: [0.9, 0.35, 0.95, 0.35], tent: [0.8, 1.3, 0.85, 1.0], trench: [0.2, 1.55, 0.25, 0.6], flamejet: [0.45, 0.4, 0.5, 0.4],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
                   pad: [0.06, 1.25, 0.15, 1.25], ped: [0.5, 0.3, 0.55, 0.3],
-                  sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
+                  sign: [0.8, 0.55, 0.8, 0.15], board: [1.1, 1.15, 1.1, 0.25], radar: [1.9, 0.7, 2.0, 0.7] }[ref.t] || [0.6, 0.5, 0.65, 0.5];
       const s = ref.t === 'chest' ? (ref.sc || 1) : 1;
       const B = { x: ref.x, y: ref.y + D[0] * s, z: ref.z, hx: D[1] * s, hy: D[2] * s, hz: D[3] * s,
                   yaw: ref.yaw || 0 };
@@ -25760,7 +26135,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind === 'part' ? 'part' + it.part : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -25835,6 +26210,13 @@ function itemIconURL(it){
     c.fillStyle = '#5b5964'; c.fillRect(5, 8, 7, 2);
     c.fillStyle = '#9a9aa5'; c.fillRect(5, 5, 3, 3);
     c.fillStyle = '#3a3242'; c.fillRect(11, 3, 3, 4);
+  } else if (it.kind === 'bkey'){
+    c.fillStyle = '#8a9a4a'; c.fillRect(3, 6, 6, 5); c.fillRect(9, 8, 5, 2);   // an olive key
+    c.fillStyle = '#556b3a'; c.fillRect(5, 8, 2, 2); c.fillRect(12, 10, 1, 2); c.fillRect(10, 10, 1, 1);
+  } else if (it.kind === 'part'){
+    if (it.part === 'tank'){ c.fillStyle = '#4f5a3a'; c.fillRect(2, 8, 12, 5); c.fillStyle = '#6a7a4a'; c.fillRect(5, 5, 6, 3); c.fillStyle = '#2a2a30'; c.fillRect(10, 6, 5, 1); c.fillRect(3, 13, 10, 1); }
+    else if (it.part === 'heli'){ c.fillStyle = '#4a5a6a'; c.fillRect(4, 7, 7, 5); c.fillRect(10, 8, 4, 2); c.fillStyle = '#2a2a30'; c.fillRect(1, 5, 13, 1); c.fillRect(7, 5, 1, 2); }
+    else { c.fillStyle = '#7a7a86'; c.fillRect(3, 7, 10, 3); c.fillRect(6, 4, 2, 9); c.fillStyle = '#c0c0cc'; c.fillRect(12, 7, 3, 3); c.fillStyle = '#ff7a30'; c.fillRect(1, 8, 2, 1); }
   } else if (it.kind === 'khammer'){
     c.fillStyle = '#5a4a3a'; c.fillRect(7, 6, 2, 9);                         // the haft
     c.fillStyle = '#6f6f78'; c.fillRect(3, 1, 10, 6);                        // the head
@@ -26488,6 +26870,8 @@ function itemLabel(it){
   if (it.kind === 'tcore') return 'tunneler core';
   if (it.kind === 'wfist') return 'warden fist';
   if (it.kind === 'khammer') return 'knocker\'s hammer';
+  if (it.kind === 'bkey') return 'commander\'s key';
+  if (it.kind === 'part') return (it.part === 'heli' ? 'gunship' : it.part || 'vehicle') + ' part';
   if (it.kind === 'mheart') return 'magma heart';
   if (it.kind === 'sigil') return 'architect sigil';
   if (it.kind === 'aseal') return "architect's seal";
@@ -27720,6 +28104,10 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">blaster</div><div class="t2">left click to fire</div>';
   } else if (it.kind === 'wfist'){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
+  } else if (it.kind === 'bkey'){
+    html = '<div class="t1">commander\'s key ×' + it.count + '</div><div class="t2">opens a garrison\'s vault — top guns, gold, and one part of a war machine</div>';
+  } else if (it.kind === 'part'){
+    html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">one of three — every garrison\'s vault holds one. collect them all and build the ' + (it.part === 'heli' ? 'gunship' : it.part) + ' (a later build)</div>';
   } else if (it.kind === 'khammer'){
     html = '<div class="t1">knocker\'s hammer</div><div class="t2">what the sound was, in your hands — left click slams the ground: a crater three metres across where it lands, its rock in your pack, and everything near it thrown</div>';
   } else if (it.kind === 'tdrone'){
@@ -28484,6 +28872,7 @@ function drawMap(){
   for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
   for (const k in (game.cities || {})) if (game.cities[k].stamped) mark(game.cities[k].x, game.cities[k].z, '#ffb44d', 9);
   if (game.expedition){ for (const cp of game.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (game.expedition.deep) mark(game.expedition.shaft.x, game.expedition.shaft.z, '#8a1c1c', 8); }
+  for (const bk in (game.bases || {})){ const br = game.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
   for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
   if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
   // player arrow
@@ -28889,6 +29278,7 @@ function buildSaveData(){
     news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null, charts: game.charts || [], surveyBought: game.surveyBought || 0, surveySold: game.surveySold || 0, mail: game.mail || {}, guardRun: game.guardRun || null, buff: game.buff || null,
     guests: game.guests || {},
     forts: game.forts || {},
+    bases: game.bases || {},
     spires: game.spires || {},
     expedition: game.expedition || null,
     zigs: game.zigs || {},
@@ -28953,6 +29343,7 @@ function startWorldData(id, data){
   game.guests = data.guests || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
+  game.bases = data.bases || {};
   game.spires = data.spires || {};
   game.zigs = data.zigs || {};
   game.wrecks = data.wrecks || {};
@@ -30627,7 +31018,7 @@ function frame(now){
   if (!netSys.guest) deepSys.tick(dt);
   if (!netSys.guest) raidSys.tick(dt);
   if (!netSys.guest) raidSys.update(dt);
-  if (!netSys.guest) raidBaseSys.tick(dt);
+  if (!netSys.guest){ raidBaseSys.tick(dt); baseSys.tick(dt); }
   if (!netSys.guest) spireSys.tick(dt);
   if (!netSys.guest) zigSys.tick(dt);
   weatherSys.tick(dt);
@@ -30871,7 +31262,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

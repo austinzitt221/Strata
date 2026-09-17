@@ -2,6 +2,77 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 60 — THE GARRISON A: the base (2026-09-18)
+
+Austin's, with my radar. The first slice: the base, the soldiers, the
+alarm, the taking. Tanks are the next slice, the gunship and the jet
+the one after.
+
+- **Bases on the highway network.** One link in two (long enough to be
+  well off both cities) carries a garrison fifty metres off the road,
+  a third to two thirds of the way along, on the side the hash picks.
+  A levelled pad, filled and cleared; a stone yard; basalt walls
+  fifty-two metres square with a gate to the road; four towers with
+  obsidian caps; a barracks with three chests of the rank and file;
+  an armoury with two heavier ones (rockets, cells, a gun); a
+  generator hut with thirty coal in it; the radar mast on a plinth,
+  wired to the generator, its dish turning while it has power; the
+  command post, two floors, with the vault at the back; a helipad with
+  an H on it, for later; torches and a sign at the gate that means
+  you. Old worlds get them the first time they drive past.
+- **Soldiers.** A new kind, in olive, a rifle along the arm: six
+  riflemen (eleven a hit, a shot every half second, worse with
+  distance), two with SMGs (six, six a second, close), two with
+  rockets (one every six and a half seconds, a beat in the air, then a
+  real crater where you were). Every shot is a line of fire checked
+  through the field: walls and buildings are cover. They hold a range
+  by weapon, close in when the line is blocked, back off if you are on
+  top of them, and use the butt of the rifle when you are. Turrets and
+  crew count them as enemies; friendly ones never.
+- **Peaceful until you are not.** They stand their posts and pace them.
+  Walk in through the gate, hit one of them, or fly over in anything,
+  and the alarm goes. With the radar powered: the siren (two notes,
+  every second and a half, fainter with distance), the whole base
+  alerted, and fourteen more file out of the barracks three seconds
+  apart to keep the roster at ten. The alarm holds forty-five seconds
+  after you leave the walls. Kill a soldier while it is quiet and the
+  shots raise it too.
+- **The radar is the stealth route.** Cut the mast's wire (fists take a
+  wire), blow its plinth, break or empty the generator, and the base
+  has no siren and no reinforcements: only soldiers within twenty
+  metres with a clear line to you react. The paper does not hear of it.
+- **The commander** in the command post: two hundred and sixty hit
+  points, a Magnus, a braid on his cap. His key opens the vault -- two
+  of the top guns (a Longeye, a GAT-900 or a Sun Spinner, and a
+  Boomtube), three to five hundred coins, six diamonds, two hundred
+  rounds, twelve rockets, and **one part** of a war machine: tank,
+  gunship or jet by the base. Every garrison's vault holds one; three
+  build one, in a later slice.
+- **Taking the base.** The commander dead and the last of the roster
+  with him (twenty-five kills through a siren, eleven in the quiet)
+  and the base is yours: the map mark goes green and six soldiers come
+  back as your guard, who fight what the city's guards fight and never
+  you. The paper reports the fall.
+- Soldiers are in the menagerie; the key stacks; the parts carry their
+  kind.
+- Tests: `b60test.js` (eight candidates within six kilometres; the
+  base stamped with its walls, gate, yard, tower cap, barracks, command
+  post, mezzanine, helipad, plinth, six chests, the locked vault with a
+  tank part and a top gun, the radar, the generator's coal, the wire,
+  the radar powered, eight props, two torches, ten posts; eleven
+  standing at peace with six rifles, two SMGs, two rockets and the
+  commander at his post, none alert; walking in raises the alarm to
+  forty-five with fourteen reinforcements and all eleven alert, three
+  killed dropping the roster to eight and refilled to ten in nine
+  seconds, a hundred and thirty-three shots, forty-three hits, four
+  rocket craters, rounds in the pack; the wire cut kills the radar and
+  a raise then alerts ten of eleven with no siren, the wire back
+  restores it, the plinth blown kills it; a plane over the base raises
+  it; the commander's death gives the key, the vault is sealed for it,
+  the roster gone the base is taken and six friendly guards stand;
+  the save keeps the base and its eight props); smoke, b22, b23, b34,
+  b32, b38, b44–b59 regressions.
+
 ## Build 59 — THE DEEP B: the second hall (2026-09-18)
 
 The pages said find what makes the sound. This is it.

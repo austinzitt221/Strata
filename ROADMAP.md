@@ -257,7 +257,14 @@ Slotted between the city builds as the mood takes me:
   cut-and-fill track along it). Left for later: a sander that reads
   the surface's curvature rather than a fixed kernel; brushes that
   carry props.
-- **THE GARRISON**, then the Space Arc.
+- **THE GARRISON** — SLICE A DONE (Build 60): the bases on the
+  highways, the soldiers, the alarm and the siren, the radar as the
+  stealth route, the commander and the vault with its part, the taking.
+  **Slice B:** tanks that patrol the roads and blow chunks out of walls,
+  crewed till they die; the tank built from three parts, drivable.
+  **Slice C:** the gunship on the alarm; the jet with its cannon,
+  missiles, rolls and loops; jet fuel sold only at a taken base.
+- Then the Space Arc.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
