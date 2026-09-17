@@ -2,6 +2,43 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 55 — FARMING (2026-09-17)
+
+The first of the slotted builds, Austin's. Crops, and meals that are
+the potion system.
+
+- **The hoe** (two iron ingots and a stick, at a table): right click
+  grass and a two-metre plot is tilled — dark earth with furrows,
+  snapped to a two-metre grid. Not on sand, rock or snow.
+- **Seeds:** tomato, wheat, lettuce, four for five or six coins at any
+  grocer, who also buys the crop. Right click a plot with seeds in
+  hand to plant.
+- **Water.** The watering can (three ingots) fills at any water you
+  are looking at — six waterings a fill — and wets a plot for one
+  stage. Rain wets every plot. A crop takes three stages, each a
+  watering and seventy-five seconds; a dry plot waits. The plot shows
+  the stage: stems, then heads, then fruit; wet earth is darker.
+- **Harvest:** right click a ripe plot — three tomatoes or two wheat or
+  two lettuce, and two seeds back; the plot is bare and tilled.
+- **The mill.** Wheat in hand, right click a mill wheel that is
+  turning (in water, not winter): flour, one for one. A stove bakes
+  flour to bread.
+- **The meals,** at a table: a burger (bread, cooked meat, lettuce,
+  tomato) for speed ×1.5; spaghetti (flour ×2, tomato ×2) for the
+  drill and the dispenser twice as fast; a salad (lettuce ×2, tomato)
+  for jump ×1.5; nightcap soup (glowshroom ×4, lettuce) so nothing
+  hunts you — hostiles find no prey in you. Ninety seconds (sixty for
+  the soup), one meal at a time, twenty or thirty hp mended, eaten full
+  or not, kept across a save.
+- Tests: `b55test.js` (the six recipes; grass found, the hoe's plot
+  snapped to the grid and refused twice; seeds planted and counted; no
+  growth dry; an empty can refused, a full can wetting the plot for
+  one of six; three stages consuming the water; the harvest and the
+  seeds back; rain; wheat refused at a dry wheel and ground at a wet
+  one; flour bakes; the burger's speed and its wearing off, the
+  spaghetti's dig, the soup's invisibility with a lurker beside you
+  finding nothing; the save); smoke, b32, b44–b54 regressions.
+
 ## Build 54 — THE MAIL CAR (2026-09-17)
 
 City Arc item 15, mine, on THE LINE. The last of the arc.

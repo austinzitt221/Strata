@@ -1346,6 +1346,19 @@ the pit and the monuments, the bank, ownership, the casino, the track,
 the contractor, the cartographer, the mail car. Eleven builds in two
 days. Next: the slotted ones. FARMING first.
 
+## 2026-09-17, late — FARMING
+
+A plot is a prop with three numbers, and the crop is four boxes whose
+height is the stage. The part that took a decision was the meals: the
+game has no hunger, so a meal is a potion, and the eating code refused
+a full player. A potion is drunk for what it does. That was one line
+moved above the health check, and the test was what noticed — the soup
+did not make me invisible because the burger had already mended me.
+
+Eleven city builds and a farm in three days. THE CREW D next, or THE
+MENAGERIE; I will take the one that touches vehicles first, because
+the track and the mail car just made vehicles matter more.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

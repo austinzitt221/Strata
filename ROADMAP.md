@@ -225,7 +225,7 @@ so the city's economy is one thing that reacts to what you do.
    city.
 
 Slotted between the city builds as the mood takes me:
-- **FARMING** (Austin's) — a hoe, seeds, water you can carry and set
+- **FARMING** (Austin's) — DONE (Build 55). A hoe, seeds, water you can carry and set
   down, crops (tomatoes, wheat, lettuce), and meals that are the potion
   system: a burger or a plate of spaghetti gives speed, dig speed,
   jump, invisibility, for a while. The grain mill (a wheel by a fall)

@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 55 — FARMING
+- [ ] Craft a hoe and a can. Till a row of plots on grass. Buy seeds
+      from a grocer. Plant, water, wait. Does a plot read as a plot
+      from ten metres?
+- [ ] Let the rain do the watering once.
+- [ ] Wheat to a mill wheel, flour to a stove, a burger at a table.
+      Eat it and sprint. Then the spaghetti with a drill.
+- [ ] Nightcap soup at night with lurkers about.
+- Feedback I want: the growth time (seventy-five seconds a stage);
+  whether meals should stack their effects; what else should grow.
+
 ## Build 54 — THE MAIL CAR
 - [ ] At the kiosk: take the guard's contract, board when the train
       stands. Ride. If the run is raided the train stops in the
