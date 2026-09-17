@@ -5,6 +5,168 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 60 — THE GARRISON A
+- [ ] Drive a highway until the GARRISON toast. Park up the road and
+      look at it. Does it read as military from the outside — walls,
+      towers, the mast, the sign?
+- [ ] Walk in the gate in survival with a rifle and armour. How long do
+      you last? Is the siren readable, and does the reinforcement
+      stream feel like a base or like a spawner?
+- [ ] Stealth: come at night, over the wall away from the gate, and cut
+      the mast's wire with your fists (or blow the plinth). Then walk
+      in. Only the ones who see you should move, and no siren.
+- [ ] Take one: commander first, or last? Open the vault. Which part
+      did you get?
+- Feedback I want: the soldiers' accuracy and damage (eleven a rifle
+  hit, worse with distance); whether the roster (ten, plus fourteen)
+  is a fight or a grind; whether a taken base should sell things now
+  or wait for the jet fuel.
+
+## Build 59 — THE DEEP B
+- [ ] Survival, a fresh world or your old one: go down the mouth, through
+      the first hall, and dig through the fall (it will hear you). Walk
+      the tunnel on. Does the second hall read as a place when you come
+      out into it -- the light, the size, the nest?
+- [ ] Let the meter top out in the second hall. They should come from
+      the nest, not the door.
+- [ ] Walk the drift to the end. Fight THE KNOCKER. Jump when it knocks.
+      Is the throw readable, is five and a half seconds a rhythm, is the
+      call at half a spike or a wall? Did the knock stop afterwards, up
+      top too?
+- [ ] Read the page in the foreman's chest. Take the winch up with a
+      full pack (stand on it, hold space). Was the shaft's top somewhere
+      that made sense?
+- [ ] The hammer on the surface: slam a hillside, slam a lurker.
+- Feedback I want: whether the Knocker should wreck more of the chamber
+  as it fights (it craters the floor now); whether the fall should need
+  a real dig or a single cut; what the deep's own villagers would be.
+
+## Build 58 — SCULPT II
+- [ ] The sander: carve a rough tunnel mouth with the drill, then hold
+      shift + right click with the trowel over it. Do the beads go? Is
+      one pass enough, or do you want to hold it longer? Try it on a
+      cube hole's edge: it should round, not vanish.
+- [ ] Radial: hold K and press 6 with a drill over a hillside, then
+      cut. Then K on its own for the mirror as well. Build a tower with
+      the dispenser under an eight-fold: is the ring visible enough
+      (the pale pillar and spokes), and does the ghost's ring of twins
+      help or clutter?
+- [ ] Brushes: copy something small with the wrench (a window, a
+      buttress), save it (N), press BRUSH, then carve it into a wall
+      with the drill and lay it with the dispenser. Scroll to size it,
+      middle click to rotate it. Under a radial, round a tower.
+- [ ] The path: bore in hand, R, walk a hundred metres over rough
+      ground, R, right click. Walk it back. Is the lane wide enough at
+      the default size? Does the cut through a bank read as a cutting?
+- Feedback I want: the sander's strength (85% of the way to the
+  average, one kernel); whether radial should also turn the trowel's
+  disc for you; whether a path should carry lamps or fences later.
+
+## Build 57 — THE MENAGERIE
+- [ ] Creative: the catalog's spawners. Set a Magma Tyrant loose in a
+      city plaza. (Sorry, city.)
+- [ ] Survival: craft the grabber gun. Take a sheep, a lurker at
+      night, and — if you dare — a boss. Does twelve seconds under a
+      boss feel like a fight or a chore?
+- [ ] Take a crew member, walk a kilometre, set them loose: still
+      yours, still carrying what you gave them?
+- Feedback I want: what the beam should look like (a line now); whether
+  a bottled boss should come out with full hp.
+
+## Build 56 — THE CREW D
+- [ ] With a follower beside you, get in a car. They should be in the
+      passenger seat. Drive the highway; look over.
+- [ ] Give a second follower a car at the crew panel, then drive off:
+      they should follow in it, a third crew member beside them. Does
+      the convoy keep up on a highway, and through a city?
+- [ ] Park. Everyone out; their car gone back in the pack.
+- Feedback I want: the gap (a car-length, then nine metres each); a
+  boat convoy on a river; whether the convoy car should be drivable by
+  you.
+
+## Build 55 — FARMING
+- [ ] Craft a hoe and a can. Till a row of plots on grass. Buy seeds
+      from a grocer. Plant, water, wait. Does a plot read as a plot
+      from ten metres?
+- [ ] Let the rain do the watering once.
+- [ ] Wheat to a mill wheel, flour to a stove, a burger at a table.
+      Eat it and sprint. Then the spaghetti with a drill.
+- [ ] Nightcap soup at night with lurkers about.
+- Feedback I want: the growth time (seventy-five seconds a stage);
+  whether meals should stack their effects; what else should grow.
+
+## Build 54 — THE MAIL CAR
+- [ ] At the kiosk: take the guard's contract, board when the train
+      stands. Ride. If the run is raided the train stops in the
+      country and four come for the green car: hold them off from the
+      box car or the ground. Is thirty-five seconds a fight?
+- [ ] Ride a quiet run to the end: the pay.
+- [ ] Crack the car at a platform (crouch, right click it, stay six
+      seconds).
+      Then run. Do the guards catch you? Should they?
+- Feedback I want: whether raids should also happen when you are on
+  the platform (they happen a third of the way out); whether the
+  manifest is worth the standing.
+
+## Build 53 — THE CARTOGRAPHER
+- [ ] In the Herald, the desk at the back. Buy the sheet for the
+      direction you have not been. Open the map: the country, the
+      marks. Walk to one of them. Was it there?
+- [ ] Sell your survey after a long walk. Is the rate worth the walk?
+- Feedback I want: whether the marks should name villages (they do)
+  and cities (they do) or stay anonymous until you get there; whether
+  bought country should look different from walked country on the map.
+
+## Build 52 — THE CONTRACTOR
+- [ ] The mayor: THE CITY WORKS at the bottom of the screen. Take the
+      pit. Find the yellow box. Dig it with whatever drill you have.
+      Watch the marker's percentage. Is the box readable from inside
+      it as well as from outside?
+- [ ] Do the canal sloppily on purpose — wide and deep — and see the
+      pay cut. Then do the cut cleanly.
+- Feedback I want: whether ninety-five percent is the right bar with
+  a sphere drill (the corners are the hard part — a cube drill does
+  them); whether the shell penalty feels fair; what other shapes the
+  city should ask for (a cistern? a tunnel between two marks?).
+
+## Build 51 — THE TRACK
+- [ ] Find the track (outside one wall of a city — the sign by the
+      stand). Walk the circuit. Does the pad sit right against the
+      land around it, or is there a cliff where the hills were cut?
+- [ ] With a sports car in your slots: the steward, RACE. The count,
+      the grid, three laps. Is the sports car's handling a race on
+      this track, or a fight with the ends?
+- [ ] Try the bike and the hoverbike.
+- [ ] Bet from the stand. Watch a whole race. Is it worth watching?
+- Feedback I want: the AI's pace (too easy, too hard, per class);
+  whether the checkpoints ever fail you when you are on the road;
+  whether the track wants a chicane, a hill, or a second layout.
+
+## Build 50 — THE CASINO
+- [ ] Find the casino (a dark hall with a lit marquee, a block off the
+      plaza). Three tables: right click each. Does the room read as a
+      casino at pixel scale?
+- [ ] Blackjack at 50: a few hands. Does the card text read cleanly?
+      Would you rather see cards drawn?
+- [ ] The dice: is SEVEN at four to one tempting enough?
+- [ ] The wheel: ten spins. Then decide whether you would chase the car.
+- Feedback I want: which table you go back to; whether the bets should
+  go higher; whether poker against the floor brokers is worth the
+  build (it is a big one — only if you would play it).
+
+## Build 49 — OWNERSHIP
+- [ ] Trade with a keeper until goodwill 20 (the grocer is cheapest to
+      befriend). The row at the bottom of their screen: buy it. Does
+      the price feel like a stretch worth a loan?
+- [ ] Sleep a few nights. Open the phone: BUSINESS. Collect, restock
+      when it rings. Is the take worth the coins you put in?
+- [ ] Let a siege happen to that city: the till should show it.
+- [ ] Sell it: raise the buyer twice and watch them walk; take the
+      next day's offer.
+- Feedback I want: does owning a shop change how you feel about the
+  city; what should the shop do while you are in it (wares on the
+  pedestals from your own stock?); the numbers.
+
 ## Build 48 — THE BANK
 - [ ] The bank on the plaza's south side. Put coins in, sleep a night,
       look again. Is one percent a day worth the walk?

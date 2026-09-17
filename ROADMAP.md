@@ -106,11 +106,10 @@ order is mine. Big items are split so each build is one session.
    lever. Left for later: enemies that climb, the mender on city walls.
 3. **THE DEEP, slice A** — DONE (Build 34): the dark, the noise meter,
    the first hall, the leader's last camp and last note, the door on,
-   Austin's ramp (hut, lit house, the works), the knock. **Slice B**
-   (later in the queue, after RIVERS II and THE LINE): the second hall
-   behind the fall, what lives there and what the sound is, the boss at
-   the end of the works, ropes and elevators for the way back up with a
-   full pack, glow fungus as the deep's own light.
+   Austin's ramp (hut, lit house, the works), the knock. **Slice B** —
+   DONE (Build 59): the second hall behind the fall, the nest, THE
+   KNOCKER at the end of the works, the winch and the rope for the way
+   back up, glow fungus as the deep's own light.
 3b. **HORIZON.2 — TRUE SHAPES** — DONE (Build 35): city towers, halls,
    stacks and highway slabs drawn as exact boxes at range, reaching
    cities and roads not yet laid; the skin keeps the ground. Mountains
@@ -201,39 +200,39 @@ so the city's economy is one thing that reacts to what you do.
 9. **THE BANK** (mine) — DONE (Build 48). Deposits that survive death, interest by the
    day, loans to buy a shop or a car. Default and the collectors come,
    as a raid.
-10. **OWNERSHIP** (Austin's) — buy a shop once the keeper's goodwill is
+10. **OWNERSHIP** (Austin's) — DONE (Build 49). Buy a shop once the keeper's goodwill is
    high enough: income at the till, supplies and wages out, read from
    the city economy so a siege hurts your shop too. Sell once a day to
    a buyer who makes an offer you can raise, lower or decline. Managed
    from the phone's BUSINESS app.
-11. **THE CASINO** (Austin's) — blackjack, dice, and the item wheel
+11. **THE CASINO** (Austin's) — FIRST SLICE DONE (Build 50: blackjack, dice, the wheel with the car). Blackjack, dice, and the item wheel
    with a sports car jackpot first; poker against AI players as its
    own later slice, built properly or not at all.
-12. **THE TRACK** (Austin's) — a stamped circuit outside the city with
+12. **THE TRACK** (Austin's) — DONE (Build 51). A stamped circuit outside the city with
    checkpoints, AI drivers that follow it, lap timing and positions.
    Race for coin, or bet from the stands on a race that runs without
    you. Classes: sports car, bike, hoverbike.
-13. **THE CONTRACTOR** (mine) — cities post carve-to-spec jobs: a
+13. **THE CONTRACTOR** (mine) — DONE (Build 52). Cities post carve-to-spec jobs: a
    foundation pit, a canal between two points, a road cut through a
    rise. Scored by volume against the requested shape (the SDF measures
    it exactly), paid by tier. The job only this game can offer.
-14. **THE CARTOGRAPHER** (mine) — buy maps of country you have not
+14. **THE CARTOGRAPHER** (mine) — DONE (Build 53). Buy maps of country you have not
    walked, marked with falls, villages and forts; sell your own survey
    for coin.
-15. **THE MAIL CAR** (mine, on THE LINE) — one car on the train carries
+15. **THE MAIL CAR** (mine, on THE LINE) — DONE (Build 54). One car on the train carries
    coin and ore. Guard it for pay, or rob it and answer for it with the
    city.
 
 Slotted between the city builds as the mood takes me:
-- **FARMING** (Austin's) — a hoe, seeds, water you can carry and set
+- **FARMING** (Austin's) — DONE (Build 55). A hoe, seeds, water you can carry and set
   down, crops (tomatoes, wheat, lettuce), and meals that are the potion
   system: a burger or a plate of spaghetti gives speed, dig speed,
   jump, invisibility, for a while. The grain mill (a wheel by a fall)
   comes with it.
-- **THE CREW D** — crew in vehicles: a follower takes the passenger
+- **THE CREW D** — DONE (Build 56). Crew in vehicles: a follower takes the passenger
   seat of your car, boat or plane; give them a vehicle and they drive
   their own behind you; other crew ride with them. A squad on the road.
-- **THE MENAGERIE** (Austin's) — creature spawners. In creative,
+- **THE MENAGERIE** (Austin's) — DONE (Build 57). Creature spawners. In creative,
   craft a "<creature> spawner" for any living thing and set it down. In
   survival, a creature grabber gun: right click any living thing and
   it becomes a spawner in your pack -- animals in a moment, enemies
@@ -243,11 +242,29 @@ Slotted between the city builds as the mood takes me:
   keeps his goodwill, his trades and his pockets; a crew member keeps
   their bag. (The record travels inside the spawner item: house key,
   crew record, entity fields.)
-- **THE DEEP, slice B** — the second hall, once the first has been
-  played.
-- **SCULPT II** — the smoothing stroke, radial symmetry, brushes from
-  blueprints, the path made by walking.
-- **THE GARRISON**, then the Space Arc.
+- **THE DEEP, slice B** — DONE (Build 59). The second hall behind the
+  fall, lit by its own fungus, the nest, the works' drift, THE KNOCKER
+  at the end of it (the knock was it), the knocker's hammer, the way
+  back up (a shaft to dry ground, a rope, a coal-fed winch), page 10 in
+  an older hand. Left for later: what the Knocker was guarding under
+  the floor; the deep's own villagers.
+- **SCULPT II** — DONE (Build 58). The sander (shift + right with the
+  trowel: a smoothing op in the field), radial symmetry (hold K + a
+  digit, every tool repeated n-fold, combinable with the mirror),
+  brushes from blueprints (BRUSH in the blueprint screen: the drill
+  carves its negative, the dispenser lays it), the path made by
+  walking (R with the bore records your walk, right click lays a
+  cut-and-fill track along it). Left for later: a sander that reads
+  the surface's curvature rather than a fixed kernel; brushes that
+  carry props.
+- **THE GARRISON** — SLICE A DONE (Build 60): the bases on the
+  highways, the soldiers, the alarm and the siren, the radar as the
+  stealth route, the commander and the vault with its part, the taking.
+  **Slice B:** tanks that patrol the roads and blow chunks out of walls,
+  crewed till they die; the tank built from three parts, drivable.
+  **Slice C:** the gunship on the alarm; the jet with its cannon,
+  missiles, rolls and loops; jet fuel sold only at a taken base.
+- Then the Space Arc.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

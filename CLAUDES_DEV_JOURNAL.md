@@ -1246,6 +1246,233 @@ took me through that line. Wrong alarms still find things.
 OWNERSHIP next — Austin's, and the one the phone's BUSINESS app has
 been holding a placeholder for since Build 46.
 
+## 2026-09-17, small hours — OWNERSHIP
+
+The economy now has a loop: sell ore, the mine's share rises, the
+broker's shop you own takes more, the buyer offers more for it, the
+bank lends against your standing to buy the next one. None of it is
+random — the buyer's offer and patience come from the seed and the
+day, so two players on the same seed get the same buyer, and a raise
+that walks is a fact you could have predicted, not a roll.
+
+Three builds in one night is a lot. I kept them small on purpose:
+each is one system, one hall, one test. The pit is the only one with
+a shape to it. I notice the city is getting full — plaza flanks all
+taken (hall, press, exchange, bank), four statue corners, the pit on
+a block. THE CASINO will need a block of its own.
+
+## 2026-09-17, morning — THE CASINO
+
+"Never a die" survived the casino, which surprised me. A shuffle from
+the seed and a saved count is still a shuffle; the player cannot tell,
+and the world can: reload the save and the same hand comes back, so
+there is no save-scumming and nothing to save-scum for. The first
+version of the house's take moved OLD TOWN four percent a spin, and
+the test showed the share at 350 after a session. Numbers I type
+without computing are the ones the tests exist for.
+
+The pit, the bank, the shops, the casino: four builds in a night, all
+in the same city, all leaning on the same six things (a hall, a
+counter, a role, a screen, a dawn hook, a save field). The City Arc
+has a shape now. THE TRACK is next, and it is the first one outside
+the walls.
+
+## 2026-09-17, midday — THE TRACK
+
+The drivers are not driving. They are a number on a curve, and the
+curve is a stadium I can write in five lines of arithmetic. The test
+that mattered was the one that said the flag fell at thirty-three
+seconds when the arithmetic said forty: the grid sits behind the line,
+so the first crossing was counting as a lap. The player's checkpoints
+did not have the bug because they count the line last. Two systems
+for the same thing, one right, is how you find the wrong one.
+
+The pad was the risk. A 156 by 104 metre cut and fill outside the wall
+is the biggest single edit in the game, and the far skin would have
+kept the hills over it, so it is stamped after the city's edits are
+tagged and bakes in like anything a player digs. I have not seen it
+from a kilometre yet; that is on the playtest list.
+
+THE CONTRACTOR next: mine, and the first one where the SDF is the
+judge.
+
+## 2026-09-17, afternoon — THE CONTRACTOR
+
+This one is the game's own. Every other builder game would have to
+count blocks; this one asks the field whether a point is air, five
+hundred times, and has an exact answer to "is the box dug". The shell
+is the part I am proudest of: the same question asked just outside
+the box turns "did you dig it" into "did you dig only it", which is
+what a client means by to spec.
+
+The first cut job found no rise, because I measured rises against the
+plaza and the plaza is a slab twenty metres above the country. A rise
+is ground higher than the road on either side of it. Obvious once the
+test said "pit" where I expected "cut".
+
+THE CARTOGRAPHER and THE MAIL CAR are the last two City Arc items.
+Then the slotted ones — FARMING first, I think, because it touches
+the most of the game.
+
+## 2026-09-17, evening — THE CARTOGRAPHER
+
+The map already knew how to draw any cell from the generator; it only
+drew the ones you had stood on. A sheet is a rectangle of keys. The
+whole build is that sentence plus a desk, and the interesting part is
+the price: it is what you do not know, cell by cell, so the sheet gets
+cheaper as you walk and free when you are done. I like a price that
+is a fact about the player.
+
+One City Arc item left: THE MAIL CAR. Then the slotted builds.
+
+## 2026-09-17, night — THE MAIL CAR, and the arc closed
+
+The timetable was a pure function of time — the loco is where the
+clock says it is, always, which is why the trains never needed
+saving. A raid has to stop the train, so the function grew a halt: for
+a window it answers the halt's place, afterwards it answers as if
+time had slipped by the hold, until the next station, where it snaps
+back. The hold is shorter than the dwell, so the snap happens while
+the train is standing and nobody sees it. I like that the trains are
+still not saved.
+
+Two bugs from the test, both parity: a run's arrival dwell is the next
+run's number, so the guard was never paid on arrival; and the raid
+point was measured from one end whichever way the train ran. The test
+found both because it drove the clock by hand to the exact second.
+
+That is the City Arc: COUNTERS, the press and the exchange, the phone,
+the pit and the monuments, the bank, ownership, the casino, the track,
+the contractor, the cartographer, the mail car. Eleven builds in two
+days. Next: the slotted ones. FARMING first.
+
+## 2026-09-17, late — FARMING
+
+A plot is a prop with three numbers, and the crop is four boxes whose
+height is the stage. The part that took a decision was the meals: the
+game has no hunger, so a meal is a potion, and the eating code refused
+a full player. A potion is drunk for what it does. That was one line
+moved above the health check, and the test was what noticed — the soup
+did not make me invisible because the burger had already mended me.
+
+Eleven city builds and a farm in three days. THE CREW D next, or THE
+MENAGERIE; I will take the one that touches vehicles first, because
+the track and the mail car just made vehicles matter more.
+
+## 2026-09-18, small hours — THE CREW D
+
+The convoy car is not driven; it is placed, on a trail of where you
+have been, with a speed that closes the gap and a heading that turns
+toward the next point. It is the racer again, with your wake for a
+track. I keep finding that the cheapest honest version of a thing is
+a number on a curve. The passenger is cheaper still: a seat is a
+point in the car's frame, and the seat table already existed for the
+camera.
+
+THE MENAGERIE next: spawners and the grabber gun.
+
+## 2026-09-18, morning — THE MENAGERIE
+
+The hard part was never the beam. It was "the same one that went in":
+a villager is a house record plus an entity, and taking the entity
+leaves a house that wants to raise another. One flag on the house —
+bottled — and every place that respawns a villager or restores a crew
+member checks it. The record rides in the item as plain fields, which
+is why crew members keep their bag: the bag was already on the house
+record, not on the entity.
+
+The test cost me an hour on the camera: the beam aims from the
+camera, the camera only follows the player when the game loop runs,
+and hiring opens a screen that stops the loop. Three separate wrong
+answers before the right one. Every one of them a fact about the
+game I now know.
+
+## 2026-09-18, later — SCULPT II
+
+Back to the field. Four pieces I had owed SCULPT since the trowel, and
+the one I was afraid of was the sander: a smoothing stroke is a blur,
+a blur reads the field at other points, and the mesher builds its
+field as an array edit by edit, not by calling the field function.
+Two paths — the array and the analytic function — that have to agree
+at every shared sample or the chunk seams open. The answer that made
+it tractable: a stroke blurs the field BEFORE ANY STROKE. Then the
+raw field is one more array beside the live one, every stroke reads
+the same thing, and the only subtlety left was that the array applies
+an edit only inside its box rounded to the lattice, so the analytic
+raw function has to do exactly that too. I wrote the seam test wrong
+first (comparing emitted vertices, which legitimately differ) and
+right second (comparing the shared cells' vertices, which must not).
+Measure the thing that has to be equal, not the thing that is easy to
+list.
+
+The radial fell out of the mirror once I stopped thinking of the
+mirror as one twin and made it a list of transforms; every tool that
+took "the twin" now takes the list, and the two symmetries compose
+for free. The brush was the bore's job with a different edit list.
+The path was the bore with the player's feet laying the points. Three
+of the four pieces were the existing pieces seen from a different
+side, which is what a good architecture is supposed to feel like.
+
+I keep coming back to the standing note: carving is the identity.
+This build is the first in a while that made the carving better
+rather than putting something beside it, and it felt like the right
+kind of work. Next: THE DEEP, slice B, or THE GARRISON.
+
+## 2026-09-18, evening — THE DEEP B
+
+The story build. Build 34 left a rubble wall and a sign that said WORK
+QUIETLY, and every knock since has been a promise. Today I paid it: the
+second hall, the nest, the works, and at the end of them the thing
+that knocks. I named it the Knocker before I knew what it looked like,
+after the mine spirits, and the design followed from the name: it
+knocks because that is what it does, so its attack is a pound, so the
+dodge is a jump, so the arena is a floor it wrecks as it goes. The
+knock in the hills stops when it dies. I like that the world changes
+in a way you can hear.
+
+Two lessons from the laying. First: the ground is not flat, and a
+cavern laid at the first hall's height had its roof in a valley. The
+fix that felt right was not a smaller cavern but a deeper one, with
+the approach going down to it at a slope, which reads as a descent
+anyway. Second: dry land is not guaranteed either; the shaft to the
+surface hunted outward in rings for ground above the water and, on
+seed 7, found it eighty metres off at the end of a bore. The fallback
+after that is the mouth itself. I wrote the geometry before the
+search and had to add the search twice. Next time: place, then check
+what is over it and under it, before drawing.
+
+The suite killed me in the boss fight -- survival mode, ninety
+updates six metres from it -- and the hammer scenario then quietly
+did nothing because you cannot swing a hammer dead. A good bug to
+have found in a test and not in Austin's hands.
+
+Next: THE GARRISON, or the small things.
+
+## 2026-09-18, night — THE GARRISON, slice A
+
+Austin's idea from the September brainstorm, and the biggest of them:
+a base you cannot take. I sliced it three ways -- the base and the
+alarm, then the tanks, then the aircraft -- because each is a system
+of its own and the first is the one everything else hangs from.
+
+The design decision I am proudest of is the radar. Austin wanted
+bases that were peaceful until provoked and then all at once; I
+wanted a stealth route for the player who carves rather than shoots.
+The answer was already in the game: the power grid. The mast is a
+prop on a plinth wired to a generator in a hut, and the alarm asks
+the wire and the plinth whether the mast has power. Fists take a
+wire; a charge takes a plinth; either way no siren and no
+reinforcements. The same verbs the player already has, and the
+soldiers still see you if you walk up to them.
+
+A number I want Austin's eye on: eleven a rifle hit, six riflemen.
+The suite says forty-three hits in nine seconds standing in the open
+in the yard. That is death in three seconds without cover, which is
+the point of walls, but it may be too fast to be fun. The knobs are
+in one table.
+
+Next: the tanks, then the aircraft. Then the sky.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node
@@ -1293,9 +1520,8 @@ PeerJS's cloud signalling loaded on demand; `window.__netLoopback`
 switches the transport to a BroadcastChannel for two-page tests.
 The guest never saves and runs no world simulation.
 
-**Queue, in my order:** the City Arc (COUNTERS, THE
-PRESS + THE EXCHANGE with the phone, THE PIT + MONUMENTS, THE BANK,
-OWNERSHIP, THE CASINO, THE TRACK, THE CONTRACTOR, THE CARTOGRAPHER,
-THE MAIL CAR), with FARMING, CREW D, MENAGERIE, DEEP B, SCULPT II and
-GARRISON slotted between as the mood takes me. Austin said yes to all
-of it on 2026-09-10.
+**Queue, in my order:** the City Arc is done (Builds 44–54), and so
+are FARMING, CREW D, MENAGERIE, SCULPT II and DEEP B (55–59). What is
+left of the 2026-09-10 plan: THE GARRISON, then the Space Arc, with
+the small things (shadow cascades, place names on the map, footsteps
+by material, the frame-rate pass) wherever a session has room.

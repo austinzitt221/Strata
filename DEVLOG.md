@@ -2,6 +2,543 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 60 — THE GARRISON A: the base (2026-09-18)
+
+Austin's, with my radar. The first slice: the base, the soldiers, the
+alarm, the taking. Tanks are the next slice, the gunship and the jet
+the one after.
+
+- **Bases on the highway network.** One link in two (long enough to be
+  well off both cities) carries a garrison fifty metres off the road,
+  a third to two thirds of the way along, on the side the hash picks.
+  A levelled pad, filled and cleared; a stone yard; basalt walls
+  fifty-two metres square with a gate to the road; four towers with
+  obsidian caps; a barracks with three chests of the rank and file;
+  an armoury with two heavier ones (rockets, cells, a gun); a
+  generator hut with thirty coal in it; the radar mast on a plinth,
+  wired to the generator, its dish turning while it has power; the
+  command post, two floors, with the vault at the back; a helipad with
+  an H on it, for later; torches and a sign at the gate that means
+  you. Old worlds get them the first time they drive past.
+- **Soldiers.** A new kind, in olive, a rifle along the arm: six
+  riflemen (eleven a hit, a shot every half second, worse with
+  distance), two with SMGs (six, six a second, close), two with
+  rockets (one every six and a half seconds, a beat in the air, then a
+  real crater where you were). Every shot is a line of fire checked
+  through the field: walls and buildings are cover. They hold a range
+  by weapon, close in when the line is blocked, back off if you are on
+  top of them, and use the butt of the rifle when you are. Turrets and
+  crew count them as enemies; friendly ones never.
+- **Peaceful until you are not.** They stand their posts and pace them.
+  Walk in through the gate, hit one of them, or fly over in anything,
+  and the alarm goes. With the radar powered: the siren (two notes,
+  every second and a half, fainter with distance), the whole base
+  alerted, and fourteen more file out of the barracks three seconds
+  apart to keep the roster at ten. The alarm holds forty-five seconds
+  after you leave the walls. Kill a soldier while it is quiet and the
+  shots raise it too.
+- **The radar is the stealth route.** Cut the mast's wire (fists take a
+  wire), blow its plinth, break or empty the generator, and the base
+  has no siren and no reinforcements: only soldiers within twenty
+  metres with a clear line to you react. The paper does not hear of it.
+- **The commander** in the command post: two hundred and sixty hit
+  points, a Magnus, a braid on his cap. His key opens the vault -- two
+  of the top guns (a Longeye, a GAT-900 or a Sun Spinner, and a
+  Boomtube), three to five hundred coins, six diamonds, two hundred
+  rounds, twelve rockets, and **one part** of a war machine: tank,
+  gunship or jet by the base. Every garrison's vault holds one; three
+  build one, in a later slice.
+- **Taking the base.** The commander dead and the last of the roster
+  with him (twenty-five kills through a siren, eleven in the quiet)
+  and the base is yours: the map mark goes green and six soldiers come
+  back as your guard, who fight what the city's guards fight and never
+  you. The paper reports the fall.
+- Soldiers are in the menagerie; the key stacks; the parts carry their
+  kind.
+- Tests: `b60test.js` (eight candidates within six kilometres; the
+  base stamped with its walls, gate, yard, tower cap, barracks, command
+  post, mezzanine, helipad, plinth, six chests, the locked vault with a
+  tank part and a top gun, the radar, the generator's coal, the wire,
+  the radar powered, eight props, two torches, ten posts; eleven
+  standing at peace with six rifles, two SMGs, two rockets and the
+  commander at his post, none alert; walking in raises the alarm to
+  forty-five with fourteen reinforcements and all eleven alert, three
+  killed dropping the roster to eight and refilled to ten in nine
+  seconds, a hundred and thirty-three shots, forty-three hits, four
+  rocket craters, rounds in the pack; the wire cut kills the radar and
+  a raise then alerts ten of eleven with no siren, the wire back
+  restores it, the plinth blown kills it; a plane over the base raises
+  it; the commander's death gives the key, the vault is sealed for it,
+  the roster gone the base is taken and six friendly guards stand;
+  the save keeps the base and its eight props); smoke, b22, b23, b34,
+  b32, b38, b44–b59 regressions.
+
+## Build 59 — THE DEEP B: the second hall (2026-09-18)
+
+The pages said find what makes the sound. This is it.
+
+- **The second hall, behind the fall.** Laid with the world (old worlds
+  get it the first time they load): past the rubble the door tunnel
+  goes on -- level, or down at no more than one in three if the ground
+  ahead is lower, since the whole of it sits under the lowest ground
+  over its footprint with eight metres of roof to spare -- to a lumpy
+  cavern forty-four metres across with a flat floor in the middle and
+  a bowl at the edges. It grows its own light: glowshroom mounds along
+  the foot of its walls and clumps on its roof. Off the left wall, the
+  nest -- a pocket with the bones -- and once you are in the second
+  hall the meter's waves come from there. From the far wall the works
+  run on: a drift stepping down a metre and a half every twelve,
+  posted and lintelled in stonebrick by the hands that built the first
+  hall, to a round chamber at the end, floored in stonebrick and lit by
+  the same fungus in its walls.
+- **THE KNOCKER.** It sleeps in the chamber and wakes when you reach
+  it: a hunched thing of grey stone and moss, a low head with eyes the
+  green of the fungus, two arms that end in hammers. It walks you down
+  and swings; every five and a half seconds it pounds the floor -- a
+  real crater under it (the works are wrecked as you fight) and a ring
+  that throws anyone standing within twelve metres and hurts them by
+  how close they stood. Jump as it lands and the ring passes under you;
+  the first throw says so. At half its strength it calls, and three
+  from the nest answer. Leave its chamber and it goes home and mends.
+  Its pounds are the knock: while it lives the deep still knocks, and
+  when it dies the knock stops for good, under the mouth and in the
+  hills, and the paper says so.
+- **The knocker's hammer** (first kill; two hundred coins and four
+  diamonds after). A slam: where it lands, a smooth crater three metres
+  across, the rock into your pack, and everything within four and a
+  half metres thrown and hurt -- forty to a boss. Nothing in reach and
+  it slams the ground at your feet. Loud, in the deep. The sword's
+  prop, grey and half again as big, swings for it.
+- **The way back up.** From the chamber a shaft goes straight to the
+  surface -- to dry ground: the nearest ring around the chamber with a
+  spot above the water and well above the works, reached by a level
+  bore when it lies outside the chamber, and beside the mouth at the
+  end of a long bore when nowhere within a hundred and twenty-five
+  metres is dry. A rope hangs the whole way from a ring of stone at the
+  top, and at the foot the winch: an elevator with a generator wired to
+  it and ten coal in the generator. Stand on it and hold space.
+- **An older hand.** The foreman's chest by the drift's end holds page
+  10 -- not the survey's hand: who built the hall, what they dug
+  toward, and the choice they never had -- with coal, rails, ingots,
+  torches and a ruby drill; his sign beside it. THE SECOND HALL is
+  marked once the first is found, THE WORKS once the second is, until
+  the knock stops.
+- The Knocker is in the menagerie and the hammer in the creative
+  catalog.
+- Tests: `b59test.js` (the tunnel past the fall air along its slope,
+  the cavern, its floor, roof eight metres under the lowest ground,
+  forty-six fungus samples on a ring, the nest, the drift, a post, the
+  chamber's floor and its depth, the side bore and the shaft dry, the
+  ring, page 10; standing in the hall: stamped, found, THE SECOND HALL
+  before and THE WORKS after, the chest's page and drill, both signs,
+  the elevator, the generator's coal, the wire between, the rope's
+  length, seven bones on the floor, page 10 read; three from the nest
+  at the top of the meter; the winch powered and lifting on space; the
+  Knocker waking with its bar, two pounds in nine seconds with a
+  crater, a throw and a hurt, the call at half with three answering,
+  its death giving the hammer and silencing the knock; a slam cratering
+  the chamber floor for sixty-two rock; the save and the old-world
+  migration); smoke, b22, b23, b34, b58, b32, b38, b44–b57 regressions.
+
+## Build 58 — SCULPT II (2026-09-18)
+
+Mine. The four pieces SCULPT still owed, and the carving is the identity.
+
+- **The sander.** Shift + right click with the trowel. A new edit op
+  (5, "smooth"): inside the disc's sphere the field is pulled toward
+  its own average over a kernel — half a metre, a metre on a big disc,
+  six taps along the axes — fully at the centre and not at all at the
+  rim. Beads from a chain of drill cuts, the steps of a stair, the
+  crumbs at the edge of a cube hole all melt into one surface; a flat
+  plane stays flat to the bit. It moves nothing in or out of your pack
+  and undoes as one. What a stroke blurs is the field BEFORE ANY
+  STROKE, so a stroke never depends on another stroke's taps: the
+  mesher keeps that raw field as a second array beside the live one,
+  reads its six taps from it inside the chunk and evaluates them at
+  the neighbour's samples outside it, and the two chunks agree bit for
+  bit at every shared sample (proved: two stacked strokes across a
+  chunk edge, every shared sample and every shared cell's vertex the
+  same). The cull pad grows by the kernel around a stroke so the
+  neighbour's edits come along. Coarse rings skip it.
+- **Radial symmetry.** Hold K and press 2 to 9 (0 for ten): an n-fold
+  about a vertical axis through the ghost; K + 1 clears it. K alone,
+  on release, is still the mirror, and the two combine — a six-fold
+  under a mirror is twelve copies. Every tool repeats: drill cuts,
+  dispenser shapes (the yaw adds with each turn, so a tilted slab
+  leans round the ring), trowel strokes and flattens and sandings
+  (the disc shows every copy), bore and lathe jobs, the brushes below.
+  One undo takes the ring. A pale pillar with a spoke per fold stands
+  on the axis; the ghost has a twin at every copy. CORE gained
+  `rotateEditY` (the centre orbits, the yaw adds; proved on a
+  stretched, tilted cube at a thousand points).
+- **Brushes from blueprints.** In the blueprint screen (N) every saved
+  blueprint has a BRUSH button beside STAMP. It becomes the drill's
+  and the dispenser's shape: the drill carves its negative (solids
+  become holes, holes become posts of the ground's own material), the
+  dispenser lays it in the loaded material. The wheel sizes it (its
+  longest side is the tool size), the rotate mode turns it, the grid
+  snaps it, the mirror and the radial repeat it, so an ornament drawn
+  once goes round a tower in one click. Its outlines stand in for the
+  ghost (holes red, solids green). Stamped as a job — one cut per
+  frame by tier, diamond in a single frame — and undone as one. Right
+  click returns to the sphere. The brush saves with the tool state.
+- **The path made by walking.** R with the bore in hand records where
+  your feet go, a point every three metres, sixty-four at most; R
+  again (or a right click) stops it. Then a right click lays a track
+  along the walk: the ground cut down to the walked line (a smooth
+  carve, two and a half metres of headroom, banks rounded) and built
+  up to it (a smooth fill), a lane as wide as the tool, paved in stone
+  brick, or with shift in the ground's own material. Cuts yield, fills
+  cost, the lot undoes as one. The bore's points went from 32 to 64
+  for it.
+- Small: the bore's jobs can now mix cuts and fills (a path, a brush),
+  and the finishing toast lists both what came in and what went out.
+- Tests: `b58core.js` under node (a turned cube's field matches at a
+  thousand points; a flat plane unchanged by the sander; a dimple's
+  floor rises and a bead's waist opens; nothing moves outside the
+  stroke; the cull pad grows only around a stroke; k and w round-trip;
+  two chunks under two stacked strokes agree at every shared sample
+  and every shared cell vertex) and `b58test.js` in the browser (three
+  beads sanded on the ground: the crease opens, the floor rises, the
+  pack untouched through the stroke and its undo; K + 6 sets a
+  six-fold without touching the mirror or the hotbar, five cuts on a
+  ring of four metres with yaws a sixth apart, five ghost twins, one
+  undo group, then a K tap adds the mirror for eleven transforms and
+  ten cuts, K + 1 and a K tap clear both; the trowel under a four-fold
+  makes four strokes and three extra discs; a box-with-a-hole brush
+  carved by the drill leaves the box open and a post standing, laid
+  by the dispenser leaves the box solid and the hole open, the ghost
+  outlines stand in for the shapes, right click clears it; a walk of
+  seven points laid as a stone-brick path with solid bed, open
+  headroom and one undo group; radial and brush in the save); smoke,
+  b22, b23 (updated for K on release and the disc pool), b32, b38,
+  b44–b57 regressions.
+
+## Build 57 — THE MENAGERIE (2026-09-18)
+
+Austin's. A creature in your pocket.
+
+- **Spawners.** An item that holds one living thing. In creative the
+  catalog has one for every kind — grazer, sheep, lurker, stalker,
+  husk, wisp, angel, city guard, villager, and the seven bosses. Right
+  click the ground to set it loose.
+- **The grabber gun** (three ingots, two wire, two crystal, at a
+  table). Hold right click on a living thing and a green beam takes it:
+  animals in under half a second, hostiles in three, a boss in twelve
+  under whatever it is doing to you meanwhile, a crew member at once,
+  a villager only at hiring goodwill — the stranger's own words say
+  so. Vehicles, cabs, racers, the posse and the mail raiders refuse the
+  beam. Losing the target drops the hold.
+- **The same one comes out.** The spawner carries the creature's
+  record: a boss's kind and hp, a lurker's every flag, and for a
+  villager their house and place in it — the house holds their place
+  and does not raise another while they are bottled, and their crew
+  record with its bag, tool and armor rides along. Set loose, they are
+  themselves again at your feet: the mayor with his goodwill, the crew
+  member following.
+- Tests: `b57test.js` (sixteen spawners in the catalog; a grazer at 13
+  hp taken in a moment and set loose with 13 hp; a lurker held two
+  seconds then taken at three with its flags; a Burrower still there at
+  ten seconds and gone at thirteen; a villager refused at no goodwill
+  with the reason, taken at twelve, the house holding their place
+  through two village ticks, set loose with the same name and goodwill
+  and the house unbottled; a crew member taken at once with the crew
+  restore not bringing them back, the spawner in the save, and set
+  loose still following with their torches); smoke, b32, b38, b44–b56
+  regressions.
+
+## Build 56 — THE CREW D (2026-09-17)
+
+The squad on the road.
+
+- **The passenger seat.** When you drive, a following crew member
+  within seven metres takes the free seat of a two-seater — car, sports
+  car, boat, motorboat, plane — and sits there through every turn.
+  Step out and they step out on the passenger side and follow on foot.
+  Bikes and hoverbikes carry one.
+- **Their own wheels.** A follower with a land or water vehicle in
+  their pack — a car you gave them at the crew panel, a sports car, a
+  bike, a hoverbike, a boat — takes the wheel of it when you drive off,
+  and drives it behind you on your trail (the last ninety metres of
+  where you went), the first a car-length back, each after that nine
+  metres further. Other followers ride with them, two to a car. The
+  driver's car sits on the ground under it — road, slab, bare country —
+  or on the water for a boat. Nobody can take a crew member's car.
+  When you park, they stop, step out a moment later, and the vehicle
+  goes back in the pack.
+- The phone's CALL app says who is riding with you and who is driving
+  what.
+- Tests: `b56test.js` (three crew and a car: the first takes the
+  passenger seat at the seat's exact place on the right, the second
+  takes the wheel of the car in their pack with the third beside them,
+  the convoy car refuses you; twelve seconds north at ten metres a
+  second with the convoy behind at a steady gap on your heading and on
+  the ground; the save carrying no convoy; stepping out puts the
+  passenger beside the car, the convoy car away after a moment, the
+  driver and the third on foot with the car still in the pack); smoke,
+  b32, b38, b44–b55 regressions.
+
+## Build 55 — FARMING (2026-09-17)
+
+The first of the slotted builds, Austin's. Crops, and meals that are
+the potion system.
+
+- **The hoe** (two iron ingots and a stick, at a table): right click
+  grass and a two-metre plot is tilled — dark earth with furrows,
+  snapped to a two-metre grid. Not on sand, rock or snow.
+- **Seeds:** tomato, wheat, lettuce, four for five or six coins at any
+  grocer, who also buys the crop. Right click a plot with seeds in
+  hand to plant.
+- **Water.** The watering can (three ingots) fills at any water you
+  are looking at — six waterings a fill — and wets a plot for one
+  stage. Rain wets every plot. A crop takes three stages, each a
+  watering and seventy-five seconds; a dry plot waits. The plot shows
+  the stage: stems, then heads, then fruit; wet earth is darker.
+- **Harvest:** right click a ripe plot — three tomatoes or two wheat or
+  two lettuce, and two seeds back; the plot is bare and tilled.
+- **The mill.** Wheat in hand, right click a mill wheel that is
+  turning (in water, not winter): flour, one for one. A stove bakes
+  flour to bread.
+- **The meals,** at a table: a burger (bread, cooked meat, lettuce,
+  tomato) for speed ×1.5; spaghetti (flour ×2, tomato ×2) for the
+  drill and the dispenser twice as fast; a salad (lettuce ×2, tomato)
+  for jump ×1.5; nightcap soup (glowshroom ×4, lettuce) so nothing
+  hunts you — hostiles find no prey in you. Ninety seconds (sixty for
+  the soup), one meal at a time, twenty or thirty hp mended, eaten full
+  or not, kept across a save.
+- Tests: `b55test.js` (the six recipes; grass found, the hoe's plot
+  snapped to the grid and refused twice; seeds planted and counted; no
+  growth dry; an empty can refused, a full can wetting the plot for
+  one of six; three stages consuming the water; the harvest and the
+  seeds back; rain; wheat refused at a dry wheel and ground at a wet
+  one; flour bakes; the burger's speed and its wearing off, the
+  spaghetti's dig, the soup's invisibility with a lurker beside you
+  finding nothing; the save); smoke, b32, b44–b54 regressions.
+
+## Build 54 — THE MAIL CAR (2026-09-17)
+
+City Arc item 15, mine, on THE LINE. The last of the arc.
+
+- **The car.** The first car behind the locomotive is the mail car —
+  dark green, brass-barred, a brass stripe. Passengers ride the two box
+  cars behind it. Every run carries a manifest from the seed and the
+  run's number: coin (120–300) and a lot of ore (iron, ruby, coal, or a
+  diamond or two).
+- **Raids.** Half the runs are raided a third to two thirds of the way
+  along the line. If anyone is within five hundred metres when the
+  train reaches the spot, it halts for thirty-five seconds and four
+  raiders come out of the country for the car. Kill them all and the
+  mail is safe — the line pays thirty coins for standing with the
+  train, and it is a headline; leave them on the car fourteen seconds,
+  or let the halt run out with any alive, and they have it. Raided
+  with no one near, it simply happened. A halted run runs late until
+  its next station, where the timetable takes over again.
+- **The guard's contract,** at the ticket kiosk: a free pass for the
+  next departure, eighty coins and a tenth of the manifest for a raid
+  held off or a quiet run ridden to the far end, four standing either
+  way; the mail lost on your watch, or a train you never boarded,
+  costs four.
+- **Cracking it.** While the train stands at a platform, crouch, right
+  click the mail car and stay at it six seconds: the manifest is yours, the
+  city that watched takes twenty standing, the railway's share falls,
+  the paper prints it, and four of the city guard come for you — for
+  four minutes, or until you are a hundred and seventy metres gone.
+- The phone rings for a raid on the line (it is a siege), and a train
+  halted by raiders reads as one in the paper.
+- Tests: `b54test.js` (the line and its train with the mail car
+  distinct, manifests repeatable, a raided run and a quiet one found;
+  the guard's contract taken while the train stands, the train ridden
+  to the raid point and halted, four raiders about the car, the halt
+  holding, the raiders killed and the run guarded and paid with the
+  contract cleared and the train moving again; a raid unseen from the
+  platform marked as happened; a quiet guarded run paid at the far
+  end; the car cracked at the platform — six seconds, the manifest,
+  twenty standing, four guards closing, the car empty after, the
+  headline; raiders and the posse kept out of the save); smoke, b32,
+  b38, b44–b53 regressions.
+
+## Build 53 — THE CARTOGRAPHER (2026-09-17)
+
+City Arc item 14, mine. Country you have not walked, for coin.
+
+- **The desk.** A cartographer at the back of the Herald, a MAPS sign
+  by its door. Cities from before get theirs on the next visit.
+- **Five sheets** a city sells: the four 640 m quadrants that meet at
+  the plaza, and the 1600 m country round it. Each is priced by the
+  map cells it would add — five hundredths of a coin a cell, so a
+  quadrant you have never seen costs about eighty and one you have
+  walked half of costs forty; one you have walked is free and says so.
+- **Bought,** a sheet fills your map (M) with its country and marks
+  what the generators know is out there: falls, villages, forts and
+  citadels, sky spires, ziggurats, other cities. Marks are coloured by
+  kind and named at zoom. The row tells you what a sheet would mark
+  before you pay.
+- **Your survey.** Cells you walked on foot — not bought, not already
+  sold — sell for four tenths of a coin each. It is a headline.
+- Tests: `b53test.js` (the desk and the sign, right-clicked from across
+  the counter, the five sheets and the survey row with their prices
+  and marks; the north-east sheet bought — the coins, the cells added
+  and counted as bought, the price falling to nothing and the row
+  saying walked, the marks inside the square; fifty cells walked and
+  sold at four tenths with nothing left to sell after; the country
+  priced and marked; the save); smoke, b32, b44–b52 regressions.
+
+## Build 52 — THE CONTRACTOR (2026-09-17)
+
+City Arc item 13, mine. The job only this game can offer: carve to
+spec, and the SDF is the judge.
+
+- **The posting.** The mayor's office carries THE CITY WORKS: one job
+  at a time, by turns — a foundation pit (12×5×8 m, its top at the
+  ground, outside the wall on a side the track does not use), a canal
+  cut (40 m long, 4 wide, 3 deep, parallel to the wall), a road cut
+  (30 m long, 6 wide, 6 tall, through the biggest rise within two
+  hundred metres of the wall — ground higher than both its
+  approaches along the way out; with no such rise the city asks for a
+  pit instead). Pay 180 / 260 / 400 scaled by the city's size.
+- **The spec is a box.** Accepting it marks the site: a yellow
+  wireframe of the box in the world when you are within three hundred
+  metres, a marker with the tag and the percentage dug, a line in the
+  missions tab with the dimensions, the pay and the progress.
+- **Scoring.** Every two seconds while you are within ninety metres
+  the box is sampled every metre and the job is done when nineteen in
+  twenty samples are air. A shell two metres round the box, below its
+  top, is sampled too: air you made there that was solid when you
+  took the job is ground the city did not ask for, and it costs up to
+  half the pay. Clean work says so.
+- **Done:** the coins, six standing, a headline, the builders' share up,
+  and the next job posted on your next visit to the office.
+- Tests: `b52test.js` (the mayor's row and its text, the box outside
+  the wall and away from the track, the accept — baseline, shell,
+  marker, missions tab line; the wireframe; half the box dug scoring
+  sixty-one percent and the marker following; the rest dug scoring
+  full and paying in full on the next tick with the site cleared and
+  the headline; the canal dug three metres wide of the mark paying
+  half; the third posting and the save); smoke, b32, b44–b51
+  regressions.
+
+## Build 51 — THE TRACK (2026-09-17)
+
+City Arc item 12, Austin's. The first piece of the city outside its
+walls.
+
+- **The circuit.** A stadium — two 60 m straights and two half-circles
+  of 25 m radius, ten metres wide, 277 m round — on a pad flattened to
+  the city's level outside the wall, on the side with the least relief,
+  no water and no highway leaving that way. Basalt on grass, a marble
+  line, a three-step grandstand along the home straight with torches,
+  a sign, and the race steward at a counter at the stand's end. Laid
+  after the city's own edits are tagged, so the pad bakes into the far
+  skin. Cities from before get theirs on the next visit.
+- **Three classes:** sports cars, motorcycles, hoverbikes. Each race
+  has a field of three drivers with form from the seed and a saved
+  race count — a skill, a name, odds from the skill (the favourite
+  short, the outsider long).
+- **RACE.** The entry (50 / 30 / 40), your own machine on the front of
+  the grid — the one you are driving, or one from your slots — the
+  three drivers behind, a count of four, then three laps through eight
+  checkpoints (no cutting: the next checkpoint only counts within nine
+  metres of the road). Toasts for your place and lap times. Purses 300
+  / 120 / 50 for the sports cars, less for the others. Four seconds out
+  of your machine or twelve seconds off the circuit and the race is
+  off. A win is a headline.
+- **BET.** A stake (25 / 100 / 250) on a driver at their odds; the race
+  runs without you and you watch from the stand.
+- **The drivers** follow the centreline in their lane at their form's
+  share of the class top speed, slower through the ends, with a breath
+  of variation; they hold on the grid through the count and coast after
+  the flag. They cannot be taken (a racing car refuses you), are never
+  saved, and are swept eight seconds after the flag or on abandon.
+- Tests: `b51test.js` (the circuit's place outside the wall and nine
+  material probes — infield, straight, line, far straight, end, outside,
+  two stand steps; the curve closed, its nearest-point search exact,
+  its distance from the two centres exact everywhere; the field
+  repeatable; the steward right-clicked and six rows with RACE dim
+  without a machine; a race entered from a slotted car — fee, grid,
+  three drivers holding through the count, moving and on the road after
+  ten seconds, driven round by hand to the flag first, the purse, the
+  win, the headline, the sweep; a bet on the favourite paid at the
+  odds; a race abandoned from a hoverbike with the drivers gone and no
+  racer in the save); smoke, b32, b44–b50 regressions.
+
+## Build 50 — THE CASINO (2026-09-17)
+
+City Arc item 11, Austin's. The first slice: blackjack, dice, the
+wheel. Poker is its own later slice or not at all.
+
+- **The hall.** The park or lot after the pit's becomes the casino: a
+  dark obsidian hall on its own block, a lit crystal marquee over the
+  door on the plaza side, windows either side, a sign, four torches in
+  the corners, three green tables in a row facing the door, and a
+  croupier at a counter at the back. Cities from before get theirs on
+  the next visit; a small city with only one spare block gets a pit and
+  no casino.
+- **Blackjack.** A fresh 52-card shoe every hand. Bets 10 / 50 / 200.
+  DEAL, HIT, STAND; the dealer's second card face down until the hand
+  ends; the dealer stands on 17; a natural pays three to two; a push
+  returns the bet.
+- **The dice.** Two dice. HIGH (8–12) and LOW (2–6) pay even; SEVEN
+  pays four to one.
+- **The wheel.** A hundred coins a spin, sixteen segments: eight
+  blanks, 50, 200 and 500 coins, your stake back, ten iron ingots,
+  forty-eight rounds, a diamond, and THE SPORTS CAR at a quarter
+  weight — about one spin in sixty. The car lands in your inventory as
+  the dealership's does; the paper prints the jackpot; HARROW MOTORS
+  moves.
+- **The seed's own luck.** Every shuffle, roll and spin comes from the
+  world seed and a count that is saved, so a world's luck replays the
+  same and two players on one seed see the same cards. Never a die.
+- The house's take lifts OLD TOWN HOLDINGS a hair (a thousand coins
+  lost is one percent). A single payout of five hundred or more is a
+  headline.
+- Tests: `b50test.js` (the casino on a block distinct from the pit,
+  five SDF probes — the hall's air, its wall, the door, the crystal
+  marquee, the roof — three tables, the croupier and the sign; the
+  blackjack table right-clicked, a hand dealt and played out with the
+  coins matching the rules and the dealer standing on 17, the same
+  count dealing the same hand; sixty dice rolls each paid to the roll;
+  the wheel spun to the car with the jackpot in the paper and the count
+  saved; the old-city migration); smoke, b32, b44, b45, b46, b47, b48,
+  b49 regressions.
+
+## Build 49 — OWNERSHIP (2026-09-16)
+
+City Arc item 10, Austin's. The phone's BUSINESS app stops holding a
+placeholder.
+
+- **Buying.** Any of the five keepers (broker, arms, tool, electrics,
+  grocer) sells you the shop once their goodwill is 20 — a row at the
+  bottom of their trade screen, priced by the trade and the city's size
+  (the grocer's in a small city about 700, the arms dealer's in a big
+  one about 2100). The keeper stays on as staff; you get five standing;
+  the paper prints it; the builders' share moves.
+- **The till.** Each dawn the shop takes what the city gives: the
+  trade's base take, scaled by the city's size, by its sector's health
+  on the Exchange (the share against thirty days ago, held between half
+  and one and a half — the grocer follows the fisheries, the arms
+  dealer the ordnance company, the electrician the power company, the
+  toolsmith the builders, the broker the mine), by a siege (a fifth
+  while it lasts, six tenths for two days after), and by your stock.
+  Wages (12) and supplies (a tenth of the take) come out. Stock runs
+  down fifteen points a day; RESTOCK costs one and a half a point. At
+  thirty percent stock the phone rings; so does a day in the red.
+- **Selling.** Each dawn a buyer, named from the seed and the day,
+  offers a price from the shop's cost and its health. ACCEPT takes it
+  and the till with it. RAISE counters ten percent up; the buyer holds
+  once or twice, then walks for the day. DECLINE sends them off. Never
+  a die.
+- **From the phone.** BUSINESS lists every shop you own with the till,
+  the stock, yesterday's take and cost, UNDER SIEGE when it is, and the
+  day's buyer with the three answers; COLLECT and RESTOCK from anywhere.
+  The counter still does COLLECT and the buying.
+- Tests: `b49test.js` (the row locked at 0 goodwill, bought at 25, the
+  record, the keeper marked, standing, the headline; two dawns and the
+  same dawn twice; a siege cutting the take below four tenths; restock
+  and collect at their prices; the phone's rows and buttons; a raise
+  held twice then walked; the next buyer raised and accepted for the
+  price plus the till, the shop gone, the keeper freed, the save);
+  smoke, b32, b44, b45, b46, b47, b48 regressions.
+
 ## Build 48 — THE BANK (2026-09-16)
 
 City Arc item 9. Coins that outlive you, and a reason to owe someone.
