@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 61 — THE GARRISON B
+- [ ] Drive past a garrison and find its tanks on the road. Watch one
+      patrol. Then raise the alarm from the road and see what a shell
+      does to the tarmac, and to you.
+- [ ] Hide behind the base wall from a tank. Does the wall take the
+      shell, and does the hole it leaves make sense?
+- [ ] Kill a tank (rockets, or the gatling from the vault). Three parts
+      and a station: build your own. Drive it into a garrison and
+      fire on the gate.
+- Feedback I want: the tank's speed (eight and a half) and whether it
+  should leave the road when alerted; the shell's crater size; whether
+  your own tank should take crew in a second seat.
+
 ## Build 60 — THE GARRISON A
 - [ ] Drive a highway until the GARRISON toast. Park up the road and
       look at it. Does it read as military from the outside — walls,

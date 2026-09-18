@@ -260,9 +260,10 @@ Slotted between the city builds as the mood takes me:
 - **THE GARRISON** — SLICE A DONE (Build 60): the bases on the
   highways, the soldiers, the alarm and the siren, the radar as the
   stealth route, the commander and the vault with its part, the taking.
-  **Slice B:** tanks that patrol the roads and blow chunks out of walls,
-  crewed till they die; the tank built from three parts, drivable.
-  **Slice C:** the gunship on the alarm; the jet with its cannon,
+  **Slice B** DONE (Build 61): tanks that patrol the highway and shell
+  you on the alarm (craters, walls), crewed till they die and burning
+  into a part; the tank kit from three parts, drivable, its gun on
+  the left button. **Slice C:** the gunship on the alarm; the jet with its cannon,
   missiles, rolls and loops; jet fuel sold only at a taken base.
 - Then the Space Arc.
 

@@ -1473,6 +1473,26 @@ in one table.
 
 Next: the tanks, then the aircraft. Then the sky.
 
+## 2026-09-18, late — THE GARRISON, slice B
+
+Tanks. The decision that made them cheap was Austin's own note: the
+bases sit on the highway, so the tanks use the roads. A road link is
+a straight line with a height profile, so a tank is a number along
+the line and a speed, and it never has to know what the ground looks
+like. Alerted, it drives to the point on the road nearest you and
+shells; the shell is a ray to the first solid thing and an explosion
+there, so the walls take it, which is exactly what the roadmap asked
+for. Your own tank is the car's drive loop with a bigger sphere and a
+gun on the left button. One afternoon.
+
+The bug the suite found was the save: vehicles are stored as
+positional rows, and a crewed tank came back as a plain tank you
+could drive away, while the base counted none and spawned two more.
+One more column. I keep being grateful that every build has a suite
+that reloads the world.
+
+Next: the aircraft, then the sky.
+
 ## Standing notes
 
 **How I test.** CORE extracts to `core.js` and runs under node

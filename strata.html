@@ -3067,7 +3067,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
@@ -3373,6 +3373,9 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   // WINGS: the cargo plane, the hoverbike (car parts, jetpack parts, aether), the cannon, and the airfield
   RECIPES.push({ kind: 'plane', station: true,
     costs: [{ item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 10 }, { mat: MAT.PLANKS, n: 12 }] });
+  // THE GARRISON: the tank, from three parts out of three vaults (or three burnt tanks)
+  RECIPES.push({ kind: 'tank', station: true,
+    costs: [{ item: 'tankpart', n: 3 }, { item: 'ironingot', n: 24 }, { item: 'rubyingot', n: 6 }, { item: 'wire', n: 10 }] });
   RECIPES.push({ kind: 'hover', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'cannon', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'aetheringot', n: 2 }, { mat: MAT.PLANKS, n: 4 }] });
@@ -3526,6 +3529,7 @@ function craft(slots, r, free){
                   : r.kind === 'motorboat' ? { kind: 'motorboat', charge: 100 }
                   : r.kind === 'plane' ? { kind: 'plane', charge: 100 }
                   : r.kind === 'hover' ? { kind: 'hover', charge: 100 }
+                  : r.kind === 'tank' ? { kind: 'tank', charge: 100 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -6967,7 +6971,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -9705,7 +9709,7 @@ const powerSys = {
       let best = null, bd = 24;
       const mx = n.x, my = n.y + 0.95, mz = n.z;
       for (const e of game.entities){
-        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly);
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly) || (e.type === 'tank' && e.crewed && !e.friendly);
         if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
         const def = ENT_DEF[e.type]; if (!def) continue;
         const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
@@ -10993,6 +10997,9 @@ const VEH = {
                seat: { seatX: 0, seatY: 1.2, seatZ: 0.25, back: 6.5, up: 2.6, look: 1.2 } },
   motorboat: { name: 'motorboat', top: 17, rev: 4, accel: 7, brake: 5, steer: 1.9, drain: 0.09, r: 0.7, ride: 0.4, kmh: 70, repair: 8, water: true, draft: 0.3, step: 0.4,
                seat: { seatX: -0.35, seatY: 1.3, seatZ: 0.4, back: 7.5, up: 2.8, look: 1.3 } },
+  // THE GARRISON: the tank -- slow, heavy, climbs a kerb and a half, and its gun is on the left button
+  tank:      { name: 'tank', top: 8.5, rev: 3.5, accel: 4, brake: 6, steer: 0.9, drain: 0.12, r: 1.5, ride: 1.05, kmh: 30, repair: 30, step: 1.5, cannon: true,
+               seat: { seatX: 0, seatY: 2.3, seatZ: -0.2, back: 10, up: 4.2, look: 1.6 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
                seat: { seatX: -0.42, seatY: 2.32, seatZ: -1.75, back: 13, up: 4.5, look: 2.0 } },
@@ -11040,6 +11047,7 @@ const ENT_DEF = {
   guard:    { hp: 90, speed: 3.6, r: 0.42, h: 1.8, cap: 0 },   // the city's own: they fight the sieges
   soldier:  { hp: 70, speed: 3.4, r: 0.42, h: 1.8, cap: 0 },   // THE GARRISON: a base's own, with rifles
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
+  tank:     { hp: 480, speed: 0, r: 1.6, h: 2.3, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
   boat:     { hp: 120, speed: 0, r: 1.0, h: 1.0, cap: 0 },
@@ -11218,6 +11226,23 @@ function entMesh(type, ent){
     (parent || g).add(m);
     return m;
   };
+  if (type === 'tank'){
+    // the tank: an olive hull on two tracks, a turret that turns on its
+    // own, a long gun; a garrison's has the braid on the hatch
+    const olive = 0x4f5a3a, dark = 0x33392a, steel = 0x2a2a30, track = 0x1e1e22;
+    box(3.2, 1.0, 4.6, olive, 0, 1.0, 0);                     // hull
+    box(3.4, 0.35, 4.8, dark, 0, 1.55, 0);                    // deck lip
+    box(2.6, 0.5, 1.2, dark, 0, 1.3, 1.9);                    // the engine deck
+    for (const sx of [-1.55, 1.55]){ box(0.7, 0.9, 5.0, track, sx, 0.55, 0); for (let i = -2; i <= 2; i++) box(0.74, 0.5, 0.5, 0x3a3a40, sx, 0.5, i * 1.0); }
+    const turret = new THREE.Group(); turret.position.set(0, 1.75, 0.2); g.add(turret);
+    box(2.0, 0.7, 2.4, olive, 0, 0.35, 0, turret);
+    box(1.2, 0.3, 1.2, dark, 0, 0.85, -0.2, turret);          // the hatch
+    const barrel = box(0.3, 0.3, 3.4, steel, 0, 0.4, -2.6, turret);
+    box(0.42, 0.42, 0.5, steel, 0, 0.4, -4.1, turret);        // the muzzle brake
+    if (ent && ent.crewed) box(0.5, 0.06, 0.5, 0xd9b25a, 0, 1.02, -0.2, turret);
+    g.userData.turret = turret; g.userData.barrel = barrel;
+    return g;
+  }
   if (type === 'car'){
     // the electric car v2: pixel-textured panels and a real interior --
     // seats, a wheel, and a dash cluster with a live speedo + battery
@@ -11911,6 +11936,15 @@ function killEntity(e, byPlayer){
   Particles.burst(e.x, e.y + 0.5, e.z, 0.5,
     [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : e.type === 'angel' || e.type === 'archangel' ? 0xf4f2f8 : e.type === 'guardian' ? 0xc9a86a : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
+  if (VEH[e.type] && e.crewed){
+    // a garrison's tank burns where it stands; one part of it is still good
+    if (!e.noDrop){ addStackItem('tankpart', 1); addStackItem('coin', 40); toast('the tank burns — +1 tank part · +40 coins'); }
+    Particles.burst(e.x, e.y + 1.2, e.z, 1.6, [0xffb347, 0xff8830, 0x51484f, 0x9a9aa5], 40, 6);
+    Embers.burst(e.x, e.y + 1, e.z, 1.0, [0xffb347, 0xffdd66], 12, 3);
+    AudioSys.sfx('boom');
+    baseSys.onTankDeath(e);
+    return;
+  }
   if (VEH[e.type]){
     if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
     const kit = { kind: e.type, charge: Math.round((e.charge || 0) / 2), bat: e.bat || null, wrecked: 1 };
@@ -12107,7 +12141,7 @@ function hurtEntity(e, dmg, kx, kz, quiet){
   e.hp -= dmg;
   e.flash = 0.15;
   e.fleeT = 6;
-  if (e.type === 'soldier') baseSys.onHit(e);
+  if (e.type === 'soldier' || (e.type === 'tank' && e.crewed)) baseSys.onHit(e);
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
   if (e.hp <= 0) killEntity(e, !quiet);
@@ -13322,7 +13356,7 @@ const crewSys = {
     killEntity(e, false);
     markSave();
   },
-  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly)); },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly) || (o.type === 'tank' && o.crewed && !o.friendly)); },
   // what it costs to hire them: villagers 60, city folk 120, the mayor 400
   // -- and the mayor only leaves the office for someone the city knows
   hireCost(e, hrec){ return hrec.role === 'mayor' ? 400 : e.ckey ? 120 : this.HIRE_COST; },
@@ -13357,7 +13391,7 @@ const crewSys = {
   // a vehicle in their pack drives it behind you on your trail, and the
   // rest ride with them. Step out and they step out; their car goes back
   // in the pack.
-  SEATS: { car: 2, sportscar: 2, boat: 2, motorboat: 2, plane: 2, hover: 1, bike: 1 },
+  SEATS: { car: 2, sportscar: 2, boat: 2, motorboat: 2, plane: 2, hover: 1, bike: 1, tank: 1 },
   seatOf(v, idx){
     const V = VEH[v.type] || VEH.car, S = V.seat || { seatX: -0.45, seatY: 1.3, seatZ: 0.5 };
     const h = v.heading || 0, lx = idx === 0 ? (S.seatX || -0.45) : -(S.seatX || -0.45), lz = S.seatZ || 0.5;
@@ -17258,8 +17292,7 @@ const baseSys = {
     // the command post: two floors, the vault at the back
     room(f.x - 12, f.z - 13, 12, 8, 12, 1);
     EB(1, f.x - 12, g + 3.9, f.z - 15, 10.8, 0.4, 7);                                  // a mezzanine over the back half
-    const parts = ['tank', 'heli', 'jet'];
-    const vault = chest(f.x - 12, f.z - 17.4, Math.PI, 1.0, [CORE.makeFirearm([5, 6, 8][f.seed % 3]), CORE.makeFirearm(9), { kind: 'coin', count: 300 + ((rng() * 200) | 0) }, { kind: 'diamond', count: 6 }, { kind: 'part', part: parts[Math.floor(f.seed / 16) % 3] }, { kind: 'rounds', count: 200 }, { kind: 'rockets', count: 12 }]);
+    const vault = chest(f.x - 12, f.z - 17.4, Math.PI, 1.0, [CORE.makeFirearm([5, 6, 8][f.seed % 3]), CORE.makeFirearm(9), { kind: 'coin', count: 300 + ((rng() * 200) | 0) }, { kind: 'diamond', count: 6 }, { kind: ['tankpart', 'gunpart', 'jetpart'][Math.floor(f.seed / 16) % 3], count: 1 }, { kind: 'rounds', count: 200 }, { kind: 'rockets', count: 12 }]);
     vault.locked = true; vault.lockKind = 'bkey';
     pnodeSys.add('sign', f.x - 12, g + 0.05, f.z - 6.3, 0, { text: 'COMMAND\nAUTHORISED\nPERSONNEL ONLY' });
     // the helipad: an H in stone on an obsidian disc, for the gunship
@@ -17286,7 +17319,7 @@ const baseSys = {
     for (const f of this.candidatesNear(game.pos.x, game.pos.z, 130)){
       let rec = (game.bases = game.bases || {})[f.key];
       if (!rec){
-        rec = { key: f.key, x: f.x, z: f.z, seed: f.seed, gx: f.gx, gz: f.gz, stamped: false, taken: false, men: this.ROSTER, commanderDead: false, alarm: 0, reinf: null, looted: false };
+        rec = { key: f.key, x: f.x, z: f.z, seed: f.seed, gx: f.gx, gz: f.gz, link: f.link, stamped: false, taken: false, men: this.ROSTER, commanderDead: false, alarm: 0, reinf: null, looted: false, tanks: this.TANKS };
         game.bases[f.key] = rec;
       }
       if (!rec.stamped){
@@ -17355,7 +17388,102 @@ const baseSys = {
     const rec = game.bases && game.bases[e.bkey];
     if (!rec || rec.taken || e.friendly) return;
     e.alert = true;
-    this.raise(rec, 'a soldier was hit');
+    this.raise(rec, e.type === 'tank' ? 'a tank was hit' : 'a soldier was hit');
+  },
+  // ---- the tanks (slice B): two to a base, on the highway, crewed till they die ----
+  TANKS: 2,
+  linkOf(rec){
+    if (!rec.link && rec.key && rec.key[0] === 'g') rec.link = rec.key.slice(1);   // a base from before the tanks
+    if (!rec.link) return null;
+    this._links = this._links || new Map();
+    let L = this._links.get(rec.link);
+    if (L) return L;
+    for (const q of roadSys.linksNear(rec.x, rec.z, 140)) if (q.key === rec.link){ L = q; break; }
+    if (L) this._links.set(rec.link, L);
+    return L || null;
+  },
+  // the road's top at a distance along the link
+  roadY(L, s){ const i = Math.max(0, Math.min(L.segs - 1, Math.floor(s / L.len * L.segs))); return (L.prof[i] + L.prof[i + 1]) / 2 + 0.25; },
+  spawnTank(rec){
+    const L = this.linkOf(rec); if (!L) return null;
+    const s0 = (rec.x - L.sx) * L.ux + (rec.z - L.sz) * L.uz;
+    const s = Math.max(20, Math.min(L.len - 20, s0 + (Math.random() - 0.5) * 120));
+    const x = L.sx + L.ux * s, z = L.sz + L.uz * s;
+    const e = spawnEntity('tank', +x.toFixed(2), +(this.roadY(L, s) + 0.3).toFixed(2), +z.toFixed(2));
+    e.crewed = true; e.bkey = rec.key; e.heading = Math.atan2(-L.ux, -L.uz); e.speed = 0; e.charge = 100; e.s = s; e.dir = Math.random() < 0.5 ? 1 : -1;
+    e.alert = rec.alarm > 0;
+    return e;
+  },
+  // a shell: a bright line, a beat in the air, then a real crater where it
+  // lands -- at the first solid thing on the way, so a wall takes it
+  shell(from, to, r, dmg, byPlayer){
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    const ux = dx / L, uy = dy / L, uz = dz / L;
+    const le = nearEdits([Math.min(from.x, to.x) - 2, Math.min(from.y, to.y) - 2, Math.min(from.z, to.z) - 2, Math.max(from.x, to.x) + 2, Math.max(from.y, to.y) + 2, Math.max(from.z, to.z) + 2]);
+    let hit = L;
+    for (let t = 3; t < L; t += 0.6){ if (CORE.evalSDF(from.x + ux * t, from.y + uy * t, from.z + uz * t, le, game.gen) < 0.1){ hit = t; break; } }
+    const at = { x: from.x + ux * hit, y: from.y + uy * hit, z: from.z + uz * hit };
+    beamFX.add(from.x, from.y, from.z, at.x, at.y, at.z, 0xffc070);
+    Particles.burst(from.x + ux * 3, from.y + uy * 3, from.z + uz * 3, 0.5, [0xffb347, 0x9a9aa5], 10, 2.2);
+    AudioSys.tone({ freq: 90, dur: 0.25, gain: 0.5, type: 'square' }); AudioSys.sfx('shot');
+    setTimeout(() => { if (game.running) explode(at.x, at.y, at.z, r, dmg); }, Math.min(900, 60 + hit * 9));
+    return at;
+  },
+  onTankDeath(e){
+    const rec = game.bases && game.bases[e.bkey];
+    if (!rec) return;
+    rec.tanks = Math.max(0, (rec.tanks == null ? this.TANKS : rec.tanks) - 1);
+    if (!rec.taken && rec.alarm <= 0 && !e.noDrop) this.raise(rec, 'a tank is burning');
+    markSave();
+  },
+  // a crewed tank: patrols the highway by its base; alerted, it comes down
+  // the road to the point nearest you and shells you from there
+  tankTick(e, dt, now, pd){
+    const rec = game.bases && game.bases[e.bkey];
+    const L = rec && this.linkOf(rec);
+    if (!e.mesh){ e.mesh = entMesh('tank', e); game.scene.add(e.mesh); }
+    if (!L){ e.mesh.position.set(e.x, e.y, e.z); return; }
+    if (e.s == null) e.s = (e.x - L.sx) * L.ux + (e.z - L.sz) * L.uz;
+    if (!e.alert && rec.alarm > 0 && !rec.taken) e.alert = true;
+    const s0 = (rec.x - L.sx) * L.ux + (rec.z - L.sz) * L.uz;
+    const P = e.alert && !rec.taken ? crewSys.prey(e, 110) : null;
+    let want;
+    if (P){
+      const sp = (P.x - L.sx) * L.ux + (P.z - L.sz) * L.uz;
+      want = Math.max(20, Math.min(L.len - 20, sp));
+      if (Math.abs(want - e.s) < 30) want = e.s;                 // near enough along the road: hold and fire
+      e.lostT = 0;
+    } else {
+      if (e.alert){ e.lostT = (e.lostT || 0) + dt; if (e.lostT > 25 && rec.alarm <= 0) e.alert = false; }
+      if (e.s > Math.min(L.len - 20, s0 + 150)) e.dir = -1; else if (e.s < Math.max(20, s0 - 150)) e.dir = 1;
+      want = e.s + (e.dir || 1) * 50;
+    }
+    const top = e.alert ? 7 : 4, ds = want - e.s;
+    const target = Math.abs(ds) < 1.5 ? 0 : Math.sign(ds) * top;
+    e.speed = e.speed || 0;
+    e.speed += Math.max(-4 * dt, Math.min(4 * dt, target - e.speed));
+    e.s = Math.max(20, Math.min(L.len - 20, e.s + e.speed * dt));
+    e.x = L.sx + L.ux * e.s; e.z = L.sz + L.uz * e.s;
+    e.y += (this.roadY(L, e.s) + 0.05 - e.y) * Math.min(1, 8 * dt);
+    const fwd = e.speed >= 0 ? 1 : -1;
+    if (Math.abs(e.speed) > 0.3 || e.heading == null) e.heading = Math.atan2(-L.ux * fwd, -L.uz * fwd);
+    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.rotation.set(0, e.heading, 0);
+    const ud = e.mesh.userData;
+    if (P && ud.turret){
+      ud.turret.rotation.y = Math.atan2(-(P.x - e.x), -(P.z - e.z)) - e.heading;
+      e.reload = Math.max(0, (e.reload == null ? 1.5 : e.reload) - dt);
+      const d = Math.hypot(P.x - e.x, P.z - e.z);
+      if (e.reload <= 0 && d < 95 && d > 6){
+        e.reload = 4.2;
+        this.shell({ x: e.x, y: e.y + 2.2, z: e.z }, { x: P.x, y: P.y + 0.8, z: P.z }, 1.8, 40, false);
+        e.shots = (e.shots || 0) + 1;
+      }
+    } else if (ud.turret) ud.turret.rotation.y += (0 - ud.turret.rotation.y) * Math.min(1, 2 * dt);
+    e.flash = Math.max(0, (e.flash || 0) - dt);
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.04 : 1);
+    if ((e.hp || 0) < ENT_DEF.tank.hp * 0.4 && Math.random() < dt * 4) Smoke.burst(e.x, e.y + 2.4, e.z, 0.3, [0x2a2a2e, 0x4a4a4e], 1, 0.4);
   },
   onDeath(e, byPlayer){
     const rec = game.bases && game.bases[e.bkey];
@@ -17368,6 +17496,7 @@ const baseSys = {
   take(rec){
     rec.taken = true; rec.alarm = 0; rec.reinf = 0; rec.men = 6;
     for (const e of [...game.entities]) if (e.type === 'soldier' && e.bkey === rec.key && !e.friendly) killEntity(e, false);
+    for (const e of [...game.entities]) if (e.type === 'tank' && e.crewed && e.bkey === rec.key){ e.noDrop = true; killEntity(e, false); }
     toast('the GARRISON is yours — its soldiers will hold it for you now');
     econSys.note('THE GARRISON ON THE HIGHWAY HAS FALLEN', ['deed', 'siege'], null, true);
     AudioSys.sfx('craft');
@@ -17470,6 +17599,9 @@ const baseSys = {
         const men = mine.filter(e => !e.commander).length;
         if (men < (rec.men == null ? this.ROSTER : rec.men) && rec.posts) this.spawnSoldier(rec, rec.posts[(men + (rec.seed || 0)) % rec.posts.length], this.ARMS[men % this.ARMS.length], false);
         if (!rec.commanderDead && !mine.some(e => e.commander) && rec.cmdPost) this.spawnSoldier(rec, rec.cmdPost, 'magnus', true);
+        // the tanks, on the road
+        const tanks = game.entities.filter(e => e.type === 'tank' && e.crewed && e.bkey === key).length;
+        if (tanks < (rec.tanks == null ? this.TANKS : rec.tanks)) this.spawnTank(rec);
         // taken: the commander down and the last of them gone
         if (rec.commanderDead && (rec.men || 0) <= 0 && !mine.some(e => !e.commander) && pd < 80) this.take(rec);
       } else if (rec.posts){
@@ -21144,6 +21276,7 @@ function updateEntities(dt, now){
     if (e === game.driving) continue;            // driveCar owns it this frame
     if (e.racer){ trackSys.drive(e, dt); continue; }
     if (e.convoy){ crewSys.convoyTick(e, dt); continue; }
+    if (e.type === 'tank' && e.crewed){ baseSys.tankTick(e, dt, now, pd); continue; }
     if (e.ride){ if (!e.ride.veh || !game.entities.includes(e.ride.veh)) e.ride = null; else { if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); } continue; } }
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
@@ -22681,6 +22814,7 @@ function bindInput(){
       if (vent && vent.type === 'villager'){ talkTo(vent); return; }
       if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
       if (vent && VEH[vent.type]){
+        if (vent.crewed){ toast('it is crewed, and they are not getting out for you'); AudioSys.sfx('deny'); return; }
         if (game.keys['KeyC']){
           // crouch-grab folds it back into a kit, charge intact
           const i2 = game.slots.findIndex(sl => !sl);
@@ -23117,6 +23251,7 @@ function unscope(){
 // ---------- the electric car: fast travel that drinks from your grid ----------
 function enterCar(e){
   if (game.driving) return;
+  if (e.crewed){ toast('it is crewed'); return; }
   if (e.racer){ toast('that one is racing'); return; }
   if (e.convoy){ toast('that is ' + crewSys.nameOf(e.convoy) + '\u2019s'); return; }
   if (netSys.guest && e.local){ toast('one moment — the world is still taking it'); return; }
@@ -23333,6 +23468,18 @@ function driveCar(dt){
     }
     if (e.trickT > 0){ e.trickT -= dt; if (e.trickT <= 0) e.trickMsg = ''; }
   }
+  // the tank's gun: left click sends a shell where you look, a crater where it lands
+  if (V.cannon){
+    e.fireT = Math.max(0, (e.fireT || 0) - dt);
+    if (canMove && game.mouseL && e.fireT <= 0 && !dead){
+      e.fireT = 2.6;
+      const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+      const o = { x: e.x, y: e.y + 2.2, z: e.z };
+      baseSys.shell(o, { x: o.x + dir.x * 90, y: o.y + dir.y * 90, z: o.z + dir.z * 90 }, 1.8, 40, true);
+      e.charge = Math.max(0, (e.charge || 0) - 0.4);
+      e.shots = (e.shots || 0) + 1;
+    }
+  }
   // the motor hums with speed
   AudioSys.setHum(Math.abs(e.speed) > 0.5, 1, Math.min(1, Math.abs(e.speed) / V.top));
   // the driver rides along (a kerb climb eases up over a few frames)
@@ -23344,6 +23491,7 @@ function driveCar(dt){
     e.mesh.position.set(e.x, vy, e.z);
     if (V.air) e.mesh.rotation.set(e.tPitch || 0, e.heading + (e.tYaw || 0), (e.tRoll || 0) + (e.lean || 0));
     else e.mesh.rotation.y = e.heading;
+    if (V.cannon && e.mesh.userData.turret) e.mesh.userData.turret.rotation.y = game.yaw - e.heading;   // the turret follows your look
   }
   // the camera is IN the vehicle: the seat, or a chase cam on F5
   vehicleCamera(e.x, vy, e.z, e.heading, dt, V.seat);
@@ -26135,7 +26283,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind === 'part' ? 'part' + it.part : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -26213,10 +26361,12 @@ function itemIconURL(it){
   } else if (it.kind === 'bkey'){
     c.fillStyle = '#8a9a4a'; c.fillRect(3, 6, 6, 5); c.fillRect(9, 8, 5, 2);   // an olive key
     c.fillStyle = '#556b3a'; c.fillRect(5, 8, 2, 2); c.fillRect(12, 10, 1, 2); c.fillRect(10, 10, 1, 1);
-  } else if (it.kind === 'part'){
-    if (it.part === 'tank'){ c.fillStyle = '#4f5a3a'; c.fillRect(2, 8, 12, 5); c.fillStyle = '#6a7a4a'; c.fillRect(5, 5, 6, 3); c.fillStyle = '#2a2a30'; c.fillRect(10, 6, 5, 1); c.fillRect(3, 13, 10, 1); }
-    else if (it.part === 'heli'){ c.fillStyle = '#4a5a6a'; c.fillRect(4, 7, 7, 5); c.fillRect(10, 8, 4, 2); c.fillStyle = '#2a2a30'; c.fillRect(1, 5, 13, 1); c.fillRect(7, 5, 1, 2); }
-    else { c.fillStyle = '#7a7a86'; c.fillRect(3, 7, 10, 3); c.fillRect(6, 4, 2, 9); c.fillStyle = '#c0c0cc'; c.fillRect(12, 7, 3, 3); c.fillStyle = '#ff7a30'; c.fillRect(1, 8, 2, 1); }
+  } else if (it.kind === 'tankpart'){
+    c.fillStyle = '#4f5a3a'; c.fillRect(2, 8, 12, 5); c.fillStyle = '#6a7a4a'; c.fillRect(5, 5, 6, 3); c.fillStyle = '#2a2a30'; c.fillRect(10, 6, 5, 1); c.fillRect(3, 13, 10, 1);
+  } else if (it.kind === 'gunpart'){
+    c.fillStyle = '#4a5a6a'; c.fillRect(4, 7, 7, 5); c.fillRect(10, 8, 4, 2); c.fillStyle = '#2a2a30'; c.fillRect(1, 5, 13, 1); c.fillRect(7, 5, 1, 2);
+  } else if (it.kind === 'jetpart'){
+    c.fillStyle = '#7a7a86'; c.fillRect(3, 7, 10, 3); c.fillRect(6, 4, 2, 9); c.fillStyle = '#c0c0cc'; c.fillRect(12, 7, 3, 3); c.fillStyle = '#ff7a30'; c.fillRect(1, 8, 2, 1);
   } else if (it.kind === 'khammer'){
     c.fillStyle = '#5a4a3a'; c.fillRect(7, 6, 2, 9);                         // the haft
     c.fillStyle = '#6f6f78'; c.fillRect(3, 1, 10, 6);                        // the head
@@ -26240,6 +26390,10 @@ function itemIconURL(it){
     c.fillStyle = '#9fd4e8'; c.fillRect(5, 6, 6, 2);
     c.fillStyle = '#35d1c0'; c.fillRect(2, 10, 12, 1);
     c.fillStyle = '#23232a'; c.fillRect(3, 11, 2, 2); c.fillRect(11, 11, 2, 2);
+  } else if (it.kind === 'tank'){
+    c.fillStyle = '#4f5a3a'; c.fillRect(2, 8, 12, 4); c.fillRect(5, 5, 6, 3);
+    c.fillStyle = '#2a2a30'; c.fillRect(10, 6, 5, 1); c.fillRect(1, 12, 14, 2);
+    c.fillStyle = '#3a3a40'; c.fillRect(3, 12, 2, 1); c.fillRect(7, 12, 2, 1); c.fillRect(11, 12, 2, 1);
   } else if (it.kind === 'sportscar'){
     c.fillStyle = '#d8302c'; c.fillRect(1, 9, 14, 3); c.fillRect(4, 7, 8, 2);
     c.fillStyle = '#8fc8e0'; c.fillRect(6, 7, 4, 1);
@@ -26871,7 +27025,9 @@ function itemLabel(it){
   if (it.kind === 'wfist') return 'warden fist';
   if (it.kind === 'khammer') return 'knocker\'s hammer';
   if (it.kind === 'bkey') return 'commander\'s key';
-  if (it.kind === 'part') return (it.part === 'heli' ? 'gunship' : it.part || 'vehicle') + ' part';
+  if (it.kind === 'tankpart') return 'tank part';
+  if (it.kind === 'gunpart') return 'gunship part';
+  if (it.kind === 'jetpart') return 'jet part';
   if (it.kind === 'mheart') return 'magma heart';
   if (it.kind === 'sigil') return 'architect sigil';
   if (it.kind === 'aseal') return "architect's seal";
@@ -26961,6 +27117,7 @@ function itemLabel(it){
   if (it.kind === 'aetherore') return 'aether ore';
   if (it.kind === 'aetheringot') return 'aether ingot';
   if (it.kind === 'plane') return (it.wrecked ? 'wrecked ' : '') + 'cargo plane';
+  if (it.kind === 'tank') return (it.wrecked ? 'wrecked ' : '') + 'tank';
   if (it.kind === 'hover') return (it.wrecked ? 'wrecked ' : '') + 'hoverbike';
   if (it.kind === 'cannon') return 'launch cannon';
   if (it.kind === 'turret') return 'wall turret';
@@ -27198,7 +27355,7 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -27289,6 +27446,7 @@ function catalogEntries(){
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
+  out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
   for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod', 'grayling', 'pike']) out.push({ kind: 'fish', fish: f, count: 8 });
   out.push({ kind: 'coral', count: 16 }); out.push({ kind: 'kelp', count: 16 });
@@ -28106,8 +28264,9 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">warden fist</div><div class="t2">the Warden\'s knuckle — while it rides in your pack, swords hit twice as hard and punches land like hammers</div>';
   } else if (it.kind === 'bkey'){
     html = '<div class="t1">commander\'s key ×' + it.count + '</div><div class="t2">opens a garrison\'s vault — top guns, gold, and one part of a war machine</div>';
-  } else if (it.kind === 'part'){
-    html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">one of three — every garrison\'s vault holds one. collect them all and build the ' + (it.part === 'heli' ? 'gunship' : it.part) + ' (a later build)</div>';
+  } else if (it.kind === 'tankpart' || it.kind === 'gunpart' || it.kind === 'jetpart'){
+    html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">one of three — every garrison\'s vault holds one, and every garrison\'s tank leaves one. ' +
+      (it.kind === 'tankpart' ? 'three build a TANK at a station' : it.kind === 'gunpart' ? 'three build the gunship (a later build)' : 'three build the jet (a later build)') + '</div>';
   } else if (it.kind === 'khammer'){
     html = '<div class="t1">knocker\'s hammer</div><div class="t2">what the sound was, in your hands — left click slams the ground: a crater three metres across where it lands, its rock in your pack, and everything near it thrown</div>';
   } else if (it.kind === 'tdrone'){
@@ -28120,6 +28279,7 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + (VEH[it.kind].paddle ? '' : ' · ' + Math.round(it.charge || 0) + '% charge') + '</div><div class="t2">' +
       (it.wrecked ? 'wrecked — slot it into a REPAIR BENCH with ' + VEH[it.kind].repair + ' iron ingots'
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
+       : it.kind === 'tank' ? 'left click to deploy · right click to mount · W/S A/D drive · LEFT CLICK fires the gun: a shell, a real crater where it lands · it climbs a kerb and a half'
        : it.kind === 'plane' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 15 m/s to take off · A/D bank · C nose down · land slow, level and gentle or it explodes'
        : it.kind === 'hover' ? 'left click to deploy · right click to ride · hovers two metres over anything, water included · drinks its battery'
        : VEH[it.kind].paddle ? 'left click to deploy on the water · right click to row · no battery, just you'
@@ -29314,7 +29474,8 @@ function buildSaveData(){
         : [e.type, e.x, e.y, e.z, e.hp,
                  e.charge != null ? +(+e.charge).toFixed(1) : 0,
                  e.heading != null ? +(+e.heading).toFixed(2) : 0,
-                 VEH[e.type] && e.bat ? e.bat : 0]),
+                 VEH[e.type] && e.bat ? e.bat : 0,
+                 e.crewed && e.bkey ? e.bkey : 0]),                      // a garrison's tank keeps its crew and its base
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -29411,6 +29572,7 @@ function startWorldData(id, data){
     if (r[6]) e.heading = r[6];
     if (r[0] === 'drop'){ e.item = r[7] || null; e.ttl = r[8] || 1; }
     if (VEH[r[0]] && r[7]) e.bat = r[7];
+    if (VEH[r[0]] && r[8]){ e.crewed = true; e.bkey = r[8]; }
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
