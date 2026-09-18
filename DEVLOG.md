@@ -2,6 +2,52 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 61 — THE GARRISON B: the tanks (2026-09-18)
+
+The second slice: the tanks on the road, and one of your own.
+
+- **Two tanks to a base**, on the highway beside it, crewed till they
+  die. At peace they patrol a hundred and fifty metres either side of
+  the base's foot on the road, four metres a second, turning at the
+  ends. On the alarm (or when hit, or when a soldier raises it) they
+  come down the road to the point nearest you and shell you from
+  there: a shell every four seconds, a bright line, a beat in the
+  air, then a real crater a metre and a half deep where it lands --
+  at the first solid thing on the way, so a wall you hide behind
+  takes it and loses a chunk. They hold within ninety-five metres.
+  Right click refuses to board them and the crouch-grab refuses to
+  pack them; the grabber gun does not take them either. Turrets, crew
+  and city guards fight them. Under forty percent they smoke.
+- **A tank burns** where it stands (no wreck to fold into a kit): one
+  tank part and forty coins are still good, the base's tank roster
+  drops, and if the base was quiet the burning raises it. A taken
+  base's tanks burn without parts.
+- **The parts are stackable kinds now** -- tank part, gunship part,
+  jet part -- so recipes can count them; the vault gives one, and
+  every burnt tank gives one. Old saves with the loose part item lose
+  it (there were none).
+- **The tank kit**: three tank parts, twenty-four iron ingots, six
+  ruby, ten wire at a station; in the creative catalog with the parts.
+  Deploy it like any kit and mount it: eight and a half metres a
+  second on the flat, thirty on the gauge, it climbs a kerb and a half,
+  and the turret follows your look. **Left click fires the gun** --
+  the same shell the garrison's tanks fire, a crater where you look,
+  two and a half seconds between shots, a little charge each.
+- Saves: a garrison's tank keeps its crew and its base across a
+  reload (the entity row carries the base key); a base from Build 60
+  finds its road again from its key.
+- Tests: `b61test.js` (a base on a 2.1 km link with two tanks on the
+  road at the road's height, turrets on their meshes, both moving
+  twenty-four metres in six seconds, hostile and not alert; boarding
+  refused and the grabber refusing; the alarm alerting both, four
+  shells in eight seconds at the player sixty metres down the road,
+  four craters, the turret turned; a tank killed giving a part and
+  dropping the roster to one, parts stacking, the vault's part a kind;
+  the recipe's costs, a kit deployed, mounted, driven to full speed,
+  one shot fired with the reload set and a crater after it, parked;
+  the save keeping the crewed tank with its base and the link); smoke,
+  b22, b23, b34, b32, b38, b44–b60 regressions.
+
 ## Build 60 — THE GARRISON A: the base (2026-09-18)
 
 Austin's, with my radar. The first slice: the base, the soldiers, the
