@@ -288,7 +288,7 @@ Slotted between the city builds as the mood takes me:
      stamped, so they never pop; garrisons and forts on the map; the
      LOD ground that does not match the mesh under your feet (the snow
      mountain).
-  4. **Build 66 -- CITIES II.** Smaller cities; one tower, the one you
+  4. **Build 66 -- CITIES II** (DONE, for cities laid from now on). Smaller cities; one tower, the one you
      can buy; every keeper (mayor, cartographer, exchange, press,
      electrician, casino, and the rest) in a building of their own on
      their own lot; the centre unblocked.

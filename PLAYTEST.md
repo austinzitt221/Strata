@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 66 — CITIES II
+- [ ] A NEW world (old cities keep their old plan): walk a city. One
+      tower, ten buildings with signs, the pit and the casino, a clear
+      plaza. Is it still a city, or has it become a village with a
+      tower? Does it read from the highway at range?
+- [ ] Trade with every keeper in their own building: mayor, press,
+      cartographer, exchange, bank, broker, arms, toolsmith, electrician,
+      grocer. Anyone missing, anyone standing outside their own door?
+- [ ] Buy the tower with a deed. Is it the tower?
+- [ ] A siege: do the raiders go for the halls as well as the tower?
+
 ## Build 65 — THE FAR FIELD III
 - [ ] Fly high in creative and look around: villages, forts, pyramids and
       garrisons should stand at range now, before you have ever been

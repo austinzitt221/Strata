@@ -15884,7 +15884,7 @@ const siegeSys = {
   wallPoint(rec, x, z){
     let best = null, bd = 1e9;
     for (const t of rec.towers || []){
-      if (t.kind !== 'tower') continue;
+      if (t.kind !== 'tower' && t.kind !== 'hall') continue;
       const tx = rec.x + t.bx * 36, tz = rec.z + t.bz * 36, h = t.w / 2;
       const cx = Math.max(tx - h, Math.min(tx + h, x)), cz = Math.max(tz - h, Math.min(tz + h, z));
       // a point on the face, not inside
@@ -20915,6 +20915,62 @@ const citySys = {
     rec.counters = 1;
     pnodeSys.rebuild();
   },
+  // CITIES II: a keeper's own building on its own block, its door on the
+  // avenue toward the plaza. Civic halls (the town hall, the Herald, the
+  // cartographer, the exchange, the bank) get a counter and their keeper
+  // behind it; a shop gets the same room the tower shopfronts had, which
+  // stampCounters furnishes with a counter and wares.
+  stampHall(c, rec, g, tx, tz, t, fx, fz){
+    const MAT = CORE.MAT;
+    const EB = (op, x, y, z, sx, sy, sz, mat, nl) => {
+      const e = CORE.makeEdit(op, 1, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), sx, mat || 0, 0);
+      e.sy = sy; e.sz = sz; if (nl) e.noLod = 1; applyEdit(e);
+    };
+    const yawTo = (ax, az) => Math.atan2(-ax, -az);
+    const role = t.role, civic = !!(role === 'mayor' || role === 'press' || role === 'chart' || role === 'stock' || role === 'banker');
+    const w = civic ? 14 : 12, d = civic ? 11 : 12, H = 5.0, fy = g + 0.35;
+    const mat = civic ? MAT.STONEBRICK : t.mat;
+    const sx = fx ? d : w, sz = fx ? w : d;
+    const px = fz, pz = -fx;                                  // across the door axis
+    EB(1, tx, g + H / 2, tz, sx, H, sz, mat);
+    EB(0, tx, fy + 4.0 / 2, tz, sx - 1.6, 4.0, sz - 1.6, 0, 1);
+    const dx = tx + fx * (d / 2), dz = tz + fz * (d / 2);   // the door, on the wall toward the plaza
+    EB(0, dx, g + 1.9, dz, fx ? 2.0 : 2.2, 3.0, fz ? 2.0 : 2.2, 0, 1);
+    for (const sgn of [-1, 1]) EB(0, dx + px * 3.6 * sgn, g + 2.6, dz + pz * 3.6 * sgn, fx ? 1.0 : 1.6, 1.2, fz ? 1.0 : 1.6, 0, 1);
+    for (const sgn of [-1, 1]) EB(0, tx - fx * (d / 2) + px * 3.0 * sgn, g + 2.6, tz - fz * (d / 2) + pz * 3.0 * sgn, fx ? 1.0 : 1.6, 1.2, fz ? 1.0 : 1.6, 0, 1);
+    EB(1, tx, g + H + 0.2, tz, sx + 1, 0.5, sz + 1, mat);
+    game.torches.push([tx - fx * (d / 2 - 1.4) + px * (w / 2 - 1.4), fy + 1.9, tz - fz * (d / 2 - 1.4) + pz * (w / 2 - 1.4)], [tx - fx * (d / 2 - 1.4) - px * (w / 2 - 1.4), fy + 1.9, tz - fz * (d / 2 - 1.4) - pz * (w / 2 - 1.4)]);
+    game.torches.push([dx + fx * 2.0 + px * 3.0, g + 0.4, dz + fz * 2.0 + pz * 3.0]);
+    const name = rec.name || 'THE CITY';
+    const SEEDK = { mayor: [53, 7], press: [89, 17], chart: [211, 37], stock: [97, 17], banker: [151, 23], broker: [37, 0], arms: [37, 101], tool: [37, 202], spark: [37, 303], food: [37, 404] };
+    const sk = SEEDK[role] || [37, 0];
+    const vname = villageSys.nameFor((Math.imul(c.seed, sk[0]) + sk[1]) >>> 0);
+    if (civic){
+      const text = role === 'mayor' ? 'TOWN HALL\n' + name + '\n' + vname + ', mayor'
+                 : role === 'press' ? 'THE HERALD\n' + name + '\n2c a paper'
+                 : role === 'chart' ? 'MAPS\nthe cartographer\nsheets \u00b7 surveys'
+                 : role === 'stock' ? 'THE EXCHANGE\n' + name + '\nshares \u00b7 dividends'
+                 : 'THE BANK\n' + name + '\ndeposits \u00b7 loans';
+      pnodeSys.add('sign', dx + fx * 0.9 + px * 2.6, g, dz + fz * 0.9 + pz * 2.6, yawTo(fx, fz), { text });
+      pnodeSys.add('counter', tx - fx * 0.6, fy, tz - fz * 0.6, 0, { len: 4 });
+      game.pnodes[game.pnodes.length - 1].yaw = yawTo(-fx, -fz);
+      if (role === 'mayor' || role === 'banker'){
+        const box = pnodeSys.addQuiet('chest', tx - fx * 1.8 + px * 3.6, fy + 0.6, tz - fz * 1.8 + pz * 3.6, Math.PI / 2, { sc: 0.6 });
+        box.inv = new Array(chestSlots(0.6)).fill(null);
+        if (role === 'mayor') box.inv[0] = { kind: 'coin', count: 40 + (c.seed % 30) };
+      }
+      const yaw = yawTo(fx, fz);
+      rec.houses.push({ x: +dx.toFixed(1), z: +dz.toFixed(1), role, face: [fx, fz], w: sx, d: sz, gy: g, rep: 0, vname, hall: 1,
+                        post: { x: +(tx - fx * 1.8).toFixed(2), z: +(tz - fz * 1.8).toFixed(2), yaw } });
+      if (role === 'stock') for (let i = 0; i < 3; i++)
+        rec.houses.push({ x: +dx.toFixed(1), z: +dz.toFixed(1), role: 'floor', face: [fx, fz], w: 1, d: 1, gy: g, rep: 0, hall: 1,
+          vname: villageSys.nameFor((Math.imul(c.seed, 113) + i * 31) >>> 0),
+          post: { x: +(tx + fx * 1.2 + px * (i - 1) * 2.6).toFixed(2), z: +(tz + fz * 1.2 + pz * (i - 1) * 2.6).toFixed(2), yaw }, roam: 2.0 });
+    } else {
+      // the shop: stampCounters lays the counter, the wares and the sign from the door
+      rec.houses.push({ x: +(tx + fx * (w / 2 + 2.2)).toFixed(1), z: +(tz + fz * (w / 2 + 2.2)).toFixed(1), role, face: [fx, fz], w, d: w, gy: g, rep: 0, vname, hall: 1 });
+    }
+  },
   // THE CASINO (Build 50): a dark hall with a lit marquee over the door,
   // three tables inside (cards, dice, the wheel), a croupier at a
   // counter at the back, torches in the corners
@@ -21060,7 +21116,59 @@ const citySys = {
     if (bx > 0) return 'industrial';
     return bz < 0 ? 'industrial' : 'old';
   },
-  plan(c){
+  // CITIES II (Build 66): a city laid from now on is five blocks a side
+  // with ONE tower (the one a deed buys) and every keeper in a building of
+  // their own on their own lot -- the town hall, the Herald, the
+  // cartographer, the exchange and the bank on the ring round the plaza
+  // with the pit and the casino, the five shops on the ring outside. A city
+  // laid before keeps the plan it was laid with.
+  plan(c, rec){
+    // a city that has its blocks laid (rec.towers) and is not marked v2 was
+    // laid by the old plan; the stamp sets rec.towers after it reads the plan
+    const R = rec || (game.cities || {})['c' + c.key];
+    if (R && R.towers && !R.v2) return this.planV1(c);
+    return this.planV2(c);
+  },
+  HALL_ROLE: { townhall: 'mayor', press: 'press', chart: 'chart', exchange: 'stock', bank: 'banker' },
+  planV2(c){
+    const rng = CORE.mulberry32(c.seed ^ 0x7157);
+    rng();
+    const n = 5, half = 2;
+    const harbor = this.harborAt(c);
+    const out = [];
+    for (let bz = -half; bz <= half; bz++) for (let bx = -half; bx <= half; bx++){
+      if (bx === 0 && bz === 0) continue;                // central plaza
+      const district = this.districtOf(bx, bz, n, harbor);
+      const D = this.DISTRICT[district];
+      const kr = rng();
+      const w = D.w[(rng() * D.w.length) | 0];
+      const floors = D.floors[0] + ((rng() * (D.floors[1] - D.floors[0] + 1)) | 0);
+      const mat = CORE.MAT[D.mats[(rng() * D.mats.length) | 0]];
+      rng();
+      // no towers here: what would have been one is a park or a lot
+      const kind = kr < D.kinds[0] ? (kr < D.kinds[0] * 0.5 ? 'lot' : 'park') : kr < D.kinds[1] ? 'park' : kr < D.kinds[2] ? 'market' : 'lot';
+      out.push({ bx, bz, w, floors, mat, shop: false, kind, district });
+    }
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--){ const j = (rng() * (i + 1)) | 0; const t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
+    // the ring round the plaza: the tower, five civic halls, the pit, the casino
+    const ring1 = shuffle(out.filter(b => Math.max(Math.abs(b.bx), Math.abs(b.bz)) === 1));
+    const civic = ['tower', 'townhall', 'press', 'chart', 'exchange', 'bank', 'pit', 'casino'];
+    civic.forEach((k, i) => {
+      const b = ring1[i];
+      if (k === 'tower'){ b.kind = 'tower'; b.w = Math.max(14, b.w); b.floors = 9 + ((rng() * 6) | 0); }
+      else if (k === 'pit' || k === 'casino') b.kind = k;
+      else { b.kind = 'hall'; b.role = this.HALL_ROLE[k]; b.w = 14; b.floors = 1; }
+    });
+    // the ring outside: the five shops, each in its district if it has one
+    const ring2 = shuffle(out.filter(b => Math.max(Math.abs(b.bx), Math.abs(b.bz)) === 2));
+    const roleDist = { broker: 'old', food: 'old', arms: 'industrial', tool: 'industrial', spark: harbor ? 'harbor' : 'residential' };
+    for (const role of ['broker', 'arms', 'tool', 'spark', 'food']){
+      const b = ring2.find(q => q.kind !== 'hall' && q.district === roleDist[role]) || ring2.find(q => q.kind !== 'hall');
+      if (b){ b.kind = 'hall'; b.role = role; b.w = 12; b.floors = 1; }
+    }
+    return { n, blocks: out, harbor, v2: 1 };
+  },
+  planV1(c){
     const rng = CORE.mulberry32(c.seed ^ 0x7157);
     const roll = rng();
     const n = roll < 0.15 ? 3 : roll < 0.45 ? 5 : 7;     // blocks per side
@@ -21120,12 +21228,14 @@ const citySys = {
     }
     const T = PLAN.blocks;
     rec.towers = T;
+    if (PLAN.v2){ rec.v2 = 1; rec.houses = rec.houses || []; }
     let shops = 0;
     const S = 4.0;                           // story height: real headroom
     for (const t of T){
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
       const fz = fx === 0 ? -Math.sign(t.bz) : 0;
+      if (t.kind === 'hall'){ this.stampHall(c, rec, g, tx, tz, t, fx, fz); continue; }
       if (t.kind === 'pit'){ this.stampPit(c, rec, g, tx, tz, t); continue; }
       if (t.kind === 'casino'){ this.stampCasino(c, rec, g, tx, tz, t); continue; }
       if (t.kind === 'park'){
@@ -21260,8 +21370,8 @@ const citySys = {
       const pick = pool.length ? pool[0] : (all.find(i => !used.has(i)) != null ? all.find(i => !used.has(i)) : (all[0] || 0));
       used.add(pick); idxs.push(pick);
     }
-    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter' || h.role === 'croupier');   // the pit's and the casino's people are already on the list
-    for (let k = 0; k < 5; k++){
+    rec.houses = (rec.houses || []).filter(h => h.role === 'promoter' || h.role === 'croupier' || h.hall);   // the pit's and the casino's people (and, since Build 66, the halls') are already on the list
+    if (!PLAN.v2) for (let k = 0; k < 5; k++){
       const t = T[idxs[k]];
       const tx = c.x + t.bx * P, tz = c.z + t.bz * P;
       const fx = t.bx !== 0 ? -Math.sign(t.bx) : 0;
@@ -21272,9 +21382,10 @@ const citySys = {
         vname: villageSys.nameFor((Math.imul(c.seed, 37) + k * 101) >>> 0),
       });
     }
-    rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
+    if (!PLAN.v2) rec.houses.push({ x: c.x + 5.5, z: c.z + 5.5, role: 'mayor', face: [1, 0],
                       w: 6, d: 6, gy: g, rep: 0,
                       vname: villageSys.nameFor((Math.imul(c.seed, 53) + 7) >>> 0) });
+    if (PLAN.v2){ rec.arc7 = rec.arc8 = rec.arc9 = rec.arc10 = rec.arc12 = 1; }   // the plaza halls of the old plan: the halls have blocks of their own now
     this.stampCounters(c, rec);
     for (const ox of offs) for (const oz of offs)
       game.torches.push([c.x + ox + 4.6, g + 0.4, c.z + oz + 4.6]);
@@ -30358,6 +30469,11 @@ const farShapeSys = {
           const H = t.floors * 4.0 + 1.8;
           out.push({ x: tx, y: g + H / 2, z: tz, sx: t.w, sy: H, sz: t.w, yaw: 0, mat: t.mat });
           out.push({ x: tx, y: g + H + 0.2, z: tz, sx: t.w + 1.0, sy: 0.5, sz: t.w + 1.0, yaw: 0, mat: t.mat });
+        } else if (t.kind === 'hall'){
+          const civic = t.role === 'mayor' || t.role === 'press' || t.role === 'chart' || t.role === 'stock' || t.role === 'banker';
+          const w = civic ? 14 : 12, d = civic ? 11 : 12, fx = t.bx !== 0 ? 1 : 0;
+          out.push({ x: tx, y: g + 2.5, z: tz, sx: fx ? d : w, sy: 5.0, sz: fx ? w : d, yaw: 0, mat: civic ? M.STONEBRICK : t.mat });
+          out.push({ x: tx, y: g + 5.45, z: tz, sx: (fx ? d : w) + 1, sy: 0.5, sz: (fx ? w : d) + 1, yaw: 0, mat: civic ? M.STONEBRICK : t.mat });
         } else if (t.kind === 'market'){
           out.push({ x: tx, y: g + 2.8, z: tz, sx: 20, sy: 5.6, sz: 14, yaw: 0, mat: t.mat });
           out.push({ x: tx, y: g + 5.8, z: tz, sx: 21, sy: 0.5, sz: 15, yaw: 0, mat: t.mat });
@@ -32166,7 +32282,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

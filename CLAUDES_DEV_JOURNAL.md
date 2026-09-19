@@ -1448,6 +1448,19 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, late — cities, his way
+
+I built the city change the way Austin asked: one tower, everyone in
+their own building on their own lot, the plaza clear. It took a
+versioned planner (old cities keep their block list and their plan;
+new ones get the new one) and a hall stamp that reuses the shopfront
+furnishing, and the test proves the plaza has nothing tall in it but
+the obelisk. Standing on the casino roof looking across the plaza it
+reads well: the obelisk, the benches, the one tower, low halls with
+signs. From the highway a city is a single tower now. I will see it
+in his playtest before I decide whether the skyline wants something
+back.
+
 ## 2026-09-19, night — set-pieces at range
 
 The pop-in was the far skin's honesty: it draws edits, and an unvisited

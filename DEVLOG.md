@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 66 — CITIES II: a building for everyone (2026-09-19)
+
+Fourth build from the Build 62 playtest: the cities, made his way.
+
+- **Five blocks a side, one tower.** A city laid from now on is a
+  five-by-five grid round the plaza (the old plan rolled three, five or
+  seven and filled the grid with towers: sixteen to thirty-two of
+  them). There is one tower now, nine to fourteen floors, on the ring
+  round the plaza: the one a deed buys. Everything else is low.
+- **Every keeper in a building of their own, on their own lot.** The
+  ring round the plaza holds the tower, the town hall, the Herald, the
+  cartographer (his own hall now, not a desk at the back of the
+  Herald), the exchange (with its three floor brokers), the bank, the
+  pit and the casino. The ring outside holds the five shops (broker,
+  arms, toolsmith, electrician, grocer), each in its district where the
+  city has one. A hall is a fourteen-by-eleven stonebrick building
+  (shops twelve square, in their district's material) with its door on
+  the avenue toward the plaza, windows, a roof slab, torches, a sign by
+  the door, a counter and the keeper behind it; the shops are furnished
+  exactly as the tower shopfronts were (counter, three wares on
+  pedestals, the sign). The town hall keeps the strongbox, the bank its
+  vault.
+- **The plaza is clear.** The four halls that stood on the plaza's
+  flanks (and blocked the avenues) are gone from new cities; the
+  obelisk, the benches, the corner torches and the district signs
+  remain. The remaining blocks are parks, markets and lots with the
+  district flavour they had (smokestacks, dock yards).
+- **Old cities keep their plan.** A city laid before this build has its
+  block list saved; the planner reads that and keeps the old layout,
+  halls on the plaza and all. Only cities laid from now on get the new
+  plan. Halls count as walls to a siege and stand in the far mesh like
+  the tower does.
+- On the skyline: a city reads as one tower over a low town now. I
+  said in the journal I might keep more of the skyline; I did not, and
+  will look at it in play before deciding.
+
 ## Build 65 — THE FAR FIELD III: set-pieces at range (2026-09-19)
 
 Third fix build from the Build 62 playtest.
