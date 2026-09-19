@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 73 — SMALL THINGS
+- [ ] Look at the HUD's position line in a few biomes: do the names
+      sound like the places? Any that are funny for the wrong reason?
+- [ ] Open the map after a long walk. Are the labels where you would
+      put them? Are there too many, or too few?
+- [ ] Walk from grass onto snow, onto planks, onto mud, onto stone with
+      the sound up. Can you tell the ground with your eyes shut?
+
 ## Build 72 — BIOMES D
 - [ ] Walk each new biome and look down: dry grass, permafrost, leaf
       litter, mud. Do the grounds sell the place?

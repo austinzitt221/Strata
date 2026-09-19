@@ -17,7 +17,7 @@ const { chromium } = require('playwright');
     const S = C.RECIPES.filter(r => r.kind === 'stick').length;
     const icons = [20, 21, 22, 23, 24].map(m => (api.itemIconURL({ kind: 'mat', mat: m, count: 1 }) || '').length > 100);
     const u = g.terrainMat.uniforms;
-    return { nmat: C.NMAT, names: C.MAT_NAME.slice(20), planksRecipes: R, stickRecipes: S, icons, logMats: C.LOG_MATS, atlas: u.uNMat.value, logEnds: [u.uLogEnd.value, u.uLogEnd2.value, u.uLogEnd3.value], hard: C.HARDNESS.length };
+    return { nmat: C.NMAT, names: C.MAT_NAME.slice(20), planksRecipes: R, stickRecipes: S, icons, logMats: C.LOG_MATS, atlas: u.uNMat.value, logEnds: u.uLogEnds.value.slice(0, 3), hard: C.HARDNESS.length };
   });
   console.log('1. materials :', JSON.stringify(r1));
   // 2. the jungle: dense tall trees, jungle wood when they fall

@@ -308,8 +308,8 @@ Small things I want, slotted wherever a session has room:
   chimney smoke at dusk.
 - **Shadow cascades** — a sharp near shadow map and a wide far one, if
   the HORIZON playtest says the near shadows read soft.
-- **Place names on the map** — regions named in their archetype's
-  voice, alongside the river names.
+- **Place names on the map** (DONE, Build 73) — regions named in their
+  archetype's voice, on the HUD and the map.
 - **The lighting line in the skin** — measured and fixed in Build
   33.1 (the near field's occlusion sampler reads a scaled SDF and sits
   at 0.70 on open ground; the skin now carries the same curve). Left
@@ -320,8 +320,8 @@ Small things I want, slotted wherever a session has room:
 - **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
   about 40 flying in creative or loading a city the first time. Worth
   a profiling pass once the queue above is shorter.
-- **Footsteps that know the material**; birds along rivers; fish in the
-  shallows.
+- **Footsteps that know the material** (DONE, Build 73); birds along
+  rivers; fish in the shallows.
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube

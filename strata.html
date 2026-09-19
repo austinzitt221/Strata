@@ -1012,6 +1012,12 @@ function makeGen(seed){
     return { a: s1, b: s2 || s1, w };
   }
   function archAt(x, z){ return regionQuery(x, z).a.arch; }
+  // the region under a point: its site, its archetype and a seed, for names (Build 73)
+  function regionAt(x, z){
+    const S = regionQuery(x, z).a;
+    const kx = Math.round(S.sx), kz = Math.round(S.sz);
+    return { sx: S.sx, sz: S.sz, arch: S.arch, key: kx + ',' + kz, seed: hashInt(sRg ^ hashInt(Math.imul(kx, 73856093)) ^ hashInt(Math.imul(kz, 19349663))) };
+  }
   function lmAt(x, z){
     return lmCell(Math.floor(x / LM_CELL), Math.floor(z / LM_CELL));
   }
@@ -2168,7 +2174,7 @@ function makeGen(seed){
     return { x, z, y: height(x, z), seed: h0, key: cx + ',' + cz };
   }
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, fallsNear, waterYAt,
-           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, spawn: findSpawn };
+           caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, regionAt, spawn: findSpawn };
 }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
@@ -7702,8 +7708,17 @@ const AudioSys = {
       case 'hurt': this.tone({ freq: 110, dur: 0.2, gain: 0.2, type: 'sawtooth' }); break;
       case 'eat': this.tone({ freq: 340, dur: 0.06, gain: 0.1, type: 'sine' }); this.tone({ freq: 260, dur: 0.09, gain: 0.1, type: 'sine' }); break;
       case 'step': {
-        const soft = arg === CORE.MAT.GRASS || arg === CORE.MAT.SAND || arg === CORE.MAT.MUD || arg === CORE.MAT.DRYGRASS || arg === CORE.MAT.LEAFLITTER || arg === CORE.MAT.PEAT;
-        this.burst({ dur: soft ? 0.07 : 0.045, freq: soft ? 480 : 1500, gain: soft ? 0.06 : 0.05 });
+        // footsteps that know the material (Build 73): a crunch on snow, a
+        // knock on boards, a squelch in mud, a rustle on grass, a click on stone
+        const M = CORE.MAT, m = arg, det = 0.9 + Math.random() * 0.2;
+        const wood = m === M.WOOD || m === M.PLANKS || m === M.JWOOD || m === M.JPLANKS || m === M.MWOOD || m === M.MPLANKS || m === M.SWOOD || m === M.SPLANKS || m === M.AWOOD || m === M.APLANKS;
+        const wet = m === M.MUD || m === M.PEAT;
+        const soft = m === M.GRASS || m === M.SAND || m === M.DRYGRASS || m === M.LEAFLITTER;
+        if (m === M.SNOW) this.noise({ dur: 0.09, from: 2600 * det, ftype: 'highpass', gain: 0.05, attack: 0.01 });
+        else if (wood){ this.tone({ freq: 190 * det, dur: 0.05, gain: 0.05, type: 'triangle' }); this.noise({ dur: 0.04, from: 1200 * det, ftype: 'bandpass', q: 1.5, gain: 0.04 }); }
+        else if (wet) this.noise({ dur: 0.1, from: 380 * det, gain: 0.06, attack: 0.02 });
+        else if (soft) this.burst({ dur: 0.07, freq: 480, gain: 0.06 });
+        else this.burst({ dur: 0.045, freq: 1500, gain: 0.05 });
         break;
       }
     }
@@ -7841,6 +7856,34 @@ const FOG_BASE = 3200;
 // the grass and doubles the meat, autumn turns the meadows and the
 // canopies, winter greys them, freezes the lakes walkable and turns rain
 // to snow.
+// ---------- place names (Build 73) ----------
+// a region is named in its archetype's voice: a syllable pair and the word
+// the land would use for itself. The rivers already had names; now the
+// country between them does, in the HUD line and on the map.
+const REGION_WORDS = [
+  ['the {} plains', '{} vale', 'the {} meads'],            // plains
+  ['the {} hills', '{} downs', 'the {} rise'],             // hills
+  ['the {} range', '{} crags', 'the {} teeth'],            // ranges
+  ['{} mesa', 'the {} tablelands', 'the {} red'],          // mesa
+  ['the {} sands', '{} dunes', 'the {} dry'],              // dunes
+  ['{} marsh', 'the {} fen', 'the {} mire'],               // swamp
+  ['the {} ice', '{} glacier', 'the {} white'],            // glacier
+  ['the {} burn', '{} ash', 'the {} black'],               // volcanic
+  ['the {} isles', '{} shoals', 'the {} reach'],           // islands
+  ['the {} jungle', '{} green', 'the {} tangle'],          // jungle
+  ['{} wood', 'the {} pines', 'the {} dark'],              // taiga
+  ['the {} barrens', '{} waste', 'the {} cold'],           // tundra
+  ['the {} veldt', '{} flats', 'the {} gold'],             // savanna
+];
+function regionNameOf(R){
+  const A = ['Har', 'Kel', 'Mor', 'Tal', 'Bren', 'Dun', 'Fal', 'Gor', 'Hol', 'Ost', 'Vel', 'Wyn'];
+  const B = ['row', 'mere', 'den', 'wick', 'by', 'ness', 'combe', 'ford', 'garth', 'thwaite', 'shaw', 'stow'];
+  const sd = R.seed >>> 0;
+  const base = A[sd % A.length] + B[(sd >>> 4) % B.length];
+  const W = REGION_WORDS[R.arch] || REGION_WORDS[0];
+  return W[(sd >>> 8) % W.length].replace('{}', base);
+}
+function regionNameAt(x, z){ return game.gen && game.gen.regionAt ? regionNameOf(game.gen.regionAt(x, z)) : ''; }
 const SEASON_DAYS = 8;
 const SEASON_NAME = ['spring', 'summer', 'autumn', 'winter'];
 const SEASON_TINT = [[0.94, 1.06, 0.9], [1.04, 1.0, 0.82], [1.16, 0.84, 0.5], [0.8, 0.86, 0.92]];
@@ -30272,6 +30315,28 @@ function drawMap(){
       c.fillText(riverNameOf(ck), m[0] + 6, m[1] - 4);
     }
   }
+  // the regions by name, once each, on the middle of their explored cells (Build 73)
+  if (game.gen && game.gen.regionAt){
+    const rc2 = game.mapRegionCache || (game.mapRegionCache = new Map());
+    const groups2 = new Map();
+    for (const key of game.explored || []){
+      const i = key.indexOf(',');
+      const cx = +key.slice(0, i), cz = +key.slice(i + 1);
+      if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
+      let R = rc2.get(key);
+      if (R === undefined){ R = game.gen.regionAt(cx * MAP_CELL + MAP_CELL / 2, cz * MAP_CELL + MAP_CELL / 2); if (rc2.size > 60000) rc2.clear(); rc2.set(key, R); }
+      let G = groups2.get(R.key); if (!G){ G = { R, x: 0, y: 0, n: 0 }; groups2.set(R.key, G); }
+      G.x += toSX(cx); G.y += toSY(cz); G.n++;
+    }
+    c.font = 'bold 11px monospace'; c.textAlign = 'center';
+    for (const [, G] of groups2){
+      if (G.n < 6) continue;
+      const nx = G.x / G.n, ny = G.y / G.n, name = regionNameOf(G.R);
+      c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillText(name, nx + 1, ny + 1);
+      c.fillStyle = '#e8dcb0'; c.fillText(name, nx, ny);
+    }
+    c.textAlign = 'start';
+  }
   // objectives as diamonds, your own marks in green with their number;
   // untracked ones fade
   const dia = (x, z, col, s, txt) => {
@@ -32684,7 +32749,7 @@ function frameBody(now){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
     }
-    $('navpos').textContent = posTxt + '  ·  ' + seasonSys.name + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '');
+    $('navpos').textContent = posTxt + '  ·  ' + seasonSys.name + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + ' · ' + regionNameAt(game.pos.x, game.pos.z);
   }
 
   // autosave: 2.5s after last change
@@ -32792,7 +32857,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

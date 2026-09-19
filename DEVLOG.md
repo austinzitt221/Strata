@@ -2,6 +2,30 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 73 — SMALL THINGS: place names and footsteps (2026-09-20)
+
+Two of the small things from the roadmap, built while the regression
+pass over every suite ran.
+
+- **Place names.** Every region of the world (the cells the archetype
+  field is built from) has a name in its archetype's voice: *the Velrow
+  isles*, *Kelmere marsh*, *the Dunwick range*, *Ostgarth mesa*. The
+  name is a seeded stem (Har, Kel, Mor… + row, mere, den…) in one of
+  three patterns per archetype, so it is the same on every visit and
+  on every machine with the seed. It shows after the season and
+  weather on the HUD's position line, and on the map: explored cells
+  are grouped by region and any group of six or more cells is labelled
+  at its centre. The grouping is cached per cell so the map costs
+  nothing new to draw.
+- **Footsteps that know the material.** Snow is a dry, high crunch;
+  every wood and every plank is a knock with a little tone; mud and
+  peat squelch (low, wet); grass, sand, dry grass and leaf litter are
+  soft; stone is stone. Same volume, same cadence, only the timbre
+  changes.
+- **Regression.** The b69 suite failed on the log-end uniforms, which
+  Build 70 turned into an array; the test was stale, not the game. All
+  suites from smoke to b73 pass.
+
 ## Build 72 — BIOMES D: each biome's own ground, and its finds (2026-09-20)
 
 The last slice of the biomes arc.

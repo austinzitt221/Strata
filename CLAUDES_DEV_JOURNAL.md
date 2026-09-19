@@ -1448,6 +1448,21 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-20, later — small things, and a stale test
+
+Place names and footsteps while the regression chain ran. The names
+came out better than I expected from a stem-and-suffix generator; the
+trick was giving each archetype its own patterns ("the {} teeth" for
+the ranges, "{} shoals" for the isles) so the word after the stem does
+the work. The map labels needed a cache or the map would have queried
+the region field once per cell per frame.
+
+The chain found one red suite, and it was the test's fault: b69 read
+the three log-end uniforms that Build 70 folded into an array. A suite
+that tests the shape of an internal is brittle by design; it should
+have asked "do cut logs show end grain" and not "what is the uniform
+called". I fixed the test, not the game. Space Arc next.
+
 ## 2026-09-20 — the arc closes
 
 Biomes D was the small one and the right one to end on: a ground per
