@@ -7328,17 +7328,28 @@ const AudioSys = {
     }
   },
   setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
-  // ---------- procedural music: three moods, one tiny scheduler ----------
-  // surface = slow major-pentatonic plucks; cave = sparse low drones over
-  // the noise ambience; boss = a driving pulse with a minor arpeggio.
+  // ---------- procedural music: tracks that hand over ----------
+  // Every context (surface, cave, boss) has tracks in different styles and
+  // tempos. One plays for a couple of minutes, fades, a breath of silence,
+  // and a different one of the same context takes over. Boss music cuts in
+  // at once. (Playtest: "several tracks that switch as one ends".)
   musicGain: null, musicNext: 0, musicStep: 0, musicMode: 'off', musicWalk: 3,
+  track: null, trackUntil: 0, trackGap: 0,
+  TRACKS: { surface: ['dawnlight', 'roam', 'highroad', 'dusk'], cave: ['deep', 'drip'], boss: ['pulse'] },
+  SCALES: { pent: [0, 2, 4, 7, 9, 12, 14, 16], dorian: [0, 2, 3, 5, 7, 9, 10, 12], mixo: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], phryg: [0, 1, 3, 5, 7, 8, 10, 12] },
+  hz(root, semis){ return root * Math.pow(2, semis / 12); },
+  pickTrack(ctx, prev){
+    const L = this.TRACKS[ctx] || this.TRACKS.surface;
+    const c = L.filter(n => n !== prev);
+    return c[(Math.random() * c.length) | 0] || L[0];
+  },
   ensureMusic(){
     if (!this.ctx || this.musicGain) return;
     this.musicGain = this.ctx.createGain();
     this.musicGain.gain.value = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9;
     this.musicGain.connect(this.ctx.destination);
   },
-  setMusicVolume(v){ this.ensureMusic(); if (this.musicGain) this.musicGain.gain.value = v / 100 * 0.9; },
+  setMusicVolume(v){ this.ensureMusic(); if (this.musicGain){ this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime); this.musicGain.gain.value = v / 100 * 0.9; } },
   note(freq, at, dur, gain, type){
     const osc = this.ctx.createOscillator();
     osc.type = type; osc.frequency.value = freq;
@@ -7349,42 +7360,134 @@ const AudioSys = {
     osc.connect(g); g.connect(this.musicGain);
     osc.start(at); osc.stop(at + dur + 0.05);
   },
-  music(mode){
-    if (!this.ctx) return;
-    this.ensureMusic();
-    if (mode !== this.musicMode){ this.musicMode = mode; this.musicStep = 0; }
-    if (mode === 'off' || (game.opts.music != null && game.opts.music <= 0)) return;
-    const t = this.ctx.currentTime;
-    if (this.musicNext < t) this.musicNext = t + 0.08;
-    const SUR = [262, 294, 330, 392, 440, 523, 587, 659];
-    const CAV = [110, 131, 147, 165, 196, 220];
-    const BOS = [220, 262, 294, 330, 392, 440];
-    // keep just under a second of music scheduled ahead
-    while (this.musicNext < t + 0.9){
-      const at = this.musicNext, st = this.musicStep++;
-      const walk = arr => {
-        this.musicWalk = Math.max(0, Math.min(arr.length - 1,
-          this.musicWalk + ((Math.random() * 3) | 0) - 1));
-        return arr[this.musicWalk];
-      };
-      if (mode === 'boss'){
-        this.note(110, at, 0.16, 0.07, 'square');                       // the pulse
+  // one step of a track: its notes at `at`; returns the seconds to the next step
+  stepTrack(name, st, at){
+    const walk = n => { this.musicWalk = Math.max(0, Math.min(n - 1, this.musicWalk + ((Math.random() * 3) | 0) - 1)); return this.musicWalk; };
+    const S = this.SCALES;
+    switch (name){
+      case 'roam': {                                  // 100 bpm: arpeggios over a walking bass, dorian
+        const sc = S.dorian, r = 220, beat = 0.6;
+        if (st % 4 === 0) this.note(this.hz(r / 2, sc[[0, 4, 5, 3][((st / 4) | 0) % 4]]), at, beat * 1.8, 0.05, 'sine');
+        const f = this.hz(r, sc[(st * 2 + ((st / 8) | 0)) % sc.length]);
+        this.note(f, at, beat * 0.9, 0.035, 'triangle');
+        if (st % 8 === 6) this.note(f * 2, at + beat * 0.5, beat * 0.4, 0.02, 'triangle');
+        return beat / 2;
+      }
+      case 'highroad': {                              // 118 bpm: a square lead over a bass pulse, mixolydian
+        const sc = S.mixo, r = 196, beat = 60 / 118;
+        this.note(this.hz(r / 2, sc[st % 8 < 4 ? 0 : 5]), at, beat * 0.45, 0.045, 'sawtooth');
+        if (st % 2 === 0) this.note(this.hz(r * 2, sc[walk(sc.length)]), at, beat * 0.8, 0.028, 'square');
+        if (st % 16 === 15) this.note(this.hz(r * 2, 12), at, beat, 0.03, 'square');
+        return beat / 2;
+      }
+      case 'dusk': {                                  // 60 bpm: sparse pads and a slow fifth, aeolian
+        const sc = S.aeolian, r = 165;
+        if (st % 6 === 0) this.note(this.hz(r / 2, 0), at, 4.5, 0.045, 'sine');
+        if (Math.random() < 0.6){
+          const f = this.hz(r, sc[walk(sc.length)]);
+          this.note(f, at, 2.6, 0.03, 'triangle');
+          if (Math.random() < 0.4) this.note(f * 1.498, at + 0.4, 2.2, 0.018, 'sine');
+        }
+        return 1.0;
+      }
+      case 'deep': {                                  // the cave: a sub floor and low drones
+        const CAV = [110, 131, 147, 165, 196, 220];
+        if (st % 4 === 0) this.note(55, at, 3.4, 0.05, 'sine');
+        if (Math.random() < 0.65) this.note(CAV[walk(CAV.length)], at, 2.4, 0.05, 'sine');
+        return 1.8;
+      }
+      case 'drip': {                                  // the cave: high pings over a sub, slow and uneven
+        const sc = S.phryg, r = 440;
+        if (st % 5 === 0) this.note(41, at, 4.0, 0.05, 'sine');
+        if (Math.random() < 0.5) this.note(this.hz(r, sc[walk(sc.length)]), at, 0.5, 0.025, 'sine');
+        return 0.9 + Math.random() * 1.2;
+      }
+      case 'pulse': {                                 // the boss: a driving pulse, a minor arpeggio
+        const BOS = [220, 262, 294, 330, 392, 440];
+        this.note(110, at, 0.16, 0.07, 'square');
         this.note(BOS[(st * 2) % BOS.length], at, 0.3, 0.035, 'sawtooth');
-        if (st % 8 === 7) this.note(880, at, 0.12, 0.03, 'square');     // accent
-        this.musicNext += 0.44;
-      } else if (mode === 'cave'){
-        if (st % 4 === 0) this.note(55, at, 3.4, 0.05, 'sine');         // sub floor
-        if (Math.random() < 0.65) this.note(walk(CAV), at, 2.4, 0.05, 'sine');
-        this.musicNext += 1.8;
-      } else {                                                          // surface
+        if (st % 8 === 7) this.note(880, at, 0.12, 0.03, 'square');
+        return 0.44;
+      }
+      case 'dawnlight': default: {                    // the first tune: slow major-pentatonic plucks
+        const sc = S.pent, r = 262;
         if (Math.random() < 0.8){
-          const f = walk(SUR);
+          const f = this.hz(r, sc[walk(sc.length)]);
           this.note(f, at, 1.3, 0.04, 'triangle');
           if (st % 4 === 2) this.note(f * 1.5, at + 0.1, 1.1, 0.02, 'triangle');
         }
-        this.musicNext += 0.8;
+        return 0.8;
       }
     }
+  },
+  music(mode){
+    if (!this.ctx) return;
+    this.ensureMusic();
+    const vol = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9;
+    if (mode === 'off' || vol <= 0){ this.musicMode = mode; return; }
+    const t = this.ctx.currentTime;
+    if (mode !== this.musicMode){
+      // a new context: boss music cuts in at once, the others hand over with a breath
+      this.musicMode = mode;
+      const now = mode === 'boss' || !this.track;
+      this.track = this.pickTrack(mode, this.track); this.musicStep = 0; this.musicWalk = 3;
+      this.trackUntil = t + 100 + Math.random() * 40;
+      this.trackGap = now ? t : t + 2.5;
+      this.musicGain.gain.cancelScheduledValues(t);
+      if (now) this.musicGain.gain.setTargetAtTime(vol, t, 0.5);
+      else { this.musicGain.gain.setTargetAtTime(0.0001, t, 0.4); this.musicGain.gain.setTargetAtTime(vol, this.trackGap, 0.8); }
+      this.musicNext = this.trackGap + 0.1;
+    } else if (t > this.trackUntil){
+      // the track ends: fade, a breath, then the next one of the same context
+      this.track = this.pickTrack(mode, this.track); this.musicStep = 0; this.musicWalk = 3;
+      this.trackUntil = t + 100 + Math.random() * 40;
+      this.trackGap = t + 3;
+      this.musicGain.gain.cancelScheduledValues(t);
+      this.musicGain.gain.setTargetAtTime(0.0001, t, 0.6);
+      this.musicGain.gain.setTargetAtTime(vol, this.trackGap, 0.8);
+      this.musicNext = this.trackGap + 0.1;
+    }
+    if (t < this.trackGap) return;
+    if (this.musicNext < t) this.musicNext = t + 0.08;
+    // keep just under a second of music scheduled ahead
+    while (this.musicNext < t + 0.9){ const at = this.musicNext, st = this.musicStep++; this.musicNext += this.stepTrack(this.track, st, at); }
+  },
+  // SOUND II (Build 67): three voices the new booms and cracks are built
+  // from. noise: the noise buffer through a swept filter with an attack
+  // and a decay; sweep: an oscillator sliding between two pitches; punch:
+  // a soft clip the loud things go through so they hit instead of hiss.
+  noise(o){
+    if (!this.ctx) return;
+    const { dur = 0.3, from = 1000, to = null, ftype = 'lowpass', q = 0.7, gain = 0.2, attack = 0.004, rate = 1, delay = 0, out = null } = o || {};
+    const t = this.ctx.currentTime + delay;
+    const src = this.ctx.createBufferSource(); src.buffer = this.noiseBuf; src.playbackRate.value = rate;
+    const f = this.ctx.createBiquadFilter(); f.type = ftype; f.Q.value = q; f.frequency.setValueAtTime(Math.max(20, from), t);
+    if (to != null) f.frequency.exponentialRampToValueAtTime(Math.max(20, to), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f); f.connect(g); g.connect(out || this.master);
+    src.start(t, Math.random() * 0.8, dur + 0.05); src.stop(t + dur + 0.1);
+  },
+  sweep(o){
+    if (!this.ctx) return;
+    const { dur = 0.4, from = 120, to = 40, gain = 0.3, type = 'sine', attack = 0.003, delay = 0, out = null } = o || {};
+    const t = this.ctx.currentTime + delay;
+    const osc = this.ctx.createOscillator(); osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(10, from), t); osc.frequency.exponentialRampToValueAtTime(Math.max(10, to), t + dur);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g); g.connect(out || this.master);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  },
+  punch(){
+    if (!this.ctx) return null;
+    if (this.punchNode) return this.punchNode;
+    const ws = this.ctx.createWaveShaper(), n = 256, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++){ const x = i / (n - 1) * 2 - 1; curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2); }
+    ws.curve = curve; ws.oversample = '2x';
+    const g = this.ctx.createGain(); g.gain.value = 0.85; ws.connect(g); g.connect(this.master);
+    this.punchNode = ws;
+    return ws;
   },
   burst(o){
     if (!this.ctx) return;
@@ -7429,10 +7532,45 @@ const AudioSys = {
       case 'select': this.tone({ freq: 520, dur: 0.04, gain: 0.05 }); break;
       case 'craft': this.tone({ freq: 660, dur: 0.09, gain: 0.09 }); this.tone({ freq: 990, dur: 0.13, gain: 0.07 }); break;
       case 'undo': this.tone({ freq: 400, dur: 0.08, gain: 0.08, type: 'triangle' }); break;
-      case 'shot': this.burst({ dur: 0.09, freq: 2600, gain: 0.28 }); this.tone({ freq: 240, dur: 0.12, gain: 0.16, type: 'sawtooth' }); break;
+      case 'shot': {
+        // a gun: the crack, the report, the thump, the tail -- heavier with
+        // the weapon's weight (0 light .. 1 heavy), never twice the same
+        const w = typeof arg === 'number' ? Math.max(0, Math.min(1, arg)) : 0.4;
+        const P = this.punch(), det = 0.85 + Math.random() * 0.3;
+        this.noise({ dur: 0.012, from: 6000 * det, ftype: 'highpass', gain: 0.45, out: P });
+        this.noise({ dur: 0.07 + w * 0.06, from: (1200 + w * 600) * det, ftype: 'bandpass', q: 0.8, gain: 0.5, out: P });
+        this.sweep({ dur: 0.09 + w * 0.12, from: 180 + w * 60, to: 50, gain: 0.35 + w * 0.4, type: 'triangle', out: P });
+        this.noise({ dur: 0.25 + w * 0.35, from: 900, to: 150, gain: 0.12 + w * 0.15, attack: 0.02, rate: 0.7, delay: 0.03 });
+        break;
+      }
       case 'laser': this.tone({ freq: 1400, dur: 0.08, gain: 0.2, type: 'square' }); this.tone({ freq: 700, dur: 0.1, gain: 0.1, type: 'sine' }); break;
-      case 'rocket': this.burst({ dur: 0.25, freq: 900, gain: 0.3 }); this.tone({ freq: 120, dur: 0.3, gain: 0.2, type: 'sawtooth' }); break;
-      case 'boom': this.burst({ dur: 0.5, freq: 300, gain: 0.5 }); this.tone({ freq: 60, dur: 0.55, gain: 0.4, type: 'sine' }); this.tone({ freq: 45, dur: 0.7, gain: 0.3, type: 'triangle' }); break;
+      case 'rocket':
+        // the whoosh: noise swept up through a bandpass over a rising drone
+        this.noise({ dur: 0.6, from: 300, to: 2400, ftype: 'bandpass', q: 1.2, gain: 0.35, attack: 0.02 });
+        this.sweep({ dur: 0.5, from: 90, to: 170, gain: 0.18, type: 'sawtooth' });
+        this.noise({ dur: 0.05, from: 3000, ftype: 'highpass', gain: 0.25 });
+        break;
+      case 'thunder': {
+        // far away: a crack, then a long rolling rumble
+        const P = this.punch();
+        this.noise({ dur: 0.08, from: 2500, ftype: 'highpass', gain: 0.2, out: P });
+        this.noise({ dur: 3.2, from: 220, to: 45, gain: 0.45, attack: 0.25, rate: 0.45, delay: 0.15, out: P });
+        this.sweep({ dur: 2.4, from: 48, to: 24, gain: 0.35, type: 'sine', attack: 0.3, delay: 0.2, out: P });
+        break;
+      }
+      case 'boom': {
+        // an explosion, by its distance (metres): near, a crack and a sub
+        // thump that hits; far, a duller body and a rumble that goes on
+        const d = typeof arg === 'number' ? arg : 6;
+        const near = Math.max(0.15, Math.min(1, 1 - (d - 8) / 140));
+        const dull = Math.max(0.25, 1 - d / 120);
+        const P = this.punch();
+        this.noise({ dur: 0.05, from: 400 + 4000 * dull, ftype: 'highpass', gain: 0.5 * near, out: P });
+        this.sweep({ dur: 0.7, from: 70, to: 26, gain: 0.9 * near, type: 'sine', out: P });
+        this.noise({ dur: 0.9, from: 100 + 1400 * dull, to: 90, gain: 0.7 * near, attack: 0.01, out: P });
+        this.noise({ dur: 2.2, from: 160, to: 50, gain: 0.35 * near, attack: 0.15, rate: 0.5, delay: 0.12, out: P });
+        break;
+      }
       case 'hit': this.burst({ dur: 0.08, freq: 700, gain: 0.16 }); break;
       case 'die': this.burst({ dur: 0.3, freq: 500, gain: 0.2, drop: 300 }); this.tone({ freq: 220, dur: 0.25, gain: 0.1, type: 'triangle' }); break;
       case 'hurt': this.tone({ freq: 110, dur: 0.2, gain: 0.2, type: 'sawtooth' }); break;
@@ -7821,7 +7959,7 @@ const weatherSys = {
       }
     }
     // thunder arrives after the flash
-    for (let i = this.thunder.length - 1; i >= 0; i--){ this.thunder[i] -= dt; if (this.thunder[i] <= 0){ AudioSys.sfx('boom'); this.thunder.splice(i, 1); } }
+    for (let i = this.thunder.length - 1; i >= 0; i--){ this.thunder[i] -= dt; if (this.thunder[i] <= 0){ AudioSys.sfx('thunder'); this.thunder.splice(i, 1); } }
     // burning trees fall after a breath of embers
     for (let i = this.fires.length - 1; i >= 0; i--){
       const f = this.fires[i]; f.t -= dt;
@@ -12051,7 +12189,7 @@ function killEntity(e, byPlayer){
     }
     Particles.burst(e.x, e.y + 1.2, e.z, 1.6, [0xffb347, 0xff8830, 0x51484f, 0x9a9aa5], 40, 6);
     Embers.burst(e.x, e.y + 1, e.z, 1.0, [0xffb347, 0xffdd66], 12, 3);
-    AudioSys.sfx('boom');
+    AudioSys.sfx('boom', Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z));
     baseSys.onCrewedDeath(e);
     return;
   }
@@ -22074,6 +22212,7 @@ const beamFX = {
 // throws damage at everything in range (the shooter included), and leaves
 // no yield -- blasting is for holes and hurt, the drill is for ore.
 function explode(x, y, z, r, dmg, opts){
+  const _boomD = Math.hypot(x - game.pos.x, y - game.pos.y, z - game.pos.z);
   opts = opts || {};
   deepSys.loud(deepSys.NOISE.blast);
   const e = CORE.makeEdit(0, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r * 2, 0, 0);
@@ -22083,7 +22222,7 @@ function explode(x, y, z, r, dmg, opts){
   if (opts.yieldMap) for (const m in opts.yieldMap) CORE.addMat(game.slots, +m, opts.yieldMap[m]);
   Particles.burst(x, y, z, r * 0.5, [0xffb347, 0xff8830, 0x51484f, 0x9a9aa5], 40, 7);
   Embers.burst(x, y, z, r * 0.4, [0xffb347, 0xffdd66], 10, 3);
-  AudioSys.sfx('boom');
+  AudioSys.sfx('boom', _boomD);
   for (const en of [...game.entities]){
     const d = Math.hypot(en.x - x, en.y - y, en.z - z);
     if (d < r * 2.4){
@@ -26520,7 +26659,7 @@ function tryAction(dt, now){
       game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + G.kick);
       return;
     }
-    AudioSys.sfx(G.laser ? 'laser' : 'shot');
+    AudioSys.sfx(G.laser ? 'laser' : 'shot', Math.min(1, (G.kick || 0.03) * 10));
     deepSys.loud(G.laser ? 5 : deepSys.NOISE.shot);
     fireHitscan(G);
     return;
@@ -32282,7 +32421,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

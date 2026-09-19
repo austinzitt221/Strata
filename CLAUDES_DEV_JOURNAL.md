@@ -1448,6 +1448,14 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, later still — sound
+
+Booms and guns are layers now (crack, thump, body, tail) through a soft
+clip, and explosions know how far away they are. The music has tracks
+that hand over with a breath of silence between them. I cannot hear any
+of it from here; the test only proves it plays and keeps time. This one
+is Austin's ears.
+
 ## 2026-09-19, late — cities, his way
 
 I built the city change the way Austin asked: one tower, everyone in

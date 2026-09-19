@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 67 — SOUND II: booms, guns, and tracks that hand over (2026-09-19)
+
+Fifth build from the Build 62 playtest.
+
+- **Explosions boom.** A boom is four layers through a soft clip now:
+  a crack, a sub thump sliding from 70 to 26 Hz, a body of swept noise,
+  and a rumble tail over two seconds. Every explosion carries its
+  distance from you: near, the crack and the thump hit; far, it is
+  duller and the rumble goes on. Thunder is its own sound (a crack, a
+  three-second roll) instead of a nearby boom.
+- **Guns crack.** A shot is a crack, a report, a thump and a tail, with
+  a little detune so no two are the same, scaled by the weapon's weight
+  (your gun's kick sets it; a pistol snaps, the rifle and the rocket
+  launcher thump). Rockets whoosh: noise swept up through a bandpass
+  over a rising drone.
+- **Music in tracks.** The surface has four (dawnlight: the slow
+  pentatonic plucks from before; roam: 100 bpm arpeggios over a walking
+  bass; highroad: 118 bpm, a square lead over a bass pulse; dusk: 60
+  bpm pads and slow fifths), the caves two (deep: the drones; drip:
+  high pings over a sub), the bosses their pulse. A track plays for
+  two minutes or so, fades, a breath of silence, and a different track
+  of the same context takes over. Boss music still cuts in at once.
+  All of it is still synthesised: no files, no CDN.
+- Test: every sound plays without a throw, every track makes notes and
+  keeps time, the pick never repeats, the handover has its gap, the
+  boss has none, an explosion reports its distance.
+
 ## Build 66 — CITIES II: a building for everyone (2026-09-19)
 
 Fourth build from the Build 62 playtest: the cities, made his way.

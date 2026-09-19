@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 67 — SOUND II
+- [ ] Throw TNT near and far. Fire every gun you have. Does a boom boom,
+      does a rifle sound like a rifle next to a pistol? Too loud, too
+      much bass?
+- [ ] Walk the surface for ten minutes with music on: you should hear a
+      track end, a pause, and a different one begin. Which of the four
+      do you like, which should go? Go underground and back.
+
 ## Build 66 — CITIES II
 - [ ] A NEW world (old cities keep their old plan): walk a city. One
       tower, ten buildings with signs, the pit and the casino, a clear

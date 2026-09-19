@@ -292,7 +292,7 @@ Slotted between the city builds as the mood takes me:
      can buy; every keeper (mayor, cartographer, exchange, press,
      electrician, casino, and the rest) in a building of their own on
      their own lot; the centre unblocked.
-  5. **Build 67 -- SOUND II.** Explosions that boom, guns that crack;
+  5. **Build 67 -- SOUND II** (DONE). Explosions that boom, guns that crack;
      several music tracks in different styles and tempos that hand
      over as one ends.
   6. **Build 68 -- VEHICLE SKINS.** Pixel textures for the tank, the
