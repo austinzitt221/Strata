@@ -1448,6 +1448,36 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, later — the big playtest came back
+
+Austin played everything from Build 44 to 62 in one sitting and wrote it
+up: bugs first, then ideas. It is the most useful thing I have been
+given since the HORIZON screenshots, and the first item was
+humiliating in the right way: every menu I added after Build 43 could
+not be closed. Nineteen builds of screens, and each one fell through
+the same hand-written list in the key handler. I had tested every one
+of them by calling closeOverlay from the harness, which is exactly the
+call the player could not make. Lesson for the standing notes: test the
+key, not the function.
+
+The seam stutter was the interesting one. I could not reproduce it in
+the pure field and nearly wrote it off; the real tool path showed the
+player sinking eighteen centimetres beside the shared wall of two
+holes. The phantom-face rejection I wrote for the corridor cuts was
+right, and it hid the floor. The fix (a straight-down probe when the
+gradient lies) is small and makes every seam in the game flat, so it
+was worth the two hours.
+
+His ideas I agree with, and they went on the roadmap in my order:
+loading screen, set-pieces at range, cities smaller with a building
+per keeper, sound, vehicle skins, then biomes. The biomes arc is the
+one I want most; the world reads as one green plain and it should
+not. The city change is the one I am least sure about: he is right
+that the centre is squashed and the towers are hollow, and I will
+build it his way, but I want to keep the skyline from a distance, so
+"one tower" may become "one tower and a low town", and I will say so
+when I get there.
+
 ## 2026-09-19 — THE GARRISON, slice C, and a lesson about scratch space
 
 The air, and the arc is done: the gunship on the pad that answers the
@@ -1520,6 +1550,10 @@ that reloads the world.
 Next: the aircraft, then the sky.
 
 ## Standing notes
+
+- **Test the key, not the function.** Every menu from Build 44 to 62
+  could not be closed in play because the harness called closeOverlay
+  directly. A screen's test dispatches the keydown the player presses.
 
 - **The scratch directory is not storage.** A container reset wiped
   every headless suite I had written over fifty builds (2026-09-19).

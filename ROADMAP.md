@@ -268,6 +268,39 @@ Slotted between the city builds as the mood takes me:
   your own gunship; the jet with its cannon, missiles, rolls and loops;
   jet fuel from the quartermaster of a taken base and nowhere else.
   THE GARRISON is complete.
+- **THE PLAYTEST OF 2026-09-19** (Austin's report on Builds 44-62), in
+  the order I will build it. Bugs first: a broken game is no fun.
+  1. **Build 63 -- FIXES I, the blockers** (DONE). Every menu closes on E and
+     Escape (phone, paper, pit, booth, casino, bank, exchange, chart,
+     race); the fists never grab a vehicle you are driving (gunship,
+     jet, all of them); the tank fires where its turret points and
+     third person orbits with the mouse in every vehicle; the race car
+     is visible; creative is one to one with survival (fort raiders,
+     train raiders, sieges: everything that spawns, spawns); the sliver
+     between two adjacent cube holes.
+  2. **Build 64 -- THE LOADING SCREEN.** A world does not hand you the
+     controls until the ground under you and the near field are
+     meshed; the player is held, not dropped, whenever the chunk under
+     their feet is missing (the fall into an LOD cave); the new-world
+     crashes hunted.
+  3. **Build 65 -- THE FAR FIELD III.** Villages, forts, ziggurats,
+     camps and garrisons drawn as true shapes at range before they are
+     stamped, so they never pop; garrisons and forts on the map; the
+     LOD ground that does not match the mesh under your feet (the snow
+     mountain).
+  4. **Build 66 -- CITIES II.** Smaller cities; one tower, the one you
+     can buy; every keeper (mayor, cartographer, exchange, press,
+     electrician, casino, and the rest) in a building of their own on
+     their own lot; the centre unblocked.
+  5. **Build 67 -- SOUND II.** Explosions that boom, guns that crack;
+     several music tracks in different styles and tempos that hand
+     over as one ends.
+  6. **Build 68 -- VEHICLE SKINS.** Pixel textures for the tank, the
+     gunship and the jet, and a pass over the others.
+  7. **BIOMES, an arc.** A: jungle and swamp (mud, jungle wood); B:
+     taiga and tundra and savanna; C: animals by day and enemies by
+     night, per biome; D: each tree its own wood, each biome its own
+     material.
 - Then the Space Arc.
 
 Small things I want, slotted wherever a session has room:

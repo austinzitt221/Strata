@@ -5,6 +5,21 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 63 — FIXES I
+- [ ] Open every menu you found stuck (phone, paper, pit promoter, ticket
+      clerk, casino table, bank, exchange, cartographer, race steward)
+      and close each with E, then again with Escape.
+- [ ] Board the gunship and the jet with empty hands, fists down. Left
+      click. You should fire, not lift the aircraft.
+- [ ] Tank, F5 for third person: swing the mouse round. The camera should
+      orbit; the turret should follow; a shell should land where the
+      turret points. Same in the seat.
+- [ ] Enter a race. Your car should be there under you.
+- [ ] Creative: walk into a raid fort and ride the train past one. The
+      raiders should be there.
+- [ ] Mine a row of cube holes with snap on and walk the row. No dip, no
+      catch at the seams. Try it with the sphere too, and mixed.
+
 ## Build 62 — THE GARRISON C
 - [ ] Find the gunship on a base's helipad (the obsidian disc with the
       H, right of the command post). Raise the alarm and watch it lift.

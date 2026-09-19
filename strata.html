@@ -5564,6 +5564,21 @@ function contactReal(x, y, z, dTrue, g, edits){
   return sdfWorld(x - g[0] * t, y - g[1] * t, z - g[2] * t, edits) < 0.015 ||
          sdfWorld(x - g[0] * t1, y - g[1] * t1, z - g[2] * t1, edits) < -0.005;
 }
+// The floor under a sphere, found straight down: how far below the centre
+// the field turns solid (bisected to a centimetre), or -1 when there is
+// nothing solid within the radius. The gradient contact misses the floor
+// beside a phantom face -- next to the shared wall of two adjacent holes
+// the field's nearest "surface" is the removed wall, the gradient points
+// sideways, and the walker sinks a hand's width into the floor and pops
+// back up across the seam (Playtest: the stutter between two cube holes).
+// When the gradient's surface is not real, this is.
+function floorUnder(x, cy, z, r, edits){
+  if (sdfWorld(x, cy - r + 0.01, z, edits) > 0) return -1;
+  let lo = 0, hi = r - 0.01;
+  for (let i = 0; i < 7; i++){ const m = (lo + hi) * 0.5; if (sdfWorld(x, cy - m, z, edits) > 0) lo = m; else hi = m; }
+  return (lo + hi) * 0.5;
+}
+const FLOOR_N = [0, 1, 0, 1];
 // sphere-vs-world contact for vehicles: null when clear, else the unit
 // normal and how far to push. Only REAL contact counts — the CSG field is
 // a lower bound, not a distance: two subtracts that overlap (the corridor
@@ -5576,9 +5591,9 @@ function sphereContact(x, y, z, R, edits){
   if (dd >= R) return null;
   const g = gradWorld(x, y, z, edits);
   const dTrue = dd / g[3];
-  if (dTrue >= R) return null;
-  if (!contactReal(x, y, z, dTrue, g, edits)) return null;
-  return { g, push: R - dTrue };
+  if (dTrue < R && contactReal(x, y, z, dTrue, g, edits)) return { g, push: R - dTrue };
+  const t = floorUnder(x, y, z, R, edits);
+  return t < 0 ? null : { g: FLOOR_N, push: R - t };
 }
 // a wheel climbs a kerb: when a real wall stops a grounded vehicle, take the
 // lowest lift (up to maxStep) that puts the sphere in clear air both here
@@ -21440,7 +21455,8 @@ function updateEntities(dt, now){
     const def = ENT_DEF[e.type];
     // creative gets living animals and villagers too; only free-roaming
     // lurkers stay a survival thing (bounty targets still tick for hunts)
-    if (!survival && e.type === 'lurker' && !e.bountyTag && !e.pit && !e.collector) continue;   // the pit's and the bank's still fight in creative
+    // creative is one to one with survival: everything that spawns, spawns
+    // (Playtest: forts stood empty and the train was never raided in creative)
     if (e.carried){
       // Riding overhead, slightly forward so you can see your passenger --
       // but only once you have lifted it. For the first beat of the grab your
@@ -23260,12 +23276,17 @@ function bindInput(){
     if (!game.running) return;
     const code = e.code;
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (code === 'Escape') return; // browser handles pointer lock exit; see lockchange
     if (game.ui === 'sign'){ return; }               // the textarea owns the keys
-  if (game.ui === 'inv' || game.ui === 'craft' || game.ui === 'stove' || game.ui === 'blue' || game.ui === 'map' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'board' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'page'){
+    // every overlay: E closes it (Q the crafting screen, N the blueprints,
+    // M the map, and Escape closes any of them). The list is every screen
+    // that is not the world, the pause menu, the options or the death
+    // screen -- a screen added later closes too, without joining a list.
+    // (Playtest: every menu since Build 43 could not be closed.)
+    const overlay = game.ui !== 'none' && game.ui !== 'pause' && game.ui !== 'options' && game.ui !== 'dead';
+    if (code === 'Escape'){ if (overlay){ e.preventDefault(); closeOverlay(); } return; }   // else the browser drops pointer lock; see lockchange
+    if (overlay){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
-      if (code === 'KeyE' && (game.ui === 'inv' || game.ui === 'stove' || game.ui === 'crafter' || game.ui === 'cont' || game.ui === 'trade' || game.ui === 'wtab' || game.ui === 'decraft' || game.ui === 'station' || game.ui === 'exchange' || game.ui === 'phone' || game.ui === 'pit' || game.ui === 'bank' || game.ui === 'casino' || game.ui === 'race' || game.ui === 'chart')) closeOverlay();
-      else if (code === 'KeyE' && (game.ui === 'board' || game.ui === 'page')) closeOverlay();
+      if (code === 'KeyE') closeOverlay();
       else if (code === 'KeyQ' && game.ui === 'craft') closeOverlay();
       else if (code === 'KeyN' && game.ui === 'blue') closeOverlay();
       else if (code === 'KeyM' && game.ui === 'map') closeOverlay();
@@ -23387,10 +23408,14 @@ function collidePlayer(edits, still){
       const cy = game.pos.y + centers[ci];
       const d = sdfWorld(game.pos.x, cy, game.pos.z, edits);
       if (d < r){
-        const g = gradWorld(game.pos.x, cy, game.pos.z, edits);
-        const dTrue = d / g[3];
-        if (dTrue >= r) continue;
-        if (!contactReal(game.pos.x, cy, game.pos.z, dTrue, g, edits)) continue;
+        let g = gradWorld(game.pos.x, cy, game.pos.z, edits);
+        let dTrue = d / g[3];
+        if (dTrue >= r || !contactReal(game.pos.x, cy, game.pos.z, dTrue, g, edits)){
+          // not a real surface that way: the floor straight down, if any
+          dTrue = floorUnder(game.pos.x, cy, game.pos.z, r, edits);
+          if (dTrue < 0) continue;
+          g = FLOOR_N;
+        }
         const push = Math.min(r - dTrue, 0.5);
         if (still && g[1] > 0.6){
           // standing on walkable ground with no input: resolve the
@@ -23419,6 +23444,8 @@ function collidePlayer(edits, still){
       const dT = d / g[3];
       if (dT < r + 0.06 && contactReal(game.pos.x, game.pos.y + r, game.pos.z, dT, g, edits))
         game.grounded = true;
+      else if (floorUnder(game.pos.x, game.pos.y + r, game.pos.z, r + 0.06, edits) >= 0)
+        game.grounded = true;
     }
   }
 }
@@ -23444,9 +23471,15 @@ function vehicleCamera(x, y, z, heading, dt, o, att){
     return;
   }
   if (game.camView === 1){
-    const tx = x - fx * o.back, ty = y + o.up, tz = z - fz * o.back;
+    // the chase cam orbits with the mouse: it hangs behind the point you
+    // look from, at the seat's distance, and looks at the vehicle. The
+    // view still swings with the vehicle because driveCar turns game.yaw
+    // with the heading. (Playtest: no mouse look in third person.)
+    const cp = Math.cos(game.pitch), sp = Math.sin(game.pitch);
+    const lx = -Math.sin(game.yaw) * cp, ly = sp, lz = -Math.cos(game.yaw) * cp;
+    const tx = x - lx * o.back, ty = Math.max(y + 0.6, y + o.look - ly * o.back + (o.up - o.look) * 0.5), tz = z - lz * o.back;
     if (!game.chase) game.chase = new THREE.Vector3(tx, ty, tz);
-    const k = Math.min(1, 7 * dt);
+    const k = Math.min(1, 9 * dt);
     game.chase.x += (tx - game.chase.x) * k;
     game.chase.y += (ty - game.chase.y) * k;
     game.chase.z += (tz - game.chase.z) * k;
@@ -23462,6 +23495,12 @@ function vehicleCamera(x, y, z, heading, dt, o, att){
     game.camera.rotation.set(game.pitch, game.yaw, 0);
     game.camBack = 0;
   }
+}
+// where you are looking, as a unit vector from game.yaw and game.pitch --
+// the aim in a vehicle, whichever camera is on
+function lookDir(){
+  const cp = Math.cos(game.pitch);
+  return { x: -Math.sin(game.yaw) * cp, y: Math.sin(game.pitch), z: -Math.cos(game.yaw) * cp };
 }
 // the dash cluster: an analog speedo (0-50 km/h) and a battery gauge
 function drawCarGauge(e){
@@ -23519,6 +23558,7 @@ function enterCar(e){
   if (netSys.guest && e.local){ toast('one moment — the world is still taking it'); return; }
   if (netSys.guest && e.hostDrives){ toast('your friend is driving it'); return; }
   if (netSys.host && e.driver === 'guest'){ toast('your friend is driving it'); return; }
+  if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }   // (Playtest: the race car was invisible -- entered before its first frame)
   game.driving = e;
   if (netSys.guest && e.nid) netSys.send({ t: 'drive', nid: e.nid });
   game.vel.set(0, 0, 0);
@@ -23737,7 +23777,10 @@ function driveCar(dt){
     e.fireT = Math.max(0, (e.fireT || 0) - dt);
     if (canMove && game.mouseL && e.fireT <= 0 && !dead){
       e.fireT = 2.6;
-      const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+      // down the barrel: the turret follows game.yaw, the gun game.pitch --
+      // the same in the seat and in the chase view (Playtest: the shell
+      // went where the chase camera looked, not where the turret pointed)
+      const dir = lookDir();
       const o = { x: e.x, y: e.y + 2.2, z: e.z };
       baseSys.shell(o, { x: o.x + dir.x * 90, y: o.y + dir.y * 90, z: o.z + dir.z * 90 }, 1.8, 40, true);
       e.charge = Math.max(0, (e.charge || 0) - 0.4);
@@ -23755,7 +23798,10 @@ function driveCar(dt){
     e.mesh.position.set(e.x, vy, e.z);
     if (V.air) e.mesh.rotation.set(e.tPitch || 0, e.heading + (e.tYaw || 0), (e.tRoll || 0) + (e.lean || 0));
     else e.mesh.rotation.y = e.heading;
-    if (V.cannon && e.mesh.userData.turret) e.mesh.userData.turret.rotation.y = game.yaw - e.heading;   // the turret follows your look
+    if (V.cannon && e.mesh.userData.turret){
+      e.mesh.userData.turret.rotation.y = game.yaw - e.heading;   // the turret follows your look
+      if (e.mesh.userData.barrel) e.mesh.userData.barrel.rotation.x = Math.max(-0.12, Math.min(0.5, -game.pitch)) * 0.6;   // and the gun your pitch, within its cradle
+    }
   }
   // the camera is IN the vehicle: the seat, or a chase cam on F5
   vehicleCamera(e.x, vy, e.z, e.heading, dt, V.seat);
@@ -23989,11 +24035,11 @@ function driveHeli(e, V, dt){
   e.fireT = Math.max(0, (e.fireT || 0) - dt);
   if (canMove && game.mouseL && e.fireT <= 0 && !dead){
     e.fireT = 0.13;
-    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const dir = lookDir();
     const rx = -fz, rz = fx;
     const o = { x: e.x - rx * 1.0, y: e.y + 1.2, z: e.z - rz * 1.0 };
-    const cp = game.camera.position;
-    baseSys.strafe(o, { x: cp.x + dir.x * 120 - o.x, y: cp.y + dir.y * 120 - o.y, z: cp.z + dir.z * 120 - o.z }, 9, true);
+    const ex = e.x + rx * V.seat.seatX - fx * V.seat.seatZ, ey = e.y + V.seat.seatY, ez = e.z + rz * V.seat.seatX - fz * V.seat.seatZ;   // the eye in the seat
+    baseSys.strafe(o, { x: ex + dir.x * 120 - o.x, y: ey + dir.y * 120 - o.y, z: ez + dir.z * 120 - o.z }, 9, true);
     e.shots = (e.shots || 0) + 1;
     AudioSys.sfx('shot');
   }
@@ -25964,6 +26010,10 @@ function tryAction(dt, now){
   const tool = activeTool();
   const edge = game.mouseEdge; game.mouseEdge = false;
   game.actProgress = 0;
+  // at the wheel the vehicle owns the left button (the tank's gun, the
+  // gunship's door gun, the jet's cannon); nothing in the hands acts.
+  // (Playtest: the fists picked the gunship up from inside it.)
+  if (game.driving){ game.act.t = 0; game.act.charging = false; return; }
   // empty hands: the fists are the tool
   if (!tool && !selectedItem() && game.ui === 'none' && isLocked()){
     game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0);
@@ -31926,7 +31976,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

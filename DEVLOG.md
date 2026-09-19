@@ -2,6 +2,57 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 63 — FIXES I: the blockers from the Build 62 playtest (2026-09-19)
+
+Austin played Builds 44 to 62 in one go and sent the report; this is the
+first of the fix builds, the things that stop play. What was found and
+what was done:
+
+- **Every menu since Build 43 could not be closed** (phone, paper, pit,
+  booth, casino, bank, exchange, chart, race). Cause: the key handler
+  closed overlays from a hand-written list of screen names that stopped
+  growing at Build 43; every later screen fell through to "a menu is
+  open, ignore keys". Now any screen that is not the world, the pause
+  menu, the options or the death screen is an overlay: E closes it (Q
+  the crafting screen, N the blueprints, M the map as before) and
+  Escape closes any of them. A screen added later needs no list.
+- **The fists picked the gunship up from inside it** (and the jet).
+  Left click at the wheel ran the hands' action as well as the
+  vehicle's: with empty hands, the gather picked the vehicle up as a
+  carried thing. Now nothing in the hands acts while driving; the
+  vehicle owns the left button. All vehicles.
+- **The tank's shell went where the chase camera looked**, not where
+  the turret pointed, and **third person had no mouse look.** The
+  chase cam now orbits with the mouse (it hangs behind the point you
+  look from and looks at the vehicle; the view still swings with the
+  vehicle as before). Guns fire down the look direction in either
+  view: the tank's shell follows the turret, the barrel tips with your
+  pitch, the gunship's door gun converges from the seat.
+- **The race car was invisible.** A vehicle entered the instant it
+  spawned never got its body (the entity loop skips the one you are
+  driving, and the body is made in that loop). Entering a vehicle now
+  makes its body if it has none.
+- **Creative was not survival:** forts stood empty, the train was
+  never raided. Creative reaped every lurker without a bounty, pit or
+  bank tag every frame, which included fort raiders, train raiders and
+  sieges. Removed: everything that spawns, spawns, in both modes
+  (creative takes no damage, so a hostile is scenery there).
+- **The stutter between two adjacent cube holes.** Reproduced through
+  the drill headlessly: walking toward the shared wall the player sank
+  up to eighteen centimetres into the floor, then popped up across the
+  seam. The CSG field is a lower bound, not a distance: beside the
+  removed wall the field's nearest "surface" is that phantom wall, the
+  gradient points sideways, the contact is (rightly) rejected as
+  phantom, and the floor that is really there is never found, so
+  gravity wins until the gradient flips. Fix: when the gradient's
+  surface is not real, probe straight down and bisect to the real
+  floor. Player and vehicle contacts both. The walk is flat now at
+  every size.
+- Still on the list from the report, in the roadmap's order: the
+  loading screen and the hold on missing ground (Build 64), set-pieces
+  at range and the map (65), smaller cities with a building per keeper
+  (66), sound (67), vehicle skins (68), biomes (an arc).
+
 ## Build 62 — THE GARRISON C: the gunship and the jet (2026-09-19)
 
 The third slice, and the last of THE GARRISON: the air.
