@@ -5,6 +5,33 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 62 — THE GARRISON C
+- [ ] Find the gunship on a base's helipad (the obsidian disc with the
+      H, right of the command post). Raise the alarm and watch it lift.
+      Does the orbit feel like a gunship, or like a mosquito? Is the
+      door gun frightening enough, or too much?
+- [ ] Hide from it. Behind a wall, in a doorway, in a hole. Does it
+      stop firing when it cannot see you? Does it find you again?
+- [ ] Shoot it down (a rifle works; rockets work faster). You should
+      get a gunship part and forty coins, and the base should not get
+      another one.
+- [ ] Build your own gunship (creative has one). Lift, hold, fly, turn,
+      land. Is the height hold right? Is it too easy or too hard to
+      land without wrecking it? Fire the door gun at something: does it
+      go where you look?
+- [ ] Take a base and find the quartermaster at the command post (gold
+      on his cap). Buy jet fuel. Build the jet (or take creative's),
+      right click it holding a can, deploy it on an airstrip, take
+      off. Tell me how the takeoff run and the speed feel against the
+      plane.
+- [ ] Loops: climb, pull to the stop, keep pulling. Rolls: shift + A
+      or D. Do they read from the cockpit, or is the camera sick-making?
+      Try a loop low. Did you die? Should the jet have refused?
+- [ ] Cannon (left click) and missiles (R, one rocket each) at a
+      garrison from the air. Does the base's alarm answer? Does its
+      gunship come up after you?
+- [ ] Old world: does your existing base get a gunship on its pad?
+
 ## Build 61 — THE GARRISON B
 - [ ] Drive past a garrison and find its tanks on the road. Watch one
       patrol. Then raise the alarm from the road and see what a shell

@@ -3067,7 +3067,7 @@ function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'wool', 'bed', 'rope',
-  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
+  'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey',
@@ -3378,6 +3378,11 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
     costs: [{ item: 'tankpart', n: 3 }, { item: 'ironingot', n: 24 }, { item: 'rubyingot', n: 6 }, { item: 'wire', n: 10 }] });
   RECIPES.push({ kind: 'hover', station: true,
     costs: [{ item: 'ironingot', n: 14 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 8 }, { item: 'aetheringot', n: 4 }] });
+  // the gunship and the jet, from their three parts; the jet comes with an empty tank
+  RECIPES.push({ kind: 'heli', station: true,
+    costs: [{ item: 'gunpart', n: 3 }, { item: 'ironingot', n: 20 }, { item: 'rubyingot', n: 6 }, { item: 'wire', n: 12 }, { item: 'aetheringot', n: 2 }] });
+  RECIPES.push({ kind: 'jet', station: true,
+    costs: [{ item: 'jetpart', n: 3 }, { item: 'ironingot', n: 26 }, { item: 'rubyingot', n: 8 }, { item: 'wire', n: 10 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'cannon', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'aetheringot', n: 2 }, { mat: MAT.PLANKS, n: 4 }] });
   // the wall turret: wire it to your grid and it shoots what comes at you
   RECIPES.push({ kind: 'turret', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 2 }, { item: 'cells', n: 16 }] });
@@ -3530,6 +3535,8 @@ function craft(slots, r, free){
                   : r.kind === 'plane' ? { kind: 'plane', charge: 100 }
                   : r.kind === 'hover' ? { kind: 'hover', charge: 100 }
                   : r.kind === 'tank' ? { kind: 'tank', charge: 100 }
+                  : r.kind === 'heli' ? { kind: 'heli', charge: 100 }
+                  : r.kind === 'jet' ? { kind: 'jet', charge: 0 }
                   : (r.kind === 'helm' || r.kind === 'plate' || r.kind === 'boots')
                     ? { kind: r.kind, tier: r.tier }
                   : makeGun();
@@ -6971,7 +6978,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -9672,7 +9679,7 @@ const powerSys = {
   padCars(n){
     const out = [];
     for (const e of game.entities)
-      if (VEH[e.type] && (e.charge || 0) < 100 &&
+      if (VEH[e.type] && !VEH[e.type].fuel && (e.charge || 0) < 100 &&
           Math.abs(e.x - n.x) < 1.9 && Math.abs(e.z - n.z) < 1.9 && Math.abs(e.y - n.y) < 2.5) out.push(e);
     return out;
   },
@@ -9709,7 +9716,7 @@ const powerSys = {
       let best = null, bd = 24;
       const mx = n.x, my = n.y + 0.95, mz = n.z;
       for (const e of game.entities){
-        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly) || (e.type === 'tank' && e.crewed && !e.friendly);
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly) || (VEH[e.type] && e.crewed && !e.friendly);
         if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
         const def = ENT_DEF[e.type]; if (!def) continue;
         const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
@@ -11000,6 +11007,13 @@ const VEH = {
   // THE GARRISON: the tank -- slow, heavy, climbs a kerb and a half, and its gun is on the left button
   tank:      { name: 'tank', top: 8.5, rev: 3.5, accel: 4, brake: 6, steer: 0.9, drain: 0.12, r: 1.5, ride: 1.05, kmh: 30, repair: 30, step: 1.5, cannon: true,
                seat: { seatX: 0, seatY: 2.3, seatZ: -0.2, back: 10, up: 4.2, look: 1.6 } },
+  // THE GARRISON C: the gunship, a hover-flyer with a door gun on the left
+  // button; the jet, which drinks jet fuel and nothing else -- cannon on
+  // the left button, missiles on R, rolls on shift+A/D, loops on a held space
+  heli:      { name: 'gunship', top: 24, rev: 8, accel: 9, brake: 7, steer: 1.6, drain: 0.16, r: 1.4, ride: 0.9, kmh: 90, repair: 30, fly: true, heli: true, stall: 0, ceiling: 220,
+               seat: { seatX: -0.4, seatY: 1.5, seatZ: -1.1, back: 12, up: 4.5, look: 1.8 } },
+  jet:       { name: 'jet', top: 75, rev: 0, accel: 14, brake: 8, steer: 1.5, drain: 0.5, r: 1.3, ride: 0.7, kmh: 280, repair: 40, fly: true, jet: true, fuel: true, stall: 22, ceiling: 320,
+               seat: { seatX: 0, seatY: 1.62, seatZ: -1.7, back: 14, up: 5, look: 2.2 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
                seat: { seatX: -0.42, seatY: 2.32, seatZ: -1.75, back: 13, up: 4.5, look: 2.0 } },
@@ -11048,6 +11062,8 @@ const ENT_DEF = {
   soldier:  { hp: 70, speed: 3.4, r: 0.42, h: 1.8, cap: 0 },   // THE GARRISON: a base's own, with rifles
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   tank:     { hp: 480, speed: 0, r: 1.6, h: 2.3, cap: 0 },
+  heli:     { hp: 300, speed: 0, r: 1.7, h: 2.4, cap: 0 },
+  jet:      { hp: 240, speed: 0, r: 1.5, h: 2.2, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
   boat:     { hp: 120, speed: 0, r: 1.0, h: 1.0, cap: 0 },
@@ -11085,6 +11101,7 @@ const VROLE = {
   walker:  { name: 'citizen',      coat: 0x6a6a72, hat: 0x4a4a52 },
   guard:   { name: 'city guard',   coat: 0x2f4f7a, hat: 0x1c2c4a },
   soldier: { name: 'soldier',      coat: 0x556b3a, hat: 0x3c4a2c },
+  quarter: { name: 'quartermaster', coat: 0x4f5a3a, hat: 0xd9b25a },
   commander:{ name: 'commander',   coat: 0x3f4a2e, hat: 0x1e2416 },
 };
 const dropTexCache = new Map();
@@ -11241,6 +11258,69 @@ function entMesh(type, ent){
     box(0.42, 0.42, 0.5, steel, 0, 0.4, -4.1, turret);        // the muzzle brake
     if (ent && ent.crewed) box(0.5, 0.06, 0.5, 0xd9b25a, 0, 1.02, -0.2, turret);
     g.userData.turret = turret; g.userData.barrel = barrel;
+    return g;
+  }
+  if (type === 'heli'){
+    // the gunship: a slab-sided fuselage, a glass nose, a tail boom with a
+    // fin, skids, a four-blade rotor and a door gun on the left side. A
+    // garrison's wears the braid on the cabin roof.
+    g.rotation.order = 'YXZ';
+    const olive = 0x46503a, dark = 0x2a2e26, steel = 0x2a2a30, glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    box(1.9, 1.5, 4.2, olive, 0, 1.35, 0.2);                   // cabin
+    box(1.7, 0.9, 1.3, olive, 0, 1.15, -2.4);                  // the nose
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1.0), glassM); nose.position.set(0, 1.75, -2.3); g.add(nose);
+    box(1.9, 0.12, 4.0, dark, 0, 2.15, 0.2);                   // roof
+    box(0.6, 0.55, 3.6, olive, 0, 1.55, 3.9);                  // tail boom
+    box(0.14, 1.3, 0.9, olive, 0, 2.3, 5.4);                   // the fin
+    box(0.9, 0.12, 0.6, olive, 0, 1.9, 5.3);                   // the stabiliser
+    for (const sx of [-0.9, 0.9]){ box(0.12, 0.12, 3.4, steel, sx, 0.1, 0.2); box(0.1, 0.55, 0.1, steel, sx, 0.4, -0.8); box(0.1, 0.55, 0.1, steel, sx, 0.4, 1.2); }
+    box(0.4, 0.5, 0.5, dark, 0, 2.45, 0.2);                    // the mast
+    const rotor = new THREE.Group(); rotor.position.set(0, 2.75, 0.2); g.add(rotor);
+    for (let i = 0; i < 4; i++){ const bl = box(0.16, 0.05, 4.6, steel, 0, 0, 0, rotor); bl.rotation.y = i * Math.PI / 2; }
+    const trotor = new THREE.Group(); trotor.position.set(0.16, 2.3, 5.55); g.add(trotor);
+    for (let i = 0; i < 2; i++){ const bl = box(0.04, 1.1, 0.1, steel, 0, 0, 0, trotor); bl.rotation.x = i * Math.PI / 2; }
+    const gun = box(0.14, 0.14, 1.1, steel, -1.05, 1.25, -0.4);  // the door gun, left side
+    box(0.3, 0.3, 0.4, dark, -1.02, 1.25, 0.1);
+    if (ent && ent.crewed) box(0.6, 0.05, 0.6, 0xd9b25a, 0, 2.22, 0.2);
+    for (const sxx of [-0.4, 0.4]){ box(0.5, 0.45, 0.5, dark, sxx, 1.0, -1.1); }
+    g.userData.rotor = rotor; g.userData.trotor = trotor; g.userData.gun = gun;
+    const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+    const gtex = new THREE.CanvasTexture(gcv); gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+    const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.4), new THREE.MeshBasicMaterial({ map: gtex }));
+    gauges.position.set(-0.4, 1.75, -1.75); gauges.rotation.x = -0.45; g.add(gauges);
+    g.userData.gauge = { cv: gcv, tex: gtex };
+    return g;
+  }
+  if (type === 'jet'){
+    // the jet: a needle nose, a delta wing, two canted fins, one engine
+    // with a flame that shows under throttle; three gear legs
+    g.rotation.order = 'YXZ';
+    const grey = 0x8a8f9a, dark = 0x2a2a30, red = 0xc93a3a;
+    const glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+    box(1.2, 1.0, 6.0, grey, 0, 1.2, 0.6);                     // fuselage
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 8), new THREE.MeshBasicMaterial({ color: grey }));
+    cone.rotation.x = -Math.PI / 2; cone.position.set(0, 1.2, -3.6); g.add(cone);
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 1.8), glassM); canopy.position.set(0, 1.95, -1.4); g.add(canopy);
+    box(7.6, 0.14, 2.6, grey, 0, 1.0, 1.2);                    // the delta wing
+    box(0.9, 0.14, 1.2, red, -3.5, 1.02, 1.2); box(0.9, 0.14, 1.2, red, 3.5, 1.02, 1.2);   // wingtips
+    for (const sx of [-0.5, 0.5]){ const fin = box(0.1, 1.3, 1.2, grey, sx, 2.2, 3.0); fin.rotation.z = -sx * 0.45; }
+    box(2.6, 0.12, 0.9, grey, 0, 1.1, 3.3);                    // tailplane
+    const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.7, 10), new THREE.MeshBasicMaterial({ color: dark }));
+    noz.rotation.x = Math.PI / 2; noz.position.set(0, 1.2, 3.9); g.add(noz);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.8, 8), new THREE.MeshBasicMaterial({ color: 0xff9a30, transparent: true, opacity: 0.85 }));
+    flame.rotation.x = -Math.PI / 2; flame.position.set(0, 1.2, 5.1); flame.visible = false; g.add(flame);
+    for (const [wx2, wz2] of [[-0.9, 0.9], [0.9, 0.9], [0, -2.2]]){
+      box(0.1, 0.7, 0.1, dark, wx2, 0.55, wz2);
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.2, 10), new THREE.MeshBasicMaterial({ color: dark })); wh.rotation.z = Math.PI / 2; wh.position.set(wx2, 0.26, wz2); g.add(wh);
+    }
+    box(0.1, 0.1, 0.9, dark, -0.55, 1.05, -2.2); box(0.1, 0.1, 0.9, dark, 0.55, 1.05, -2.2);   // the cannon ports
+    box(0.5, 0.4, 0.5, dark, 0, 1.45, -1.1);                   // the seat
+    g.userData.flame = flame;
+    const gcv = document.createElement('canvas'); gcv.width = 128; gcv.height = 64;
+    const gtex = new THREE.CanvasTexture(gcv); gtex.magFilter = THREE.NearestFilter; gtex.minFilter = THREE.NearestFilter;
+    const gauges = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.35), new THREE.MeshBasicMaterial({ map: gtex }));
+    gauges.position.set(0, 1.85, -2.25); gauges.rotation.x = -0.5; g.add(gauges);
+    g.userData.gauge = { cv: gcv, tex: gtex };
     return g;
   }
   if (type === 'car'){
@@ -11937,12 +12017,17 @@ function killEntity(e, byPlayer){
     [e.type === 'grazer' ? 0xc8a24b : e.type === 'sheep' ? 0xeceae2 : e.type === 'stalker' ? 0x2c3444 : e.type === 'husk' ? 0x6a5040 : e.type === 'wisp' ? 0x9fe8ff : e.type === 'angel' || e.type === 'archangel' ? 0xf4f2f8 : e.type === 'guardian' ? 0xc9a86a : 0x1c1626], 24, 2.2);
   AudioSys.sfx('die');
   if (VEH[e.type] && e.crewed){
-    // a garrison's tank burns where it stands; one part of it is still good
-    if (!e.noDrop){ addStackItem('tankpart', 1); addStackItem('coin', 40); toast('the tank burns — +1 tank part · +40 coins'); }
+    // a garrison's tank burns where it stands, its gunship falls out of
+    // the sky; one part of it is still good
+    if (!e.noDrop){
+      const part = e.type === 'heli' ? 'gunpart' : e.type === 'jet' ? 'jetpart' : 'tankpart';
+      addStackItem(part, 1); addStackItem('coin', 40);
+      toast((e.type === 'heli' ? 'the gunship goes down' : 'the ' + VEH[e.type].name + ' burns') + ' — +1 ' + (e.type === 'heli' ? 'gunship' : VEH[e.type].name) + ' part · +40 coins');
+    }
     Particles.burst(e.x, e.y + 1.2, e.z, 1.6, [0xffb347, 0xff8830, 0x51484f, 0x9a9aa5], 40, 6);
     Embers.burst(e.x, e.y + 1, e.z, 1.0, [0xffb347, 0xffdd66], 12, 3);
     AudioSys.sfx('boom');
-    baseSys.onTankDeath(e);
+    baseSys.onCrewedDeath(e);
     return;
   }
   if (VEH[e.type]){
@@ -12141,7 +12226,7 @@ function hurtEntity(e, dmg, kx, kz, quiet){
   e.hp -= dmg;
   e.flash = 0.15;
   e.fleeT = 6;
-  if (e.type === 'soldier' || (e.type === 'tank' && e.crewed)) baseSys.onHit(e);
+  if (e.type === 'soldier' || (VEH[e.type] && e.crewed)) baseSys.onHit(e);
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
   if (e.hp <= 0) killEntity(e, !quiet);
@@ -13356,7 +13441,7 @@ const crewSys = {
     killEntity(e, false);
     markSave();
   },
-  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly) || (o.type === 'tank' && o.crewed && !o.friendly)); },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly) || (VEH[o.type] && o.crewed && !o.friendly)); },
   // what it costs to hire them: villagers 60, city folk 120, the mayor 400
   // -- and the mayor only leaves the office for someone the city knows
   hireCost(e, hrec){ return hrec.role === 'mayor' ? 400 : e.ckey ? 120 : this.HIRE_COST; },
@@ -13391,7 +13476,7 @@ const crewSys = {
   // a vehicle in their pack drives it behind you on your trail, and the
   // rest ride with them. Step out and they step out; their car goes back
   // in the pack.
-  SEATS: { car: 2, sportscar: 2, boat: 2, motorboat: 2, plane: 2, hover: 1, bike: 1, tank: 1 },
+  SEATS: { car: 2, sportscar: 2, boat: 2, motorboat: 2, plane: 2, hover: 1, bike: 1, tank: 1, heli: 2, jet: 1 },
   seatOf(v, idx){
     const V = VEH[v.type] || VEH.car, S = V.seat || { seatX: -0.45, seatY: 1.3, seatZ: 0.5 };
     const h = v.heading || 0, lx = idx === 0 ? (S.seatX || -0.45) : -(S.seatX || -0.45), lz = S.seatZ || 0.5;
@@ -17388,7 +17473,7 @@ const baseSys = {
     const rec = game.bases && game.bases[e.bkey];
     if (!rec || rec.taken || e.friendly) return;
     e.alert = true;
-    this.raise(rec, e.type === 'tank' ? 'a tank was hit' : 'a soldier was hit');
+    this.raise(rec, e.type === 'tank' ? 'a tank was hit' : e.type === 'heli' ? 'the gunship was hit' : 'a soldier was hit');
   },
   // ---- the tanks (slice B): two to a base, on the highway, crewed till they die ----
   TANKS: 2,
@@ -17430,12 +17515,166 @@ const baseSys = {
     setTimeout(() => { if (game.running) explode(at.x, at.y, at.z, r, dmg); }, Math.min(900, 60 + hit * 9));
     return at;
   },
-  onTankDeath(e){
+  onCrewedDeath(e){
     const rec = game.bases && game.bases[e.bkey];
     if (!rec) return;
-    rec.tanks = Math.max(0, (rec.tanks == null ? this.TANKS : rec.tanks) - 1);
-    if (!rec.taken && rec.alarm <= 0 && !e.noDrop) this.raise(rec, 'a tank is burning');
+    if (e.type === 'heli') rec.helis = Math.max(0, (rec.helis == null ? this.HELIS : rec.helis) - 1);
+    else rec.tanks = Math.max(0, (rec.tanks == null ? this.TANKS : rec.tanks) - 1);
+    if (!rec.taken && rec.alarm <= 0 && !e.noDrop) this.raise(rec, e.type === 'heli' ? 'the gunship is down' : 'a tank is burning');
     markSave();
+  },
+  // ---- the gunship (slice C): one to a base, on the helipad till the siren ----
+  HELIS: 1,
+  padOf(rec){
+    const gy = rec.gy != null ? rec.gy : game.gen.height(rec.x, rec.z);
+    return { x: rec.x + 12, y: gy + 0.45, z: rec.z + 1 };
+  },
+  spawnHeli(rec){
+    const pad = this.padOf(rec);
+    const e = spawnEntity('heli', +pad.x.toFixed(2), +pad.y.toFixed(2), +pad.z.toFixed(2));
+    e.crewed = true; e.bkey = rec.key; e.heading = 0; e.speed = 0; e.charge = 100; e.spool = 0; e.onPad = true;
+    e.alert = rec.alarm > 0;
+    return e;
+  },
+  // a burst of fire down a line: the first solid thing stops it (and, one
+  // round in four, takes a pockmark); a body on the way takes the round.
+  // Yours hits what is not yours; a garrison's hits you and your friend.
+  strafe(from, dir, dmg, byPlayer, range){
+    const R = range || 140;
+    const L0 = Math.hypot(dir.x, dir.y, dir.z) || 1;
+    const ux = dir.x / L0, uy = dir.y / L0, uz = dir.z / L0;
+    const ex = from.x + ux * R, ey = from.y + uy * R, ez = from.z + uz * R;
+    const le = nearEdits([Math.min(from.x, ex) - 1, Math.min(from.y, ey) - 1, Math.min(from.z, ez) - 1, Math.max(from.x, ex) + 1, Math.max(from.y, ey) + 1, Math.max(from.z, ez) + 1]);
+    let hit = R;
+    for (let t = 1.5; t < R; t += 0.5){ if (CORE.evalSDF(from.x + ux * t, from.y + uy * t, from.z + uz * t, le, game.gen) < 0.1){ hit = t; break; } }
+    let tgt = null, td = hit, player = false;
+    const along = (x, y, z, r) => {
+      const t = (x - from.x) * ux + (y - from.y) * uy + (z - from.z) * uz;
+      if (t < 1 || t >= td) return null;
+      const px = from.x + ux * t - x, py = from.y + uy * t - y, pz = from.z + uz * t - z;
+      return Math.hypot(px, py, pz) < r ? t : null;
+    };
+    if (byPlayer){
+      for (const e of game.entities){
+        if (e === game.driving || e.type === 'drop' || e.friendly || e.crew || e.type === 'villager' || e.type === 'cab') continue;
+        const def = ENT_DEF[e.type]; if (!def) continue;
+        const t = along(e.x, e.y + def.h * 0.5, e.z, def.r + 0.45);
+        if (t != null){ tgt = e; td = t; }
+      }
+    } else {
+      const t = along(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.75);
+      if (t != null && !farmSys.invisible()){ player = true; td = t; }
+      for (const e of game.entities){
+        if (!e.crew || e.type === 'drop') continue;
+        const def = ENT_DEF[e.type]; if (!def) continue;
+        const t2 = along(e.x, e.y + def.h * 0.5, e.z, def.r + 0.45);
+        if (t2 != null){ tgt = e; td = t2; player = false; }
+      }
+    }
+    const at = { x: from.x + ux * td, y: from.y + uy * td, z: from.z + uz * td };
+    beamFX.add(from.x, from.y, from.z, at.x, at.y, at.z, byPlayer ? 0xffe08a : 0xff9a5a);
+    if (player) damagePlayer(dmg, ux * 2, uz * 2);
+    else if (tgt){ if (tgt.crew) crewSys.hurt(tgt, dmg, ux * 1.5, uz * 1.5); else hurtEntity(tgt, dmg, ux * 1.5, uz * 1.5); }
+    else if (hit < R){
+      Particles.burst(at.x, at.y, at.z, 0.2, [0xffd080, 0x9a9aa5], 3, 1.2);
+      if (Math.random() < 0.25) explode(at.x, at.y, at.z, 0.35, Math.round(dmg * 0.5));
+    }
+    return { at, hit: player ? 'player' : tgt ? tgt : null };
+  },
+  // a crewed gunship: it sits on the helipad at peace, rotor still. On the
+  // alarm it spools up, lifts, and circles you at thirty metres and
+  // sixteen up, its door gun in bursts of five; when it loses you it
+  // holds over the base, and when the alarm ends it comes home and lands.
+  heliTick(e, dt, now, pd){
+    const rec = game.bases && game.bases[e.bkey];
+    if (!e.mesh){ e.mesh = entMesh('heli', e); game.scene.add(e.mesh); }
+    if (!rec){ e.mesh.position.set(e.x, e.y, e.z); return; }
+    const pad = this.padOf(rec);
+    if (!e.alert && rec.alarm > 0 && !rec.taken) e.alert = true;
+    const P = e.alert && !rec.taken ? crewSys.prey(e, 150) : null;
+    // the rotor stays up until it is home on the pad
+    e.spool = Math.max(0, Math.min(1, (e.spool || 0) + (e.alert || !e.onPad ? 0.45 : -0.3) * dt));
+    let tx, ty, tz, home = false;
+    if (P){
+      e.orb = (e.orb || 0) + dt * 0.32;
+      tx = P.x + Math.cos(e.orb) * 30; tz = P.z + Math.sin(e.orb) * 30;
+      ty = Math.max(P.y + 16, game.gen.height(tx, tz) + 10);
+      e.lostT = 0;
+    } else {
+      if (e.alert){ e.lostT = (e.lostT || 0) + dt; if (e.lostT > 20 && rec.alarm <= 0) e.alert = false; }
+      if (e.alert){ tx = rec.x; tz = rec.z; ty = pad.y + 22; }
+      else { tx = pad.x; tz = pad.z; ty = pad.y; home = true; }
+    }
+    const dx = tx - e.x, dz = tz - e.z, dh = Math.hypot(dx, dz);
+    // it climbs before it goes anywhere, and comes down only over the pad
+    const lifted = e.y > pad.y + 6;
+    const sp = e.spool < 0.7 ? 0 : (lifted ? (e.alert ? 16 : 8) : 0);
+    if (dh > 0.5 && sp > 0){
+      const step = Math.min(sp * dt, dh);
+      e.x += dx / dh * step; e.z += dz / dh * step;
+      e.heading = Math.atan2(-dx, -dz);
+      e.speed = sp;
+    } else e.speed = 0;
+    let wantY = ty;
+    if (home && dh > 1.5) wantY = Math.max(ty, pad.y + 12);           // fly home at height, then settle
+    if (!home && !lifted && e.spool < 0.7) wantY = e.y;
+    const vr = e.spool < 0.7 && !home ? 0 : (home && dh <= 1.5 ? 2.5 : 6);
+    const dy = wantY - e.y;
+    e.y += Math.max(-vr * dt, Math.min(vr * dt, dy));
+    if (home && dh <= 1.5 && Math.abs(dy) < 0.05) e.y = wantY;
+    e.onPad = home && dh <= 1.5 && Math.abs(e.y - pad.y) < 0.1;
+    if (e.y > (VEH.heli.ceiling || 220)) e.y = VEH.heli.ceiling || 220;
+    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.rotation.set(-Math.min(0.22, (e.speed || 0) * 0.014), e.heading || 0, 0);
+    const ud = e.mesh.userData;
+    if (ud.rotor) ud.rotor.rotation.y += dt * (e.spool * 26);
+    if (ud.trotor) ud.trotor.rotation.x += dt * (e.spool * 40);
+    // the door gun: bursts of five, a round every eighth of a second, one
+    // burst every two and a half -- when it can see you
+    if (P && e.spool > 0.9){
+      e.burstT = (e.burstT == null ? 1.2 : e.burstT) - dt;
+      if (e.burstT <= 0 && !(e.burst > 0) && this.canSee({ x: e.x, y: e.y - 0.5, z: e.z }, P.x, P.y + 0.9, P.z)){ e.burstT = 2.5; e.burst = 5; e.burstGap = 0; }
+      if (e.burst > 0){
+        e.burstGap = (e.burstGap || 0) - dt;
+        if (e.burstGap <= 0){
+          e.burstGap = 0.125; e.burst--;
+          const o = { x: e.x, y: e.y + 0.9, z: e.z };
+          const d = { x: P.x - o.x + (Math.random() - 0.5) * 2.2, y: P.y + 0.9 - o.y + (Math.random() - 0.5) * 1.2, z: P.z - o.z + (Math.random() - 0.5) * 2.2 };
+          this.strafe(o, d, 7, false);
+          e.shots = (e.shots || 0) + 1;
+          if (pd < 90) AudioSys.sfx('shot');
+        }
+      }
+    }
+    e.flash = Math.max(0, (e.flash || 0) - dt);
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.04 : 1);
+    if ((e.hp || 0) < ENT_DEF.heli.hp * 0.4 && Math.random() < dt * 5) Smoke.burst(e.x, e.y + 2.2, e.z, 0.3, [0x2a2a2e, 0x4a4a4e], 1, 0.4);
+  },
+  // the quartermaster of a taken base: right click him for a can of jet
+  // fuel at forty coins -- the only place it is sold
+  FUEL_PRICE: 40,
+  quarterTalk(e){
+    if (CORE.countItem(game.slots, 'coin') < this.FUEL_PRICE){
+      toast('the quartermaster: "forty coins a can — jet fuel does not grow on trees"'); AudioSys.sfx('deny'); return false;
+    }
+    CORE.consumeItem(game.slots, 'coin', this.FUEL_PRICE);
+    addStackItem('jetfuel', 1);
+    refreshHotbar(); refreshToolHUD(); markSave();
+    toast('a can of JET FUEL — ' + this.FUEL_PRICE + ' coins · right click the jet with it to fill her up');
+    AudioSys.sfx('craft');
+    return true;
+  },
+  // a can into the jet: half a tank
+  refuel(v, it){
+    if (!v || !VEH[v.type] || !VEH[v.type].fuel || !it || it.kind !== 'jetfuel') return false;
+    if ((v.charge || 0) >= 100){ toast('the tank is full'); return false; }
+    it.count--;
+    if (it.count <= 0){ const i = game.slots.indexOf(it); if (i >= 0) game.slots[i] = null; }
+    v.charge = Math.min(100, (v.charge || 0) + 50);
+    refreshHotbar(); refreshToolHUD(); markSave();
+    toast('fuelled — ' + Math.round(v.charge) + '%');
+    AudioSys.sfx('craft');
+    return true;
   },
   // a crewed tank: patrols the highway by its base; alerted, it comes down
   // the road to the point nearest you and shells you from there
@@ -17497,6 +17736,12 @@ const baseSys = {
     rec.taken = true; rec.alarm = 0; rec.reinf = 0; rec.men = 6;
     for (const e of [...game.entities]) if (e.type === 'soldier' && e.bkey === rec.key && !e.friendly) killEntity(e, false);
     for (const e of [...game.entities]) if (e.type === 'tank' && e.crewed && e.bkey === rec.key){ e.noDrop = true; killEntity(e, false); }
+    // the gunship's crew fly it out rather than hand it over
+    for (const e of [...game.entities]) if (e.type === 'heli' && e.crewed && e.bkey === rec.key){
+      if (e.mesh) game.scene.remove(e.mesh);
+      game.entities.splice(game.entities.indexOf(e), 1);
+      toast('the gunship lifts off and is gone');
+    }
     toast('the GARRISON is yours — its soldiers will hold it for you now');
     econSys.note('THE GARRISON ON THE HIGHWAY HAS FALLEN', ['deed', 'siege'], null, true);
     AudioSys.sfx('craft');
@@ -17602,11 +17847,21 @@ const baseSys = {
         // the tanks, on the road
         const tanks = game.entities.filter(e => e.type === 'tank' && e.crewed && e.bkey === key).length;
         if (tanks < (rec.tanks == null ? this.TANKS : rec.tanks)) this.spawnTank(rec);
+        // the gunship, on its pad
+        const helis = game.entities.filter(e => e.type === 'heli' && e.crewed && e.bkey === key).length;
+        if (helis < (rec.helis == null ? this.HELIS : rec.helis)) this.spawnHeli(rec);
         // taken: the commander down and the last of them gone
         if (rec.commanderDead && (rec.men || 0) <= 0 && !mine.some(e => !e.commander) && pd < 80) this.take(rec);
       } else if (rec.posts){
-        const mine = game.entities.filter(e => e.type === 'soldier' && e.bkey === key && e.friendly).length;
+        const ours = game.entities.filter(e => e.type === 'soldier' && e.bkey === key && e.friendly);
+        const mine = ours.filter(e => !e.quarter).length;
         if (mine < (rec.men || 6)) this.spawnSoldier(rec, rec.posts[(mine + 1) % rec.posts.length], this.ARMS[mine % this.ARMS.length], false);
+        // the quartermaster at the command post, with the fuel
+        if (!ours.some(e => e.quarter) && rec.cmdPost){
+          const q = this.spawnSoldier(rec, rec.cmdPost, 'rifle', false);
+          q.quarter = true; q.role = 'quarter'; q.roam = 0.6;
+          if (q.mesh){ game.scene.remove(q.mesh); q.mesh = null; }
+        }
       }
     }
   },
@@ -21277,6 +21532,7 @@ function updateEntities(dt, now){
     if (e.racer){ trackSys.drive(e, dt); continue; }
     if (e.convoy){ crewSys.convoyTick(e, dt); continue; }
     if (e.type === 'tank' && e.crewed){ baseSys.tankTick(e, dt, now, pd); continue; }
+    if (e.type === 'heli' && e.crewed){ baseSys.heliTick(e, dt, now, pd); continue; }
     if (e.ride){ if (!e.ride.veh || !game.entities.includes(e.ride.veh)) e.ride = null; else { if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); } continue; } }
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
@@ -22812,9 +23068,15 @@ function bindInput(){
       }
       const vent = entityOnRay(3.6);
       if (vent && vent.type === 'villager'){ talkTo(vent); return; }
+      if (vent && vent.type === 'soldier' && vent.quarter){ baseSys.quarterTalk(vent); return; }
       if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
       if (vent && VEH[vent.type]){
         if (vent.crewed){ toast('it is crewed, and they are not getting out for you'); AudioSys.sfx('deny'); return; }
+        if (VEH[vent.type].fuel){
+          const sel = selectedItem();
+          if (sel && sel.kind === 'jetfuel'){ baseSys.refuel(vent, sel); return; }
+          if ((vent.charge || 0) <= 0 && !game.keys['KeyC']){ toast('no fuel — the quartermaster of a taken garrison sells it, a can for ' + baseSys.FUEL_PRICE + ' coins'); AudioSys.sfx('deny'); return; }
+        }
         if (game.keys['KeyC']){
           // crouch-grab folds it back into a kit, charge intact
           const i2 = game.slots.findIndex(sl => !sl);
@@ -23238,7 +23500,7 @@ function drawCarGauge(e){
   c.fillStyle = '#cfd6e2'; c.font = '9px monospace';
   c.fillText(Math.round(b) + '%', 98, 40);
   c.fillStyle = '#8a8f9a'; c.font = '7px monospace';
-  c.fillText('CHARGE', 98, 52);
+  c.fillText((VEH[e.type] || VEH.car).fuel ? 'FUEL' : 'CHARGE', 98, 52);
   G.tex.needsUpdate = true;
 }
 function unscope(){
@@ -23293,6 +23555,8 @@ function driveCar(dt){
   const e = game.driving;
   if (!e || e.hp <= 0 || game.entities.indexOf(e) < 0){ game.driving = null; return; }
   const V = VEH[e.type] || VEH.car;
+  if (V.heli) return driveHeli(e, V, dt);
+  if (V.jet) return driveJet(e, V, dt);
   if (V.fly) return drivePlane(e, V, dt);
   if (V.hover) return driveHover(e, V, dt);
   const k = game.keys;
@@ -23656,6 +23920,221 @@ function this_crash(e, V, why){
   AudioSys.sfx('boom');
   e.hp = 0;
   killEntity(e, false);
+}
+// ---------- the gunship ----------
+// A hover-flyer: W/S forward and back, A/D turn, space up, C down. It
+// holds its height with nothing pressed, spools up over two seconds, and
+// its door gun is on the left button. Hard landings and walls at speed
+// wreck it like the plane.
+function driveHeli(e, V, dt){
+  const k = game.keys;
+  const canMove = game.ui === 'none' && isLocked();
+  let thr = 0, yawIn = 0, coll = 0;
+  if (canMove){
+    if (k['KeyW']) thr = 1; if (k['KeyS']) thr = -1;
+    if (k['KeyD']) yawIn = 1; if (k['KeyA']) yawIn = -1;
+    if (k['Space']) coll = 1; if (k['KeyC']) coll = -1;
+  }
+  e.heading = e.heading || 0; e.speed = e.speed || 0; e.vy = e.vy || 0; e.pitch = e.pitch || 0; e.roll = e.roll || 0;
+  const dead = (e.charge || 0) <= 0;
+  e.spool = Math.max(0, Math.min(1, (e.spool || 0) + (dead ? -0.5 : 0.5) * dt));
+  const pw = e.spool;
+  const target = thr > 0 ? V.top * pw : thr < 0 ? -V.rev * pw : 0;
+  const accel = thr !== 0 ? V.accel : V.brake;
+  e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
+  const prevH = e.heading;
+  if (!e.onGround || pw > 0.9) e.heading -= yawIn * dt * V.steer * (0.4 + 0.6 * pw);
+  if (!dead) e.charge = Math.max(0, (e.charge || 0) - dt * V.drain * (0.35 + (coll > 0 ? 0.4 : 0) + (thr !== 0 ? 0.25 : 0)));
+  if (e.bat && e.bat.kind === 'battery' && (e.charge || 0) < 100 && (e.bat.charge || 0) > 0){
+    const g = Math.min(100 - (e.charge || 0), e.bat.charge, dt * 2.5);
+    e.charge += g; e.bat.charge -= g;
+  }
+  // the collective: up, down, or hold; without the rotor up it sinks
+  const wantVy = pw < 0.85 ? -7 * (1 - pw) : coll * 6.5;
+  e.vy += (wantVy - e.vy) * Math.min(1, 3.5 * dt);
+  if (dead) e.vy -= 8 * dt;
+  game.yaw += e.heading - prevH;
+  const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading);
+  const vyBefore = e.vy;
+  e.x += fx * e.speed * dt; e.z += fz * e.speed * dt; e.y += e.vy * dt;
+  if (e.y > (V.ceiling || 220)){ e.y = V.ceiling || 220; e.vy = Math.min(e.vy, 0); }
+  const R = V.r;
+  const le = nearEdits([e.x - 3, e.y - 3, e.z - 3, e.x + 3, e.y + 4, e.z + 3]);
+  let grounded = false, wall = false;
+  for (let it = 0; it < 3; it++){
+    const c = sphereContact(e.x, e.y + R, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
+    else wall = true;
+  }
+  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; grounded = true; }
+  const wt = waterTopAt(e.x, e.z, e.y);
+  if (wt != null && e.y < wt - 0.4){ this_crash(e, V, 'ditched in the water'); return; }
+  const wasGround = !!e.onGround;
+  e.onGround = grounded;
+  if (grounded && !wasGround && e.airT > 0.4){
+    if (-vyBefore > 8){ this_crash(e, V, 'came down too hard'); return; }
+    if (Math.abs(e.speed) > 14){ this_crash(e, V, 'came in too fast'); return; }
+    toast('touchdown');
+  }
+  if (grounded && coll <= 0) e.speed *= Math.pow(0.05, dt);
+  e.airT = grounded ? 0 : (e.airT || 0) + dt;
+  if (wall && Math.abs(e.speed) > 10){ this_crash(e, V, 'flew into the ground'); return; }
+  if (wall) e.speed *= 0.5;
+  e.pitch += (-e.speed * 0.011 - e.pitch) * Math.min(1, 3 * dt);
+  e.roll += (-yawIn * 0.22 * pw * (e.onGround ? 0 : 1) - e.roll) * Math.min(1, 3 * dt);
+  // the door gun, converging on the point you look at
+  e.fireT = Math.max(0, (e.fireT || 0) - dt);
+  if (canMove && game.mouseL && e.fireT <= 0 && !dead){
+    e.fireT = 0.13;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const rx = -fz, rz = fx;
+    const o = { x: e.x - rx * 1.0, y: e.y + 1.2, z: e.z - rz * 1.0 };
+    const cp = game.camera.position;
+    baseSys.strafe(o, { x: cp.x + dir.x * 120 - o.x, y: cp.y + dir.y * 120 - o.y, z: cp.z + dir.z * 120 - o.z }, 9, true);
+    e.shots = (e.shots || 0) + 1;
+    AudioSys.sfx('shot');
+  }
+  AudioSys.setHum(pw > 0.05, 1, 0.25 + 0.6 * pw);
+  if (e.mesh){
+    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.rotation.set(e.pitch, e.heading, e.roll);
+    if (e.mesh.userData.rotor) e.mesh.userData.rotor.rotation.y += dt * (pw * 26);
+    if (e.mesh.userData.trotor) e.mesh.userData.trotor.rotation.x += dt * (pw * 40);
+  }
+  game.pos.set(e.x, e.y + V.ride, e.z);
+  game.vel.set(0, 0, 0);
+  game.grounded = true;
+  vehicleCamera(e.x, e.y, e.z, e.heading, dt, V.seat, { pitch: e.pitch, roll: e.roll });
+  game.carHudT = (game.carHudT || 0) + dt;
+  if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
+  game.carHud2T = (game.carHud2T || 0) + dt;
+  if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
+}
+// ---------- the jet ----------
+// The plane's model, twice as fast, on jet fuel. Pull past the stop and
+// keep pulling and it loops; shift with A or D rolls it right over. The
+// cannon is on the left button, the missiles (rockets from your pack) on R.
+function driveJet(e, V, dt){
+  const k = game.keys;
+  const canMove = game.ui === 'none' && isLocked();
+  let thr = 0, yawIn = 0, pitchIn = 0, rollIn = 0;
+  const shift = k['ShiftLeft'] || k['ShiftRight'];
+  if (canMove){
+    if (k['KeyW']) thr = 1; if (k['KeyS']) thr = -1;
+    if (k['KeyD']) yawIn = 1; if (k['KeyA']) yawIn = -1;
+    if (k['Space']) pitchIn = 1; if (k['KeyC']) pitchIn = -1;
+    if (shift && yawIn){ rollIn = yawIn; yawIn = 0; }
+  }
+  e.heading = e.heading || 0; e.speed = e.speed || 0; e.pitch = e.pitch || 0; e.roll = e.roll || 0; e.vy = e.vy || 0;
+  const dead = (e.charge || 0) <= 0;
+  const target = dead ? 0 : thr > 0 ? V.top : thr < 0 ? 0 : e.speed;
+  e.speed += Math.max(-V.brake * dt, Math.min(V.accel * dt, target - e.speed));
+  if (dead) e.speed = Math.max(0, e.speed - 3 * dt);
+  if (thr > 0 && !dead) e.charge = Math.max(0, (e.charge || 0) - dt * V.drain);
+  const lift = Math.max(0, Math.min(1, (e.speed - V.stall * 0.8) / (V.stall * 0.6)));
+  const prevH = e.heading;
+  if (e.onGround){
+    e.loop = false; e.rolling = 0;
+    e.heading -= yawIn * dt * V.steer * Math.min(1, e.speed / 10);
+    const wantP = (pitchIn > 0 && lift > 0.3) ? 0.3 : 0;
+    e.pitch += (wantP - e.pitch) * Math.min(1, 4 * dt);
+    e.roll += (0 - e.roll) * Math.min(1, 6 * dt);
+  } else {
+    // the loop: at the stop, still pulling, fast enough -- over the top
+    if (e.loop){
+      e.pitch += 1.6 * dt;
+      e.speed = Math.max(V.stall * 0.9, e.speed - 4 * dt);
+      if (e.pitch >= Math.PI * 2 - 0.05){ e.pitch -= Math.PI * 2; e.loop = false; e.pullT = 0; e.loops = (e.loops || 0) + 1; toast('LOOP'); }
+    } else {
+      e.pitch = Math.max(-0.7, Math.min(0.65, e.pitch + pitchIn * 1.1 * dt));
+      if (!pitchIn) e.pitch += (0 - e.pitch) * Math.min(1, 0.35 * dt);
+      e.pullT = pitchIn > 0 && e.pitch >= 0.64 ? (e.pullT || 0) + dt : 0;
+      if (e.pullT > 0.45 && e.speed > V.stall * 1.4){ e.loop = true; e.pullT = 0; }
+    }
+    // the roll: a full turn about the nose in eight tenths of a second
+    if (rollIn && !e.rolling) e.rolling = rollIn;
+    if (e.rolling){
+      e.roll += e.rolling * 7.85 * dt;
+      if (Math.abs(e.roll) >= Math.PI * 2 - 0.05){ e.roll = 0; e.rolling = 0; e.rolls = (e.rolls || 0) + 1; toast('ROLL'); }
+    } else {
+      e.roll += (-yawIn * 0.7 - e.roll) * Math.min(1, 3 * dt);
+      e.heading -= yawIn * dt * V.steer * (0.5 + 0.5 * lift);
+    }
+  }
+  game.yaw += e.heading - prevH;
+  const fx = -Math.sin(e.heading) * Math.cos(e.pitch), fz = -Math.cos(e.heading) * Math.cos(e.pitch), fy = Math.sin(e.pitch);
+  const vyBefore = e.vy;
+  e.vy += (fy * e.speed * lift - e.vy) * Math.min(1, 3 * dt) * lift - (1 - lift) * 22 * dt;
+  if (e.onGround && e.vy < 0) e.vy = 0;
+  e.x += fx * e.speed * dt; e.z += fz * e.speed * dt; e.y += e.vy * dt;
+  if (e.y > (V.ceiling || 320)){ e.y = V.ceiling || 320; e.vy = Math.min(e.vy, 0); }
+  const R = V.r;
+  const le = nearEdits([e.x - 3, e.y - 3, e.z - 3, e.x + 3, e.y + 4, e.z + 3]);
+  let grounded = false, wall = false;
+  for (let it = 0; it < 3; it++){
+    const c = sphereContact(e.x, e.y + R, e.z, R, le);
+    if (!c) continue;
+    const g2 = c.g, push = c.push;
+    e.x += g2[0] * push; e.y += g2[1] * push; e.z += g2[2] * push;
+    if (g2[1] > 0.5){ grounded = true; e.vy = Math.max(e.vy, 0); }
+    else wall = true;
+  }
+  if (e.y < CORE.BEDROCK_Y + 0.5){ e.y = CORE.BEDROCK_Y + 0.5; grounded = true; }
+  const wt = waterTopAt(e.x, e.z, e.y);
+  if (wt != null && e.y < wt - 0.5){ this_crash(e, V, 'ditched in the water'); return; }
+  const wasGround = !!e.onGround;
+  e.onGround = grounded;
+  if (grounded && !wasGround && e.airT > 0.4){
+    const impact = -vyBefore;
+    const upside = Math.abs(e.roll) > 1.2 || e.pitch > 1.2;
+    if (impact > 9 || e.pitch < -0.28 || e.speed > 42 || upside){
+      this_crash(e, V, impact > 9 ? 'came in too hard' : e.pitch < -0.28 ? 'nosed in' : upside ? 'came in upside down' : 'came in too hot');
+      return;
+    }
+    toast('touchdown — ' + Math.round(e.speed * 3.6) + ' km/h');
+    e.pitch = 0; e.roll = 0;
+  }
+  e.airT = grounded ? 0 : (e.airT || 0) + dt;
+  if (wall && e.speed > 12){ this_crash(e, V, 'flew into the ground'); return; }
+  if (wall) e.speed *= 0.6;
+  // the cannon and the missiles
+  e.fireT = Math.max(0, (e.fireT || 0) - dt);
+  e.misT = Math.max(0, (e.misT || 0) - dt);
+  if (canMove && game.mouseL && e.fireT <= 0 && !dead){
+    e.fireT = 0.1;
+    const o = { x: e.x + fx * 3.5, y: e.y + 1.2 + fy * 3.5, z: e.z + fz * 3.5 };
+    baseSys.strafe(o, { x: fx, y: fy, z: fz }, 12, true, 200);
+    e.shots = (e.shots || 0) + 1;
+    AudioSys.sfx('shot');
+  }
+  if (canMove && k['KeyR'] && e.misT <= 0){
+    e.misT = 1.6;
+    if (CORE.countItem(game.slots, 'rockets') > 0){
+      CORE.consumeItem(game.slots, 'rockets', 1);
+      const o = { x: e.x + fx * 2, y: e.y + 0.9 + fy * 2, z: e.z + fz * 2 };
+      baseSys.shell(o, { x: o.x + fx * 220, y: o.y + fy * 220, z: o.z + fz * 220 }, 2.2, 60, true);
+      e.missiles = (e.missiles || 0) + 1;
+      refreshHotbar();
+    } else toast('no rockets in the pack — the missiles are rockets');
+  }
+  AudioSys.setHum(e.speed > 0.5, 1, Math.min(1, e.speed / V.top));
+  if (e.mesh){
+    e.mesh.position.set(e.x, e.y, e.z);
+    e.mesh.rotation.set(e.pitch, e.heading, e.roll);
+    if (e.mesh.userData.flame){ e.mesh.userData.flame.visible = thr > 0 && !dead; e.mesh.userData.flame.scale.setScalar(0.8 + Math.random() * 0.4); }
+  }
+  if (thr > 0 && !dead && Math.random() < dt * 20) Particles.burst(e.x - fx * 4.5, e.y + 1.2 - fy * 4.5, e.z - fz * 4.5, 0.25, [0xffb347, 0xff8830], 1, 0.4);
+  game.pos.set(e.x, e.y + V.ride, e.z);
+  game.vel.set(0, 0, 0);
+  game.grounded = true;
+  vehicleCamera(e.x, e.y, e.z, e.heading, dt, V.seat, { pitch: e.pitch, roll: e.roll });
+  game.carHudT = (game.carHudT || 0) + dt;
+  if (game.carHudT > 0.15){ game.carHudT = 0; drawCarGauge(e); }
+  game.carHud2T = (game.carHud2T || 0) + dt;
+  if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
 }
 // ---------- the hoverbike ----------
 // Two metres over anything — rock, water, a road, a lake — and it drinks
@@ -26283,7 +26762,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -26367,6 +26846,20 @@ function itemIconURL(it){
     c.fillStyle = '#4a5a6a'; c.fillRect(4, 7, 7, 5); c.fillRect(10, 8, 4, 2); c.fillStyle = '#2a2a30'; c.fillRect(1, 5, 13, 1); c.fillRect(7, 5, 1, 2);
   } else if (it.kind === 'jetpart'){
     c.fillStyle = '#7a7a86'; c.fillRect(3, 7, 10, 3); c.fillRect(6, 4, 2, 9); c.fillStyle = '#c0c0cc'; c.fillRect(12, 7, 3, 3); c.fillStyle = '#ff7a30'; c.fillRect(1, 8, 2, 1);
+  } else if (it.kind === 'jetfuel'){
+    c.fillStyle = '#c93a3a'; c.fillRect(3, 5, 10, 9);                        // a red jerry can
+    c.fillStyle = '#8a2424'; c.fillRect(3, 9, 10, 1); c.fillRect(11, 5, 2, 9);
+    c.fillStyle = '#2a2a30'; c.fillRect(5, 3, 6, 2); c.fillRect(6, 2, 1, 1); c.fillRect(9, 2, 1, 1);
+    c.fillStyle = '#ffe08a'; c.fillRect(5, 6, 2, 2);
+  } else if (it.kind === 'heli'){
+    c.fillStyle = '#46503a'; c.fillRect(3, 8, 8, 4); c.fillRect(11, 9, 4, 2);
+    c.fillStyle = '#9fd4e8'; c.fillRect(3, 8, 2, 2);
+    c.fillStyle = '#2a2a30'; c.fillRect(1, 5, 13, 1); c.fillRect(7, 6, 1, 2); c.fillRect(14, 7, 1, 4); c.fillRect(2, 13, 10, 1);
+  } else if (it.kind === 'jet'){
+    c.fillStyle = '#8a8f9a'; c.fillRect(1, 8, 13, 2); c.fillRect(5, 6, 6, 6);
+    c.fillStyle = '#c93a3a'; c.fillRect(5, 5, 1, 1); c.fillRect(10, 5, 1, 1);
+    c.fillStyle = '#9fd4e8'; c.fillRect(3, 7, 2, 1);
+    c.fillStyle = '#ff9a30'; c.fillRect(14, 8, 2, 2);
   } else if (it.kind === 'khammer'){
     c.fillStyle = '#5a4a3a'; c.fillRect(7, 6, 2, 9);                         // the haft
     c.fillStyle = '#6f6f78'; c.fillRect(3, 1, 10, 6);                        // the head
@@ -27118,6 +27611,9 @@ function itemLabel(it){
   if (it.kind === 'aetheringot') return 'aether ingot';
   if (it.kind === 'plane') return (it.wrecked ? 'wrecked ' : '') + 'cargo plane';
   if (it.kind === 'tank') return (it.wrecked ? 'wrecked ' : '') + 'tank';
+  if (it.kind === 'heli') return (it.wrecked ? 'wrecked ' : '') + 'gunship';
+  if (it.kind === 'jet') return (it.wrecked ? 'wrecked ' : '') + 'jet';
+  if (it.kind === 'jetfuel') return 'jet fuel';
   if (it.kind === 'hover') return (it.wrecked ? 'wrecked ' : '') + 'hoverbike';
   if (it.kind === 'cannon') return 'launch cannon';
   if (it.kind === 'turret') return 'wall turret';
@@ -27355,7 +27851,7 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -27446,7 +27942,7 @@ function catalogEntries(){
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
-  out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
+  out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
   for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod', 'grayling', 'pike']) out.push({ kind: 'fish', fish: f, count: 8 });
   out.push({ kind: 'coral', count: 16 }); out.push({ kind: 'kelp', count: 16 });
@@ -28266,7 +28762,9 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">commander\'s key ×' + it.count + '</div><div class="t2">opens a garrison\'s vault — top guns, gold, and one part of a war machine</div>';
   } else if (it.kind === 'tankpart' || it.kind === 'gunpart' || it.kind === 'jetpart'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">one of three — every garrison\'s vault holds one, and every garrison\'s tank leaves one. ' +
-      (it.kind === 'tankpart' ? 'three build a TANK at a station' : it.kind === 'gunpart' ? 'three build the gunship (a later build)' : 'three build the jet (a later build)') + '</div>';
+      (it.kind === 'tankpart' ? 'three build a TANK at a station' : it.kind === 'gunpart' ? 'three build the GUNSHIP at a station' : 'three build the JET at a station') + '</div>';
+  } else if (it.kind === 'jetfuel'){
+    html = '<div class="t1">jet fuel ×' + it.count + '</div><div class="t2">a can: half a tank for the jet — right click the jet holding it. Sold by the quartermaster of a garrison you have taken, and nowhere else</div>';
   } else if (it.kind === 'khammer'){
     html = '<div class="t1">knocker\'s hammer</div><div class="t2">what the sound was, in your hands — left click slams the ground: a crater three metres across where it lands, its rock in your pack, and everything near it thrown</div>';
   } else if (it.kind === 'tdrone'){
@@ -28276,10 +28774,12 @@ function itemInfoHTML(it, tool){
   } else if (it.kind === 'deed'){
     html = '<div class="t1">property deed</div><div class="t2">left click inside a city to claim its nearest tower — furnished with a strongbox, a bed and a light</div>';
   } else if (VEH[it.kind]){
-    html = '<div class="t1">' + itemLabel(it) + (VEH[it.kind].paddle ? '' : ' · ' + Math.round(it.charge || 0) + '% charge') + '</div><div class="t2">' +
+    html = '<div class="t1">' + itemLabel(it) + (VEH[it.kind].paddle ? '' : ' · ' + Math.round(it.charge || 0) + (VEH[it.kind].fuel ? '% fuel' : '% charge')) + '</div><div class="t2">' +
       (it.wrecked ? 'wrecked — slot it into a REPAIR BENCH with ' + VEH[it.kind].repair + ' iron ingots'
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
        : it.kind === 'tank' ? 'left click to deploy · right click to mount · W/S A/D drive · LEFT CLICK fires the gun: a shell, a real crater where it lands · it climbs a kerb and a half'
+       : it.kind === 'heli' ? 'left click to deploy · right click to board · SPACE up, C down, W/S forward and back, A/D turn · it holds its height · LEFT CLICK the door gun · come down gently'
+       : it.kind === 'jet' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 22 m/s · at the stop keep pulling: a LOOP · SHIFT + A/D: a ROLL · LEFT CLICK the cannon · R a missile (a rocket from your pack) · burns JET FUEL only'
        : it.kind === 'plane' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 15 m/s to take off · A/D bank · C nose down · land slow, level and gentle or it explodes'
        : it.kind === 'hover' ? 'left click to deploy · right click to ride · hovers two metres over anything, water included · drinks its battery'
        : VEH[it.kind].paddle ? 'left click to deploy on the water · right click to row · no battery, just you'
@@ -31426,7 +31926,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

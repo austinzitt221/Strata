@@ -2,6 +2,56 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 62 — THE GARRISON C: the gunship and the jet (2026-09-19)
+
+The third slice, and the last of THE GARRISON: the air.
+
+- **The gunship on the pad.** Every base has one now, sitting on the
+  helipad with its rotor still, the braid on its roof. On the siren it
+  spools up over two seconds, lifts straight up, and comes for you:
+  it circles at thirty metres out and sixteen up, and its door gun
+  fires in bursts of five, a round every eighth of a second, one burst
+  every two and a half, whenever it can see you. The rounds are real
+  lines; the ones that hit rock leave a pockmark one time in four.
+  When it loses you it holds over the base; when the alarm ends it
+  flies home at height and settles on the pad. Shoot it down and it
+  goes down in fire: a gunship part and forty coins, and the base does
+  not get another. Take the base with it alive and the crew fly it out.
+- **Your own gunship**, from three gunship parts at a station. A
+  hover-flyer: space up, C down, W/S forward and back, A/D turn; it
+  holds its height with nothing pressed, sinks when the rotor is not
+  up, and the door gun is on the left button, converging on where you
+  look. Come down hard, fast, or into a wall and it wrecks like the
+  plane. It takes a battery in the slot and charges on a pad.
+- **The jet**, from three jet parts. The plane's model at twice the
+  speed (two hundred and eighty on the dial), with a needle nose, a
+  delta wing and a flame under throttle. It burns **jet fuel** and
+  nothing else: no pad, no battery. Pull to the stop and keep pulling
+  at speed and it goes over the top -- a LOOP; shift with A or D and it
+  rolls right over in eight tenths of a second -- a ROLL. The cannon
+  is on the left button (a stream of rounds down the nose, two hundred
+  metres); R fires a missile, which is a rocket out of your pack, and
+  lands like a tank shell. Landing upside down counts as a crash.
+- **Jet fuel** is sold in one place: by the **quartermaster** of a
+  garrison you have taken, who stands at the command post with gold on
+  his cap. Forty coins a can, half a tank a can; right click the jet
+  holding one. A jet crafted at a station comes with an empty tank, so
+  the first garrison has to fall before the jet flies.
+- Everything crewed is hostile to turrets, guards and crew alike now
+  (tanks and gunships, not only tanks), and hitting any of it raises
+  the base. Old bases get their gunship on the next tick; old saves
+  keep working.
+- Known: the jet will happily start a loop straight off the runway if
+  you hold space past the stop at speed; from forty metres up the
+  bottom of the loop is the ground. That is the pilot's problem, as it
+  should be, but it may want a minimum height. The gunship AI does
+  not avoid terrain on its orbit beyond holding ten metres over the
+  ground under it; a cliff between you and it can clip through.
+- Also this build: the headless suites now live in `tests/` in the
+  repository (they lived in a scratch directory before, and a container
+  reset wiped every one of them). `tests/README.md` says how to run
+  them.
+
 ## Build 61 — THE GARRISON B: the tanks (2026-09-18)
 
 The second slice: the tanks on the road, and one of your own.

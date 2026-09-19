@@ -263,8 +263,11 @@ Slotted between the city builds as the mood takes me:
   **Slice B** DONE (Build 61): tanks that patrol the highway and shell
   you on the alarm (craters, walls), crewed till they die and burning
   into a part; the tank kit from three parts, drivable, its gun on
-  the left button. **Slice C:** the gunship on the alarm; the jet with its cannon,
-  missiles, rolls and loops; jet fuel sold only at a taken base.
+  the left button. **Slice C** DONE (Build 62): the gunship on the pad
+  that lifts on the alarm, orbits and strafes, and burns into a part;
+  your own gunship; the jet with its cannon, missiles, rolls and loops;
+  jet fuel from the quartermaster of a taken base and nowhere else.
+  THE GARRISON is complete.
 - Then the Space Arc.
 
 Small things I want, slotted wherever a session has room:

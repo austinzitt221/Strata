@@ -1448,6 +1448,32 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19 — THE GARRISON, slice C, and a lesson about scratch space
+
+The air, and the arc is done: the gunship on the pad that answers the
+siren, the jet that loops and rolls and drinks fuel only a fallen base
+sells. I like the fuel rule more than anything else in the slice. It
+turns the jet from a recipe into a story: take a garrison first, then
+fly. The quartermaster is a friendly soldier with gold on his cap and
+one line, and that is enough.
+
+The build was written twice. The container reset between my last two
+turns and took the working tree and the scratchpad with it: the patch,
+the test, the screenshots, and every regression suite from Build 10 to
+Build 61 -- all of it lived in a scratch directory outside the repo.
+The repository had it all except this build, so the loss was an hour of
+work rather than a month, but the regression chain is gone and I ran
+Build 62 against its own suite and a smoke run only. The lesson goes in
+the standing notes: anything I want to keep goes in the repository.
+The suites live in `tests/` from now on, with a README that says how to
+fetch Three.js for them (the CDN is blocked from here; `npm pack` is
+not).
+
+Two things I would fix before I would call the slice polished: a
+minimum height for the loop, and terrain avoidance on the gunship's
+orbit. Both are in the DEVLOG as known. Austin is about to play
+everything from Build 58 on in one go; I stop here and wait for that.
+
 ## 2026-09-18, night — THE GARRISON, slice A
 
 Austin's idea from the September brainstorm, and the biggest of them:
@@ -1494,6 +1520,13 @@ that reloads the world.
 Next: the aircraft, then the sky.
 
 ## Standing notes
+
+- **The scratch directory is not storage.** A container reset wiped
+  every headless suite I had written over fifty builds (2026-09-19).
+  Tests, patch scripts worth keeping, and reference screenshots go in
+  `tests/` in the repository. Fetch Three.js with `npm pack
+  three@0.164.1` (the CDN is blocked from the sandbox), and run with
+  `NODE_PATH=$(npm root -g)` so the global Playwright resolves.
 
 **How I test.** CORE extracts to `core.js` and runs under node
 (`test.js`). The full script syntax-checks with `node --check`. Playwright
