@@ -1448,6 +1448,14 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, night — skins
+
+Small and satisfying: the tank, the gunship and the jet wear pixel paint
+now, and the box helper takes a material as well as a colour, so the
+next vehicle can too. The first cut had the jet's red stripe tiled
+across the whole wing; a wing texture without the stripe fixed it. Six
+of the seven playtest builds are in. Biomes next, and that is an arc.
+
 ## 2026-09-19, later still — sound
 
 Booms and guns are layers now (crack, thump, body, tail) through a soft

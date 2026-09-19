@@ -11401,19 +11401,26 @@ function entMesh(type, ent){
     return g;
   }
   const box = (w, h, d, color, x, y, z, parent) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color }));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), color && color.isMaterial ? color : new THREE.MeshBasicMaterial({ color }));
     m.position.set(x, y, z);
     (parent || g).add(m);
     return m;
   };
+  // VEHICLE SKINS (Build 68): the war machines wear pixel textures like the
+  // car does -- speckled paint, rivet rows, panel lines, treads
+  const skin = (key, draw, rep2) => pixMat(PixTex.make(key, draw), 0xffffff, rep2 || 2, rep2 || 2);
+  const rivets = (c, y, col) => { c.fillStyle = col; for (let x = 1; x < 16; x += 4) c.fillRect(x, y, 1, 1); };
   if (type === 'tank'){
     // the tank: an olive hull on two tracks, a turret that turns on its
     // own, a long gun; a garrison's has the braid on the hatch
-    const olive = 0x4f5a3a, dark = 0x33392a, steel = 0x2a2a30, track = 0x1e1e22;
+    const olive = skin('tankhull', (c, w, h, rng) => { pxSpeckle(c, rng, '#4f5a3a', '#455033', '#5b6844', 18); c.fillStyle = '#3f4830'; c.fillRect(0, 8, w, 1); rivets(c, 2, '#2e3424'); rivets(c, 13, '#2e3424'); });
+    const dark = skin('tankdeck', (c, w, h, rng) => { pxSpeckle(c, rng, '#33392a', '#2b3023', '#3d4432', 16); c.fillStyle = '#242a1e'; c.fillRect(0, 5, w, 1); c.fillRect(0, 11, w, 1); });
+    const steel = skin('gunsteel', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2a30', '#222227', '#35353c', 14); c.fillStyle = '#4a4a52'; c.fillRect(0, 7, w, 1); }, 1);
+    const track = skin('tanktrack', (c, w, h, rng) => { pxSpeckle(c, rng, '#1e1e22', '#161619', '#26262b', 10); c.fillStyle = '#34343a'; for (let y = 0; y < 16; y += 3) c.fillRect(0, y, w, 1); }, 3);
     box(3.2, 1.0, 4.6, olive, 0, 1.0, 0);                     // hull
     box(3.4, 0.35, 4.8, dark, 0, 1.55, 0);                    // deck lip
     box(2.6, 0.5, 1.2, dark, 0, 1.3, 1.9);                    // the engine deck
-    for (const sx of [-1.55, 1.55]){ box(0.7, 0.9, 5.0, track, sx, 0.55, 0); for (let i = -2; i <= 2; i++) box(0.74, 0.5, 0.5, 0x3a3a40, sx, 0.5, i * 1.0); }
+    for (const sx of [-1.55, 1.55]){ box(0.7, 0.9, 5.0, track, sx, 0.55, 0); for (let i = -2; i <= 2; i++) box(0.74, 0.5, 0.5, steel, sx, 0.5, i * 1.0); }
     const turret = new THREE.Group(); turret.position.set(0, 1.75, 0.2); g.add(turret);
     box(2.0, 0.7, 2.4, olive, 0, 0.35, 0, turret);
     box(1.2, 0.3, 1.2, dark, 0, 0.85, -0.2, turret);          // the hatch
@@ -11428,7 +11435,10 @@ function entMesh(type, ent){
     // fin, skids, a four-blade rotor and a door gun on the left side. A
     // garrison's wears the braid on the cabin roof.
     g.rotation.order = 'YXZ';
-    const olive = 0x46503a, dark = 0x2a2e26, steel = 0x2a2a30, glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const olive = skin('heliskin', (c, w, h, rng) => { pxSpeckle(c, rng, '#46503a', '#3d4633', '#515c44', 18); c.fillStyle = '#5d6a4c'; c.fillRect(0, 7, w, 1); rivets(c, 3, '#2b3125'); rivets(c, 12, '#2b3125'); });
+    const dark = skin('helidark', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2e26', '#22261f', '#33382e', 14); c.fillStyle = '#1c1f19'; c.fillRect(0, 8, w, 1); });
+    const steel = skin('gunsteel', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2a30', '#222227', '#35353c', 14); c.fillStyle = '#4a4a52'; c.fillRect(0, 7, w, 1); }, 1);
+    const glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
     box(1.9, 1.5, 4.2, olive, 0, 1.35, 0.2);                   // cabin
     box(1.7, 0.9, 1.3, olive, 0, 1.15, -2.4);                  // the nose
     const nose = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.8, 1.0), glassM); nose.position.set(0, 1.75, -2.3); g.add(nose);
@@ -11458,23 +11468,26 @@ function entMesh(type, ent){
     // the jet: a needle nose, a delta wing, two canted fins, one engine
     // with a flame that shows under throttle; three gear legs
     g.rotation.order = 'YXZ';
-    const grey = 0x8a8f9a, dark = 0x2a2a30, red = 0xc93a3a;
+    const grey = skin('jetskin', (c, w, h, rng) => { pxSpeckle(c, rng, '#8a8f9a', '#7f848f', '#969ba6', 14); c.fillStyle = '#6f747f'; c.fillRect(5, 0, 1, h); c.fillRect(11, 0, 1, h); c.fillStyle = '#c93a3a'; c.fillRect(0, 6, w, 1); rivets(c, 10, '#6a6f7a'); });
+    const wing = skin('jetwing', (c, w, h, rng) => { pxSpeckle(c, rng, '#8a8f9a', '#7f848f', '#969ba6', 14); c.fillStyle = '#6f747f'; c.fillRect(0, 5, w, 1); c.fillRect(0, 11, w, 1); rivets(c, 8, '#6a6f7a'); }, 3);
+    const dark = skin('jetdark', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2a30', '#222227', '#35353c', 12); }, 1);
+    const red = skin('jetred', (c, w, h, rng) => { pxSpeckle(c, rng, '#c93a3a', '#b53232', '#d94a4a', 12); c.fillStyle = '#e8e8ee'; c.fillRect(0, 7, w, 2); }, 1);
     const glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
     box(1.2, 1.0, 6.0, grey, 0, 1.2, 0.6);                     // fuselage
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 8), new THREE.MeshBasicMaterial({ color: grey }));
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.4, 8), pixMat(PixTex.make('jetskin', () => {}), 0xffffff, 1, 1));
     cone.rotation.x = -Math.PI / 2; cone.position.set(0, 1.2, -3.6); g.add(cone);
     const canopy = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.6, 1.8), glassM); canopy.position.set(0, 1.95, -1.4); g.add(canopy);
-    box(7.6, 0.14, 2.6, grey, 0, 1.0, 1.2);                    // the delta wing
+    box(7.6, 0.14, 2.6, wing, 0, 1.0, 1.2);                    // the delta wing
     box(0.9, 0.14, 1.2, red, -3.5, 1.02, 1.2); box(0.9, 0.14, 1.2, red, 3.5, 1.02, 1.2);   // wingtips
-    for (const sx of [-0.5, 0.5]){ const fin = box(0.1, 1.3, 1.2, grey, sx, 2.2, 3.0); fin.rotation.z = -sx * 0.45; }
-    box(2.6, 0.12, 0.9, grey, 0, 1.1, 3.3);                    // tailplane
-    const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.7, 10), new THREE.MeshBasicMaterial({ color: dark }));
+    for (const sx of [-0.5, 0.5]){ const fin = box(0.1, 1.3, 1.2, wing, sx, 2.2, 3.0); fin.rotation.z = -sx * 0.45; }
+    box(2.6, 0.12, 0.9, wing, 0, 1.1, 3.3);                    // tailplane
+    const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, 0.7, 10), dark);
     noz.rotation.x = Math.PI / 2; noz.position.set(0, 1.2, 3.9); g.add(noz);
     const flame = new THREE.Mesh(new THREE.ConeGeometry(0.36, 1.8, 8), new THREE.MeshBasicMaterial({ color: 0xff9a30, transparent: true, opacity: 0.85 }));
     flame.rotation.x = -Math.PI / 2; flame.position.set(0, 1.2, 5.1); flame.visible = false; g.add(flame);
     for (const [wx2, wz2] of [[-0.9, 0.9], [0.9, 0.9], [0, -2.2]]){
       box(0.1, 0.7, 0.1, dark, wx2, 0.55, wz2);
-      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.2, 10), new THREE.MeshBasicMaterial({ color: dark })); wh.rotation.z = Math.PI / 2; wh.position.set(wx2, 0.26, wz2); g.add(wh);
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.2, 10), dark); wh.rotation.z = Math.PI / 2; wh.position.set(wx2, 0.26, wz2); g.add(wh);
     }
     box(0.1, 0.1, 0.9, dark, -0.55, 1.05, -2.2); box(0.1, 0.1, 0.9, dark, 0.55, 1.05, -2.2);   // the cannon ports
     box(0.5, 0.4, 0.5, dark, 0, 1.45, -1.1);                   // the seat

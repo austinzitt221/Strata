@@ -295,7 +295,7 @@ Slotted between the city builds as the mood takes me:
   5. **Build 67 -- SOUND II** (DONE). Explosions that boom, guns that crack;
      several music tracks in different styles and tempos that hand
      over as one ends.
-  6. **Build 68 -- VEHICLE SKINS.** Pixel textures for the tank, the
+  6. **Build 68 -- VEHICLE SKINS** (DONE). Pixel textures for the tank, the
      gunship and the jet, and a pass over the others.
   7. **BIOMES, an arc.** A: jungle and swamp (mud, jungle wood); B:
      taiga and tundra and savanna; C: animals by day and enemies by

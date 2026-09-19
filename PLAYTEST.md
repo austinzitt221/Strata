@@ -5,6 +5,11 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 68 — VEHICLE SKINS
+- [ ] Spawn the tank, the gunship and the jet side by side (creative).
+      Do they belong with the car and the plane now? Anything that still
+      reads as a flat block?
+
 ## Build 67 — SOUND II
 - [ ] Throw TNT near and far. Fire every gun you have. Does a boom boom,
       does a rifle sound like a rifle next to a pistol? Too loud, too

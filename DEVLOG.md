@@ -2,6 +2,26 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 68 — VEHICLE SKINS (2026-09-19)
+
+Sixth build from the Build 62 playtest: the war machines were flat
+colour.
+
+- **Pixel paint on the tank, the gunship and the jet**, the way the car
+  wears it: sixteen-pixel textures drawn to canvas, nearest-filtered,
+  tiled over every panel. The tank's hull is speckled olive with a
+  panel line and two rivet rows, the deck darker with seams, the tracks
+  black with treads, the gun and the road wheels steel with a light
+  edge. The gunship's cabin and boom are a grey-green with a lighter
+  stripe and rivets, the roof and the seats a darker skin. The jet's
+  fuselage is light grey with two panel lines, a rivet row and one red
+  stripe; the wings and fins have panel lines and rivets without the
+  stripe; the tips red with a white band; gear, nozzle and gun ports
+  dark steel.
+- No new draw calls: a texture per part kind, shared across the
+  vehicle's boxes, the same material path the car and the plane use.
+- The other vehicles already had skins; I left them.
+
 ## Build 67 — SOUND II: booms, guns, and tracks that hand over (2026-09-19)
 
 Fifth build from the Build 62 playtest.
