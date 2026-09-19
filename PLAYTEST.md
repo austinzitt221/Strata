@@ -5,6 +5,13 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 72 — BIOMES D
+- [ ] Walk each new biome and look down: dry grass, permafrost, leaf
+      litter, mud. Do the grounds sell the place?
+- [ ] Dig under a swamp for peat; burn it in a stove; sell some.
+- [ ] Fell spruces until an amber turns up; sell it. Fell jungle trees
+      for cocoa; eat one.
+
 ## Build 71 — BIOMES C
 - [ ] A day and a night in each new biome: jungle, swamp, taiga, tundra,
       savanna. Which animal or hunter surprised you? Which one is a

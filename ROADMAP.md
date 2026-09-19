@@ -299,8 +299,8 @@ Slotted between the city builds as the mood takes me:
      gunship and the jet, and a pass over the others.
   7. **BIOMES, an arc.** A (DONE, Build 69): jungle and swamp (mud, jungle and mangrove wood and planks); B (DONE, Build 70):
      taiga and tundra and savanna; C (DONE, Build 71): animals by day and enemies by
-     night, per biome; D: each tree its own wood, each biome its own
-     material.
+     night, per biome; D (DONE, Build 72): each biome its own ground,
+     peat, amber, cocoa. THE BIOMES ARC IS COMPLETE.
 - Then the Space Arc.
 
 Small things I want, slotted wherever a session has room:

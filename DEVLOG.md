@@ -2,6 +2,30 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 72 — BIOMES D: each biome's own ground, and its finds (2026-09-20)
+
+The last slice of the biomes arc.
+
+- **Four materials.** The savanna stands on **dry grass** (yellow, with
+  green flecks), the tundra on **permafrost** between its snow patches
+  (grey-blue, frost-flecked), the jungle on **leaf litter** (dark,
+  leaf-flecked); and under a swamp's mud, in pockets from one to six
+  metres down, there is **peat**. Snow settles on the new grounds in
+  winter, a hoe tills dry grass and leaf litter, footsteps are soft on
+  all of them.
+- **Peat** is cut like coal (the drill gives the item), burns in a
+  stove at five to coal's eight, and the ore broker buys it by the
+  eight. About one probe in five under a swamp finds it.
+- **Amber**, now and then, from a felled spruce (one in five or six);
+  the ore broker pays forty-five a piece. **Cocoa pods** from felled
+  jungle trees (a third of them, two pods): food, twenty hp over time.
+- Icons, labels, tooltips, the creative catalog and map colours for all
+  of it.
+- The biomes arc is complete: five new biomes (jungle, swamp remade,
+  taiga, tundra, savanna), five tree kinds with their own wood and
+  planks, ten creatures, eight materials and three finds, over Builds
+  69 to 72. Every item of the 2026-09-19 playtest is answered.
+
 ## Build 71 — BIOMES C: the living things (2026-09-19)
 
 Third slice of the biomes arc: each biome has its own animals by day and

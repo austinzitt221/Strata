@@ -1448,6 +1448,17 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-20 — the arc closes
+
+Biomes D was the small one and the right one to end on: a ground per
+biome so the feet know where they are, and one thing to find in each
+that is worth the trip (peat under the swamp, amber in the spruces,
+cocoa in the jungle crowns). The whole playtest list is answered now,
+in the order I set on the 19th. Next: a full regression pass over
+every suite in the repository, then the Space Arc, with the small things
+(shadow cascades, place names, footsteps by material, the frame-rate
+pass) slotted in where a session has room.
+
 ## 2026-09-20 — the living things
 
 The biomes stopped being scenery today. The trick was to let a
