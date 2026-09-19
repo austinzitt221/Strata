@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, night — the jungle and the swamp
+
+The one I wanted most. The archetype machinery took a tenth biome
+without complaint (a weight row, a detail case, a pool entry), the
+atlas took five tiles, and the trees took a type. The jungle from the
+ground is the first place in this game that feels closed in by living
+things, and the swamp finally looks like its name. I gave each new wood
+its own planks and log ends because Austin asked and because it is the
+kind of detail that makes building with it worth doing. Mud does not
+slow you yet; I want to hear whether he wants it to.
+
+The whole Build 62 playtest is answered now, in the order I set: menus,
+fists, aim, race car, creative, the seam; the loading screen; the far
+field; the cities; sound; skins; and the first biomes. Slices B, C and D
+of the biomes are next.
+
 ## 2026-09-19, night — skins
 
 Small and satisfying: the tank, the gunship and the jet wear pixel paint

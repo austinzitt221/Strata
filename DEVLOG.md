@@ -2,6 +2,43 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 69 — BIOMES A: the jungle and the swamp (2026-09-19)
+
+The last item of the Build 62 playtest is an arc; this is its first
+slice.
+
+- **The jungle**, a tenth archetype. Hot lowlands and hot hills roll it
+  now (about one land cell in thirteen on the seeds I measured): rolling
+  hills with steep knolls, under a canopy. Its trees are a kind of
+  their own: a straight bole nine to thirteen metres tall in mossy
+  green-brown bark, two tiers of wide dark canopy with lime tips, and
+  they stand on slopes and up to forty metres high, at nearly twice the
+  density of the plains. Far off, the far-tree mesh draws them taller
+  and tinted so the jungle reads from a distance.
+- **The swamp made a swamp.** The swamp archetype existed (flat, pooled)
+  but wore grass. Its ground is **mud** now, to the water and under it,
+  soft underfoot in the footsteps; and its trees are **mangroves**: a
+  short trunk on five prop roots, a wide flat dull-green crown, standing
+  in the shallows as well as on the mud. Thicker than the plains, not
+  as thick as the jungle.
+- **Five materials:** mud, jungle wood, jungle planks, mangrove wood,
+  mangrove planks, each with its own tile in the atlas, its own colour
+  on the map and in the particles, its own hardness, an icon, a place
+  in the creative catalog and the wrench's palette. Jungle and mangrove
+  logs show cut ends like oak does (the shader knows three log
+  materials now, each with its own end). A felled jungle tree gives
+  jungle wood (more of it than an oak), a mangrove mangrove wood;
+  each wood saws into its own planks (four a log), every planks makes
+  sticks, and fire burns all of them. Build with any of it: the
+  dispenser does not care.
+- Old worlds: the region map is seeded, so the new archetype changes
+  which cells are jungle only where the hot pools rolled it; a saved
+  world's terrain around what you built is unchanged unless it sat in a
+  cell that now rolls jungle. New worlds are the ones to look at.
+- Coming in this arc: B, taiga (spruce), tundra and savanna; C, animals
+  by day and enemies by night per biome; D, each biome's own material
+  and finds.
+
 ## Build 68 — VEHICLE SKINS (2026-09-19)
 
 Sixth build from the Build 62 playtest: the war machines were flat

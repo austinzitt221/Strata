@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 69 — BIOMES A
+- [ ] A new world: fly until you find a jungle (dense tall trees, mossy
+      bark) and a swamp (mud, mangroves in the shallows). Do they read
+      as new places from the air and on foot? Too big, too small, too
+      rare?
+- [ ] Fell a jungle tree and a mangrove. Saw the wood into planks, build
+      a wall of each, cut a log in half and look at the ends.
+- [ ] Walk on mud. Should it slow you? (It does not yet.)
+- [ ] Old world: did anything near your builds change biome?
+
 ## Build 68 — VEHICLE SKINS
 - [ ] Spawn the tank, the gunship and the jet side by side (creative).
       Do they belong with the car and the plane now? Anything that still
