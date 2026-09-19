@@ -1448,6 +1448,29 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, night — set-pieces at range
+
+The pop-in was the far skin's honesty: it draws edits, and an unvisited
+fort has none. The city towers already had the answer (true boxes in
+one mesh), so villages, forts, ziggurats and garrisons got the same,
+from the same footprints their stamps use. The pleasing part is the
+retirement: the moment the real thing is laid, the shape goes and the
+skin takes over, and the test proves the handover. The mountain I
+could not reproduce; I wrote down exactly what I checked so the next
+report can start from there.
+
+## 2026-09-19, evening — the loading screen
+
+Austin asked for it and he was right: the game had grown past the
+point where you can drop a player into a world that is still being
+meshed and hope. The gate is simple (the ground under you plus the
+mesh queue), and the hold on missing ground is the part I like: it is
+the general answer to every "fell through the floor" report I will
+ever get, because the LOD is a heightfield and will never show a cave.
+I also put the frame body in a guard. I have no reproduction of his
+crash; the guard means the next one leaves a message instead of a
+frozen tab.
+
 ## 2026-09-19, later — the big playtest came back
 
 Austin played everything from Build 44 to 62 in one sitting and wrote it

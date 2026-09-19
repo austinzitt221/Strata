@@ -2,6 +2,75 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 65 — THE FAR FIELD III: set-pieces at range (2026-09-19)
+
+Third fix build from the Build 62 playtest.
+
+- **Villages, forts, ziggurats and garrisons at range.** Each of them
+  was stamped into the world only when you came within a hundred
+  metres or so, and the far skin bakes edits, so before that first
+  visit there was nothing to see: they popped. Now every one in range
+  of the far-shape mesh (2.6 km, the same mesh the city towers and the
+  highways use) stands as its own shapes until it is laid: a village as
+  its houses with plank caps, at the height each house will be built
+  at; a fort as its walls, towers, bunkers and vault; a ziggurat as its
+  tiers and shrine; a garrison as its pad, walls, towers and helipad.
+  The footprints and ground levels are the ones the stamps use, so the
+  real thing lands where the shape stood. The moment one is stamped
+  its shapes retire and the skin carries it from then on.
+- **Garrisons on the cartographer's sheets**, in their own colour, so a
+  base can be found from the map like a fort can. That, with the
+  shapes, is the answer to "I could not find a base flying around":
+  they are one highway link in two, fifty metres off the road, and now
+  they are visible from the air and on a bought sheet.
+- **The snow mountain (standing in the LOD).** Not reproduced. On the
+  headless machine the seed's highest ridge has every chunk around the
+  player meshed, the mask covers the columns, and the feet sit on the
+  surface; heightRange never under-reports a peak (2,635 mountain
+  columns checked against a half-metre sweep). What the screenshot
+  shows is the skin drawn where the near mesh is not standing, which
+  happens when the mesher is behind the player (a long run or a fast
+  fly in creative). Build 64's hold stops the fall; the visual
+  mismatch on a run is the mesher lagging. If it happens standing
+  still after a wait, I want to know where.
+- Also: `villageSys`, `raidBaseSys`, `zigSys` and `farShapeSys` are on
+  the test API; `tests/b65test.js` checks the shapes, the retirement
+  and the sheet.
+
+## Build 64 — THE LOADING SCREEN (2026-09-19)
+
+Second fix build from the Build 62 playtest: the world no longer hands
+you the controls before it exists.
+
+- **The loading screen.** Opening a world (new or saved) shows LOADING
+  with the world's name, a bar, and a count of chunks still to mesh.
+  It ends when the ground under you is meshed and the queue is down to
+  its last few far chunks (under two percent), or after a minute, or
+  when you press ENTER ANYWAY (offered after eight seconds). While it
+  shows, the player is not simulated: no gravity, no input, no falling
+  through a floor the mesher has not laid. Escape and E do not close
+  it. On the headless machine a seed-7 world with 1,261 chunks queued
+  opened in about ten seconds; a real GPU is faster.
+- **The hold on missing ground.** Whenever the chunk under your feet
+  (or under your car) is missing or still queued, you are held still
+  for up to four seconds while it meshes, with a toast, rather than
+  dropped through it. Flying vehicles and fly mode are exempt. This is
+  the fall into a cave the LOD did not show: the LOD cannot show caves
+  (it is a heightfield), so the answer is to never drop you into ground
+  that has not been meshed. Long teleports (the drone, the train, a
+  blink) get the same hold for free.
+- **A frame that throws no longer takes the game with it.** The frame
+  body runs in a guard: an exception is logged (console and the F3
+  log), a "hiccup" toast shows at most every five seconds, and the loop
+  carries on. I could not reproduce the new-world crash headlessly (a
+  fresh world sprinting from the first frame for twelve seconds gave no
+  errors); if it was an exception in a streaming path, this keeps the
+  world playable and puts the message where a report can find it. If
+  it was the tab itself dying, the loading gate removes the case of
+  moving before the world is there.
+- Tests drive the world themselves and skip the gate with
+  `loadSys.end()`.
+
 ## Build 63 — FIXES I: the blockers from the Build 62 playtest (2026-09-19)
 
 Austin played Builds 44 to 62 in one go and sent the report; this is the

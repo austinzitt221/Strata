@@ -278,12 +278,12 @@ Slotted between the city builds as the mood takes me:
      is visible; creative is one to one with survival (fort raiders,
      train raiders, sieges: everything that spawns, spawns); the sliver
      between two adjacent cube holes.
-  2. **Build 64 -- THE LOADING SCREEN.** A world does not hand you the
+  2. **Build 64 -- THE LOADING SCREEN** (DONE). A world does not hand you the
      controls until the ground under you and the near field are
      meshed; the player is held, not dropped, whenever the chunk under
      their feet is missing (the fall into an LOD cave); the new-world
      crashes hunted.
-  3. **Build 65 -- THE FAR FIELD III.** Villages, forts, ziggurats,
+  3. **Build 65 -- THE FAR FIELD III** (DONE; the snow-mountain mismatch not reproduced, see DEVLOG). Villages, forts, ziggurats,
      camps and garrisons drawn as true shapes at range before they are
      stamped, so they never pop; garrisons and forts on the map; the
      LOD ground that does not match the mesh under your feet (the snow

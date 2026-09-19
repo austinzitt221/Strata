@@ -287,6 +287,16 @@ body.pad{cursor:none;}
   </div>
 </div>
 
+<div id="loadscreen" class="screen hidden dim">
+  <div class="panel" style="min-width:420px;">
+    <h2>LOADING</h2>
+    <div class="sub" id="loadtitle">the world</div>
+    <div style="border:2px solid var(--ui-border); background:#0c0b12; height:18px; margin:6px 0 10px;"><div id="loadbar" style="height:100%; width:0%; background:var(--ui-hi);"></div></div>
+    <div class="sub" id="loadtext" style="margin-bottom:8px;">finding the ground</div>
+    <button class="btn small hidden" id="btnLoadSkip">ENTER ANYWAY</button>
+  </div>
+</div>
+
 <div id="mapscreen" class="screen hidden dim">
   <div class="panel">
     <h2>MAP</h2>
@@ -12478,7 +12488,7 @@ const villageSys = {
         game.villages[key] = rec;
       }
       if (!rec.stamped){
-        rec.stamped = true;
+        rec.stamped = true; farShapeSys.dirty = true;
         propBatchBegin();
         try { this.stamp(v, rec); } finally { propBatchEnd(); }
         this.footbridge(v, rec);
@@ -16945,7 +16955,7 @@ const zigSys = {
       bc.inv[0] = { kind: 'coin', count: 20 + ((rng() * 20) | 0) };
       bc.inv[1] = { kind: 'rounds', count: 24 };
     }
-    rec.stamped = true;
+    rec.stamped = true; farShapeSys.dirty = true;
   },
   ensure(){
     game.zigs = game.zigs || {};
@@ -17243,7 +17253,7 @@ const raidBaseSys = {
         game.forts[key] = rec;
       }
       if (!rec.stamped){
-        rec.stamped = true;
+        rec.stamped = true; farShapeSys.dirty = true;
         this.stamp(f, rec);
         toast(rec.citadel ? 'a CITADEL looms ahead — THE WARDEN guards its vault'
                           : 'a RAID FORT looms ahead — its warlord holds the vault key');
@@ -17423,7 +17433,7 @@ const baseSys = {
         game.bases[f.key] = rec;
       }
       if (!rec.stamped){
-        rec.stamped = true;
+        rec.stamped = true; farShapeSys.dirty = true;
         this.stamp(f, rec);
         toast('a GARRISON on the highway — peaceful, until you are not');
         AudioSys.sfx('boom');
@@ -19719,7 +19729,7 @@ const contractSys = {
 // to your map, marked with what the generators know is there: falls,
 // villages, forts, spires, ziggurats, other cities. And the survey you
 // walked yourself, sold by the cell.
-const CHART_COL = { village: '#9ad07a', fort: '#ff7a5c', falls: '#7fd0ff', spire: '#e8c878', zig: '#d9a63a', city: '#ffd75e' };
+const CHART_COL = { village: '#9ad07a', fort: '#ff7a5c', falls: '#7fd0ff', spire: '#e8c878', zig: '#d9a63a', city: '#ffd75e', garrison: '#c9d84a' };
 const chartSys = {
   CELL: 0.05, SURVEY: 0.4,
   sheets(rec){
@@ -19749,6 +19759,7 @@ const chartSys = {
     try { if (game.gen.fallsNear) for (const f of game.gen.fallsNear(cx, cz, r)) push('falls', f.x, f.z, 'falls'); } catch (e){}
     try { for (const sp of spireSys.candidatesNear(cx, cz, r)) if (sp) push('spire', sp.x, sp.z, 'spire'); } catch (e){}
     try { for (const zg of zigSys.candidatesNear(cx, cz, r)) if (zg) push('zig', zg.x, zg.z, 'ziggurat'); } catch (e){}
+    try { for (const gb of baseSys.candidatesNear(cx, cz, r)) if (gb) push('garrison', gb.x, gb.z, 'garrison'); } catch (e){}
     try { for (const ct of citySys.candidatesNear(cx, cz, r)) if (ct) push('city', ct.x, ct.z, citySys.nameFor(ct.seed)); } catch (e){}
     return out;
   },
@@ -23282,7 +23293,7 @@ function bindInput(){
     // that is not the world, the pause menu, the options or the death
     // screen -- a screen added later closes too, without joining a list.
     // (Playtest: every menu since Build 43 could not be closed.)
-    const overlay = game.ui !== 'none' && game.ui !== 'pause' && game.ui !== 'options' && game.ui !== 'dead';
+    const overlay = game.ui !== 'none' && game.ui !== 'pause' && game.ui !== 'options' && game.ui !== 'dead' && game.ui !== 'loading';
     if (code === 'Escape'){ if (overlay){ e.preventDefault(); closeOverlay(); } return; }   // else the browser drops pointer lock; see lockchange
     if (overlay){
       if ((code === 'ShiftLeft' || code === 'ShiftRight') && !e.repeat && INV_UIS.includes(game.ui)){ invCursor.shiftTap(); return; }
@@ -23396,6 +23407,81 @@ function bindInput(){
   });
 }
 
+// ---------- the loading screen ----------
+// A world does not hand you the controls until the ground under you and
+// everything queued in render distance is meshed (or a minute has passed,
+// or you press ENTER ANYWAY after eight seconds). While it shows, the
+// player is not simulated: no gravity, no input, no fall through a floor
+// that is not there yet. (Playtest: new worlds crashed when you moved too
+// early, and you fell into caves the LOD did not show.)
+const loadSys = {
+  on: false, t0: 0, most: 0,
+  begin(title){
+    if (this.on) return;
+    this.on = true; this.t0 = performance.now(); this.most = 0;
+    game.ui = 'loading';
+    $('loadtitle').textContent = title || 'the world';
+    $('loadtext').textContent = 'finding the ground';
+    $('loadbar').style.width = '2%';
+    $('btnLoadSkip').classList.add('hidden');
+    show('loadscreen');
+    if (document.pointerLockElement) document.exitPointerLock();
+    const b = $('btnLoadSkip');
+    if (!b._wired){ b._wired = true; b.addEventListener('click', () => this.end('entered before the ground was all there')); }
+  },
+  pending(){ return game.terrain ? game.terrain.dirty.size + meshPool.inflight.size : 0; },
+  tick(){
+    if (!this.on || !game.running) return;
+    const el = (performance.now() - this.t0) / 1000;
+    const pend = this.pending();
+    this.most = Math.max(this.most, pend);
+    const ground = groundReadyAt(game.pos.x, game.pos.y, game.pos.z);
+    const f = this.most ? 1 - pend / this.most : (ground ? 1 : 0);
+    $('loadbar').style.width = Math.round(Math.max(0.02, f) * 100) + '%';
+    $('loadtext').textContent = pend ? 'meshing the ground · ' + pend + ' chunks to go' : ground ? 'ready' : 'finding the ground';
+    if (el > 8) $('btnLoadSkip').classList.remove('hidden');
+    // the last few chunks are the far ones: the ground is here, go
+    const few = pend <= Math.max(8, this.most * 0.02);
+    if ((ground && few && el > 1.5) || el > 60) this.end(el > 60 ? 'the mesher is slow today — entering anyway' : null);
+  },
+  end(why){
+    if (!this.on) return;
+    this.on = false;
+    hide('loadscreen');
+    if (game.ui === 'loading') game.ui = 'none';
+    game.forceStream = true; game.holdT = 0;
+    if (why) toast(why);
+    requestLock();
+  },
+};
+// is the chunk under (x,y,z) meshed, or known empty? A missing chunk, or
+// one still in the queue, is ground nobody must be dropped through.
+function groundReadyAt(x, y, z){
+  const T = game.terrain; if (!T) return true;
+  const M = CORE.CHUNK_M;
+  const cx = Math.floor(x / M), cz = Math.floor(z / M);
+  for (const yy of [y + 0.2, y - 0.6]){
+    const cy = Math.floor(yy / M);
+    if (cy < CORE.CY_MIN || cy > CORE.CY_MAX) continue;
+    const ch = T.chunks.get(cx + ',' + cy + ',' + cz);
+    if (!ch || !(ch.done || ch.built || ch.empty)) return false;
+  }
+  return true;
+}
+// the ground is not there yet: hold still (up to four seconds) rather than
+// fall through a floor the mesher has not laid. (Playtest: falling into a
+// cave the LOD did not show.) Flying vehicles are exempt.
+function holdForGround(x, y, z, dt){
+  if (loadSys.on) return true;
+  if (groundReadyAt(x, y, z)){ game.holdT = 0; return false; }
+  game.holdT = (game.holdT || 0) + dt;
+  if (game.holdT > 4) return false;
+  game.forceStream = true;
+  const now = performance.now();
+  if (now - (game.holdToastT || 0) > 6000){ game.holdToastT = now; toast('the ground is still loading'); }
+  game.vel.set(0, 0, 0);
+  return true;
+}
 // ---------- player physics ----------
 function collidePlayer(edits, still){
   // capsule approximated by 3 spheres; iterative gradient pushout
@@ -24257,7 +24343,12 @@ function trickName(flips, spins, whips){
 }
 function updatePlayer(dt){
   if (game.riding){ if (game.riding.train) lineSys.ride(dt); else railSys.ride(dt); return; }
-  if (game.driving){ driveCar(dt); crewSys.vehTick(dt); return; }
+  if (game.driving){
+    const dv = game.driving, DV = VEH[dv.type] || VEH.car;
+    if (!DV.fly && !DV.water && holdForGround(dv.x, dv.y, dv.z, dt)) return;
+    driveCar(dt); crewSys.vehTick(dt); return;
+  }
+  if (!game.fly && holdForGround(game.pos.x, game.pos.y, game.pos.z, dt)) return;
   const k = game.keys;
   const canMove = game.ui === 'none' && isLocked();
   game.crouch = !!(canMove && k['KeyC'] && !game.fly);
@@ -30181,7 +30272,7 @@ function startWorldData(id, data){
   game.forceStream = true;
   game.photo = null;          // never inherit photo mode from the last world
   game.scope = 0;
-  requestLock();
+  loadSys.begin(game.worldName || 'the world');
 }
 function reviveItem(it){
   return it || null;
@@ -30280,6 +30371,11 @@ const farShapeSys = {
         }
       }
     }
+    // villages, forts, ziggurats and garrisons that have not been laid yet
+    // stand as their shapes, so nothing pops when you get close; once
+    // stamped, their edits are in the skin and these go (Playtest: forts,
+    // pyramids and villages popped out of nowhere)
+    this.setPieces(px, pz, out);
     for (const L of roadSys.linksNear(px, pz, this.RANGE)){
       if (!L.far){
         // the slabs, once per link: the same grade and depth stampSeg lays
@@ -30296,6 +30392,87 @@ const farShapeSys = {
       for (const b of L.far) if (Math.hypot(b.x - px, b.z - pz) < this.RANGE) out.push(b);
     }
     return out;
+  },
+  // the same footprints the stamps lay, at the same ground level the stamps
+  // find (a set-piece keeps a cached copy so the heights are read once)
+  setPieces(px, pz, out){
+    const M = CORE.MAT, gen = game.gen, R = this.RANGE;
+    const cache = this._pieces || (this._pieces = new Map());
+    const hmax = (x, z, pts) => { let g = gen.height(x, z); for (const [dx, dz] of pts) g = Math.max(g, gen.height(x + dx, z + dz)); return +g.toFixed(1); };
+    const add = (key, mk) => { let B = cache.get(key); if (!B){ B = mk(); if (cache.size > 400) cache.clear(); cache.set(key, B); } for (const b of B) out.push(b); };
+    try {
+      for (const v of villageSys.candidatesNear(px, pz, R)){
+        const rec = (game.villages || {})['v' + v.key];
+        if (rec && rec.stamped) continue;
+        add('v' + v.key, () => {
+          const B = [];
+          for (const h of villageSys.layout(v)){
+            const g = hmax(h.x, h.z, [[-h.w / 2, -h.d / 2], [h.w / 2, -h.d / 2], [-h.w / 2, h.d / 2], [h.w / 2, h.d / 2]]);
+            const top = h.two ? 6.7 : 3.4;
+            B.push({ x: h.x, y: g + top / 2, z: h.z, sx: h.w, sy: top, sz: h.d, yaw: 0, mat: M.STONEBRICK });
+            B.push({ x: h.x, y: g + top + 0.2, z: h.z, sx: h.w + 0.6, sy: 0.4, sz: h.d + 0.6, yaw: 0, mat: M.PLANKS });
+          }
+          return B;
+        });
+      }
+    } catch (err){}
+    try {
+      for (const f of raidBaseSys.candidatesNear(px, pz, R)){
+        const rec = (game.forts || {})[f.key];
+        if (rec && rec.stamped) continue;
+        add('f' + f.key, () => {
+          const g = hmax(f.x, f.z, [[-17, -17], [17, -17], [-17, 17], [17, 17]]), B = [];
+          B.push({ x: f.x, y: g + 1.5, z: f.z - 17, sx: 36, sy: 5.8, sz: 1.4, yaw: 0, mat: M.STONEBRICK });
+          B.push({ x: f.x, y: g + 1.5, z: f.z + 17, sx: 36, sy: 5.8, sz: 1.4, yaw: 0, mat: M.STONEBRICK });
+          B.push({ x: f.x - 17, y: g + 1.5, z: f.z, sx: 1.4, sy: 5.8, sz: 36, yaw: 0, mat: M.STONEBRICK });
+          B.push({ x: f.x + 17, y: g + 1.5, z: f.z, sx: 1.4, sy: 5.8, sz: 36, yaw: 0, mat: M.STONEBRICK });
+          for (const [sx2, sz2] of [[-17, -17], [17, -17], [-17, 17], [17, 17]]){
+            B.push({ x: f.x + sx2, y: g + 2.6, z: f.z + sz2, sx: 5, sy: 8.4, sz: 5, yaw: 0, mat: M.STONEBRICK });
+            B.push({ x: f.x + sx2, y: g + 7.1, z: f.z + sz2, sx: 6, sy: 0.5, sz: 6, yaw: 0, mat: M.PLANKS });
+          }
+          for (const bx of [-8, 8]) B.push({ x: f.x + bx, y: g + 1.4, z: f.z - 5, sx: 7, sy: 4.4, sz: 5.6, yaw: 0, mat: M.STONEBRICK });
+          B.push({ x: f.x, y: g + 2.0, z: f.z + 10, sx: 7, sy: 5.6, sz: 7, yaw: 0, mat: M.OBSIDIAN });
+          return B;
+        });
+      }
+    } catch (err){}
+    try {
+      for (const f of zigSys.candidatesNear(px, pz, R)){
+        const rec = (game.zigs || {})['z' + f.key];
+        if (rec && rec.stamped) continue;
+        add('z' + f.key, () => {
+          const g = hmax(f.x, f.z, [[-20, -20], [20, -20], [-20, 20], [20, 20], [0, 34]]), B = [];
+          B.push({ x: f.x, y: g - 3, z: f.z, sx: 46, sy: 6, sz: 46, yaw: 0, mat: M.ROCK });
+          let y = g;
+          for (const [w, h] of [[40, 5], [32, 5], [24, 5], [16, 4]]){ B.push({ x: f.x, y: y + h / 2, z: f.z, sx: w, sy: h, sz: w, yaw: 0, mat: M.STONEBRICK }); y += h; }
+          B.push({ x: f.x, y: y + 2, z: f.z, sx: 8, sy: 4, sz: 8, yaw: 0, mat: M.STONEBRICK });
+          return B;
+        });
+      }
+    } catch (err){}
+    try {
+      for (const f of baseSys.candidatesNear(px, pz, R)){
+        const rec = (game.bases || {})[f.key];
+        if (rec && rec.stamped) continue;
+        add('g' + f.key, () => {
+          const W = baseSys.WALL, B = [];
+          let g = 0;
+          for (const [dx, dz] of [[0, 0], [-20, -20], [20, -20], [-20, 20], [20, 20]]) g += gen.height(f.x + dx, f.z + dz);
+          g = +Math.max(g / 5, (gen.seaLevel != null ? gen.seaLevel : -1e9) + 3).toFixed(1);
+          B.push({ x: f.x, y: g - 4.5, z: f.z, sx: 64, sy: 9, sz: 64, yaw: 0, mat: M.ROCK });
+          B.push({ x: f.x, y: g + 1.9, z: f.z - W, sx: 2 * W + 2, sy: 6.6, sz: 1.6, yaw: 0, mat: M.BASALT });
+          B.push({ x: f.x, y: g + 1.9, z: f.z + W, sx: 2 * W + 2, sy: 6.6, sz: 1.6, yaw: 0, mat: M.BASALT });
+          B.push({ x: f.x - W, y: g + 1.9, z: f.z, sx: 1.6, sy: 6.6, sz: 2 * W + 2, yaw: 0, mat: M.BASALT });
+          B.push({ x: f.x + W, y: g + 1.9, z: f.z, sx: 1.6, sy: 6.6, sz: 2 * W + 2, yaw: 0, mat: M.BASALT });
+          for (const [sx2, sz2] of [[-W, -W], [W, -W], [-W, W], [W, W]]){
+            B.push({ x: f.x + sx2, y: g + 3.6, z: f.z + sz2, sx: 6, sy: 10.4, sz: 6, yaw: 0, mat: M.STONEBRICK });
+            B.push({ x: f.x + sx2, y: g + 9.1, z: f.z + sz2, sx: 7, sy: 0.5, sz: 7, yaw: 0, mat: M.OBSIDIAN });
+          }
+          B.push({ x: f.x + 12, y: g + 0.15, z: f.z + 1, sx: 12, sy: 0.3, sz: 12, yaw: 0, mat: M.OBSIDIAN });
+          return B;
+        });
+      }
+    } catch (err){}
   },
   // ---- one mesh of boxes with the terrain's own attributes ----
   ensureMat(){
@@ -31642,6 +31819,18 @@ function updateSunShadow(dt){
 }
 function frame(now){
   requestAnimationFrame(frame);
+  try { frameBody(now); }
+  catch (err){
+    // one bad frame must not take the game with it: log it, say so once in
+    // a while, carry on (Playtest: "the game crashed loading in")
+    game.frameErrs = (game.frameErrs || 0) + 1;
+    console.error(err);
+    gfxLog.push('frame', [err]);
+    if (now - (game.frameErrT || 0) > 5000){ game.frameErrT = now; toast('hiccup — ' + String(err && err.message || err).slice(0, 80)); }
+  }
+}
+function frameBody(now){
+  if (game.testThrow){ game.testThrow = 0; throw new Error('test throw'); }
   // once a second: the window's real size, a camera that went bad, a
   // context that did not come back
   if (now - (game.vpCheckT || 0) > 1000){
@@ -31655,6 +31844,7 @@ function frame(now){
   lastT = now;
   if (!game.running || !game.scene){ return; }
 
+  loadSys.tick();
   if (game.photo){
     updatePhoto(dt);
   } else if (game.ui === 'none'){
@@ -31976,7 +32166,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

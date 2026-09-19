@@ -5,6 +5,27 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 65 — THE FAR FIELD III
+- [ ] Fly high in creative and look around: villages, forts, pyramids and
+      garrisons should stand at range now, before you have ever been
+      near them. Do they land where their shapes stood when you arrive?
+- [ ] Buy a country sheet from the cartographer near a highway: garrisons
+      show in yellow-green. Find one by the map.
+- [ ] The snow mountain: if you stand in the LOD again, wait ten seconds
+      standing still. Does it resolve? Tell me what you were doing just
+      before (running, flying, a teleport) and roughly how high you were.
+
+## Build 64 — THE LOADING SCREEN
+- [ ] Open a saved world and a new one. How long does LOADING show on
+      your machine, at your render distance? Does the bar read right?
+      Does ENTER ANYWAY appear after eight seconds if it is slow?
+- [ ] Sprint the moment the world opens. Any crash, any hiccup toast?
+      If a hiccup shows, the text is what I need.
+- [ ] Take the drone or the train somewhere far. Do you stand still for a
+      beat ("the ground is still loading") instead of falling?
+- [ ] Run fast across country toward a cave you can see on the LOD's
+      surface. Do you still ever fall through?
+
 ## Build 63 — FIXES I
 - [ ] Open every menu you found stuck (phone, paper, pit promoter, ticket
       clerk, casino table, bank, exchange, cartographer, race steward)

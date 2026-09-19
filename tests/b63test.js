@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(1500);
   await page.click('#btnWorlds'); await page.fill('#newWorldName','b63'); await page.fill('#newWorldSeed', '7');
   await page.click('#btnCreateWorld'); await page.waitForTimeout(200); await page.click('.worlditem .btn'); await page.waitForTimeout(3000);
+  await page.evaluate(() => { window.__api.loadSys.end(); });   // the tests drive the world themselves; skip the loading gate
   const settle = async (n) => { for (let i = 0; i < n; i++){ await page.waitForTimeout(1000); await page.evaluate(() => { window.__game.terrain.process(60); }); } };
   await page.evaluate(() => { const g = window.__game; g.debugLock = true; g.ui = 'none'; g.mode = 'creative'; g.fly = false; });
   await settle(4);
@@ -88,17 +89,15 @@ const { chromium } = require('playwright');
   });
   console.log('4. creative  :', JSON.stringify(r4));
   // 5. the seam between two cube holes, through the drill: no dip, no stall
-  const r5 = await page.evaluate(() => {
-    const g = window.__game, api = window.__api, C = window.__CORE;
-    g.slots[0] = { kind: 'drill', tier: 0 }; g.hotSel = 0; api.refreshHotbar();
-    const tool = api.activeTool(); g.tool.shape = 1; g.snapOn = true; g.gridIdx = 3;
-    const out = {};
-    let k = 0;
-    for (const eff of [1.5, 3]){
-      k++;
+  const r5 = {};
+  for (const eff of [1.5, 3]){
+    await page.evaluate((eff) => {
+      const g = window.__game, api = window.__api, C = window.__CORE;
+      g.slots[0] = { kind: 'drill', tier: 0 }; g.hotSel = 0; api.refreshHotbar();
+      const tool = api.activeTool(); g.tool.shape = 1; g.snapOn = true; g.gridIdx = 3;
       const cell = C.GRID_SIZES[g.gridIdx];
-      // a level stone pad, so the only ground is the holes' floor
-      const px = Math.round(g.pos.x) + 40 * k, pz = Math.round(g.pos.z) + 25 * k;
+      // a level stone pad under the player, so the only ground is the holes' floor
+      const px = Math.round(g.pos.x), pz = Math.round(g.pos.z);
       const gy = Math.round(g.gen.height(px, pz)) + 4;
       api.applyEdit(C.makeEdit(1, 1, px, gy - 10, pz, 20, C.MAT.STONE, 0));
       api.applyEdit(C.makeEdit(0, 1, px, gy + 10, pz, 20, 0, 0));
@@ -106,8 +105,13 @@ const { chromium } = require('playwright');
       const sp = C.snapSpacing(eff, cell);
       api.doMine(tool, { x: P0[0], y: P0[1], z: P0[2] }, 1, eff);
       api.doMine(tool, { x: P0[0] + sp, y: P0[1], z: P0[2] }, 1, eff);
-      const floor = P0[1] - eff / 2, seam = P0[0] + sp / 2;
-      g.pos.set(P0[0], floor + 0.05, P0[2]); g.vel.set(0, 0, 0); g.yaw = -Math.PI / 2; g.pitch = 0;
+      window.__SEAM = { P0, sp, floor: P0[1] - eff / 2, seam: P0[0] + sp / 2 };
+      g.pos.set(P0[0], P0[1] - eff / 2 + 0.05, P0[2]); g.vel.set(0, 0, 0); g.yaw = -Math.PI / 2; g.pitch = 0; g.fly = false; g.forceStream = true;
+    }, eff);
+    await settle(4);                                     // the pad's chunks mesh (Build 64 holds the player otherwise)
+    r5['size' + eff] = await page.evaluate(() => {
+      const g = window.__game, api = window.__api, Sm = window.__SEAM, floor = Sm.floor, seam = Sm.seam;
+      const ready = api.groundReadyAt(g.pos.x, g.pos.y, g.pos.z);
       for (let i = 0; i < 30; i++) api.updatePlayer(1 / 60);
       g.keys['KeyW'] = true;
       let minY = 1, maxY = -1, stuck = 0, lastX = g.pos.x;
@@ -118,10 +122,9 @@ const { chromium } = require('playwright');
         if (Math.abs(rel) < 0.6){ minY = Math.min(minY, g.pos.y - floor); maxY = Math.max(maxY, g.pos.y - floor); if (dx < 0.02) stuck++; }
       }
       g.keys['KeyW'] = false;
-      out['size' + eff] = { dip: +minY.toFixed(3), rise: +maxY.toFixed(3), stuck, crossed: g.pos.x > seam + 0.5 };
-    }
-    return out;
-  });
+      return { ready, dip: +minY.toFixed(3), rise: +maxY.toFixed(3), stuck, crossed: g.pos.x > seam + 0.5, holdT: +(g.holdT || 0).toFixed(1) };
+    });
+  }
   console.log('5. the seam  :', JSON.stringify(r5));
   console.log('errors:', errs.length ? errs.slice(0, 3).join(' | ') : 'none');
   await b.close();
