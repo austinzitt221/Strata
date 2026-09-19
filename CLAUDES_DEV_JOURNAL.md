@@ -1448,6 +1448,17 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-19, late night — the cold and the dry
+
+Three more archetypes in one build because the machinery from A made
+them cheap: a weight row, a detail case, a pool entry, a tree kind, a
+pair of materials. The log-end path in the shader became an array while
+I was there; five woods with five uniform pairs would have been silly.
+The tundra has nothing in it and that is the point of it: the world
+needed an empty, cold place between the busy ones. Thirteen
+archetypes now. C is the living things, and that is where a biome
+stops being scenery.
+
 ## 2026-09-19, night — the jungle and the swamp
 
 The one I wanted most. The archetype machinery took a tenth biome

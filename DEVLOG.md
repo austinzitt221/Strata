@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 70 — BIOMES B: taiga, tundra, savanna (2026-09-19)
+
+The second slice of the biomes arc: the cold and the dry.
+
+- **The taiga**, archetype ten: long cold hills under spruce, the
+  snowline down at twenty metres. Spruce is a thin straight trunk in
+  red-brown bark with lichen, four tiers of blue-green cone, eight to
+  eleven metres tall, thick on the ground (three cells in four).
+- **The tundra**, eleven: cold flats, frost-heaved, snow in patches over
+  grass, dry sparse tufts, no trees at all. The empty one, on purpose.
+- **The savanna**, twelve: hot dry flats with a kopje here and there,
+  dry tufts, and acacias one cell in five: a forked trunk and a wide
+  flat umbrella of a crown in dry olive.
+- **Four materials:** spruce wood and planks, acacia wood and planks,
+  with tiles, log ends, colours, hardness, icons, palette, catalog,
+  recipes (planks from the log, sticks from the planks), and fire.
+  Spruce gives more wood than an oak.
+- **The shader's log ends are an array now** (five woods, five ends,
+  one loop) instead of a uniform pair per wood; the atlas holds one end
+  tile per log after the materials.
+- The far-tree mesh reads a table of kinds now (trunk height and
+  width, canopy height, width and centre, tints), so spruces stand tall
+  and narrow at range and acacias wide and flat.
+- Villages settle the taiga and the savanna as well as the plains, the
+  hills, the dunes and the swamp.
+- Measured on two seeds: taiga about 5% of land, tundra 2.5%, savanna
+  7%, jungle 7.5%, swamp 10%.
+
 ## Build 69 — BIOMES A: the jungle and the swamp (2026-09-19)
 
 The last item of the Build 62 playtest is an arc; this is its first

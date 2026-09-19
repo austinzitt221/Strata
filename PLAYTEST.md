@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 70 — BIOMES B
+- [ ] Find a taiga (spruce, snow up high), a tundra (flat, patchy snow,
+      nothing growing) and a savanna (dry grass, umbrella trees). Do the
+      three read as different countries?
+- [ ] Fell a spruce and an acacia; saw them; build with the planks next
+      to oak, jungle and mangrove planks. Five woods: can you tell them
+      apart at a glance?
+- [ ] From the air: do spruces read as spruces at range, acacias as
+      acacias?
+
 ## Build 69 — BIOMES A
 - [ ] A new world: fly until you find a jungle (dense tall trees, mossy
       bark) and a swamp (mud, mangroves in the shallows). Do they read

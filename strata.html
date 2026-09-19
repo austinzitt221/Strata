@@ -688,12 +688,13 @@ const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) mete
 
 // materials (0 = air / none)
 const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18, MARBLE:19,
-              MUD:20, JWOOD:21, JPLANKS:22, MWOOD:23, MPLANKS:24 };   // BIOMES A (Build 69): the swamp's mud, jungle and mangrove wood and their planks
-const NMAT = 24;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks'];
+              MUD:20, JWOOD:21, JPLANKS:22, MWOOD:23, MPLANKS:24,    // BIOMES A (Build 69): the swamp's mud, jungle and mangrove wood and their planks
+              SWOOD:25, SPLANKS:26, AWOOD:27, APLANKS:28 };           // BIOMES B (Build 70): spruce and acacia
+const NMAT = 28;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
-const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD];
-const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS };
+const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
+const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
 
 // ---- tools ----
 const TIER_NAME = ['stone','iron','ruby','obsidian','diamond'];
@@ -774,7 +775,7 @@ const ORE_TYPES = [
   { mat: MAT.COAL,       yMin: -60,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
 ];
 const VEIN_CELL = 4;
-const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands','jungle'];
+const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands','jungle','taiga','tundra','savanna'];
 const REGION = 260;            // macro-region cell edge (m) -- biomes change FAST
 const LM_CELL = 520;           // landmark set-piece grid (decoupled from biomes)
 const CAVE_CELL = 160;         // cave-network graph cell edge (m)
@@ -869,6 +870,9 @@ function makeGen(seed){
     { sw: 18, rg: 24, add: 1.6 },   // volcanic
     { sw: 6,  rg: 3,  add: -7.5 },  // islands: a shallow sea, land only where the detail lifts it
     { sw: 22, rg: 12, add: 1.6 },   // jungle: hills under a canopy (Build 69)
+    { sw: 24, rg: 14, add: 2.4 },   // taiga: cold hills under spruce (Build 70)
+    { sw: 10, rg: 3,  add: 1.0 },   // tundra: cold flats, snow in patches
+    { sw: 12, rg: 4,  add: 1.0 },   // savanna: hot dry flats with kopjes
   ];
   function coreH(a, x, z, F){
     const P = ARCHP[a];
@@ -921,11 +925,12 @@ function makeGen(seed){
     const heat = fbm2(sCl, sx * 0.0016, sz * 0.0016, 2);
     let pool;
     // the hot pools hold the jungle (9); wet coasts and hot lowlands the swamp (5)
-    if (Fc.c < 0.34)            pool = heat > 0.60 ? [4, 9, 5, 1, 9, 8, 8] : [5, 0, 1, 4, 2, 8];
-    else if (Fc.relief > 1.30)  pool = heat < 0.33 ? [6, 2, 1, 6, 0]
+    // cold pools hold the taiga (10) and the tundra (11), hot ones the jungle (9) and the savanna (12)
+    if (Fc.c < 0.34)            pool = heat > 0.60 ? [4, 9, 5, 12, 9, 8, 8] : heat < 0.33 ? [11, 10, 1, 5, 2, 8] : [5, 0, 1, 4, 2, 8];
+    else if (Fc.relief > 1.30)  pool = heat < 0.33 ? [6, 2, 10, 6, 10]
                                      : heat > 0.65 ? [7, 2, 9, 1, 4] : [2, 1, 0, 7, 3];
-    else                        pool = heat > 0.60 ? [4, 9, 0, 9, 7, 5]
-                                     : heat < 0.33 ? [6, 0, 1, 2, 5, 3] : [0, 1, 3, 5, 4, 2];
+    else                        pool = heat > 0.60 ? [4, 9, 12, 9, 7, 12]
+                                     : heat < 0.33 ? [6, 10, 1, 11, 10, 3] : [0, 1, 3, 5, 4, 2];
     const arch = pool[hashInt(h0 ^ 7) % pool.length];
     // per-cell conquest weight: some pockets, some larger -- but nothing
     // sprawls into a 30-minute walk any more
@@ -1034,6 +1039,12 @@ function makeGen(seed){
         return -0.6 + (fbm2(sH, x * 0.02, z * 0.02, 3) - 0.5) * 4.5;
       case 9:   // jungle: rolling hills with steep knolls rising out of the canopy
         return 1.0 + (fbm2(sH, x * 0.013, z * 0.013, 3) - 0.5) * 12 + Math.max(0, fbm2(sR, x * 0.03, z * 0.03, 2) - 0.62) * 22;
+      case 10:  // taiga: long cold hills
+        return 1.2 + (fbm2(sH, x * 0.012, z * 0.012, 3) - 0.5) * 14;
+      case 11:  // tundra: flat, frost-heaved
+        return 0.4 + (fbm2(sH, x * 0.02, z * 0.02, 2) - 0.5) * 3;
+      case 12:  // savanna: flat grassland, a kopje here and there
+        return 0.5 + (fbm2(sH, x * 0.012, z * 0.012, 3) - 0.5) * 5 + Math.max(0, fbm2(sR, x * 0.02, z * 0.02, 2) - 0.7) * 16;
       case 6: { // glacier: ice sheet split by crevasses
         const c = 1 - Math.abs(2 * fbm2(sR, x * 0.021, z * 0.021, 2) - 1);
         return (fbm2(sH, x * 0.01, z * 0.01, 3) - 0.5) * 12 - sstep(0.88, 0.97, c) * 9;
@@ -1851,6 +1862,8 @@ function makeGen(seed){
       if (a === 6) return MAT.SNOW;              // glacier: ice to the water line
       if (a === 4) return MAT.SAND;              // dunes
       if (a === 5) return MAT.MUD;               // swamp: mud to the water and under it
+      if (a === 11 && fbm2(sH, x * 0.05, z * 0.05, 2) > 0.5) return MAT.SNOW;   // tundra: snow in patches
+      if (a === 10 && h >= 20) return MAT.SNOW;  // taiga: the snowline comes down
       if (a === 8) return h < seaLevel + 2.6 ? MAT.SAND : MAT.GRASS;   // islands: wide beaches
       if (h < seaLevel + 1.6) return MAT.SAND;   // beaches ring the water
       { const R = riverAt(x, z); if (R && R.d < R.w * 1.3 && h < R.y + 1.4) return MAT.SAND; }   // riverbeds and banks
@@ -1978,9 +1991,9 @@ function makeGen(seed){
     const slope = Math.abs(height(x + 1.2, z) - height(x - 1.2, z)) +
                   Math.abs(height(x, z + 1.2) - height(x, z - 1.2));
     if (slope > 1.5) return null;
-    const desert = arch === 3 || arch === 4;            // badlands + dunes stay sparse
+    const desert = arch === 3 || arch === 4 || arch === 12 || arch === 11;   // badlands, dunes, savanna and tundra wear dry tufts
     const r1 = hashInt(h0 ^ 13) / 4294967296;
-    if (desert && r1 > 0.3) return null;                // deserts stay sparse
+    if ((arch === 3 || arch === 4 || arch === 11) && r1 > 0.3) return null;   // deserts and the tundra stay sparse
     let type = 'tuft';
     if (!desert){
       if (r1 > 0.94) type = 'shrub';
@@ -1997,17 +2010,17 @@ function makeGen(seed){
     const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
     const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
     const a = archAt(x, z);
-    if (a !== 0 && a !== 1 && a !== 5 && a !== 8 && a !== 9) return null;  // trees: plains, hills, swamp, islands, jungle
-    // the jungle is dense, the swamp thick, the rest open (Build 69)
-    if (h0 / 4294967296 > (a === 9 ? 0.88 : a === 5 ? 0.66 : 0.52)) return null;
+    if (a !== 0 && a !== 1 && a !== 5 && a !== 8 && a !== 9 && a !== 10 && a !== 12) return null;  // trees: plains, hills, swamp, islands, jungle, taiga, savanna
+    // the jungle is dense, the taiga and the swamp thick, the savanna open (Build 69/70)
+    if (h0 / 4294967296 > (a === 9 ? 0.88 : a === 10 ? 0.78 : a === 5 ? 0.66 : a === 12 ? 0.2 : 0.52)) return null;
     const h = height(x, z);
-    if (h < seaLevel + (a === 5 ? -0.4 : 1.8) || h > (a === 9 ? 40 : 22)) return null;   // no trees on beaches or underwater; mangroves stand in the shallows
+    if (h < seaLevel + (a === 5 ? -0.4 : 1.8) || h > (a === 9 ? 40 : a === 10 ? 30 : 22)) return null;   // no trees on beaches or underwater; mangroves stand in the shallows
     { const R = riverAt(x, z); if (R && R.d < R.w * 1.5) return null; }   // nor in a river
     const slope = Math.abs(height(x + 2, z) - height(x - 2, z)) + Math.abs(height(x, z + 2) - height(x, z - 2));
     if (slope > (a === 9 ? 3.4 : 2.2)) return null;
     if (inCity(x, z)) return null;                   // streets stay paved
     const s = 0.85 + (hashInt(h0 ^ 2) / 4294967296) * 0.5;
-    return { x, z, y: h, s, key: cx + ',' + cz, type: a === 9 ? 'jungle' : a === 5 ? 'mangrove' : 'oak' };
+    return { x, z, y: h, s, key: cx + ',' + cz, type: a === 9 ? 'jungle' : a === 5 ? 'mangrove' : a === 10 ? 'spruce' : a === 12 ? 'acacia' : 'oak' };
   }
   // does this point land inside a mega-city footprint? (candidates keep
   // 400m off their cell edge, so only the containing cell can claim it)
@@ -2022,7 +2035,7 @@ function makeGen(seed){
     const vx = cx * VILLAGE_CELL + 100 + (h0 % 312);
     const vz = cz * VILLAGE_CELL + 100 + (hashInt(h0 ^ 5) % 312);
     const a = archAt(vx, vz);
-    if (a !== 0 && a !== 1 && a !== 4 && a !== 5) return null;  // gentle land only
+    if (a !== 0 && a !== 1 && a !== 4 && a !== 5 && a !== 10 && a !== 12) return null;  // gentle land only
     const hc = height(vx, vz);
     if (hc < seaLevel + 2.5) return null;
     let mn = hc, mx = hc;
@@ -3216,7 +3229,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -3290,6 +3303,10 @@ const RECIPES = [];
   RECIPES.push({ kind: 'matout', matOut: MAT.MPLANKS, yields: 4, costs: [{ mat: MAT.MWOOD, n: 1 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.JPLANKS, n: 2 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.MPLANKS, n: 2 }] });
+  RECIPES.push({ kind: 'matout', matOut: MAT.SPLANKS, yields: 4, costs: [{ mat: MAT.SWOOD, n: 1 }] });
+  RECIPES.push({ kind: 'matout', matOut: MAT.APLANKS, yields: 4, costs: [{ mat: MAT.AWOOD, n: 1 }] });
+  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.SPLANKS, n: 2 }] });
+  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.APLANKS, n: 2 }] });
   RECIPES.push({ kind: 'matout', matOut: MAT.STONEBRICK, yields: 4, costs: [{ mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'rope', yields: 2, costs: [{ item: 'wool', n: 2 }, { item: 'stick', n: 1 }] });
@@ -4138,6 +4155,35 @@ function makeTileDrawers(){
       ctx.fillStyle = '#4e3a24'; for (const y of [3, 7, 11, 15]) ctx.fillRect(0, y, 16, 1);
       ctx.fillStyle = '#3f2e1c'; ctx.fillRect(6, 0, 1, 3); ctx.fillRect(1, 4, 1, 3); ctx.fillRect(13, 8, 1, 3); ctx.fillRect(8, 12, 1, 3);
     },
+    [CORE.MAT.SWOOD](ctx, rng){
+      speckle(ctx, rng, '#5a3a2c', '#472c20', '#6a4837', 0.34, 0.2);
+      for (let x = 0; x < 16; x++){ const seam = rng(); if (seam < 0.34){ ctx.fillStyle = seam < 0.14 ? '#2e1c14' : '#3c261b'; let y = 0; while (y < 16){ const run = 3 + ((rng() * 5) | 0); if (rng() < 0.8) ctx.fillRect(x, y, 1, Math.min(run, 16 - y)); y += run + 1 + ((rng() * 2) | 0); } } }
+      for (let i = 0; i < 3; i++){ ctx.fillStyle = '#8a8a86'; ctx.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 1, 1); }   // lichen
+    },
+    [CORE.MAT.SPLANKS](ctx, rng){
+      speckle(ctx, rng, '#b58a68', '#a37a5a', '#c49a78', 0.26, 0.2);
+      ctx.fillStyle = '#7e5b42'; for (const y of [3, 7, 11, 15]) ctx.fillRect(0, y, 16, 1);
+      ctx.fillStyle = '#6a4a34'; ctx.fillRect(3, 0, 1, 3); ctx.fillRect(11, 4, 1, 3); ctx.fillRect(7, 8, 1, 3); ctx.fillRect(13, 12, 1, 3);
+    },
+    [CORE.MAT.AWOOD](ctx, rng){
+      speckle(ctx, rng, '#6e5236', '#5a4229', '#7f6142', 0.34, 0.2);
+      for (let x = 0; x < 16; x++){ const seam = rng(); if (seam < 0.3){ ctx.fillStyle = seam < 0.12 ? '#3e2c1a' : '#4c3722'; let y = 0; while (y < 16){ const run = 2 + ((rng() * 6) | 0); if (rng() < 0.78) ctx.fillRect(x, y, 1, Math.min(run, 16 - y)); y += run + 1 + ((rng() * 2) | 0); } } }
+    },
+    [CORE.MAT.APLANKS](ctx, rng){
+      speckle(ctx, rng, '#b8763e', '#a66634', '#c98650', 0.26, 0.2);
+      ctx.fillStyle = '#8a5428'; for (const y of [3, 7, 11, 15]) ctx.fillRect(0, y, 16, 1);
+      ctx.fillStyle = '#72441f'; ctx.fillRect(5, 0, 1, 3); ctx.fillRect(1, 4, 1, 3); ctx.fillRect(12, 8, 1, 3); ctx.fillRect(9, 12, 1, 3);
+    },
+    logInnerS(ctx, rng){
+      speckle(ctx, rng, '#d9b591', '#c8a27e', '#e6c6a4', 0.24, 0.24);
+      for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#a8805c' : '#bd9370'; ctx.fillRect(x, 0, 1, 16); } }
+      ctx.fillStyle = '#8a6a48'; ctx.beginPath(); ctx.arc(8, 8, 3.5, 0, 6.3); ctx.stroke();
+    },
+    logInnerA(ctx, rng){
+      speckle(ctx, rng, '#d19a5e', '#bf8850', '#dfaa70', 0.24, 0.24);
+      for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#9e6a34' : '#b07a40'; ctx.fillRect(x, 0, 1, 16); } }
+      ctx.fillStyle = '#8a5a2a'; ctx.beginPath(); ctx.arc(8, 8, 3.5, 0, 6.3); ctx.stroke();
+    },
     logInnerJ(ctx, rng){
       speckle(ctx, rng, '#c9b271', '#b89f5f', '#d8c485', 0.24, 0.24);
       for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#9a7f45' : '#ad9152'; ctx.fillRect(x, 0, 1, 16); } }
@@ -4250,9 +4296,11 @@ function makeTileDrawers(){
 // Column i holds material i+1 (the mesher writes mat-1 into aMat). One extra
 // column past the materials holds the log's end grain, which the terrain
 // shader swaps in on cut faces -- see ATLAS_SLOTS / uLogEnd.
-const ATLAS_SLOTS = CORE.NMAT + 3;
+const ATLAS_SLOTS = CORE.NMAT + CORE.LOG_MATS.length;
 const LOG_END_SLOT = CORE.NMAT;          // 0-based column index of the extra
-const LOG_END_J = CORE.NMAT + 1, LOG_END_M = CORE.NMAT + 2;   // jungle and mangrove log ends (Build 69)
+// one end tile per log material, after the materials (Build 70: an array)
+const LOG_END_SLOTS = CORE.LOG_MATS.map((m, i) => CORE.NMAT + i);
+const LOG_END_DRAWER = { [CORE.MAT.WOOD]: 'logInner', [CORE.MAT.JWOOD]: 'logInnerJ', [CORE.MAT.MWOOD]: 'logInnerM', [CORE.MAT.SWOOD]: 'logInnerS', [CORE.MAT.AWOOD]: 'logInnerA' };
 function buildAtlas(seed){
   const cv = document.createElement('canvas');
   cv.width = TEX_SIZE * ATLAS_SLOTS; cv.height = TEX_SIZE;
@@ -4264,11 +4312,11 @@ function buildAtlas(seed){
     drawers[m](ctx, rng);
     ctx.restore();
   }
-  ctx.save(); ctx.translate(LOG_END_SLOT * TEX_SIZE, 0);
-  drawers.logInner(ctx, CORE.mulberry32(seed ^ 0x51ab3f27));
-  ctx.restore();
-  ctx.save(); ctx.translate(LOG_END_J * TEX_SIZE, 0); drawers.logInnerJ(ctx, CORE.mulberry32(seed ^ 0x2b7d11)); ctx.restore();
-  ctx.save(); ctx.translate(LOG_END_M * TEX_SIZE, 0); drawers.logInnerM(ctx, CORE.mulberry32(seed ^ 0x7e33a9)); ctx.restore();
+  CORE.LOG_MATS.forEach((m, i) => {
+    ctx.save(); ctx.translate(LOG_END_SLOTS[i] * TEX_SIZE, 0);
+    drawers[LOG_END_DRAWER[m]](ctx, CORE.mulberry32(seed ^ (0x51ab3f27 + i * 0x2b7d11)));
+    ctx.restore();
+  });
   const tex = new THREE.CanvasTexture(cv);
   tex.magFilter = THREE.NearestFilter;
   tex.minFilter = THREE.NearestFilter;
@@ -4313,12 +4361,8 @@ const TERRAIN_FRAG = `
 precision highp float;
 uniform sampler2D uAtlas;
 uniform float uNMat;
-uniform float uLogMat;
-uniform float uLogEnd;
-uniform float uLogMat2;
-uniform float uLogEnd2;
-uniform float uLogMat3;
-uniform float uLogEnd3;
+uniform float uLogMats[5];
+uniform float uLogEnds[5];
 uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform vec3 uAmbCol;
@@ -4381,9 +4425,11 @@ void main(){
   // ends. Which faces those are follows the BLOCK's rotation, not the world:
   // vAxis is the trunk direction baked in by the mesher. A zero axis (a wood
   // sphere) never matches, so it stays bark all over.
-  if (abs(m - uLogMat) < 0.5 || abs(m - uLogMat2) < 0.5 || abs(m - uLogMat3) < 0.5){
-    float axLen = length(vAxis);
-    if (axLen > 0.5 && abs(dot(n, vAxis / axLen)) > 0.7) m = abs(m - uLogMat) < 0.5 ? uLogEnd : abs(m - uLogMat2) < 0.5 ? uLogEnd2 : uLogEnd3;
+  for (int li = 0; li < 5; li++){
+    if (abs(m - uLogMats[li]) < 0.5){
+      float axLen = length(vAxis);
+      if (axLen > 0.5 && abs(dot(n, vAxis / axLen)) > 0.7) m = uLogEnds[li];
+    }
   }
   float fx = clamp(fract(uv.x), 0.5/16.0, 15.5/16.0);
   float fy = clamp(fract(uv.y), 0.5/16.0, 15.5/16.0);
@@ -5782,12 +5828,8 @@ function buildScene(){
     uniforms: {
       uAtlas: { value: game.atlas.tex },
       uNMat: { value: ATLAS_SLOTS },
-      uLogMat: { value: CORE.MAT.WOOD - 1 },
-      uLogEnd: { value: LOG_END_SLOT },
-      uLogMat2: { value: CORE.MAT.JWOOD - 1 },
-      uLogEnd2: { value: LOG_END_J },
-      uLogMat3: { value: CORE.MAT.MWOOD - 1 },
-      uLogEnd3: { value: LOG_END_M },
+      uLogMats: { value: CORE.LOG_MATS.map(m => m - 1) },
+      uLogEnds: { value: LOG_END_SLOTS.slice() },
       uSunDir: { value: new THREE.Vector3(0.55, 0.75, 0.35).normalize() },
       uSunCol: { value: new THREE.Color(0.42, 0.40, 0.36) },
       uAmbCol: { value: new THREE.Color(0.62, 0.63, 0.68) },
@@ -5972,7 +6014,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -8069,7 +8111,7 @@ const weatherSys = {
     if (tk && !this.fires.some(f => f.k === tk)) this.fires.push({ k: tk, x, y, z, t: 2.6 });
     const le = nearEdits([x - 2, y - 2, z - 2, x + 2, y + 2, z + 2]);
     const m = CORE.materialAt(x, y - 0.3, z, le, game.gen);
-    if (m === CORE.MAT.WOOD || m === CORE.MAT.PLANKS || m === CORE.MAT.JWOOD || m === CORE.MAT.JPLANKS || m === CORE.MAT.MWOOD || m === CORE.MAT.MPLANKS){
+    if (m === CORE.MAT.WOOD || m === CORE.MAT.PLANKS || m === CORE.MAT.JWOOD || m === CORE.MAT.JPLANKS || m === CORE.MAT.MWOOD || m === CORE.MAT.MPLANKS || m === CORE.MAT.SWOOD || m === CORE.MAT.SPLANKS || m === CORE.MAT.AWOOD || m === CORE.MAT.APLANKS){
       applyEdit(CORE.makeEdit(0, 0, +x.toFixed(1), +y.toFixed(1), +z.toFixed(1), 2.6, 0, 0));   // the planks burn through
     }
     const pd = Math.hypot(x - game.pos.x, z - game.pos.z);
@@ -10225,6 +10267,15 @@ const torchSys = {
 // cell on screen.
 const farTreeSys = {
   group: null, trunks: null, canopy: null, lastCell: null, CAP: 9000, R: 460,
+  // how each kind of tree stands at range: trunk height and width, canopy
+  // height, width and centre, and the tints on the one bark and one leaf
+  KIND: {
+    oak:      { th: 1,    tw: 1,   cy: 5.9,  cw: 1,   ch: 1,   cc: new THREE.Color(1, 1, 1),          tc: new THREE.Color(1, 1, 1) },
+    jungle:   { th: 2.0,  tw: 1.2, cy: 11.2, cw: 1.7, ch: 1.0, cc: new THREE.Color(0.72, 0.9, 0.62),  tc: new THREE.Color(0.85, 1.0, 0.7) },
+    mangrove: { th: 0.75, tw: 1,   cy: 4.6,  cw: 1.2, ch: 0.5, cc: new THREE.Color(0.7, 0.72, 0.6),   tc: new THREE.Color(0.55, 0.5, 0.5) },
+    spruce:   { th: 1.7,  tw: 0.7, cy: 7.0,  cw: 0.8, ch: 1.9, cc: new THREE.Color(0.5, 0.72, 0.62),  tc: new THREE.Color(0.85, 0.7, 0.66) },
+    acacia:   { th: 0.85, tw: 0.9, cy: 5.0,  cw: 1.5, ch: 0.32, cc: new THREE.Color(0.95, 0.95, 0.62), tc: new THREE.Color(1.0, 0.92, 0.82) },
+  },
   init(scene){
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -10273,18 +10324,17 @@ const farTreeSys = {
         const ddx = t.x - px, ddz = t.z - pz;
         if (ddx * ddx + ddz * ddz > R2) continue;
         const s2 = t.s || 1;
-        const J = t.type === 'jungle', Mg = t.type === 'mangrove';
-        const th = J ? 2.0 : Mg ? 0.75 : 1;                 // the jungle's boles are twice as tall, the mangrove's short
-        po.set(t.x, t.y + 2.4 * s2 * th, t.z);
-        sc.set(s2, s2 * th, s2);
+        const K = this.KIND[t.type] || this.KIND.oak;
+        po.set(t.x, t.y + 2.4 * s2 * K.th, t.z);
+        sc.set(s2 * K.tw, s2 * K.th, s2 * K.tw);
         mt.compose(po, q, sc);
         this.trunks.setMatrixAt(n, mt);
-        po.set(t.x, t.y + (J ? 11.2 : Mg ? 4.6 : 5.9) * s2, t.z);
-        sc.set(s2 * (J ? 1.7 : Mg ? 1.2 : 1), s2 * (J ? 1.0 : Mg ? 0.5 : 1), s2 * (J ? 1.7 : Mg ? 1.2 : 1));
+        po.set(t.x, t.y + K.cy * s2, t.z);
+        sc.set(s2 * K.cw, s2 * K.ch, s2 * K.cw);
         mt.compose(po, q, sc);
         this.canopy.setMatrixAt(n, mt);
-        this.canopy.setColorAt(n, J ? this._cJ || (this._cJ = new THREE.Color(0.72, 0.9, 0.62)) : Mg ? this._cM || (this._cM = new THREE.Color(0.7, 0.72, 0.6)) : this._cO || (this._cO = new THREE.Color(1, 1, 1)));
-        this.trunks.setColorAt(n, J ? this._tJ || (this._tJ = new THREE.Color(0.85, 1.0, 0.7)) : Mg ? this._tM || (this._tM = new THREE.Color(0.55, 0.5, 0.5)) : this._cO || (this._cO = new THREE.Color(1, 1, 1)));
+        this.canopy.setColorAt(n, K.cc);
+        this.trunks.setColorAt(n, K.tc);
         n++;
       }
     this.trunks.count = n; this.canopy.count = n;
@@ -10559,7 +10609,26 @@ const treeSys = {
     const leafJ  = tex(leafDraw('#2f6b2a', '#1e4a1c', '#2a5f25', '#7fd24a'), 3, 2);
     const leafJ2 = tex(leafDraw('#3a7d30', '#244f1f', '#2f6b2a', '#9be060'), 3, 2);
     const leafM  = tex(leafDraw('#3d5a2e', '#2a3f20', '#355028', '#587a3e'), 3, 2);
+    // BIOMES B: spruce bark is red-brown with lichen, its needles blue-green;
+    // acacia bark warm brown, its crown a dry olive
+    const barkS = tex(c => {
+      c.fillStyle = '#5a3a2c'; c.fillRect(0, 0, 16, 16);
+      c.fillStyle = '#3c261b'; for (const x of [1, 5, 9, 13]) c.fillRect(x, 0, 1, 16);
+      c.fillStyle = '#6a4837'; for (const x of [3, 7, 11, 15]) c.fillRect(x, 0, 1, 16);
+      c.fillStyle = '#8a8a86'; c.fillRect(2, 5, 1, 1); c.fillRect(11, 9, 2, 1); c.fillRect(6, 13, 1, 1);
+    }, 2, 3);
+    const barkA = tex(c => {
+      c.fillStyle = '#6e5236'; c.fillRect(0, 0, 16, 16);
+      c.fillStyle = '#4c3722'; for (const x of [1, 5, 9, 13]) c.fillRect(x, 0, 1, 16);
+      c.fillStyle = '#7f6142'; for (const x of [3, 7, 11, 15]) c.fillRect(x, 0, 1, 16);
+    }, 2, 3);
+    const leafS  = tex(leafDraw('#2f5a4a', '#1f3d33', '#28503f', '#4a8a6a'), 3, 2);
+    const leafA  = tex(leafDraw('#6f7f36', '#4d5a24', '#5f6e2e', '#98a84a'), 3, 2);
     this.mats = {
+      barkS: new THREE.MeshBasicMaterial({ map: barkS }),
+      leafS: new THREE.MeshBasicMaterial({ map: leafS }),
+      barkA: new THREE.MeshBasicMaterial({ map: barkA }),
+      leafA: new THREE.MeshBasicMaterial({ map: leafA }),
       bark:  new THREE.MeshBasicMaterial({ map: bark }),
       leaf:  new THREE.MeshBasicMaterial({ map: leaf }),
       leaf2: new THREE.MeshBasicMaterial({ map: leaf2 }),
@@ -10572,7 +10641,7 @@ const treeSys = {
     return this.mats;
   },
   // what a tree is made of, and what it gives when it falls
-  woodOf(t){ return t && t.type === 'jungle' ? CORE.MAT.JWOOD : t && t.type === 'mangrove' ? CORE.MAT.MWOOD : CORE.MAT.WOOD; },
+  woodOf(t){ return t && t.type === 'jungle' ? CORE.MAT.JWOOD : t && t.type === 'mangrove' ? CORE.MAT.MWOOD : t && t.type === 'spruce' ? CORE.MAT.SWOOD : t && t.type === 'acacia' ? CORE.MAT.AWOOD : CORE.MAT.WOOD; },
   mesh(t){
     // round "true 3d" tree: tapered trunk + a cluster of leaf-ball blobs,
     // deterministic per tree so it never changes between visits
@@ -10590,6 +10659,37 @@ const treeSys = {
       const n = 3 + ((rng() * 3) | 0);
       for (let i = 0; i < n; i++){ const a = rng() * Math.PI * 2, rr = R0 * (0.55 + rng() * 0.35); blob(R0 * (0.45 + rng() * 0.3), Math.cos(a) * rr, H + 0.4 + (rng() - 0.5) * 1.2, Math.sin(a) * rr, rng() < 0.5 ? M.leafJ : M.leafJ2, 0.6); }
       blob(R0 * 0.55, 0, H * 0.62, 0, M.leafJ2, 0.5);                     // a lower tier on the bole
+      g.scale.setScalar(t.s); g.position.set(t.x, t.y - 0.15, t.z);
+      g.userData.trunkH = H;
+      return g;
+    }
+    if (t.type === 'spruce'){
+      // a spruce: a thin straight trunk, four tiers of cone
+      const H = 7 + rng() * 3.5;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.34, H + 0.4, 6), M.barkS);
+      trunk.position.y = (H + 0.4) / 2 - 0.2; g.add(trunk);
+      const tiers = 4;
+      for (let i = 0; i < tiers; i++){
+        const f = i / tiers, r = (2.3 - f * 1.5) * (0.9 + rng() * 0.2), ch = 2.6 - f * 0.6;
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(r, ch, 7), M.leafS);
+        cone.position.y = H * (0.34 + f * 0.62) + ch * 0.3; cone.rotation.y = rng() * Math.PI; g.add(cone);
+      }
+      g.scale.setScalar(t.s); g.position.set(t.x, t.y - 0.15, t.z);
+      g.userData.trunkH = H;
+      return g;
+    }
+    if (t.type === 'acacia'){
+      // an acacia: a forked trunk and a wide flat umbrella of a crown
+      const H = 3.6 + rng() * 1.2;
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.36, H + 0.4, 7), M.barkA);
+      trunk.position.y = (H + 0.4) / 2 - 0.2; g.add(trunk);
+      const lean = rng() * Math.PI * 2;
+      const limb = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.18, 2.4, 6), M.barkA);
+      limb.position.set(Math.cos(lean) * 0.8, H + 0.6, Math.sin(lean) * 0.8); limb.rotation.z = Math.cos(lean) * 0.7; limb.rotation.x = -Math.sin(lean) * 0.7; g.add(limb);
+      const blob = (r, x, y, z) => { const b = new THREE.Mesh(new THREE.SphereGeometry(r, 9, 5), M.leafA); b.position.set(x, y, z); b.scale.y = 0.22; b.rotation.y = rng() * Math.PI; g.add(b); };
+      const R0 = 3.2 + rng() * 1.0;
+      blob(R0, 0, H + 1.3, 0);
+      blob(R0 * 0.6, Math.cos(lean) * 1.6, H + 1.9, Math.sin(lean) * 1.6);
       g.scale.setScalar(t.s); g.position.set(t.x, t.y - 0.15, t.z);
       g.userData.trunkH = H;
       return g;
@@ -10675,7 +10775,7 @@ const treeSys = {
     this.group.remove(v.m);
     this.visible.delete(k);
     const wm = this.woodOf(v.t);
-    const wood = Math.round((v.t.type === 'jungle' ? 10 : v.t.type === 'mangrove' ? 5 : 6) + 4 * v.t.s);
+    const wood = Math.round((v.t.type === 'jungle' ? 10 : v.t.type === 'mangrove' ? 5 : v.t.type === 'spruce' ? 8 : 6) + 4 * v.t.s);
     if (grant){
       CORE.addMat(game.slots, wm, wood);
       toast('+' + wood + ' ' + CORE.MAT_NAME[wm]);
@@ -25501,7 +25601,7 @@ const wrenchSys = {
   paste: null, pasteGroup: null, selGeos: null, solidGeos: null, selMat: null, pasteMats: null,
   palette: [CORE.MAT.ROCK, CORE.MAT.GRASS, CORE.MAT.SAND, CORE.MAT.WOOD,
             CORE.MAT.PLANKS, CORE.MAT.STONEBRICK, CORE.MAT.SNOW,
-            CORE.MAT.OBSIDIAN, CORE.MAT.GLOWSHROOM, CORE.MAT.MUD, CORE.MAT.JPLANKS, CORE.MAT.MPLANKS],
+            CORE.MAT.OBSIDIAN, CORE.MAT.GLOWSHROOM, CORE.MAT.MUD, CORE.MAT.JPLANKS, CORE.MAT.MPLANKS, CORE.MAT.SPLANKS, CORE.MAT.APLANKS],
   palIdx: 0, raycaster: null,
   arrowDefs: [
     { axis: 0, sign: 1, color: 0xe04040 }, { axis: 0, sign: -1, color: 0xe04040 },
