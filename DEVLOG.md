@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 71 — BIOMES C: the living things (2026-09-19)
+
+Third slice of the biomes arc: each biome has its own animals by day and
+its own hunters by night.
+
+- **By day:** monkeys in the jungle (small, quick, a long tail), crocs
+  in the swamp (long and low; they lie still until you are within seven
+  metres, then lunge and bite for twelve), elk in the taiga (big, antlered,
+  four meat), hares on the tundra (tiny, fast), zebras on the savanna
+  (striped, three meat). Plains and hills keep their grazers and sheep.
+- **By night:** crawlers in the jungle (six-legged, green-eyed, in
+  pairs), the bogwight in the swamp (a waterlogged husk, green-eyed,
+  hits for twenty, burns at dawn), wolves in the taiga (in threes, grey,
+  fast, they circle in), frost wisps on the tundra (paler, colder, they
+  pop), hyenas on the savanna (spotted, in pairs). All of them fear
+  light as the night shift does, and dawn ends them the way it ends
+  their kind.
+- **One AI, many animals.** A creature names the behaviour it borrows
+  (grazer: wander and flee; stalker: circle in, fear light, slink off at
+  dawn; husk: walk straight at you and hit hard; wisp: drift and pop)
+  and its own numbers (health, speed, reach, damage, whether the sun
+  bothers it). The four behaviours read those numbers now instead of
+  their own constants. Ten creatures, no new AI, which is how the next
+  ten will come too.
+- **Bodies** from one quadruped builder (body, ridge, head with snout,
+  eyes, ears or antlers, tail, four or six legs, stripes or spots) plus a
+  recoloured husk and a recoloured wisp.
+- Drops: meat from the animals (and coins from a croc), fangs from the
+  hunters, a wisp core from the frost wisp. Turrets, guards and crew
+  treat the hunters as hostile; you cannot pick up a hunter, a croc, an
+  elk or a zebra. All ten have spawners in the creative catalog and the
+  grabber gun takes the animals.
+- Spawning is by the archetype under the spawn point: a biome with its
+  own animal or hunter sends that instead of the common roll; hunters
+  come as a pack at once, up to their cap.
+
 ## Build 70 — BIOMES B: taiga, tundra, savanna (2026-09-19)
 
 The second slice of the biomes arc: the cold and the dry.

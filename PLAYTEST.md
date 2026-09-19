@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 71 — BIOMES C
+- [ ] A day and a night in each new biome: jungle, swamp, taiga, tundra,
+      savanna. Which animal or hunter surprised you? Which one is a
+      pushover, which one is unfair?
+- [ ] Stand still near a croc. Does the lunge read? Does it leave you
+      alone at eight metres?
+- [ ] A wolf pack at night in the taiga with a torch, and without one.
+- [ ] Creative: spawn all ten from the catalog and look at them.
+
 ## Build 70 — BIOMES B
 - [ ] Find a taiga (spruce, snow up high), a tundra (flat, patchy snow,
       nothing growing) and a savanna (dry grass, umbrella trees). Do the

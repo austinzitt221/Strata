@@ -9982,7 +9982,7 @@ const powerSys = {
       let best = null, bd = 24;
       const mx = n.x, my = n.y + 0.95, mz = n.z;
       for (const e of game.entities){
-        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || (e.type === 'soldier' && !e.friendly) || (VEH[e.type] && e.crewed && !e.friendly);
+        const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || HOSTILE_BEASTS.has(e.type) || (e.type === 'soldier' && !e.friendly) || (VEH[e.type] && e.crewed && !e.friendly);
         if (!hostile || e.type === 'villager' || e.type === 'guard' || e.type === 'drop') continue;
         const def = ENT_DEF[e.type]; if (!def) continue;
         const d = Math.hypot(e.x - mx, e.y + def.h * 0.6 - my, e.z - mz);
@@ -11451,6 +11451,20 @@ const ENT_DEF = {
   cab:      { hp: 120, speed: 6.0, r: 0.9, h: 1.5, cap: 0 },
   guard:    { hp: 90, speed: 3.6, r: 0.42, h: 1.8, cap: 0 },   // the city's own: they fight the sieges
   soldier:  { hp: 70, speed: 3.4, r: 0.42, h: 1.8, cap: 0 },   // THE GARRISON: a base's own, with rifles
+  // BIOMES C (Build 71): the day's animals and the night's hunters, by biome.
+  // `like` names the behaviour they borrow (grazer: wander and flee; stalker:
+  // circle in, fear light, slink off at dawn; husk: walk straight at you and
+  // hit hard, burn at dawn unless dayOk; wisp: drift and pop)
+  monkey:   { hp: 14, speed: 3.6, r: 0.3,  h: 0.7,  cap: 5, like: 'grazer' },
+  croc:     { hp: 55, speed: 1.7, r: 0.5,  h: 0.5,  cap: 3, like: 'husk', aggro: 7, dmg: 12, dayOk: true },
+  elk:      { hp: 40, speed: 2.6, r: 0.5,  h: 1.5,  cap: 4, like: 'grazer' },
+  hare:     { hp: 8,  speed: 4.6, r: 0.25, h: 0.35, cap: 5, like: 'grazer' },
+  zebra:    { hp: 26, speed: 3.8, r: 0.45, h: 1.2,  cap: 5, like: 'grazer' },
+  crawler:  { hp: 22, speed: 5.2, r: 0.35, h: 0.6,  cap: 5, like: 'stalker', dmg: 5 },
+  bogwight: { hp: 90, speed: 1.3, r: 0.5,  h: 2.0,  cap: 3, like: 'husk', dmg: 20 },
+  wolf:     { hp: 30, speed: 5.8, r: 0.36, h: 0.8,  cap: 4, like: 'stalker', dmg: 7, aggro: 30 },
+  frostwisp:{ hp: 12, speed: 2.2, r: 0.3,  h: 0.5,  cap: 3, like: 'wisp', dmg: 20, fly: true },
+  hyena:    { hp: 26, speed: 5.4, r: 0.36, h: 0.8,  cap: 4, like: 'stalker', dmg: 6, aggro: 28 },
   car:      { hp: 300, speed: 0, r: 1.1, h: 1.5, cap: 0 },
   tank:     { hp: 480, speed: 0, r: 1.6, h: 2.3, cap: 0 },
   heli:     { hp: 300, speed: 0, r: 1.7, h: 2.4, cap: 0 },
@@ -11471,6 +11485,14 @@ const ENT_DEF = {
   archangel: { hp: 900, speed: 9.0, r: 1.6, h: 3.6, cap: 0, boss: 'THE ARCHANGEL' },
   guardian:  { hp: 420, speed: 2.6, r: 0.9, h: 2.8, cap: 0, boss: 'THE TOMB GUARDIAN' },
   knocker:   { hp: 560, speed: 2.4, r: 1.2, h: 3.0, cap: 0, boss: 'THE KNOCKER' },
+};
+// by archetype: what grazes by day, what hunts by night (Build 71)
+const BIOME_DAY = { 9: 'monkey', 5: 'croc', 10: 'elk', 11: 'hare', 12: 'zebra' };
+const BIOME_NIGHT = { 9: { type: 'crawler', pack: 2 }, 5: { type: 'bogwight', pack: 1 }, 10: { type: 'wolf', pack: 3 }, 11: { type: 'frostwisp', pack: 1 }, 12: { type: 'hyena', pack: 2 } };
+const HOSTILE_BEASTS = new Set(['crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena']);
+const BEAST_DROP = {
+  monkey: [['meat', 1]], croc: [['meat', 3], ['coin', 4]], elk: [['meat', 4]], hare: [['meat', 1]], zebra: [['meat', 3]],
+  crawler: [['fang', 1], ['coin', 2]], bogwight: [['huskmeat', 2], ['coin', 6]], wolf: [['fang', 2], ['meat', 1]], frostwisp: [['wispcore', 1], ['coin', 3]], hyena: [['fang', 1], ['meat', 1]],
 };
 const CREW_HAT = 0x4fc3f7;
 const VROLE = {
@@ -12161,7 +12183,36 @@ function entMesh(type, ent){
     g.userData = { legs, phase: Math.random() * 6, hpbar };
     return g;
   }
-  if (type === 'grazer'){
+  // BIOMES C: a quadruped from a spec -- body, head with snout and eyes, ears
+  // or horns, tail, four legs (or six), stripes or spots
+  const beast = (S) => {
+    box(S.bw, S.bh, S.bd, S.body, 0, S.by, 0.05);
+    if (S.ridge) box(S.bw * 0.8, 0.1, S.bd * 0.8, S.ridge, 0, S.by + S.bh / 2 + 0.02, 0.05);
+    const head = box(S.hw, S.hh, S.hd, S.head, 0, S.hy, -S.bd / 2 - S.hd * 0.4);
+    box(S.hw * 0.55, S.hh * 0.35, 0.1, S.snout || S.head, 0, -S.hh * 0.2, -S.hd / 2 - 0.04, head);
+    for (const sx of [-S.hw * 0.28, S.hw * 0.28]) box(0.06, 0.06, 0.03, S.eye || 0x241b12, sx, S.hh * 0.15, -S.hd / 2 - 0.005, head);
+    if (S.ears) for (const sx of [-S.hw * 0.4, S.hw * 0.4]) box(0.08, S.ears, 0.06, S.head, sx, S.hh / 2 + S.ears / 2, 0.02, head);
+    if (S.horns) for (const sx of [-S.hw * 0.35, S.hw * 0.35]){ box(0.06, S.horns, 0.06, 0x5a4a3a, sx, S.hh / 2 + S.horns / 2, -0.05, head); box(0.3, 0.05, 0.05, 0x5a4a3a, sx * 1.8, S.hh / 2 + S.horns * 0.8, -0.05, head); }
+    if (S.tail) box(S.tail[0], S.tail[0], S.tail[1], S.tailCol || S.body, 0, S.by + S.bh * 0.2, S.bd / 2 + S.tail[1] / 2);
+    const n = S.six ? 3 : 2;
+    for (let i = 0; i < n; i++) for (const sx of [-1, 1]){ const sz = -1 + (n === 2 ? i * 2 : i); legs.push(box(S.lw, S.ly * 2, S.lw, S.legs || S.body, sx * S.bw * 0.34, S.ly, 0.05 + sz * S.bd * 0.34)); }
+    if (S.stripes) for (let i = 0; i < 5; i++) box(S.bw + 0.02, 0.06, 0.05, 0x1a1a1a, 0, S.by - S.bh * 0.3 + i * (S.bh * 0.15), 0.05 - S.bd * 0.3 + i * S.bd * 0.15);
+    if (S.spots) for (let i = 0; i < 6; i++) box(0.07, 0.07, 0.02, 0x3a3020, (i % 2 ? 1 : -1) * (S.bw / 2 + 0.005), S.by + (i % 3 - 1) * 0.08, 0.05 + (i - 2.5) * S.bd * 0.12);
+    return head;
+  };
+  const BEASTS = {
+    monkey:  { bw: 0.36, bh: 0.32, bd: 0.44, body: 0x6b4a2a, by: 0.5, hw: 0.26, hh: 0.24, hd: 0.24, head: 0x7a5a38, snout: 0xd8b48c, hy: 0.64, ears: 0.1, tail: [0.05, 0.5], tailCol: 0x5a3e22, lw: 0.08, ly: 0.17 },
+    croc:    { bw: 0.5, bh: 0.3, bd: 1.6, body: 0x3f5a2e, ridge: 0x2c4020, by: 0.32, hw: 0.34, hh: 0.2, hd: 0.6, head: 0x4a6a36, snout: 0x3a5228, hy: 0.34, eye: 0xd8d060, tail: [0.18, 0.9], lw: 0.12, ly: 0.12 },
+    elk:     { bw: 0.7, bh: 0.6, bd: 1.3, body: 0x6a4a30, by: 0.95, hw: 0.34, hh: 0.4, hd: 0.5, head: 0x7a5a3a, snout: 0x3a2a1a, hy: 1.22, horns: 0.5, tail: [0.08, 0.15], lw: 0.14, ly: 0.33 },
+    hare:    { bw: 0.26, bh: 0.22, bd: 0.4, body: 0xc9c0b0, by: 0.28, hw: 0.2, hh: 0.18, hd: 0.2, head: 0xd8d0c0, snout: 0xf0e8e0, hy: 0.38, ears: 0.24, tail: [0.08, 0.08], tailCol: 0xf0ece4, lw: 0.07, ly: 0.09 },
+    zebra:   { bw: 0.6, bh: 0.55, bd: 1.2, body: 0xe8e6e0, by: 0.85, hw: 0.3, hh: 0.36, hd: 0.48, head: 0xe8e6e0, snout: 0x2a2a2a, hy: 1.06, ears: 0.12, tail: [0.06, 0.4], tailCol: 0x2a2a2a, lw: 0.13, ly: 0.29, stripes: 1 },
+    crawler: { bw: 0.4, bh: 0.22, bd: 0.7, body: 0x2e5a2a, ridge: 0x1c3a1a, by: 0.3, hw: 0.3, hh: 0.2, hd: 0.26, head: 0x3a6a30, snout: 0x1c3a1a, hy: 0.34, eye: 0xd8ff60, lw: 0.07, ly: 0.15, six: 1 },
+    wolf:    { bw: 0.34, bh: 0.32, bd: 0.9, body: 0x8a8a8a, ridge: 0x5a5a5a, by: 0.5, hw: 0.28, hh: 0.24, hd: 0.36, head: 0x9a9a9a, snout: 0x3a3a3a, hy: 0.58, ears: 0.1, eye: 0xffe070, tail: [0.08, 0.45], tailCol: 0x6a6a6a, lw: 0.1, ly: 0.2 },
+    hyena:   { bw: 0.36, bh: 0.34, bd: 0.85, body: 0xa08a5a, ridge: 0x3a3020, by: 0.55, hw: 0.3, hh: 0.26, hd: 0.34, head: 0xa89060, snout: 0x2a2420, hy: 0.62, ears: 0.12, eye: 0xffd060, tail: [0.06, 0.3], tailCol: 0x3a3020, lw: 0.1, ly: 0.22, spots: 1 },
+  };
+  if (BEASTS[type]){
+    beast(BEASTS[type]);
+  } else if (type === 'grazer'){
     box(0.72, 0.5, 1.0, 0xc8a24b, 0, 0.62, 0.05);            // body
     box(0.6, 0.12, 0.85, 0xb08d3f, 0, 0.9, 0.05);            // back fur ridge
     const head = box(0.4, 0.36, 0.34, 0xd8b45e, 0, 0.78, -0.62);
@@ -12217,27 +12268,30 @@ function entMesh(type, ent){
       const leg = box(0.1, 0.4, 0.1, 0x1e2431, sx, 0.2, sz);
       legs.push(leg);
     }
-  } else if (type === 'husk'){
-    // a dried giant: cracked hide, hollow amber eyes, arms like beams
-    box(0.72, 0.95, 0.5, 0x6a5040, 0, 1.15, 0);              // torso
-    box(0.9, 0.2, 0.56, 0x4e3a2e, 0, 1.68, 0);               // shoulders
-    box(0.6, 0.35, 0.42, 0x5a4436, 0, 0.55, 0);              // hips
-    for (const [cx, cy] of [[-0.2, 1.3],[0.15, 0.95],[0.28, 1.45]]) box(0.06, 0.28, 0.52, 0x3a2a20, cx, cy, 0);   // cracks
-    const head = box(0.42, 0.44, 0.4, 0x5e4838, 0, 1.98, -0.04);
-    const eyeM = new THREE.MeshBasicMaterial({ color: 0xffb040 });
+  } else if (type === 'husk' || type === 'bogwight'){
+    // a dried giant: cracked hide, hollow amber eyes, arms like beams --
+    // or the swamp's, waterlogged and green-eyed
+    const P = type === 'bogwight' ? { a: 0x3f4a3a, b: 0x2c352c, c: 0x364033, d: 0x1c241c, e: 0x8aff8a } : { a: 0x6a5040, b: 0x4e3a2e, c: 0x5a4436, d: 0x3a2a20, e: 0xffb040 };
+    box(0.72, 0.95, 0.5, P.a, 0, 1.15, 0);                   // torso
+    box(0.9, 0.2, 0.56, P.b, 0, 1.68, 0);                    // shoulders
+    box(0.6, 0.35, 0.42, P.c, 0, 0.55, 0);                   // hips
+    for (const [cx, cy] of [[-0.2, 1.3],[0.15, 0.95],[0.28, 1.45]]) box(0.06, 0.28, 0.52, P.d, cx, cy, 0);   // cracks
+    const head = box(0.42, 0.44, 0.4, P.a, 0, 1.98, -0.04);
+    const eyeM = new THREE.MeshBasicMaterial({ color: P.e });
     for (const sx of [-0.1, 0.1]){
       box(0.12, 0.1, 0.05, 0x1a120c, sx, 0.04, -0.2, head);  // sockets
       const eye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.04), eyeM);
       eye.position.set(sx, 0.04, -0.21); head.add(eye);
     }
     box(0.2, 0.05, 0.04, 0x1a120c, 0, -0.12, -0.2, head);    // a mouth sewn shut
+    if (type === 'bogwight') for (const [cx, cy] of [[-0.3, 0.9], [0.25, 1.5]]) box(0.14, 0.05, 0.54, 0x6a8a4a, cx, cy, 0);   // weed
     for (const sx of [-0.5, 0.5]){
-      const arm = box(0.2, 1.0, 0.22, 0x5a4436, sx, 1.1, 0);
-      box(0.24, 0.16, 0.26, 0x3a2a20, 0, -0.55, 0, arm);     // fist
+      const arm = box(0.2, 1.0, 0.22, P.c, sx, 1.1, 0);
+      box(0.24, 0.16, 0.26, P.d, 0, -0.55, 0, arm);          // fist
       legs.push(arm);
     }
     for (const sx of [-0.18, 0.18]){
-      const leg = box(0.22, 0.75, 0.24, 0x4e3a2e, sx, 0.37, 0);
+      const leg = box(0.22, 0.75, 0.24, P.b, sx, 0.37, 0);
       legs.push(leg);
     }
   } else if (type === 'guardian'){
@@ -12319,9 +12373,10 @@ function entMesh(type, ent){
       g.scale.setScalar(2.1);
     }
     g.userData.wings = wings;
-  } else if (type === 'wisp'){
+  } else if (type === 'wisp' || type === 'frostwisp'){
     // a caged light: a bright core, two flecks that orbit it, a soft halo
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), new THREE.MeshBasicMaterial({ color: 0xd8f6ff }));
+    // (the tundra's is paler and colder)
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.26), new THREE.MeshBasicMaterial({ color: type === 'frostwisp' ? 0xf0fbff : 0xd8f6ff }));
     g.add(core);
     const inner = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
     core.add(inner);
@@ -12447,7 +12502,12 @@ function killEntity(e, byPlayer){
     return;
   }
   if (byPlayer){
-    if (e.type === 'grazer'){ const n = seasonSys.summer ? 4 : 2; addStackItem('meat', n); toast('+' + n + ' meat' + (n > 2 ? ' (summer)' : '')); }
+    if (BEAST_DROP[e.type]){
+      const parts = [];
+      for (const [k, n] of BEAST_DROP[e.type]){ addStackItem(k, n); parts.push('+' + n + ' ' + itemLabel({ kind: k, count: n })); }
+      toast(parts.join('  ·  '));
+    }
+    else if (e.type === 'grazer'){ const n = seasonSys.summer ? 4 : 2; addStackItem('meat', n); toast('+' + n + ' meat' + (n > 2 ? ' (summer)' : '')); }
     else if (e.type === 'stalker'){
       const n = 1 + ((Math.random() * 2) | 0);
       addStackItem('fang', n); addStackItem('coin', 2);
@@ -13845,7 +13905,7 @@ const crewSys = {
     killEntity(e, false);
     markSave();
   },
-  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || (o.type === 'soldier' && !o.friendly) || (VEH[o.type] && o.crewed && !o.friendly)); },
+  hostile(o){ return !!(o.siege || o.raider || o.bossType || o.type === 'lurker' || o.type === 'stalker' || o.type === 'husk' || o.type === 'wisp' || o.type === 'angel' || HOSTILE_BEASTS.has(o.type) || (o.type === 'soldier' && !o.friendly) || (VEH[o.type] && o.crewed && !o.friendly)); },
   // what it costs to hire them: villagers 60, city folk 120, the mayor 400
   // -- and the mayor only leaves the office for someone the city knows
   hireCost(e, hrec){ return hrec.role === 'mayor' ? 400 : e.ckey ? 120 : this.HIRE_COST; },
@@ -16304,7 +16364,7 @@ const siegeSys = {
   guardTarget(e, dt){
     let best = null, bd = 34;
     for (const o of game.entities){
-      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk' || (o.type === 'soldier' && !o.friendly))) continue;
+      if (!(o.siege || (o.raider && o.type === 'lurker') || o.type === 'stalker' || o.type === 'husk' || HOSTILE_BEASTS.has(o.type) || (o.type === 'soldier' && !o.friendly))) continue;
       const d = Math.hypot(o.x - e.x, o.z - e.z);
       if (d < bd){ bd = d; best = o; }
     }
@@ -20499,11 +20559,14 @@ const farmSys = {
 // while under fire, villagers only at hiring goodwill. What comes out
 // is the one that went in: its record rides inside the item -- the
 // villager's house and crew, a boss's kind, an animal's hp.
-const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker', 'soldier'];
+const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker', 'soldier',
+  'monkey', 'croc', 'elk', 'hare', 'zebra', 'crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena'];
 const MENAGERIE_NAME = { grazer: 'grazer', sheep: 'sheep', lurker: 'lurker', stalker: 'stalker', husk: 'husk', wisp: 'wisp', angel: 'angel', guard: 'city guard', villager: 'villager',
-  burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker', soldier: 'soldier' };
+  burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker', soldier: 'soldier',
+  monkey: 'monkey', croc: 'crocodile', elk: 'elk', hare: 'hare', zebra: 'zebra', crawler: 'crawler', bogwight: 'bogwight', wolf: 'wolf', frostwisp: 'frost wisp', hyena: 'hyena' };
 const MENAGERIE_COL = { grazer: '#c8a24b', sheep: '#eceae2', lurker: '#3a5a3a', stalker: '#2c3444', husk: '#6a5040', wisp: '#9fe8ff', angel: '#e8e0ff', guard: '#2f4f7a', villager: '#d9b25a',
-  burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78', soldier: '#556b3a' };
+  burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78', soldier: '#556b3a',
+  monkey: '#6b4a2a', croc: '#3f5a2e', elk: '#6a4a30', hare: '#c9c0b0', zebra: '#e8e6e0', crawler: '#2e5a2a', bogwight: '#3f4a3a', wolf: '#8a8a8a', frostwisp: '#f0fbff', hyena: '#a08a5a' };
 const menagerieSys = {
   beam: null, hold: null,
   secs(e){
@@ -21902,7 +21965,7 @@ const citySys = {
 function trySpawnEntities(){
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
-  for (const e of game.entities) counts[e.type]++;
+  for (const e of game.entities) counts[e.type] = (counts[e.type] || 0) + 1;
   const a = Math.random() * Math.PI * 2;
   const d = 22 + Math.random() * 20;
   const x = game.pos.x + Math.cos(a) * d, z = game.pos.z + Math.sin(a) * d;
@@ -21916,6 +21979,19 @@ function trySpawnEntities(){
     const ld = nearestLightDist(x, h, z);
     const f = Math.max(0, Math.min(1, (ld - 12) / 38));
     if (f > 0 && Math.random() < f * 0.7){
+      // a biome with hunters of its own sends them (Build 71): a pack at once
+      const B = BIOME_NIGHT[game.gen.archAt(x, z)];
+      if (B){
+        const T = B.type, D = ENT_DEF[T];
+        if ((counts[T] || 0) + B.pack <= D.cap){
+          for (let k = 0; k < B.pack; k++){
+            const a2 = Math.random() * Math.PI * 2;
+            const e2 = spawnEntity(T, x + Math.cos(a2) * 2.5 * k, h + (D.fly ? 1.8 : 0.4), z + Math.sin(a2) * 2.5 * k);
+            if (k) e2.pairOf = 1;
+          }
+        }
+        return;
+      }
       const roll = Math.random();
       if (roll < 0.42 && counts.stalker + 1 < ENT_DEF.stalker.cap){
         spawnEntity('stalker', x, h + 0.4, z);
@@ -21940,8 +22016,10 @@ function trySpawnEntities(){
       spawnEntity('lurker', x, uy, z); return;
     }
   }
-  // grazers and sheep wander the surface by day
+  // grazers and sheep wander the surface by day -- or the biome's own animal
   if (game.dayF > 0.4){
+    const A = BIOME_DAY[game.gen.archAt(x, z)];
+    if (A){ if ((counts[A] || 0) < ENT_DEF[A].cap) spawnEntity(A, x, h + 0.5, z); return; }
     const wantSheep = Math.random() < 0.45;
     if (wantSheep && counts.sheep < ENT_DEF.sheep.cap){ spawnEntity('sheep', x, h + 0.5, z); return; }
     if (counts.grazer < ENT_DEF.grazer.cap) spawnEntity('grazer', x, h + 0.5, z);
@@ -21954,6 +22032,7 @@ function updateEntities(dt, now){
   for (let i = game.entities.length - 1; i >= 0; i--){
     const e = game.entities[i];
     const def = ENT_DEF[e.type];
+    const kind = def && def.like || e.type;              // the behaviour it borrows (Build 71)
     // creative gets living animals and villagers too; only free-roaming
     // lurkers stay a survival thing (bounty targets still tick for hunts)
     // creative is one to one with survival: everything that spawns, spawns
@@ -22059,16 +22138,16 @@ function updateEntities(dt, now){
       continue;
     }
     // the night shift at dawn: wisps gutter out, stalkers slink off
-    if (game.dayF > 0.45 && (e.type === 'wisp' || e.type === 'stalker')){
+    if (game.dayF > 0.45 && (kind === 'wisp' || kind === 'stalker')){
       e.dawnT = (e.dawnT || 0) + dt;
-      if (e.type === 'wisp' && e.dawnT > 1.5){
+      if (kind === 'wisp' && e.dawnT > 1.5){
         Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
         killEntity(e, false); continue;
       }
-      if (e.type === 'stalker' && !e.pit && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+      if (kind === 'stalker' && !e.pit && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
     }
     // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
-    if ((e.type === 'lurker' || e.type === 'husk') && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
+    if ((e.type === 'lurker' || (kind === 'husk' && !def.dayOk)) && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
       e.burnT = (e.burnT || 0) + dt;
       if (Math.random() < dt * 6) Particles.burst(e.x, e.y + 1.2, e.z, 0.3, [0xff8830, 0xffb347, 0x442211], 2, 1.4);
       if (e.burnT > 0.4){ e.burnT = 0; e.hp -= 5; e.flash = 0.1; }
@@ -22101,7 +22180,7 @@ function updateEntities(dt, now){
         e.atkT = 1;
         crewSys.hitPrey(P, 8, (P.x - e.x) * 2.5, (P.z - e.z) * 2.5);
       }
-    } else if (e.type === 'stalker'){
+    } else if (kind === 'stalker'){
       // fast and low: it circles in rather than charging, backs off from
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
@@ -22113,8 +22192,8 @@ function updateEntities(dt, now){
         for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
         for (const b of game.beacons){ const d = Math.hypot(b[0]-e.x, b[2]-e.z) * 0.6; if (d < bd){ bd = d; lx = b[0]; lz = b[2]; } }
         sx = e.x - lx; sz = e.z - lz; sp *= 1.1;
-      } else if (crewSys.prey(e, 24)){
-        const P = crewSys.prey(e, 24);
+      } else if (crewSys.prey(e, def.aggro || 24)){
+        const P = crewSys.prey(e, def.aggro || 24);
         const dx = P.x - e.x, dz = P.z - e.z;
         const px2 = -dz * e.orbit, pz2 = dx * e.orbit;             // sideways
         const close = Math.max(0, Math.min(1, (P.d - 2.5) / 6));  // spiral in
@@ -22122,7 +22201,7 @@ function updateEntities(dt, now){
         const d3 = Math.hypot(dx, e.y - P.y, dz);
         if (d3 < 1.5 && e.atkT <= 0){
           e.atkT = 0.55;
-          crewSys.hitPrey(P, 5, (P.x - e.x) * 1.5, (P.z - e.z) * 1.5);
+          crewSys.hitPrey(P, def.dmg || 5, (P.x - e.x) * 1.5, (P.z - e.z) * 1.5);
           if (Math.random() < 0.3) e.orbit = -e.orbit;
         }
       } else {
@@ -22130,15 +22209,16 @@ function updateEntities(dt, now){
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
-    } else if (e.type === 'husk'){
-      // it saw you. it is coming. nothing about that changes.
-      const P = crewSys.prey(e, 36);
+    } else if (kind === 'husk'){
+      // it saw you. it is coming. nothing about that changes. (a croc only
+      // sees you from seven metres, and lunges)
+      const P = crewSys.prey(e, def.aggro || 36);
       if (P){
         sx = P.x - e.x; sz = P.z - e.z;
         const d3 = Math.hypot(sx, e.y - P.y, sz);
         if (d3 < 2.3 && e.atkT <= 0){
           e.atkT = 1.7;
-          crewSys.hitPrey(P, 18, (P.x - e.x) * 4, (P.z - e.z) * 4);
+          crewSys.hitPrey(P, def.dmg || 18, (P.x - e.x) * 4, (P.z - e.z) * 4);
           AudioSys.sfx('hit');
         }
         if (e.atkT > 1.3) sp *= 0.2;                              // the swing plants its feet
@@ -22147,7 +22227,7 @@ function updateEntities(dt, now){
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
-    } else if (e.type === 'wisp'){
+    } else if (kind === 'wisp'){
       // a light that drifts toward you and pops: TNT with a grudge
       e.fuse = e.fuse || 0;
       if (pd < 30){
@@ -22157,7 +22237,7 @@ function updateEntities(dt, now){
         if (d3 < 2.2){
           e.fuse += dt * 4;
           if (e.fuse > 1){
-            explode(e.x, e.y, e.z, 1.5, 26);
+            explode(e.x, e.y, e.z, 1.5, def.dmg || 26);
             killEntity(e, false); continue;
           }
         } else e.fuse = Math.max(0, e.fuse - dt * 2);
@@ -22166,7 +22246,7 @@ function updateEntities(dt, now){
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
-    } else if (e.type === 'grazer' && e.fleeT > 0 && pd < 14){
+    } else if (kind === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.8;
     } else if (VEH[e.type]){
       sx = 0; sz = 0;                              // parked
@@ -26697,7 +26777,8 @@ function tryAction(dt, now){
       }
       const ent = entityOnRay(2.6);
       if (ent){
-        if (ent.type === 'lurker'){ toast('it would eat your face'); return; }
+        if (ent.type === 'lurker' || ent.type === 'croc' || HOSTILE_BEASTS.has(ent.type)){ toast('it would eat your face'); return; }
+        if (ent.type === 'elk' || ent.type === 'zebra'){ toast('too big to lift'); return; }
         if (ent.type === 'villager'){
           // your crew, and anyone who would join it, let you carry them
           const hr = villageSys.villagerRec(ent);
@@ -32662,7 +32743,7 @@ window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
-  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, torchSys, tryEat, updateDayNight,
+  spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
   pnodeSys, wireSys, powerSys, bulbSys, stoveSys, grappleSys,
   uiMove, quickMove, openMachine, openCrafter, openCraft, closeOverlay, tryAction, refreshAllUI, saveNow,

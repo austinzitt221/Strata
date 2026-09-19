@@ -1448,6 +1448,18 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-20 — the living things
+
+The biomes stopped being scenery today. The trick was to let a
+creature borrow a behaviour by name and bring its own numbers, so ten
+creatures cost no new AI; the crocodile is a husk that only sees seven
+metres and does not mind the sun, the wolf a stalker that bites harder
+and comes in threes. I lost an hour to my own test pad (a forty-metre
+box carved from the wrong height put the beasts ten metres under the
+player, and I read "no bite" as a bug); the note about test geometry
+goes in the standing notes. One slice left in the arc: each biome's
+own material and finds.
+
 ## 2026-09-19, late night — the cold and the dry
 
 Three more archetypes in one build because the machinery from A made
@@ -1629,6 +1641,11 @@ that reloads the world.
 Next: the aircraft, then the sky.
 
 ## Standing notes
+
+- **A test pad is a box of size S centred at top − S/2, carved by a box
+  of size S centred at top + S/2.** Twice now a pad built from the wrong
+  centre put the thing under test metres below where I looked, and I
+  read the wrong number as a game bug.
 
 - **Test the key, not the function.** Every menu from Build 44 to 62
   could not be closed in play because the harness called closeOverlay
