@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, morning — THE CROSSING
+
+The ambush is the first scripted scene in the game and it went in as a
+timeline over the crossing's own clock, in the crossing's own scene,
+with nothing new but four models and a fade to white. The view swings
+back on its own when the thing rises; Austin will either love or hate
+being turned, and I want to know which. The alien world is the Earth's
+field in violet because that is honest for a first landing and because
+the next chapter is where it earns its own generator.
+
+Two vehicle bugs came out of the same assumption: that "the rocket"
+was a type and not a kind. The star rocket landed as a plain rocket and
+flew the crossing as one. Both are one word each now.
+
+Austin asked for a couple of builds and got 80 and 81; the teleport
+bands slipped to the next chapter so this one could end on the crash.
+Now the big playtest, 76 to 81.
+
 ## 2026-09-22, small hours — STATION TWO A
 
 Austin cannot play tonight and asked for a couple more builds, so the

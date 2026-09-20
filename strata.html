@@ -694,9 +694,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               DRYGRASS:29, PERMAFROST:30, LEAFLITTER:31, PEAT:32,
               REGOLITH:33, MOONROCK:34,
               PLATING:35, LUNITE:36,
-              SELENITE:37, ASTRIUM:38 };                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 38;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium'];
+              SELENITE:37, ASTRIUM:38,
+              VMOSS:39, DUSKROCK:40 };                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 40;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
@@ -2554,7 +2555,26 @@ function makeSiteGen(seed){
     regionAt: () => ({ sx: 0, sz: 0, arch: MOON_ARCH, key: '0,0', seed }), spawn: () => ({ x: 0, z: -53 }), planet: 'site', frames: SITE_FRAMES, solids };
   return gen;
 }
-function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : makeEarthGen(seed); }
+// ---------- THE ALIEN WORLD (Build 81): the first landing ----------
+// Vehl's home, overrun. For now it is the Earth's generator wearing
+// another world's skin: violet moss for grass, duskrock for rock, its own
+// names, nothing of ours built on it (what the Earth's field carves and
+// raises on its own, ruins and sky islands, it keeps: they are the
+// overrun world's). Its own things come in the builds after
+function makeAlienGen(seed){
+  const E = makeEarthGen((seed ^ 0xa11e9a7e) >>> 0);
+  const SWAP = { [MAT.GRASS]: MAT.VMOSS, [MAT.ROCK]: MAT.DUSKROCK, [MAT.DRYGRASS]: MAT.VMOSS, [MAT.LEAFLITTER]: MAT.VMOSS, [MAT.STONEBRICK]: MAT.DUSKROCK, [MAT.MARBLE]: MAT.DUSKROCK };
+  const nil = () => null;
+  const wrapLocal = (L) => Object.assign({}, L, { mat: (x, y, z) => { const m = L.mat(x, y, z); return SWAP[m] || m; }, makeLocal: (...a) => wrapLocal(L.makeLocal(...a)) });
+  const gen = Object.assign({}, E, {
+    mat: (x, y, z) => { const m = E.mat(x, y, z); return SWAP[m] || m; },
+    makeLocal: (...a) => wrapLocal(E.makeLocal(...a)),
+    villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil, skyNear: nil, zigAt: nil,
+    regionAt: (x, z) => Object.assign({}, E.regionAt(x, z), { arch: 14 }),
+    planet: 'alien' });
+  return gen;
+}
+function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : planet === 'alien' ? makeAlienGen(seed) : makeEarthGen(seed); }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
@@ -3621,7 +3641,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -4608,6 +4628,15 @@ function makeTileDrawers(){
       speckle(ctx, rng, '#7a8494', '#6e7787', '#86909f', 0.22, 0.16);
       ctx.fillStyle = '#5a6272'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16);
       ctx.fillStyle = '#98a2b0'; for (let x = 2; x < 16; x += 4){ ctx.fillRect(x, 2, 1, 1); ctx.fillRect(x, 12, 1, 1); }
+    },
+    [CORE.MAT.VMOSS](ctx, rng){
+      speckle(ctx, rng, '#6a3aaa', '#5a2e96', '#7a48bb', 0.3, 0.22);
+      for (let i = 0; i < 6; i++){ const x = (rng() * 15) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#b070ff'; ctx.fillRect(x, y, 1, 2); }
+      for (let i = 0; i < 3; i++){ const x = (rng() * 15) | 0, y = (rng() * 15) | 0; ctx.fillStyle = '#3a8a8a'; ctx.fillRect(x, y, 1, 1); }
+    },
+    [CORE.MAT.DUSKROCK](ctx, rng){
+      speckle(ctx, rng, '#2e3a4a', '#26303e', '#384658', 0.32, 0.2);
+      for (let i = 0; i < 4; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#4a6a7a'; ctx.fillRect(x, y, 2, 1); }
     },
     [CORE.MAT.SELENITE](ctx, rng){
       speckle(ctx, rng, '#8f8f94', '#7e7e84', '#9e9ea4', 0.3, 0.22);
@@ -5718,6 +5747,7 @@ function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.heigh
 // LIFTOFF (Build 74): the Moon pulls a sixth as hard. Same jump, six times the air
 const MOON_G = 4.0;
 function zeroG(){ return game.planet === 'station' || game.planet === 'site'; }
+function airless(){ return game.planet === 'moon' || zeroG(); }
 function gravityNow(){ return game.planet === 'moon' ? MOON_G : zeroG() ? 0 : PLAYER.gravity; }
 // how far a ghost — drill/dispenser shape, paste, blueprint — can be pushed
 // out. A copied build is easiest to line up from OUTSIDE it.
@@ -6466,7 +6496,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -8255,7 +8285,7 @@ function updateDayNight(dt){
   const W = weatherSys.cur;
   const wdark = W.dark == null ? 1 : W.dark;
   dayF *= wdark;
-  const tint = seasonSys.tint;
+  const tint = game.planet === 'alien' ? [0.78, 0.55, 1.2] : seasonSys.tint;   // the alien world (Build 81): its green is violet
   // unlit vegetation (decor + trees are MeshBasic) tracks the sky, or it
   // glows through the night
   {
@@ -8274,6 +8304,7 @@ function updateDayNight(dt){
   u.uAmbCol.value.copy(AMB_NIGHT).lerp(AMB_DAY, dayF);
   u.uLampSky.value = 0.85 * game.dayF;       // headlamp works on the surface at night
   game.skyNow = (game.skyNow || new THREE.Color()).copy(SKY_NIGHT).lerp(SKY, dayF);
+  if (game.planet === 'alien') game.skyNow.lerp(new THREE.Color(0.42, 0.22, 0.62), 0.55 * (0.4 + 0.6 * dayF));
   if (wdark < 1){
     // overcast: the sky goes grey and the light flattens
     const grey = 0.3 + 0.7 * wdark;
@@ -8291,7 +8322,7 @@ function updateDayNight(dt){
     treeSys.mats.leaf2.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
   }
   if (farTreeSys && farTreeSys.canopy) farTreeSys.canopy.material.color.setRGB(b2(dayF) * tint[0], b2(dayF) * tint[1], b2(dayF) * tint[2]);
-  if (game.planet !== 'earth'){
+  if (airless()){
     // LIFTOFF (Build 74): no atmosphere. A hard sun, a black sky at noon, the night lit a little by the Earth
     u.uSunCol.value.copy(SUN_BASE).multiplyScalar(0.2 + 1.0 * game.dayF);
     u.uAmbCol.value.setRGB(0.09, 0.10, 0.14).lerp(new THREE.Color(0.30, 0.30, 0.34), game.dayF);
@@ -8327,6 +8358,7 @@ const REGION_WORDS = [
   ['the {} barrens', '{} waste', 'the {} cold'],           // tundra
   ['the {} veldt', '{} flats', 'the {} gold'],             // savanna
   ['the {} mare', '{} crater', 'the {} dust'],             // the Moon (Build 74)
+  ['the {} glow', '{} hollow', 'the {} violet'],           // the alien world (Build 81)
 ];
 function regionNameOf(R){
   const A = ['Har', 'Kel', 'Mor', 'Tal', 'Bren', 'Dun', 'Fal', 'Gor', 'Hol', 'Ost', 'Vel', 'Wyn'];
@@ -8443,7 +8475,7 @@ const weatherSys = {
     return r < 0.52 ? 'clear' : r < 0.74 ? 'rain' : r < 0.82 ? 'storm' : r < 0.9 ? 'fog' : 'clear';
   },
   dawn(day){
-    if (game.planet !== 'earth'){ this.set('clear', 1e9); return; }
+    if (airless()){ this.set('clear', 1e9); return; }
     let k = this.forecast(day);
     const snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
     if (snowy && (k === 'rain' || k === 'storm')) k = 'snow';
@@ -8455,7 +8487,7 @@ const weatherSys = {
     this.boltT = 4 + Math.random() * 6;
   },
   roll(){
-    if (game.planet !== 'earth'){ this.set('clear', 1e9); return; }
+    if (airless()){ this.set('clear', 1e9); return; }
     const r = Math.random(), snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
     const morning = game.timeOfDay > 0.02 && game.timeOfDay < 0.12;
     if (r < 0.5) this.set('clear', 240 + Math.random() * 600);
@@ -15298,6 +15330,7 @@ const objectiveSys = {
     const out = [];
     if (game.planet === 'station'){ stationOneSys.objectives(out); return out; }
     if (game.planet === 'site'){ siteSys.objectives(out); return out; }
+    if (game.planet === 'alien'){ alienSys.objectives(out); return out; }
     expeditionSys.markers(out);
     for (const key in game.villages){
       const rec = game.villages[key];
@@ -30559,7 +30592,11 @@ function refreshToolHUD(){
     if (V.rocket){
       const F = spaceSys.flight;
       const ok = game.mode === 'creative' || (e.charge || 0) >= 50;
-      el.innerHTML = '<div class="t1">rocket' + (F ? ' · ' + (F.phase === 'climb' ? 'LIFTOFF' : F.phase === 'landing' ? 'COMING DOWN' : 'THE CROSSING') : '') + '</div>' +
+      if (e.wrecked){
+        el.innerHTML = '<div class="t1">' + V.name + ' · WRECKED</div><div class="t2">it needs ' + spaceSys.REPAIR.map(c => c.n + ' ' + (c.mat ? c.mat.toLowerCase() : c.item)).join(', ') + '</div><div class="t2">' + (spaceSys.canRepair() || game.mode === 'creative' ? 'SPACE to repair it' : 'not yet — right click to step out') + '</div>';
+        return;
+      }
+      el.innerHTML = '<div class="t1">' + V.name + (F ? ' · ' + (F.phase === 'climb' ? 'LIFTOFF' : F.phase === 'landing' ? 'COMING DOWN' : F.phase === 'crash' ? 'GOING DOWN' : 'THE CROSSING') : '') + '</div>' +
         '<div class="t2">fuel ' + Math.round(e.charge || 0) + '% · a launch burns half a tank' +
           (F && F.phase === 'transit' ? ' · ' + spaceSys.nameOf(F.from) + ' behind, ' + spaceSys.nameOf(F.to) + ' ahead · the mouse looks around' : '') + '</div>' +
         '<div class="t2">' + (F ? 'hold on' : ok ? 'SPACE to launch for ' + spaceSys.nameOf(spaceSys.destOf()) + ' · R picks the other stop' : 'step out and right click it with JET FUEL') + '</div>' +
@@ -31544,7 +31581,8 @@ function buildSaveData(){
                  e.charge != null ? +(+e.charge).toFixed(1) : 0,
                  e.heading != null ? +(+e.heading).toFixed(2) : 0,
                  VEH[e.type] && e.bat ? e.bat : 0,
-                 e.crewed && e.bkey ? e.bkey : 0]),                      // a garrison's tank keeps its crew and its base
+                 e.crewed && e.bkey ? e.bkey : 0,
+                 e.wrecked ? 1 : 0]),                      // a garrison's tank keeps its crew and its base
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -31562,7 +31600,7 @@ function startWorldData(id, data){
   game.worldName = data.name || (ixEntry && ixEntry.name) || 'world';
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
-  game.planet = ['moon', 'station', 'site'].includes(data.planet) ? data.planet : 'earth';
+  game.planet = ['moon', 'station', 'site', 'alien'].includes(data.planet) ? data.planet : 'earth';
   spaceSys.others = Object.assign({}, data.others || {});
   if (data.moon) spaceSys.others.moon = data.moon;                 // Build 74's two-world saves
   if (data.earth) spaceSys.others.earth = data.earth;
@@ -31614,7 +31652,7 @@ function startWorldData(id, data){
   game.day = data.day || 0;
   if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
   weatherSys.fires = []; weatherSys.thunder = []; weatherSys.puddles = (data.weather && data.weather.puddles) || [];
-  if (game.planet !== 'earth') weatherSys.set('clear', 1e9);     // no air, no weather
+  if (airless()) weatherSys.set('clear', 1e9);                   // no air, no weather
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -31652,6 +31690,7 @@ function startWorldData(id, data){
     if (r[0] === 'drop'){ e.item = r[7] || null; e.ttl = r[8] || 1; }
     if (VEH[r[0]] && r[7]) e.bat = r[7];
     if (VEH[r[0]] && r[8]){ e.crewed = true; e.bkey = r[8]; }
+    if (VEH[r[0]] && r[9]) e.wrecked = true;
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
@@ -31711,7 +31750,7 @@ function startWorldData(id, data){
   game.forceStream = true;
   game.photo = null;          // never inherit photo mode from the last world
   game.scope = 0;
-  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : game.planet === 'site' ? ' · the site of STATION TWO' : ''));
+  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : game.planet === 'site' ? ' · the site of STATION TWO' : game.planet === 'alien' ? ' · the ALIEN WORLD' : ''));
 }
 function reviveItem(it){
   return it || null;
@@ -31734,6 +31773,30 @@ function quitToTitle(){
   game.ui = 'none';
   show('mainmenu');
 }
+
+// ---------- THE ALIEN WORLD (Build 81): what is here so far ----------
+// Vehl, beside the wreck, until the world gets its people; the wreck as an
+// objective until it stands again
+const alienSys = {
+  accT: 0,
+  tick(dt){
+    if (game.planet !== 'alien') return;
+    this.accT += dt;
+    if (this.accT < 1.5) return;
+    this.accT = 0;
+    if (!(game.story && game.story.ambushed)) return;
+    if (game.entities.some(e => e.type === 'alien' && e.cast === 'leader')) return;
+    const w = game.entities.find(e => e.type === 'rocket2') || game.driving;
+    const x = (w ? w.x : game.pos.x) + 4, z = (w ? w.z : game.pos.z) + 2;
+    const P = { x, y: game.gen.height(x, z) + 0.25, z };
+    const e = spawnEntity('alien', P.x, P.y, P.z);
+    e.cast = 'leader'; e.home = P; e.friendly = true; e.noburn = true; e.role = 'x_leader';
+  },
+  objectives(out){
+    const w = game.entities.find(e => e.type === 'rocket2' && e.wrecked);
+    if (w) out.push({ id: 'wreck', x: w.x, z: w.z, y: w.y + 12, label: 'THE WRECK', rec: { name: 'the star rocket' } });
+  },
+};
 
 // ---------- STATION TWO (Build 80): the build ----------
 // Four frames along the keel, filled one after another with anything
@@ -31898,7 +31961,11 @@ const stationOneSys = {
   ],
   STORY5: [
     'Vehl: The STAR ROCKET. It will make the crossing. Fly it from the site, toward home. I will be watching from the hall.',
-    '(THE CROSSING is the next build.)',
+  ],
+  STORY6: [
+    'Vehl: So that is what it looks like from the inside. The station is gone. I am sorry for it; it was well built. We are on my world, and it is as I told you: overrun.',
+    'Vehl: The ship can be raised. Iron from the ground, plating you know how to make, two grains of astrium: I saw you carry more. Then we find what is at the centre of this, and we end it.',
+    '(THE ALIEN WORLD, its people, its things and its end, is the next chapter.)',
   ],
   offers(cast){
     if (cast === 'ores') return [
@@ -31933,8 +32000,9 @@ const stationOneSys = {
     if (cast === 'leader'){
       const st = this.stage();
       const built = !!(game.story && game.story.built);
-      const lines = st === 0 ? this.STORY : st === 1 ? this.STORY2 : st === 2 ? (built ? this.STORY4 : this.STORY3) : this.STORY5;
+      const lines = game.planet === 'alien' ? this.STORY6 : st === 0 ? this.STORY : st === 1 ? this.STORY2 : st === 2 ? (built ? this.STORY4 : this.STORY3) : this.STORY5;
       for (const t of lines) line(t);
+      if (game.planet === 'alien') return;
       if (st === 2 && !built){
         const done = (game.story && game.story.site) || 0;
         line('STATION TWO: ' + done + ' of ' + CORE.SITE_FRAMES.length + ' frames stand · fly to the site from the Moon (R in the seat)', '#ffb44d');
@@ -32149,21 +32217,25 @@ const spaceSys = {
            'surveyBought', 'surveySold', 'mail', 'guardRun', 'buff', 'guests', 'bossKills', 'hotSel', 'snapOn', 'gridIdx', 'hp', 'heal', 'timeOfDay', 'day', 'story', 'stationCast'],
   // the route (Build 78): the station sits between the Earth and the Moon.
   // The first stop is always the next one along; R in the seat picks the other
-  routes(){
-    const word = !!(game.story && game.story.word);
+  routes(e){
+    e = e || game.driving;
+    const S = game.story || {}, word = !!S.word, site = word && !S.siteLost;
+    const star = !!(e && VEH[e.type] && VEH[e.type].star);
     return game.planet === 'earth' ? ['station', 'moon'] : game.planet === 'station' ? ['moon', 'earth']
-         : game.planet === 'site' ? ['moon', 'station'] : word ? ['station', 'site', 'earth'] : ['station', 'earth'];   // the site (Build 80) opens with the leader's word, from the Moon
+         : game.planet === 'site' ? (star ? ['alien', 'moon', 'station'] : ['moon', 'station'])     // the crossing (Build 81) needs the star rocket
+         : game.planet === 'alien' ? ['station', 'moon']
+         : site ? ['station', 'site', 'earth'] : ['station', 'earth'];                              // the site (Build 80) opens with the leader's word, from the Moon
   },
   destOf(){ const R = this.routes(); return R.includes(this.dest) ? this.dest : R[0]; },
   cycleDest(){ const R = this.routes(); this.dest = R[(R.indexOf(this.destOf()) + 1) % R.length]; refreshToolHUD(); toast('destination: ' + this.nameOf(this.dest)); },
-  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : p === 'site' ? 'the SITE of Station Two' : 'Earth'; },
+  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : p === 'site' ? 'the SITE of Station Two' : p === 'alien' ? 'the ALIEN WORLD' : 'Earth'; },
   // the seat: the rocket is flown from outside; look around, and SPACE lights it
   drive(e, V, dt){
     const F = this.flight;
     if (game.camView !== 1){ if (this.camWas == null) this.camWas = game.camView; game.camView = 1; game.chase = null; }
     if (e.mesh){
       e.mesh.position.set(e.x, e.y, e.z);
-      e.mesh.rotation.set(0, e.heading || 0, 0);
+      e.mesh.rotation.set(0, e.heading || 0, e.tilt || 0);
       const fl = e.mesh.userData.flame;
       if (fl){
         fl.visible = !!(F && (F.phase === 'climb' || F.phase === 'landing') && F.burn);
@@ -32177,7 +32249,7 @@ const spaceSys = {
     vehicleCamera(e.x, e.y, e.z, e.heading || 0, dt, V.seat, null);
     if (!F){
       const k = game.keys;
-      if (k['Space'] && !this.spaceWas) this.launch(e);
+      if (k['Space'] && !this.spaceWas){ if (e.wrecked) this.repair(e); else this.launch(e); }
       this.spaceWas = !!k['Space'];
       if (k['KeyR'] && !this.rWas) this.cycleDest();
       this.rWas = !!k['KeyR'];
@@ -32185,8 +32257,20 @@ const spaceSys = {
     game.carHud2T = (game.carHud2T || 0) + dt;
     if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
   },
+  REPAIR: [{ item: 'ironingot', n: 16 }, { mat: 'PLATING', n: 8 }, { item: 'astrium', n: 2 }],
+  canRepair(){ return this.REPAIR.every(c => c.mat ? CORE.countMat(game.slots, CORE.MAT[c.mat]) >= c.n : CORE.countItem(game.slots, c.item) >= c.n); },
+  repair(e){
+    if (!e.wrecked) return false;
+    if (game.mode !== 'creative' && !this.canRepair()){ toast('the wreck wants ' + this.REPAIR.map(c => c.n + ' ' + (c.mat ? c.mat.toLowerCase() : c.item)).join(', ')); AudioSys.sfx('deny'); return false; }
+    if (game.mode !== 'creative') for (const c of this.REPAIR){ if (c.mat) CORE.consumeMat(game.slots, CORE.MAT[c.mat], c.n); else CORE.consumeItem(game.slots, c.item, c.n); }
+    e.wrecked = false; e.hp = ENT_DEF[e.type].hp; e.tilt = 0; e.charge = Math.max(e.charge || 0, 50);
+    toast('the ' + VEH[e.type].name + ' stands again · fuelled for one launch');
+    AudioSys.sfx('craft'); refreshHotbar(); refreshToolHUD(); markSave();
+    return true;
+  },
   launch(e){
     if (this.flight) return false;
+    if (e.wrecked){ toast('it is wrecked — SPACE repairs it'); return false; }
     if (netSys.guest || netSys.host){ toast('not with company in the world'); return false; }
     const to = this.destOf();
     if (game.mode !== 'creative'){
@@ -32220,7 +32304,31 @@ const spaceSys = {
       this.transitTick(F, dt);
       if (F.t > this.TRANSIT_T){ F.phase = 'fadein'; F.t = 0; $('fade').style.opacity = '1'; }
     } else if (F.phase === 'fadein'){
-      if (F.t > 0.55){ this.endTransit(); this.arrive(F); $('fade').style.opacity = '0'; }
+      if (F.t > 0.55){ const crash = !!F.ambush; this.endTransit(); this.arrive(F, crash); $('fade').style.opacity = '0'; $('fade').style.background = '#000'; }
+    } else if (F.phase === 'crash'){
+      // THE CROSSING (Build 81): thrown out of the hole over Vehl's world, and down
+      if (loadSys.on) return;
+      const r = F.e;
+      r.vy = -26; r.y += r.vy * dt; r.tilt = Math.min(0.42, (r.tilt || 0) + dt * 0.12);
+      r.x += 3 * dt;
+      if (Math.random() < 0.9) Particles.burst(r.x, r.y + 4, r.z, 1.6, [0xff7a20, 0x2a2a30, 0xffb060], 3, 6);
+      const box = [r.x - 2, r.y - 3, r.z - 2, r.x + 2, r.y + 2, r.z + 2];
+      const d = sdfWorld(r.x, r.y - 0.05, r.z, nearEdits(box));
+      if (d <= 0.2){
+        this.flight = null;
+        explode(r.x, r.y + 1.5, r.z, 5, 0);
+        for (let i = 0; i < 120 && sdfWorld(r.x, r.y - 0.1, r.z, nearEdits([r.x - 2, r.y - 3, r.z - 2, r.x + 2, r.y + 2, r.z + 2])) > 0.2; i++) r.y -= 0.1;
+        r.wrecked = true; r.hp = 40; r.vy = 0;
+        if (r.mesh && r.mesh.userData.flame) r.mesh.userData.flame.visible = false;
+        AudioSys.setHum(false, 0, 0);
+        AudioSys.sfx('boom', 0);
+        Particles.burst(r.x, r.y + 2, r.z, 6, [0xff7a20, 0x2a2a30, 0x6a3aaa], 60, 8);
+        game.camView = 1; game.chase = null;
+        toast('CRASH. The star rocket is wrecked. Vehl is here.');
+        alienSys.tick(2);
+        refreshToolHUD();
+        markSave(); saveNow();
+      }
     } else if (F.phase === 'landing'){
       if (loadSys.on) return;
       const r = F.e;
@@ -32262,6 +32370,11 @@ const spaceSys = {
         c.fillStyle = '#a08a58'; for (let i = 0; i < 7; i++) c.fillRect((rng() * 60) | 0, (8 + rng() * 14) | 0, 2, 2);
         c.fillStyle = '#eef4ff'; c.fillRect(0, 0, 64, 2); c.fillRect(0, 30, 64, 2);
         for (let i = 0; i < 26; i++) c.fillRect((rng() * 62) | 0, (2 + rng() * 28) | 0, (2 + rng() * 5) | 0, 1);
+      } else if (kind === 'alien'){
+        c.fillStyle = '#6a3aaa'; c.fillRect(0, 0, 64, 32);
+        c.fillStyle = '#3a1a5a'; for (let i = 0; i < 5; i++) c.fillRect(0, (2 + rng() * 28) | 0, 64, (1 + rng() * 3) | 0);
+        c.fillStyle = '#2a7a8a'; for (let i = 0; i < 10; i++) c.fillRect((rng() * 60) | 0, (4 + rng() * 22) | 0, (2 + rng() * 8) | 0, (2 + rng() * 4) | 0);
+        c.fillStyle = '#b070ff'; for (let i = 0; i < 20; i++) c.fillRect((rng() * 63) | 0, (rng() * 31) | 0, 2, 1);
       } else {
         c.fillStyle = '#8f8f94'; c.fillRect(0, 0, 64, 32);
         c.fillStyle = '#6a6a70'; for (let i = 0; i < 18; i++) c.fillRect((rng() * 62) | 0, (rng() * 30) | 0, (1 + rng() * 5) | 0, (1 + rng() * 3) | 0);
@@ -32303,7 +32416,7 @@ const spaceSys = {
       g.userData.rad = 14;
       return g;
     };
-    const mkBody = (kind) => kind === 'station' ? mkStation() : kind === 'site' ? mkSite() : mk(kind, kind === 'earth' ? 70 : 19);
+    const mkBody = (kind) => kind === 'station' ? mkStation() : kind === 'site' ? mkSite() : mk(kind, kind === 'earth' ? 70 : kind === 'alien' ? 62 : 19);
     const from = mkBody(F.from), to = mkBody(F.to);
     from.position.set(0, 0, 0); to.position.set(0, 0, 1000);
     S.add(from, to);
@@ -32316,7 +32429,7 @@ const spaceSys = {
     S.add(new THREE.AmbientLight(0x404050, 0.6));
     const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(40, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff6e0 }));
     sunDisc.position.set(2600, 1600, -2300); S.add(sunDisc);
-    const ship = entMesh('rocket', F.e);
+    const ship = entMesh(F.e.type || 'rocket', F.e);
     ship.rotation.set(Math.PI / 2, 0, 0);       // nose along +z
     if (ship.userData.flame) ship.userData.flame.visible = true;
     S.add(ship);
@@ -32324,17 +32437,74 @@ const spaceSys = {
     this.cam = new THREE.PerspectiveCamera(game.camera.fov, game.camera.aspect, 0.5, 20000);
     game.yaw = 0; game.pitch = 0.18;
     AudioSys.setHum(true, 0.6, 0.25);
+    // THE CROSSING (Build 81): the first flight from the site toward the alien world is not a flight
+    if (F.from === 'site' && F.to === 'alien' && !(game.story && game.story.ambushed)) F.ambush = { stage: 0 };
+  },
+  // the ambush, in stages by the crossing's clock: it comes up behind, it
+  // tears the black open where the station was, Vehl is on your hull, and
+  // the hole takes you
+  ambushTick(F, dt, z){
+    const A = F.ambush, q = F.t / this.TRANSIT_T, S = this.scene;
+    if (A.stage === 0 && q > 0.3){
+      A.stage = 1;
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(26, 16, 12), new THREE.MeshBasicMaterial({ color: 0x120a1e }));
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(34, 2.2, 8, 40), new THREE.MeshBasicMaterial({ color: 0xb070ff }));
+      g.add(body, ring);
+      for (const [ex, ey] of [[-9, 6], [9, 6], [0, -8]]){ const eye = new THREE.Mesh(new THREE.SphereGeometry(4, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe0c0ff })); eye.position.set(ex, ey, 24); g.add(eye); }
+      g.position.set(0, 30, z - 320);
+      S.add(g); A.boss = g;
+      game.yaw = Math.PI; game.pitch = 0.1;                       // you look back
+      toast('something is behind you');
+      AudioSys.sfx('boom', 60);
+    }
+    if (A.boss){ const tz = z - 90; A.boss.position.z += (tz - A.boss.position.z) * Math.min(1, 0.5 * dt); A.boss.rotation.z += dt * 0.3; A.boss.lookAt(this.ship.position); }
+    if (A.stage === 1 && q > 0.45){
+      A.stage = 2;
+      const hole = new THREE.Group();
+      hole.add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+      hole.add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 8, 60), new THREE.MeshBasicMaterial({ color: 0xb070ff })));
+      hole.position.set(0, 0, 40);
+      S.add(hole); A.hole = hole;
+      toast('Vehl: It found us. Hold on.');
+      AudioSys.sfx('thunder');
+    }
+    if (A.hole){
+      const r = Math.min(70, (q - 0.45) / 0.25 * 70);
+      A.hole.scale.setScalar(Math.max(0.01, r));
+      A.hole.lookAt(this.cam.position);
+      const st = this.bodies.from; const sc = Math.max(0.001, 1 - (q - 0.5) / 0.22);   // the station goes into it
+      if (q > 0.5) st.scale.setScalar(sc);
+      if (q > 0.5) st.position.z += (40 - st.position.z) * Math.min(1, 1.5 * dt);
+    }
+    if (A.stage === 2 && q > 0.7){
+      A.stage = 3;
+      const v = entMesh('alien', { cast: 'leader' }); v.scale.setScalar(0.7); v.position.set(1.4, 0.4, 3.2); v.rotation.x = -Math.PI / 2;
+      this.ship.add(v); A.vehl = v;
+      toast('Vehl is on your hull. "Through, or nothing."');
+      AudioSys.sfx('rocket');
+    }
+    if (A.stage >= 3){
+      // pulled back: the ship loses way, then goes in
+      const pull = Math.min(1, (q - 0.7) / 0.3);
+      this.ship.position.z = z - pull * pull * (z - 40);
+      this.ship.position.x += (Math.random() - 0.5) * pull * 1.2;
+      this.ship.position.y += (Math.random() - 0.5) * pull * 1.2;
+      if (q > 0.92 && !A.white){ A.white = 1; const f = $('fade'); f.style.background = '#fff'; f.style.opacity = '1'; }
+    }
   },
   transitTick(F, dt){
     const p = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, F.t / this.TRANSIT_T));
     const rFrom = this.bodies.from.userData.rad, rTo = this.bodies.to.userData.rad;
     const z = (rFrom + 30) + (1000 - rTo - 30 - rFrom - 30) * p;
     this.ship.position.set(0, 0, z);
+    if (F.ambush) this.ambushTick(F, dt, z);
     this.ship.rotation.z += dt * 0.15;       // a slow roll
     this.bodies.from.rotation.y += dt * 0.02; this.bodies.to.rotation.y += dt * 0.02;
     const R = 16, cp = Math.cos(game.pitch), sp = Math.sin(game.pitch);
-    this.cam.position.set(Math.sin(game.yaw) * cp * R, sp * R + 1.5, z - Math.cos(game.yaw) * cp * R);
-    this.cam.lookAt(0, 0, z + 2);
+    const sz = this.ship.position.z;
+    this.cam.position.set(this.ship.position.x + Math.sin(game.yaw) * cp * R, sp * R + 1.5, sz - Math.cos(game.yaw) * cp * R);
+    this.cam.lookAt(this.ship.position.x, 0, sz + 2);
     this.cam.aspect = game.camera.aspect; this.cam.fov = game.camera.fov; this.cam.updateProjectionMatrix();
     if (this.ship.userData.flame) this.ship.userData.flame.scale.set(1, 0.6 + Math.random() * 0.3, 1);
     game.carHud2T = (game.carHud2T || 0) + dt;
@@ -32352,7 +32522,13 @@ const spaceSys = {
   // the far world takes over: this one is put away as it stands, the other
   // planet's save comes up (or is born), and the rocket appears high over
   // the pad with you in it
-  arrive(F){
+  arrive(F, crash){
+    if (crash){
+      // the station is gone, and so is the road that went through it
+      game.story = game.story || {};
+      game.story.ambushed = 1; game.story.siteLost = 1; game.story.site = 0;
+      delete this.others.site;
+    }
     const idx = game.entities.indexOf(F.e);
     if (idx >= 0) game.entities.splice(idx, 1);          // the rocket leaves with you
     game.driving = null;
@@ -32367,16 +32543,17 @@ const spaceSys = {
     next.player = land ? { x: land.x, y: null, z: land.z, yaw: F.e.heading || 0, pitch: 0, fly: false } : null;
     next.others = Object.assign({}, this.others);
     delete next.others[F.to];
-    next.others[F.from] = live;
+    if (!crash) next.others[F.from] = live;
     this.dest = null;
     this.teardown();
     startWorldData(game.worldId, next);
-    const r = spawnEntity('rocket', game.pos.x, game.pos.y + 110, game.pos.z);
+    const r = spawnEntity(F.e.type || 'rocket', game.pos.x, game.pos.y + 110, game.pos.z);
     r.charge = F.e.charge || 0; r.hp = F.e.hp; r.heading = F.e.heading || 0; r.vy = -4;
-    r.mesh = entMesh('rocket', r); game.scene.add(r.mesh);
+    r.mesh = entMesh(r.type, r); game.scene.add(r.mesh);
     game.driving = r;
     game.camView = 1; game.chase = null; game.pitch = 0.2;
-    F.e = r; F.phase = 'landing'; F.t = 0; F.burn = true;
+    F.e = r; F.phase = crash ? 'crash' : 'landing'; F.t = 0; F.burn = !crash;
+    if (crash){ r.vy = -22; r.tilt = 0.1; }
     AudioSys.setHum(true, 0.8, 0.5);
     refreshToolHUD();
   },
@@ -33951,6 +34128,7 @@ function frameBody(now){
   moonBaseSys.tick(dt);
   stationOneSys.tick(dt);
   siteSys.tick(dt);
+  alienSys.tick(dt);
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -34166,7 +34344,7 @@ function frameBody(now){
     }
     { const vis = !!(game.armor && game.armor.head && game.armor.head.kind === 'spacesuit' && game.camView === 0 && !game.photo && !game.driving);
       if (vis !== game.visorOn){ game.visorOn = vis; $('visor').classList.toggle('hidden', !vis); } }
-    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
+    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : game.planet === 'alien' ? 'the ALIEN WORLD · ' + seasonSys.name : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
   }
 
   // autosave: 2.5s after last change
@@ -34273,7 +34451,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

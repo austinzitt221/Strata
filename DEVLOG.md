@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 81 — THE CROSSING: the ambush, the crash, the alien world (2026-09-22)
+
+The star rocket flies, and the first flight goes wrong the way the
+roadmap said it would.
+
+- **The route.** From the site, the star rocket (and only it) can go for
+  the alien world. The crossing draws the world ahead as a violet
+  sphere with dark bands and teal seas.
+- **The ambush.** The first crossing is scripted on the crossing's own
+  clock: at a third of the way something rises behind you and the view
+  swings back to it (a dark mass in a violet ring, three pale eyes); at
+  half, it tears the black open where Station Two hangs and the station
+  goes into it; Vehl appears on your hull ("Through, or nothing"); then
+  the hole takes the ship and the screen goes white. Station Two is
+  gone from the save and its road with it. Every later crossing is a
+  crossing.
+- **The crash.** Thrown out over Vehl's world, the star rocket comes
+  down fast and tilted, blows a crater where it lands, and stands in it
+  **wrecked**. The wreck is an objective, the seat says what it needs
+  (16 iron ingots, 8 plating, 2 astrium; free in creative), and SPACE in
+  the seat repairs it with one launch's fuel. Wrecks survive a save.
+- **The alien world**, first version: the Earth's generator wearing
+  another world's skin. **Violet moss** for grass, **duskrock** for
+  rock, a lavender sky, foliage tinted toward violet, its own names
+  (*the Kelthwaite violet*, *Morrow hollow*), and nothing of ours built
+  on it: no villages, cities, forts, ziggurats or wrecks; what the
+  field carves and raises on its own (caves, ruins, sky islands, rivers,
+  weather) it keeps as the overrun world's. The Earth's animals and
+  night things spawn there for now.
+- **Vehl** stands beside the wreck on the alien world and speaks of it
+  (the station lost, the ship raisable, what is at the centre to be
+  found and ended). The alien world proper, its people, its things and
+  its end, is the next chapter.
+- Vehicles keep their kind across flights (the star rocket used to land
+  as a plain rocket); the crossing draws the vehicle you are in.
+
 ## Build 80 — STATION TWO A: the build (2026-09-21)
 
 The biggest build the game asks of you, as the roadmap promised: a

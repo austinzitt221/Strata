@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 81 — THE CROSSING
+- [ ] Fly the star rocket from the site. Did you turn to look when the
+      view swung back? Did the station going into the hole land? Was
+      the white-out too long, too short?
+- [ ] The crash: does the wreck read as a wreck? Find the iron, make the
+      plating, raise it. Is the repair cost right for that moment?
+- [ ] Walk the alien world for a day. What is the first thing it needs
+      to stop being Earth in violet?
+- [ ] Talk to Vehl at the wreck. Then fly back to Station One and talk
+      to them there too. (They are in both places; call it out if it
+      bothers you.)
+
 ## Build 80 — STATION TWO A
 - [ ] Get the word from Vehl, read the blueprint, fly to the site (R in
       the seat on the Moon). Does landing on the keel's pad read?

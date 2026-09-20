@@ -326,11 +326,16 @@ Slotted between the city builds as the mood takes me:
      two missions ending in the leader's word. STATION ONE IS COMPLETE.
   4. STATION TWO & THE CROSSING. A (DONE, Build 80): the site past the
      Moon, four frames to fill by hand, plating craftable, the star
-     rocket for eight astrium. B (next): THE CROSSING itself: fly the
+     rocket for eight astrium. B (DONE, Build 81): THE CROSSING: the
      star rocket from the site toward the alien world, the ambush (the
-     final boss, the black hole, the station lost, Vehl aboard your
-     hull), the crash landing on the alien world, and the teleport
-     bands. The alien planet proper after that.
+     boss behind, the black hole, the station lost, Vehl on your hull),
+     the crash landing, the wreck and its repair, the alien world's
+     first version (the Earth's field in violet, nothing of ours on it).
+     Still owed from this chapter: the **teleport bands** (Vehl's
+     parting gift: fast travel to any beacon or spawn on any world).
+  5. THE ALIEN WORLD & THE END (next): its own biomes, materials, trees,
+     people and beasts; the thing at the centre; the final boss for
+     real; the ending.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
