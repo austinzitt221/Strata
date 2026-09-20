@@ -319,7 +319,11 @@ Slotted between the city builds as the mood takes me:
      veins in their walls and skylights down into them; two more
      structures to find: the crashed lander, and the drill rig over a
      shaft into a tube.
-  3. Then STATION ONE. The upgraded rocket (STATION TWO's reward) will
+  3. Then STATION ONE. A (DONE, Build 78): the station as a third world,
+     the route through it, zero-G, the cast in their shops speaking
+     their own tongue. B (next): the translator quest (the leader sends
+     you for it), six trades with alien goods, the leader's story and
+     the first missions. The upgraded rocket (STATION TWO's reward) will
      cost astrium as well as the leader's word.
 
 Small things I want, slotted wherever a session has room:

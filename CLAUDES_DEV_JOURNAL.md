@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, evening — STATION ONE A
+
+The station was less new machinery than I feared. A world with no
+ground is a generator whose heightfield says "nothing here" and whose
+SDF is the station; the mesher, the streamer, the collider and the
+landing all took it without a change, once heightRange told the truth
+about where the plating was. Zero-G is the ground branch skipped and
+a small thruster model in its place. The one real bug was mine: I put
+the hall's corridor under the landing spot, and the rocket fell
+through its own hangar floor into the hall. Layouts have to be read
+against where things land.
+
+The shop screenshot, a trader floating in front of the port with the
+Earth in it, is the first picture from this game I would put on a
+poster. B is the words: the translator, the trades, the leader's story.
+
 ## 2026-09-21, midday — MOON DEPTHS
 
 Tubes, a lander and a rig, and the Moon is what Austin asked for: a

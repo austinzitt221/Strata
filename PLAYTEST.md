@@ -5,6 +5,20 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 78 — STATION ONE A
+- [ ] Launch from Earth: the rocket now stops at the station first. Did
+      the station's shape resolving in the crossing read? The landing
+      through the open roof?
+- [ ] Step out into zero-G. Is it fun or is it sick-making? Is seven
+      too fast a top speed, is the brake enough, does the tether feel
+      fair when you drift out the roof?
+- [ ] Find all six shops and the hall below. Did you get lost? Should
+      the corridors be lit or marked?
+- [ ] Look out a port. Talk to all seven. Which one do you want to
+      understand first?
+- [ ] R in the seat: fly Earth to the Moon direct, then Moon to Earth
+      direct. Does the routing make sense?
+
 ## Build 77 — MOON DEPTHS
 - [ ] Find a skylight and drop in (a sixth of the gravity: you will be
       fine). Walk the tube to its end. Does it feel like a cave, or a

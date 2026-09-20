@@ -2,6 +2,42 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 78 — STATION ONE A: the station, zero-G, the cast (2026-09-21)
+
+The first slice of STATION ONE. The station exists, you can land in it,
+float through it and meet the seven who live there; they do not speak
+your language yet.
+
+- **A third world in the save.** The station is a generator behind the
+  same interface as the Earth and the Moon, but it has no ground: a
+  hangar (34 m, open above, you land through the roof), six shop
+  spheres on corridors in every direction with quarters beyond them,
+  and the leader's hall below, all plating shells cut by their insides
+  so every corridor opens into its room. The layout is rolled per world
+  (the corridors' angles and pitches, the lengths). Each shop and the
+  hall has a round port facing the Earth. Save blobs are now a map
+  (`others`) of every world you are not on; Build 74's two-world saves
+  load as before.
+- **The route.** The station sits between the Earth and the Moon. From
+  Earth the rocket goes to the station first; from the station to the
+  Moon; from the Moon back to the station. **R in the seat picks the
+  other stop** (Earth to the Moon direct, the Moon to Earth direct).
+  In the crossing the station is drawn from its own layout at a fifth
+  scale, a low shape that resolves as you close.
+- **Zero-G.** Nothing pulls: what you have you keep. WASD and SPACE/C
+  are thrusters, SHIFT brakes, top speed seven; past 120 m from the
+  hangar a tether hauls you back. No suit needed aboard.
+- **The sky.** Black, the stars out, the Earth large in the ports'
+  direction and the Moon opposite it.
+- **The cast.** Seven, the same in every world: Vehl the leader in the
+  hall, Orrun (ores), Kessa (arms), Dral (tools), Mim (food), Tehk
+  (charts), Sova (relics), each floating at their post before their
+  port. Talk to them and you get a wall of their tongue, seeded so a
+  speaker repeats their lines. The translator, trade and the story are
+  STATION ONE B.
+- Nothing wild spawns aboard, no bosses, no weather, no horizon skin,
+  no depth marker, no Earth markers.
+
 ## Build 77 — MOON DEPTHS: lava tubes, the lander, the rig (2026-09-21)
 
 The Moon's caves and its last two finds. With this the Moon is where I
