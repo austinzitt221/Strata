@@ -268,15 +268,51 @@ Slotted between the city builds as the mood takes me:
   your own gunship; the jet with its cannon, missiles, rolls and loops;
   jet fuel from the quartermaster of a taken base and nowhere else.
   THE GARRISON is complete.
-- Then the Space Arc.
+- **THE PLAYTEST OF 2026-09-19** (Austin's report on Builds 44-62), in
+  the order I will build it. Bugs first: a broken game is no fun.
+  1. **Build 63 -- FIXES I, the blockers** (DONE). Every menu closes on E and
+     Escape (phone, paper, pit, booth, casino, bank, exchange, chart,
+     race); the fists never grab a vehicle you are driving (gunship,
+     jet, all of them); the tank fires where its turret points and
+     third person orbits with the mouse in every vehicle; the race car
+     is visible; creative is one to one with survival (fort raiders,
+     train raiders, sieges: everything that spawns, spawns); the sliver
+     between two adjacent cube holes.
+  2. **Build 64 -- THE LOADING SCREEN** (DONE). A world does not hand you the
+     controls until the ground under you and the near field are
+     meshed; the player is held, not dropped, whenever the chunk under
+     their feet is missing (the fall into an LOD cave); the new-world
+     crashes hunted.
+  3. **Build 65 -- THE FAR FIELD III** (DONE; the snow-mountain mismatch not reproduced, see DEVLOG). Villages, forts, ziggurats,
+     camps and garrisons drawn as true shapes at range before they are
+     stamped, so they never pop; garrisons and forts on the map; the
+     LOD ground that does not match the mesh under your feet (the snow
+     mountain).
+  4. **Build 66 -- CITIES II** (DONE, for cities laid from now on). Smaller cities; one tower, the one you
+     can buy; every keeper (mayor, cartographer, exchange, press,
+     electrician, casino, and the rest) in a building of their own on
+     their own lot; the centre unblocked.
+  5. **Build 67 -- SOUND II** (DONE). Explosions that boom, guns that crack;
+     several music tracks in different styles and tempos that hand
+     over as one ends.
+  6. **Build 68 -- VEHICLE SKINS** (DONE). Pixel textures for the tank, the
+     gunship and the jet, and a pass over the others.
+  7. **BIOMES, an arc.** A (DONE, Build 69): jungle and swamp (mud, jungle and mangrove wood and planks); B (DONE, Build 70):
+     taiga and tundra and savanna; C (DONE, Build 71): animals by day and enemies by
+     night, per biome; D (DONE, Build 72): each biome its own ground,
+     peat, amber, cocoa. THE BIOMES ARC IS COMPLETE.
+- Then the Space Arc: LIFTOFF A (DONE, Build 74): the Moon, the rocket,
+  the crossing, the space suit, two worlds in one save. LIFTOFF B (DONE,
+  Build 75): lunite, abandoned moon bases, dust crawlers, the Dust Wyrm,
+  the mech suit. STATION ONE next.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.
 - **Shadow cascades** — a sharp near shadow map and a wide far one, if
   the HORIZON playtest says the near shadows read soft.
-- **Place names on the map** — regions named in their archetype's
-  voice, alongside the river names.
+- **Place names on the map** (DONE, Build 73) — regions named in their
+  archetype's voice, on the HUD and the map.
 - **The lighting line in the skin** — measured and fixed in Build
   33.1 (the near field's occlusion sampler reads a scaled SDF and sits
   at 0.70 on open ground; the skin now carries the same curve). Left
@@ -287,8 +323,8 @@ Small things I want, slotted wherever a session has room:
 - **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
   about 40 flying in creative or loading a city the first time. Worth
   a profiling pass once the queue above is shorter.
-- **Footsteps that know the material**; birds along rivers; fish in the
-  shallows.
+- **Footsteps that know the material** (DONE, Build 73); birds along
+  rivers; fish in the shallows.
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube
@@ -729,6 +765,11 @@ generator and its own edit list inside the same save file; travel between
 them is a real flown sequence, not a menu.
 
 ## Build 22 — LIFTOFF (the rocket and the moon)
+Status: A (DONE, Build 74) — the Moon as a second generator and a second
+blob in the save, the rocket, the three-scene flight, the space suit,
+vacuum, a sixth of the gravity, the Earth in the sky. B (DONE, Build 75)
+— lunite veins, abandoned moon bases with loot, dust crawlers by night,
+THE DUST WYRM, the mech suit. LIFTOFF IS COMPLETE.
 - **Space suit** — breathe off-Earth. Crafted mid-late; a real armor-slot
   item with its own visor overlay.
 - **The mech suit** — the upgrade: same protection plus strength, mining

@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(1500);
   await page.click('#btnWorlds'); await page.fill('#newWorldName','b62'); await page.fill('#newWorldSeed', '7');
   await page.click('#btnCreateWorld'); await page.waitForTimeout(200); await page.click('.worlditem .btn'); await page.waitForTimeout(3000);
+  await page.evaluate(() => { window.__api.loadSys.end(); });   // the tests drive the world themselves; skip the loading gate
   const settle = async (n) => { for (let i = 0; i < n; i++){ await page.waitForTimeout(1000); await page.evaluate(() => { window.__game.terrain.process(60); }); } };
   // 1. the gunship sits on the pad at peace
   await page.evaluate(() => {

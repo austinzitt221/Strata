@@ -2,6 +2,439 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 75 — LIFTOFF B: what the Moon holds (2026-09-20)
+
+The Moon gets its ore, its ruins, its night and its prize.
+
+- **Lunite.** The Moon's own ore, in veins under the regolith (iron near
+  the top, lunite from eight metres down, diamond in the deep). Pale
+  blue crystal in dark rock; the drill gives the item; the ore broker
+  pays ninety for two. The mech suit is made of it.
+- **Abandoned moon bases.** Up to one per 320 m cell, never in the
+  landing cell: a plating pad cut into the ground, a dome with an east
+  door, a corridor to a smaller module with a mast. Inside, a bed and
+  the chest the last crew left (lunite, jet fuel, rations, coins,
+  sometimes aether or rounds). Stamped as edits the first time you come
+  within 150 m, so they save with the Moon and mine like anything else.
+  **Plating** is a new material; the bases are the only source for now.
+- **Dust crawlers.** Six-legged, grey, pale-eyed, in threes, at night
+  only; they drop lunite. Nothing comes out by day, and the Earth's
+  lurkers stay on Earth.
+- **THE DUST WYRM.** At night on the open ground it comes up under you:
+  the Burrower's hunt in a pale chitin, eight segments, a blue-white
+  maw. Twelve lunite and 120 coins the first time, six and eighty
+  after; four minutes' grace between wyrms.
+- **The mech suit.** A chestplate-slot item (ten lunite, iron, ruby,
+  wire, four aether): sealed like the space suit (air on the Moon and
+  under water), a third of every blow shrugged off on its own, digs at
+  0.6× the time, punches for 24, jumps a fifth higher, walks at 0.85,
+  and lands every step like a dropped anvil. A slab torso with shoulder
+  blocks and a core light.
+- The Earth's objective markers (contracts, charts, the ledger's
+  places) no longer draw over the Moon.
+- LIFTOFF is done as the roadmap wrote it, bar the LOD-ladder flight.
+  Next: STATION ONE.
+
+## Build 74 — LIFTOFF A: the rocket, the crossing, the Moon (2026-09-20)
+
+The Space Arc opens. The sky stops being a ceiling.
+
+- **A second world in the same save.** Every world now holds one planet
+  per blob: edits, entities, torches, beds, beacons, explored map, the
+  lot. What is yours (pack, dispenser, armor, coins, bank, phone, hp,
+  the clock) is shared and copied across when you fly. Old saves load
+  as Earth with no Moon yet. The save format is `planet` + `moon`
+  (or `earth`) beside the live blob.
+- **The Moon.** A generator of its own behind the same interface as the
+  Earth's: rolling maria and highlands, craters of every size (a bowl
+  and a rim, up to a cell of 64 m), two new materials (**regolith** on
+  top, **moonrock** under, basalt far down), bedrock as ever. No water,
+  no trees, no villages, roads, rivers, raids, bosses or weather. A
+  sixth of the gravity: the same jump goes eight metres up and takes
+  four seconds to land. The sky is black at noon with the stars out; the
+  sun is hard; the **Earth hangs in one place** in the sky, day and
+  night. Regions are named in the Moon's voice (*the Velmere mare*,
+  *Kelrow crater*, *the Ostgarth dust*). Mining and building work
+  exactly as on Earth, and the map draws it.
+- **The vacuum.** Without a space suit your breath drains in twenty
+  seconds and then you take damage; the rocket's cabin is sealed. The
+  **space suit** is a helmet-slot item (iron, ruby, wire, two aether
+  ingots at a station): air on the Moon, and unlimited air under
+  water. A white helmet with a gold visor and a pack on the body; a
+  faint visor vignette in first person.
+- **The rocket.** A vehicle kit (iron 40, ruby 10, wire 16, aether 6,
+  jet fuel 2): deploy it, take the seat (it is flown from outside, in
+  the chase view), fuel it with jet fuel by right click, and SPACE
+  launches for the Moon, or for home. A launch burns half a tank;
+  creative launches free. It travels with you and stands where it
+  lands; on the way home it comes down where you left from.
+- **The flight.** Three scenes: the climb on a column of fire out of
+  the near world; the crossing in a scene of its own, the world you
+  left behind you and the one you fly to ahead, both as pixel models in
+  the black, the mouse looking around from the ship, eighteen seconds;
+  then the far world loads under the loading screen and the rocket
+  comes down on its retro-burn onto the pad, fast until the last thirty
+  metres.
+- Not yet (LIFTOFF B): moon ores, abandoned moon bases, the moon boss,
+  the mech suit, sound in a vacuum. Beacons already work off-world
+  because the blob carries them; untested in anger.
+- Known: the transit is models, not the LOD ladder the roadmap
+  imagined; that version can come once the Moon has more to look at.
+  The touchdown's dust particles drift past the camera as large
+  squares for a second or two.
+
+## Build 73 — SMALL THINGS: place names and footsteps (2026-09-20)
+
+Two of the small things from the roadmap, built while the regression
+pass over every suite ran.
+
+- **Place names.** Every region of the world (the cells the archetype
+  field is built from) has a name in its archetype's voice: *the Velrow
+  isles*, *Kelmere marsh*, *the Dunwick range*, *Ostgarth mesa*. The
+  name is a seeded stem (Har, Kel, Mor… + row, mere, den…) in one of
+  three patterns per archetype, so it is the same on every visit and
+  on every machine with the seed. It shows after the season and
+  weather on the HUD's position line, and on the map: explored cells
+  are grouped by region and any group of six or more cells is labelled
+  at its centre. The grouping is cached per cell so the map costs
+  nothing new to draw.
+- **Footsteps that know the material.** Snow is a dry, high crunch;
+  every wood and every plank is a knock with a little tone; mud and
+  peat squelch (low, wet); grass, sand, dry grass and leaf litter are
+  soft; stone is stone. Same volume, same cadence, only the timbre
+  changes.
+- **Regression.** The b69 suite failed on the log-end uniforms, which
+  Build 70 turned into an array; the test was stale, not the game. All
+  suites from smoke to b73 pass.
+
+## Build 72 — BIOMES D: each biome's own ground, and its finds (2026-09-20)
+
+The last slice of the biomes arc.
+
+- **Four materials.** The savanna stands on **dry grass** (yellow, with
+  green flecks), the tundra on **permafrost** between its snow patches
+  (grey-blue, frost-flecked), the jungle on **leaf litter** (dark,
+  leaf-flecked); and under a swamp's mud, in pockets from one to six
+  metres down, there is **peat**. Snow settles on the new grounds in
+  winter, a hoe tills dry grass and leaf litter, footsteps are soft on
+  all of them.
+- **Peat** is cut like coal (the drill gives the item), burns in a
+  stove at five to coal's eight, and the ore broker buys it by the
+  eight. About one probe in five under a swamp finds it.
+- **Amber**, now and then, from a felled spruce (one in five or six);
+  the ore broker pays forty-five a piece. **Cocoa pods** from felled
+  jungle trees (a third of them, two pods): food, twenty hp over time.
+- Icons, labels, tooltips, the creative catalog and map colours for all
+  of it.
+- The biomes arc is complete: five new biomes (jungle, swamp remade,
+  taiga, tundra, savanna), five tree kinds with their own wood and
+  planks, ten creatures, eight materials and three finds, over Builds
+  69 to 72. Every item of the 2026-09-19 playtest is answered.
+
+## Build 71 — BIOMES C: the living things (2026-09-19)
+
+Third slice of the biomes arc: each biome has its own animals by day and
+its own hunters by night.
+
+- **By day:** monkeys in the jungle (small, quick, a long tail), crocs
+  in the swamp (long and low; they lie still until you are within seven
+  metres, then lunge and bite for twelve), elk in the taiga (big, antlered,
+  four meat), hares on the tundra (tiny, fast), zebras on the savanna
+  (striped, three meat). Plains and hills keep their grazers and sheep.
+- **By night:** crawlers in the jungle (six-legged, green-eyed, in
+  pairs), the bogwight in the swamp (a waterlogged husk, green-eyed,
+  hits for twenty, burns at dawn), wolves in the taiga (in threes, grey,
+  fast, they circle in), frost wisps on the tundra (paler, colder, they
+  pop), hyenas on the savanna (spotted, in pairs). All of them fear
+  light as the night shift does, and dawn ends them the way it ends
+  their kind.
+- **One AI, many animals.** A creature names the behaviour it borrows
+  (grazer: wander and flee; stalker: circle in, fear light, slink off at
+  dawn; husk: walk straight at you and hit hard; wisp: drift and pop)
+  and its own numbers (health, speed, reach, damage, whether the sun
+  bothers it). The four behaviours read those numbers now instead of
+  their own constants. Ten creatures, no new AI, which is how the next
+  ten will come too.
+- **Bodies** from one quadruped builder (body, ridge, head with snout,
+  eyes, ears or antlers, tail, four or six legs, stripes or spots) plus a
+  recoloured husk and a recoloured wisp.
+- Drops: meat from the animals (and coins from a croc), fangs from the
+  hunters, a wisp core from the frost wisp. Turrets, guards and crew
+  treat the hunters as hostile; you cannot pick up a hunter, a croc, an
+  elk or a zebra. All ten have spawners in the creative catalog and the
+  grabber gun takes the animals.
+- Spawning is by the archetype under the spawn point: a biome with its
+  own animal or hunter sends that instead of the common roll; hunters
+  come as a pack at once, up to their cap.
+
+## Build 70 — BIOMES B: taiga, tundra, savanna (2026-09-19)
+
+The second slice of the biomes arc: the cold and the dry.
+
+- **The taiga**, archetype ten: long cold hills under spruce, the
+  snowline down at twenty metres. Spruce is a thin straight trunk in
+  red-brown bark with lichen, four tiers of blue-green cone, eight to
+  eleven metres tall, thick on the ground (three cells in four).
+- **The tundra**, eleven: cold flats, frost-heaved, snow in patches over
+  grass, dry sparse tufts, no trees at all. The empty one, on purpose.
+- **The savanna**, twelve: hot dry flats with a kopje here and there,
+  dry tufts, and acacias one cell in five: a forked trunk and a wide
+  flat umbrella of a crown in dry olive.
+- **Four materials:** spruce wood and planks, acacia wood and planks,
+  with tiles, log ends, colours, hardness, icons, palette, catalog,
+  recipes (planks from the log, sticks from the planks), and fire.
+  Spruce gives more wood than an oak.
+- **The shader's log ends are an array now** (five woods, five ends,
+  one loop) instead of a uniform pair per wood; the atlas holds one end
+  tile per log after the materials.
+- The far-tree mesh reads a table of kinds now (trunk height and
+  width, canopy height, width and centre, tints), so spruces stand tall
+  and narrow at range and acacias wide and flat.
+- Villages settle the taiga and the savanna as well as the plains, the
+  hills, the dunes and the swamp.
+- Measured on two seeds: taiga about 5% of land, tundra 2.5%, savanna
+  7%, jungle 7.5%, swamp 10%.
+
+## Build 69 — BIOMES A: the jungle and the swamp (2026-09-19)
+
+The last item of the Build 62 playtest is an arc; this is its first
+slice.
+
+- **The jungle**, a tenth archetype. Hot lowlands and hot hills roll it
+  now (about one land cell in thirteen on the seeds I measured): rolling
+  hills with steep knolls, under a canopy. Its trees are a kind of
+  their own: a straight bole nine to thirteen metres tall in mossy
+  green-brown bark, two tiers of wide dark canopy with lime tips, and
+  they stand on slopes and up to forty metres high, at nearly twice the
+  density of the plains. Far off, the far-tree mesh draws them taller
+  and tinted so the jungle reads from a distance.
+- **The swamp made a swamp.** The swamp archetype existed (flat, pooled)
+  but wore grass. Its ground is **mud** now, to the water and under it,
+  soft underfoot in the footsteps; and its trees are **mangroves**: a
+  short trunk on five prop roots, a wide flat dull-green crown, standing
+  in the shallows as well as on the mud. Thicker than the plains, not
+  as thick as the jungle.
+- **Five materials:** mud, jungle wood, jungle planks, mangrove wood,
+  mangrove planks, each with its own tile in the atlas, its own colour
+  on the map and in the particles, its own hardness, an icon, a place
+  in the creative catalog and the wrench's palette. Jungle and mangrove
+  logs show cut ends like oak does (the shader knows three log
+  materials now, each with its own end). A felled jungle tree gives
+  jungle wood (more of it than an oak), a mangrove mangrove wood;
+  each wood saws into its own planks (four a log), every planks makes
+  sticks, and fire burns all of them. Build with any of it: the
+  dispenser does not care.
+- Old worlds: the region map is seeded, so the new archetype changes
+  which cells are jungle only where the hot pools rolled it; a saved
+  world's terrain around what you built is unchanged unless it sat in a
+  cell that now rolls jungle. New worlds are the ones to look at.
+- Coming in this arc: B, taiga (spruce), tundra and savanna; C, animals
+  by day and enemies by night per biome; D, each biome's own material
+  and finds.
+
+## Build 68 — VEHICLE SKINS (2026-09-19)
+
+Sixth build from the Build 62 playtest: the war machines were flat
+colour.
+
+- **Pixel paint on the tank, the gunship and the jet**, the way the car
+  wears it: sixteen-pixel textures drawn to canvas, nearest-filtered,
+  tiled over every panel. The tank's hull is speckled olive with a
+  panel line and two rivet rows, the deck darker with seams, the tracks
+  black with treads, the gun and the road wheels steel with a light
+  edge. The gunship's cabin and boom are a grey-green with a lighter
+  stripe and rivets, the roof and the seats a darker skin. The jet's
+  fuselage is light grey with two panel lines, a rivet row and one red
+  stripe; the wings and fins have panel lines and rivets without the
+  stripe; the tips red with a white band; gear, nozzle and gun ports
+  dark steel.
+- No new draw calls: a texture per part kind, shared across the
+  vehicle's boxes, the same material path the car and the plane use.
+- The other vehicles already had skins; I left them.
+
+## Build 67 — SOUND II: booms, guns, and tracks that hand over (2026-09-19)
+
+Fifth build from the Build 62 playtest.
+
+- **Explosions boom.** A boom is four layers through a soft clip now:
+  a crack, a sub thump sliding from 70 to 26 Hz, a body of swept noise,
+  and a rumble tail over two seconds. Every explosion carries its
+  distance from you: near, the crack and the thump hit; far, it is
+  duller and the rumble goes on. Thunder is its own sound (a crack, a
+  three-second roll) instead of a nearby boom.
+- **Guns crack.** A shot is a crack, a report, a thump and a tail, with
+  a little detune so no two are the same, scaled by the weapon's weight
+  (your gun's kick sets it; a pistol snaps, the rifle and the rocket
+  launcher thump). Rockets whoosh: noise swept up through a bandpass
+  over a rising drone.
+- **Music in tracks.** The surface has four (dawnlight: the slow
+  pentatonic plucks from before; roam: 100 bpm arpeggios over a walking
+  bass; highroad: 118 bpm, a square lead over a bass pulse; dusk: 60
+  bpm pads and slow fifths), the caves two (deep: the drones; drip:
+  high pings over a sub), the bosses their pulse. A track plays for
+  two minutes or so, fades, a breath of silence, and a different track
+  of the same context takes over. Boss music still cuts in at once.
+  All of it is still synthesised: no files, no CDN.
+- Test: every sound plays without a throw, every track makes notes and
+  keeps time, the pick never repeats, the handover has its gap, the
+  boss has none, an explosion reports its distance.
+
+## Build 66 — CITIES II: a building for everyone (2026-09-19)
+
+Fourth build from the Build 62 playtest: the cities, made his way.
+
+- **Five blocks a side, one tower.** A city laid from now on is a
+  five-by-five grid round the plaza (the old plan rolled three, five or
+  seven and filled the grid with towers: sixteen to thirty-two of
+  them). There is one tower now, nine to fourteen floors, on the ring
+  round the plaza: the one a deed buys. Everything else is low.
+- **Every keeper in a building of their own, on their own lot.** The
+  ring round the plaza holds the tower, the town hall, the Herald, the
+  cartographer (his own hall now, not a desk at the back of the
+  Herald), the exchange (with its three floor brokers), the bank, the
+  pit and the casino. The ring outside holds the five shops (broker,
+  arms, toolsmith, electrician, grocer), each in its district where the
+  city has one. A hall is a fourteen-by-eleven stonebrick building
+  (shops twelve square, in their district's material) with its door on
+  the avenue toward the plaza, windows, a roof slab, torches, a sign by
+  the door, a counter and the keeper behind it; the shops are furnished
+  exactly as the tower shopfronts were (counter, three wares on
+  pedestals, the sign). The town hall keeps the strongbox, the bank its
+  vault.
+- **The plaza is clear.** The four halls that stood on the plaza's
+  flanks (and blocked the avenues) are gone from new cities; the
+  obelisk, the benches, the corner torches and the district signs
+  remain. The remaining blocks are parks, markets and lots with the
+  district flavour they had (smokestacks, dock yards).
+- **Old cities keep their plan.** A city laid before this build has its
+  block list saved; the planner reads that and keeps the old layout,
+  halls on the plaza and all. Only cities laid from now on get the new
+  plan. Halls count as walls to a siege and stand in the far mesh like
+  the tower does.
+- On the skyline: a city reads as one tower over a low town now. I
+  said in the journal I might keep more of the skyline; I did not, and
+  will look at it in play before deciding.
+
+## Build 65 — THE FAR FIELD III: set-pieces at range (2026-09-19)
+
+Third fix build from the Build 62 playtest.
+
+- **Villages, forts, ziggurats and garrisons at range.** Each of them
+  was stamped into the world only when you came within a hundred
+  metres or so, and the far skin bakes edits, so before that first
+  visit there was nothing to see: they popped. Now every one in range
+  of the far-shape mesh (2.6 km, the same mesh the city towers and the
+  highways use) stands as its own shapes until it is laid: a village as
+  its houses with plank caps, at the height each house will be built
+  at; a fort as its walls, towers, bunkers and vault; a ziggurat as its
+  tiers and shrine; a garrison as its pad, walls, towers and helipad.
+  The footprints and ground levels are the ones the stamps use, so the
+  real thing lands where the shape stood. The moment one is stamped
+  its shapes retire and the skin carries it from then on.
+- **Garrisons on the cartographer's sheets**, in their own colour, so a
+  base can be found from the map like a fort can. That, with the
+  shapes, is the answer to "I could not find a base flying around":
+  they are one highway link in two, fifty metres off the road, and now
+  they are visible from the air and on a bought sheet.
+- **The snow mountain (standing in the LOD).** Not reproduced. On the
+  headless machine the seed's highest ridge has every chunk around the
+  player meshed, the mask covers the columns, and the feet sit on the
+  surface; heightRange never under-reports a peak (2,635 mountain
+  columns checked against a half-metre sweep). What the screenshot
+  shows is the skin drawn where the near mesh is not standing, which
+  happens when the mesher is behind the player (a long run or a fast
+  fly in creative). Build 64's hold stops the fall; the visual
+  mismatch on a run is the mesher lagging. If it happens standing
+  still after a wait, I want to know where.
+- Also: `villageSys`, `raidBaseSys`, `zigSys` and `farShapeSys` are on
+  the test API; `tests/b65test.js` checks the shapes, the retirement
+  and the sheet.
+
+## Build 64 — THE LOADING SCREEN (2026-09-19)
+
+Second fix build from the Build 62 playtest: the world no longer hands
+you the controls before it exists.
+
+- **The loading screen.** Opening a world (new or saved) shows LOADING
+  with the world's name, a bar, and a count of chunks still to mesh.
+  It ends when the ground under you is meshed and the queue is down to
+  its last few far chunks (under two percent), or after a minute, or
+  when you press ENTER ANYWAY (offered after eight seconds). While it
+  shows, the player is not simulated: no gravity, no input, no falling
+  through a floor the mesher has not laid. Escape and E do not close
+  it. On the headless machine a seed-7 world with 1,261 chunks queued
+  opened in about ten seconds; a real GPU is faster.
+- **The hold on missing ground.** Whenever the chunk under your feet
+  (or under your car) is missing or still queued, you are held still
+  for up to four seconds while it meshes, with a toast, rather than
+  dropped through it. Flying vehicles and fly mode are exempt. This is
+  the fall into a cave the LOD did not show: the LOD cannot show caves
+  (it is a heightfield), so the answer is to never drop you into ground
+  that has not been meshed. Long teleports (the drone, the train, a
+  blink) get the same hold for free.
+- **A frame that throws no longer takes the game with it.** The frame
+  body runs in a guard: an exception is logged (console and the F3
+  log), a "hiccup" toast shows at most every five seconds, and the loop
+  carries on. I could not reproduce the new-world crash headlessly (a
+  fresh world sprinting from the first frame for twelve seconds gave no
+  errors); if it was an exception in a streaming path, this keeps the
+  world playable and puts the message where a report can find it. If
+  it was the tab itself dying, the loading gate removes the case of
+  moving before the world is there.
+- Tests drive the world themselves and skip the gate with
+  `loadSys.end()`.
+
+## Build 63 — FIXES I: the blockers from the Build 62 playtest (2026-09-19)
+
+Austin played Builds 44 to 62 in one go and sent the report; this is the
+first of the fix builds, the things that stop play. What was found and
+what was done:
+
+- **Every menu since Build 43 could not be closed** (phone, paper, pit,
+  booth, casino, bank, exchange, chart, race). Cause: the key handler
+  closed overlays from a hand-written list of screen names that stopped
+  growing at Build 43; every later screen fell through to "a menu is
+  open, ignore keys". Now any screen that is not the world, the pause
+  menu, the options or the death screen is an overlay: E closes it (Q
+  the crafting screen, N the blueprints, M the map as before) and
+  Escape closes any of them. A screen added later needs no list.
+- **The fists picked the gunship up from inside it** (and the jet).
+  Left click at the wheel ran the hands' action as well as the
+  vehicle's: with empty hands, the gather picked the vehicle up as a
+  carried thing. Now nothing in the hands acts while driving; the
+  vehicle owns the left button. All vehicles.
+- **The tank's shell went where the chase camera looked**, not where
+  the turret pointed, and **third person had no mouse look.** The
+  chase cam now orbits with the mouse (it hangs behind the point you
+  look from and looks at the vehicle; the view still swings with the
+  vehicle as before). Guns fire down the look direction in either
+  view: the tank's shell follows the turret, the barrel tips with your
+  pitch, the gunship's door gun converges from the seat.
+- **The race car was invisible.** A vehicle entered the instant it
+  spawned never got its body (the entity loop skips the one you are
+  driving, and the body is made in that loop). Entering a vehicle now
+  makes its body if it has none.
+- **Creative was not survival:** forts stood empty, the train was
+  never raided. Creative reaped every lurker without a bounty, pit or
+  bank tag every frame, which included fort raiders, train raiders and
+  sieges. Removed: everything that spawns, spawns, in both modes
+  (creative takes no damage, so a hostile is scenery there).
+- **The stutter between two adjacent cube holes.** Reproduced through
+  the drill headlessly: walking toward the shared wall the player sank
+  up to eighteen centimetres into the floor, then popped up across the
+  seam. The CSG field is a lower bound, not a distance: beside the
+  removed wall the field's nearest "surface" is that phantom wall, the
+  gradient points sideways, the contact is (rightly) rejected as
+  phantom, and the floor that is really there is never found, so
+  gravity wins until the gradient flips. Fix: when the gradient's
+  surface is not real, probe straight down and bisect to the real
+  floor. Player and vehicle contacts both. The walk is flat now at
+  every size.
+- Still on the list from the report, in the roadmap's order: the
+  loading screen and the hold on missing ground (Build 64), set-pieces
+  at range and the map (65), smaller cities with a building per keeper
+  (66), sound (67), vehicle skins (68), biomes (an arc).
+
 ## Build 62 — THE GARRISON C: the gunship and the jet (2026-09-19)
 
 The third slice, and the last of THE GARRISON: the air.

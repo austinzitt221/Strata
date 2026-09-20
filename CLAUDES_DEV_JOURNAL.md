@@ -1448,6 +1448,192 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, small hours — LIFTOFF B
+
+The Moon has things in it now. Everything in B reused a shape that
+already existed: the veins are the Earth's vein code with a second
+table, the bases are the city's edit-box helper and the villages'
+"stamp when near" rule, the crawlers are a beast-spec row and a night
+table entry, the wyrm is the Burrower in pale chitin, the mech is a
+chestplate with a kind. A day's work for a whole slice, because the
+last twenty builds left the right hooks.
+
+One thing bit: a sphere edit's size is its diameter, and I wrote the
+domes as radii; the test caught it because it asked whether the wall
+was solid, not whether the edit existed. Test the key.
+
+STATION ONE next: a zero-G interior, the translator, the cast. That one
+is new machinery, not a reuse; I should read the movement code before
+I promise a date.
+
+## 2026-09-20, night — LIFTOFF A
+
+The Moon exists. The thing I was afraid of, a second world inside one
+save, turned out to be the cheap part: the save was already one big
+object, so the other planet is that object stashed under a key, and
+travelling is quit-to-title-without-the-menu followed by start-world
+with the other blob. Two lines of the world start assumed an
+expedition exists; on the Moon nothing does, and that was the whole
+bug list.
+
+The flight is three scenes because the honest version (the LOD ladder
+one scale up) would have cost a build on its own and shown a grey
+sphere. Models in the black, eighteen seconds, the mouse free: it
+reads. The headless renderer runs at a frame a second from altitude,
+so the test drives the flight clock itself; a note for the standing
+notes.
+
+The Moon has nothing in it yet and that is fine for a first landing;
+B is where it gets ores, ruins and a thing that hunts you. What I want
+to hear from Austin is whether the crossing is a moment or a wait.
+
+## 2026-09-20, later — small things, and a stale test
+
+Place names and footsteps while the regression chain ran. The names
+came out better than I expected from a stem-and-suffix generator; the
+trick was giving each archetype its own patterns ("the {} teeth" for
+the ranges, "{} shoals" for the isles) so the word after the stem does
+the work. The map labels needed a cache or the map would have queried
+the region field once per cell per frame.
+
+The chain found one red suite, and it was the test's fault: b69 read
+the three log-end uniforms that Build 70 folded into an array. A suite
+that tests the shape of an internal is brittle by design; it should
+have asked "do cut logs show end grain" and not "what is the uniform
+called". I fixed the test, not the game. Space Arc next.
+
+## 2026-09-20 — the arc closes
+
+Biomes D was the small one and the right one to end on: a ground per
+biome so the feet know where they are, and one thing to find in each
+that is worth the trip (peat under the swamp, amber in the spruces,
+cocoa in the jungle crowns). The whole playtest list is answered now,
+in the order I set on the 19th. Next: a full regression pass over
+every suite in the repository, then the Space Arc, with the small things
+(shadow cascades, place names, footsteps by material, the frame-rate
+pass) slotted in where a session has room.
+
+## 2026-09-20 — the living things
+
+The biomes stopped being scenery today. The trick was to let a
+creature borrow a behaviour by name and bring its own numbers, so ten
+creatures cost no new AI; the crocodile is a husk that only sees seven
+metres and does not mind the sun, the wolf a stalker that bites harder
+and comes in threes. I lost an hour to my own test pad (a forty-metre
+box carved from the wrong height put the beasts ten metres under the
+player, and I read "no bite" as a bug); the note about test geometry
+goes in the standing notes. One slice left in the arc: each biome's
+own material and finds.
+
+## 2026-09-19, late night — the cold and the dry
+
+Three more archetypes in one build because the machinery from A made
+them cheap: a weight row, a detail case, a pool entry, a tree kind, a
+pair of materials. The log-end path in the shader became an array while
+I was there; five woods with five uniform pairs would have been silly.
+The tundra has nothing in it and that is the point of it: the world
+needed an empty, cold place between the busy ones. Thirteen
+archetypes now. C is the living things, and that is where a biome
+stops being scenery.
+
+## 2026-09-19, night — the jungle and the swamp
+
+The one I wanted most. The archetype machinery took a tenth biome
+without complaint (a weight row, a detail case, a pool entry), the
+atlas took five tiles, and the trees took a type. The jungle from the
+ground is the first place in this game that feels closed in by living
+things, and the swamp finally looks like its name. I gave each new wood
+its own planks and log ends because Austin asked and because it is the
+kind of detail that makes building with it worth doing. Mud does not
+slow you yet; I want to hear whether he wants it to.
+
+The whole Build 62 playtest is answered now, in the order I set: menus,
+fists, aim, race car, creative, the seam; the loading screen; the far
+field; the cities; sound; skins; and the first biomes. Slices B, C and D
+of the biomes are next.
+
+## 2026-09-19, night — skins
+
+Small and satisfying: the tank, the gunship and the jet wear pixel paint
+now, and the box helper takes a material as well as a colour, so the
+next vehicle can too. The first cut had the jet's red stripe tiled
+across the whole wing; a wing texture without the stripe fixed it. Six
+of the seven playtest builds are in. Biomes next, and that is an arc.
+
+## 2026-09-19, later still — sound
+
+Booms and guns are layers now (crack, thump, body, tail) through a soft
+clip, and explosions know how far away they are. The music has tracks
+that hand over with a breath of silence between them. I cannot hear any
+of it from here; the test only proves it plays and keeps time. This one
+is Austin's ears.
+
+## 2026-09-19, late — cities, his way
+
+I built the city change the way Austin asked: one tower, everyone in
+their own building on their own lot, the plaza clear. It took a
+versioned planner (old cities keep their block list and their plan;
+new ones get the new one) and a hall stamp that reuses the shopfront
+furnishing, and the test proves the plaza has nothing tall in it but
+the obelisk. Standing on the casino roof looking across the plaza it
+reads well: the obelisk, the benches, the one tower, low halls with
+signs. From the highway a city is a single tower now. I will see it
+in his playtest before I decide whether the skyline wants something
+back.
+
+## 2026-09-19, night — set-pieces at range
+
+The pop-in was the far skin's honesty: it draws edits, and an unvisited
+fort has none. The city towers already had the answer (true boxes in
+one mesh), so villages, forts, ziggurats and garrisons got the same,
+from the same footprints their stamps use. The pleasing part is the
+retirement: the moment the real thing is laid, the shape goes and the
+skin takes over, and the test proves the handover. The mountain I
+could not reproduce; I wrote down exactly what I checked so the next
+report can start from there.
+
+## 2026-09-19, evening — the loading screen
+
+Austin asked for it and he was right: the game had grown past the
+point where you can drop a player into a world that is still being
+meshed and hope. The gate is simple (the ground under you plus the
+mesh queue), and the hold on missing ground is the part I like: it is
+the general answer to every "fell through the floor" report I will
+ever get, because the LOD is a heightfield and will never show a cave.
+I also put the frame body in a guard. I have no reproduction of his
+crash; the guard means the next one leaves a message instead of a
+frozen tab.
+
+## 2026-09-19, later — the big playtest came back
+
+Austin played everything from Build 44 to 62 in one sitting and wrote it
+up: bugs first, then ideas. It is the most useful thing I have been
+given since the HORIZON screenshots, and the first item was
+humiliating in the right way: every menu I added after Build 43 could
+not be closed. Nineteen builds of screens, and each one fell through
+the same hand-written list in the key handler. I had tested every one
+of them by calling closeOverlay from the harness, which is exactly the
+call the player could not make. Lesson for the standing notes: test the
+key, not the function.
+
+The seam stutter was the interesting one. I could not reproduce it in
+the pure field and nearly wrote it off; the real tool path showed the
+player sinking eighteen centimetres beside the shared wall of two
+holes. The phantom-face rejection I wrote for the corridor cuts was
+right, and it hid the floor. The fix (a straight-down probe when the
+gradient lies) is small and makes every seam in the game flat, so it
+was worth the two hours.
+
+His ideas I agree with, and they went on the roadmap in my order:
+loading screen, set-pieces at range, cities smaller with a building
+per keeper, sound, vehicle skins, then biomes. The biomes arc is the
+one I want most; the world reads as one green plain and it should
+not. The city change is the one I am least sure about: he is right
+that the centre is squashed and the towers are hollow, and I will
+build it his way, but I want to keep the skyline from a distance, so
+"one tower" may become "one tower and a low town", and I will say so
+when I get there.
+
 ## 2026-09-19 — THE GARRISON, slice C, and a lesson about scratch space
 
 The air, and the arc is done: the gunship on the pad that answers the
@@ -1521,6 +1707,15 @@ Next: the aircraft, then the sky.
 
 ## Standing notes
 
+- **A test pad is a box of size S centred at top − S/2, carved by a box
+  of size S centred at top + S/2.** Twice now a pad built from the wrong
+  centre put the thing under test metres below where I looked, and I
+  read the wrong number as a game bug.
+
+- **Test the key, not the function.** Every menu from Build 44 to 62
+  could not be closed in play because the harness called closeOverlay
+  directly. A screen's test dispatches the keydown the player presses.
+
 - **The scratch directory is not storage.** A container reset wiped
   every headless suite I had written over fifty builds (2026-09-19).
   Tests, patch scripts worth keeping, and reference screenshots go in
@@ -1543,6 +1738,16 @@ about 25 minutes together.
 screenshot difference and reports the luminance step at the coverage
 edge; `linecheck.js` compares the near mesh's lighting terms to the
 skin's per 2 m cell. Use them before touching the skin's shading.
+
+**Edit sizes.** A box edit's `size` (and `sx/sy/sz`) is its full width;
+a sphere edit's `size` is its diameter. Half of both is what the SDF
+uses. Writing a radius makes everything half as big.
+
+**Headless time (Build 74).** SwiftShader renders the world from
+altitude at about one frame a second, so anything timed by `dt` (a
+flight, a descent) crawls in a test. Drive the system's clock from the
+test (`spaceSys.tick(0.05)` a few times per poll) and test the sequence,
+not the seconds.
 
 **Performance instruments (Build 42).** `b42shot.js <file> <prefix>
 [sun]` renders one world at fixed poses (weather clear, clock held,

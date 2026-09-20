@@ -5,6 +5,136 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 75 — LIFTOFF B
+- [ ] Walk from the landing until you find a base (the HUD's region
+      name changes every 512 m; bases are one per 320 m cell, roughly
+      half the cells). Does the dome read from a distance? Is the door
+      findable? Loot the chest, sleep in the bed.
+- [ ] Dig for lunite (from eight metres down). Is a vein worth the dig?
+- [ ] A night on the open ground: the crawlers, and then the wyrm. Can
+      you kill it with what you brought? Too often, too rare?
+- [ ] Craft the mech suit; wear it on Earth for a day. Does the strength
+      show, and does the weight?
+
+## Build 74 — LIFTOFF A
+- [ ] Creative: take a rocket from the catalog, deploy it, board it,
+      SPACE. Does the climb feel like a launch? Is the crossing too long,
+      too short? Did you turn around to look at Earth?
+- [ ] The landing: does it read as a landing, or as a lift going down?
+- [ ] Step out on the Moon without the suit. Then with it. Jump. Fall
+      off a crater rim. Mine a cube; build a hut of regolith.
+- [ ] Find the Earth in the sky by day and by night.
+- [ ] Fly home, and check the hole you dug on Earth is still there. Fly
+      back and check the hut is still on the Moon.
+- [ ] Survival: craft the suit and the rocket. Are the costs right? Is
+      jet fuel from the quarter enough of a chore?
+- [ ] Save mid-flight (quit during the crossing) and reload. Where are
+      you, and is it sane?
+
+## Build 73 — SMALL THINGS
+- [ ] Look at the HUD's position line in a few biomes: do the names
+      sound like the places? Any that are funny for the wrong reason?
+- [ ] Open the map after a long walk. Are the labels where you would
+      put them? Are there too many, or too few?
+- [ ] Walk from grass onto snow, onto planks, onto mud, onto stone with
+      the sound up. Can you tell the ground with your eyes shut?
+
+## Build 72 — BIOMES D
+- [ ] Walk each new biome and look down: dry grass, permafrost, leaf
+      litter, mud. Do the grounds sell the place?
+- [ ] Dig under a swamp for peat; burn it in a stove; sell some.
+- [ ] Fell spruces until an amber turns up; sell it. Fell jungle trees
+      for cocoa; eat one.
+
+## Build 71 — BIOMES C
+- [ ] A day and a night in each new biome: jungle, swamp, taiga, tundra,
+      savanna. Which animal or hunter surprised you? Which one is a
+      pushover, which one is unfair?
+- [ ] Stand still near a croc. Does the lunge read? Does it leave you
+      alone at eight metres?
+- [ ] A wolf pack at night in the taiga with a torch, and without one.
+- [ ] Creative: spawn all ten from the catalog and look at them.
+
+## Build 70 — BIOMES B
+- [ ] Find a taiga (spruce, snow up high), a tundra (flat, patchy snow,
+      nothing growing) and a savanna (dry grass, umbrella trees). Do the
+      three read as different countries?
+- [ ] Fell a spruce and an acacia; saw them; build with the planks next
+      to oak, jungle and mangrove planks. Five woods: can you tell them
+      apart at a glance?
+- [ ] From the air: do spruces read as spruces at range, acacias as
+      acacias?
+
+## Build 69 — BIOMES A
+- [ ] A new world: fly until you find a jungle (dense tall trees, mossy
+      bark) and a swamp (mud, mangroves in the shallows). Do they read
+      as new places from the air and on foot? Too big, too small, too
+      rare?
+- [ ] Fell a jungle tree and a mangrove. Saw the wood into planks, build
+      a wall of each, cut a log in half and look at the ends.
+- [ ] Walk on mud. Should it slow you? (It does not yet.)
+- [ ] Old world: did anything near your builds change biome?
+
+## Build 68 — VEHICLE SKINS
+- [ ] Spawn the tank, the gunship and the jet side by side (creative).
+      Do they belong with the car and the plane now? Anything that still
+      reads as a flat block?
+
+## Build 67 — SOUND II
+- [ ] Throw TNT near and far. Fire every gun you have. Does a boom boom,
+      does a rifle sound like a rifle next to a pistol? Too loud, too
+      much bass?
+- [ ] Walk the surface for ten minutes with music on: you should hear a
+      track end, a pause, and a different one begin. Which of the four
+      do you like, which should go? Go underground and back.
+
+## Build 66 — CITIES II
+- [ ] A NEW world (old cities keep their old plan): walk a city. One
+      tower, ten buildings with signs, the pit and the casino, a clear
+      plaza. Is it still a city, or has it become a village with a
+      tower? Does it read from the highway at range?
+- [ ] Trade with every keeper in their own building: mayor, press,
+      cartographer, exchange, bank, broker, arms, toolsmith, electrician,
+      grocer. Anyone missing, anyone standing outside their own door?
+- [ ] Buy the tower with a deed. Is it the tower?
+- [ ] A siege: do the raiders go for the halls as well as the tower?
+
+## Build 65 — THE FAR FIELD III
+- [ ] Fly high in creative and look around: villages, forts, pyramids and
+      garrisons should stand at range now, before you have ever been
+      near them. Do they land where their shapes stood when you arrive?
+- [ ] Buy a country sheet from the cartographer near a highway: garrisons
+      show in yellow-green. Find one by the map.
+- [ ] The snow mountain: if you stand in the LOD again, wait ten seconds
+      standing still. Does it resolve? Tell me what you were doing just
+      before (running, flying, a teleport) and roughly how high you were.
+
+## Build 64 — THE LOADING SCREEN
+- [ ] Open a saved world and a new one. How long does LOADING show on
+      your machine, at your render distance? Does the bar read right?
+      Does ENTER ANYWAY appear after eight seconds if it is slow?
+- [ ] Sprint the moment the world opens. Any crash, any hiccup toast?
+      If a hiccup shows, the text is what I need.
+- [ ] Take the drone or the train somewhere far. Do you stand still for a
+      beat ("the ground is still loading") instead of falling?
+- [ ] Run fast across country toward a cave you can see on the LOD's
+      surface. Do you still ever fall through?
+
+## Build 63 — FIXES I
+- [ ] Open every menu you found stuck (phone, paper, pit promoter, ticket
+      clerk, casino table, bank, exchange, cartographer, race steward)
+      and close each with E, then again with Escape.
+- [ ] Board the gunship and the jet with empty hands, fists down. Left
+      click. You should fire, not lift the aircraft.
+- [ ] Tank, F5 for third person: swing the mouse round. The camera should
+      orbit; the turret should follow; a shell should land where the
+      turret points. Same in the seat.
+- [ ] Enter a race. Your car should be there under you.
+- [ ] Creative: walk into a raid fort and ride the train past one. The
+      raiders should be there.
+- [ ] Mine a row of cube holes with snap on and walk the row. No dip, no
+      catch at the seams. Try it with the sphere too, and mixed.
+
 ## Build 62 — THE GARRISON C
 - [ ] Find the gunship on a base's helipad (the obsidian disc with the
       H, right of the command post). Raise the alarm and watch it lift.

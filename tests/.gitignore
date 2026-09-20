@@ -2,3 +2,4 @@ three.module.js
 *.png
 *.tgz
 package/
+reg*_*.log

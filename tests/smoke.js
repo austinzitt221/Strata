@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(1500);
   await page.click('#btnWorlds'); await page.fill('#newWorldName','smoke'); await page.fill('#newWorldSeed', '3');
   await page.click('#btnCreateWorld'); await page.waitForTimeout(200); await page.click('.worlditem .btn'); await page.waitForTimeout(4000);
+  await page.evaluate(() => { window.__api.loadSys.end(); });
   const r = await page.evaluate(() => {
     const g = window.__game, api = window.__api;
     g.debugLock = true; g.ui = 'none';
