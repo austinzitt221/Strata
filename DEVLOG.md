@@ -2,6 +2,39 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 75 — LIFTOFF B: what the Moon holds (2026-09-20)
+
+The Moon gets its ore, its ruins, its night and its prize.
+
+- **Lunite.** The Moon's own ore, in veins under the regolith (iron near
+  the top, lunite from eight metres down, diamond in the deep). Pale
+  blue crystal in dark rock; the drill gives the item; the ore broker
+  pays ninety for two. The mech suit is made of it.
+- **Abandoned moon bases.** Up to one per 320 m cell, never in the
+  landing cell: a plating pad cut into the ground, a dome with an east
+  door, a corridor to a smaller module with a mast. Inside, a bed and
+  the chest the last crew left (lunite, jet fuel, rations, coins,
+  sometimes aether or rounds). Stamped as edits the first time you come
+  within 150 m, so they save with the Moon and mine like anything else.
+  **Plating** is a new material; the bases are the only source for now.
+- **Dust crawlers.** Six-legged, grey, pale-eyed, in threes, at night
+  only; they drop lunite. Nothing comes out by day, and the Earth's
+  lurkers stay on Earth.
+- **THE DUST WYRM.** At night on the open ground it comes up under you:
+  the Burrower's hunt in a pale chitin, eight segments, a blue-white
+  maw. Twelve lunite and 120 coins the first time, six and eighty
+  after; four minutes' grace between wyrms.
+- **The mech suit.** A chestplate-slot item (ten lunite, iron, ruby,
+  wire, four aether): sealed like the space suit (air on the Moon and
+  under water), a third of every blow shrugged off on its own, digs at
+  0.6× the time, punches for 24, jumps a fifth higher, walks at 0.85,
+  and lands every step like a dropped anvil. A slab torso with shoulder
+  blocks and a core light.
+- The Earth's objective markers (contracts, charts, the ledger's
+  places) no longer draw over the Moon.
+- LIFTOFF is done as the roadmap wrote it, bar the LOD-ladder flight.
+  Next: STATION ONE.
+
 ## Build 74 — LIFTOFF A: the rocket, the crossing, the Moon (2026-09-20)
 
 The Space Arc opens. The sky stops being a ceiling.

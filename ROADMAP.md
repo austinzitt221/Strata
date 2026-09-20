@@ -302,8 +302,9 @@ Slotted between the city builds as the mood takes me:
      night, per biome; D (DONE, Build 72): each biome its own ground,
      peat, amber, cocoa. THE BIOMES ARC IS COMPLETE.
 - Then the Space Arc: LIFTOFF A (DONE, Build 74): the Moon, the rocket,
-  the crossing, the space suit, two worlds in one save. LIFTOFF B next:
-  moon ores, abandoned moon bases, the moon boss, the mech suit.
+  the crossing, the space suit, two worlds in one save. LIFTOFF B (DONE,
+  Build 75): lunite, abandoned moon bases, dust crawlers, the Dust Wyrm,
+  the mech suit. STATION ONE next.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
@@ -766,8 +767,9 @@ them is a real flown sequence, not a menu.
 ## Build 22 — LIFTOFF (the rocket and the moon)
 Status: A (DONE, Build 74) — the Moon as a second generator and a second
 blob in the save, the rocket, the three-scene flight, the space suit,
-vacuum, a sixth of the gravity, the Earth in the sky. B (next) — moon
-ores, abandoned moon bases, the moon boss, the mech suit.
+vacuum, a sixth of the gravity, the Earth in the sky. B (DONE, Build 75)
+— lunite veins, abandoned moon bases with loot, dust crawlers by night,
+THE DUST WYRM, the mech suit. LIFTOFF IS COMPLETE.
 - **Space suit** — breathe off-Earth. Crafted mid-late; a real armor-slot
   item with its own visor overlay.
 - **The mech suit** — the upgrade: same protection plus strength, mining

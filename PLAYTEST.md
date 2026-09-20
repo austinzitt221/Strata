@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 75 — LIFTOFF B
+- [ ] Walk from the landing until you find a base (the HUD's region
+      name changes every 512 m; bases are one per 320 m cell, roughly
+      half the cells). Does the dome read from a distance? Is the door
+      findable? Loot the chest, sleep in the bed.
+- [ ] Dig for lunite (from eight metres down). Is a vein worth the dig?
+- [ ] A night on the open ground: the crawlers, and then the wyrm. Can
+      you kill it with what you brought? Too often, too rare?
+- [ ] Craft the mech suit; wear it on Earth for a day. Does the strength
+      show, and does the weight?
+
 ## Build 74 — LIFTOFF A
 - [ ] Creative: take a rocket from the catalog, deploy it, board it,
       SPACE. Does the climb feel like a launch? Is the crossing too long,

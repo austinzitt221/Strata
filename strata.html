@@ -692,9 +692,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               MUD:20, JWOOD:21, JPLANKS:22, MWOOD:23, MPLANKS:24,    // BIOMES A (Build 69): the swamp's mud, jungle and mangrove wood and their planks
               SWOOD:25, SPLANKS:26, AWOOD:27, APLANKS:28,             // BIOMES B (Build 70): spruce and acacia
               DRYGRASS:29, PERMAFROST:30, LEAFLITTER:31, PEAT:32,
-              REGOLITH:33, MOONROCK:34 };                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 34;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock'];
+              REGOLITH:33, MOONROCK:34,
+              PLATING:35, LUNITE:36 };                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 36;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
@@ -2224,11 +2225,50 @@ function makeMoonGen(seed){
              + (fbm2(sH + 77, x * 0.04, z * 0.04, 3) - 0.5) * 3.5      // the dust's own roll
              + craterH(x, z);
   }
+  // veins, as on Earth: iron near the top, lunite (the Moon's own ore) under
+  // it, diamond in the deep
+  const MOON_ORES = [
+    { mat: MAT.IRON,    yMin: -70,  yMax: -3,   p: 0.50, rMin: 0.8, rMax: 1.5 },
+    { mat: MAT.LUNITE,  yMin: -130, yMax: -8,   p: 0.36, rMin: 0.6, rMax: 1.3 },
+    { mat: MAT.DIAMOND, yMin: -248, yMax: -120, p: 0.30, rMin: 0.6, rMax: 1.2 },
+  ];
+  const sV = hashInt(seed ^ 0x2545f491), sB = hashInt(seed ^ 0x1b56c4e9);
+  function oreAt(x, y, z){
+    if (y > -1 || y < BEDROCK_Y) return 0;
+    const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const gx = cx + dx, gy = cy + dy, gz = cz + dz;
+      const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
+      const t = MOON_ORES[hashInt(h0 ^ 0x51ab3f27) % MOON_ORES.length];
+      if (h0 / 4294967296 > t.p) continue;
+      const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
+      if (oy < t.yMin || oy > t.yMax) continue;
+      const ox = gx * VEIN_CELL + (hashInt(h0 ^ 1) / 4294967296) * VEIN_CELL;
+      const oz = gz * VEIN_CELL + (hashInt(h0 ^ 3) / 4294967296) * VEIN_CELL;
+      const r = t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin);
+      const ddx = x - ox, ddy = (y - oy) * 1.4, ddz = z - oz;
+      if (ddx*ddx + ddy*ddy + ddz*ddz < r * r) return t.mat;
+    }
+    return 0;
+  }
   function mat(x, y, z){
     const h = height(x, z);
     if (y > h - 2.4) return MAT.REGOLITH;
+    const ore = oreAt(x, y, z);
+    if (ore) return ore;
     if (y < -70 - noise2(sD, x * 0.05, z * 0.05) * 10) return MAT.BASALT;
     return MAT.MOONROCK;
+  }
+  // the abandoned bases: up to one per cell, off the origin so the first
+  // landing has a walk to make. Stamped as edits when you come near
+  const MBASE_CELL = 320;
+  function mbaseAt(cx, cz){
+    if (cx === 0 && cz === 0) return null;
+    const h0 = hashInt(sB ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    if ((h0 & 255) >= 120) return null;
+    const x = cx * MBASE_CELL + 60 + (hashInt(h0 ^ 1) / 4294967296) * (MBASE_CELL - 120);
+    const z = cz * MBASE_CELL + 60 + (hashInt(h0 ^ 2) / 4294967296) * (MBASE_CELL - 120);
+    return { x: Math.round(x), z: Math.round(z), key: cx + ',' + cz, seed: hashInt(h0 ^ 7) };
   }
   function sdf(x, y, z){ return y - height(x, z); }
   const hrCache = new Map();
@@ -2295,7 +2335,7 @@ function makeMoonGen(seed){
   const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: false, caveFloorY: -86, seed, seaLevel: null,
     ruinInCell: nil, wetAt: no, archAt: () => MOON_ARCH, lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
     caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
-    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'moon' };
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'moon', mbaseAt, MBASE_CELL };
   return gen;
 }
 function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : makeEarthGen(seed); }
@@ -3243,7 +3283,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'w
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
-const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat' };
+const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat', [MAT.LUNITE]: 'lunite' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
 const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat', flour: 'bread' };
 // what bites where: the fish of each region
@@ -3365,7 +3405,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -3546,6 +3586,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'divehelm', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }, { item: 'wire', n: 2 }] });
   // LIFTOFF (Build 74): the space suit, and the rocket
   RECIPES.push({ kind: 'spacesuit', station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 6 }, { item: 'aetheringot', n: 2 }] });
+  RECIPES.push({ kind: 'mech', station: true,
+    costs: [{ item: 'lunite', n: 10 }, { item: 'ironingot', n: 24 }, { item: 'rubyingot', n: 6 }, { item: 'wire', n: 10 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'rocket', station: true,
     costs: [{ item: 'ironingot', n: 40 }, { item: 'rubyingot', n: 10 }, { item: 'wire', n: 16 }, { item: 'aetheringot', n: 6 }, { item: 'jetfuel', n: 2 }] });
   // boats: the paddle boat is planks and honesty; the motorboat drinks a battery
@@ -3714,6 +3756,7 @@ function craft(slots, r, free){
                   : r.kind === 'rod' ? { kind: 'rod' }
                   : r.kind === 'divehelm' ? { kind: 'divehelm', tier: 0 }
                   : r.kind === 'spacesuit' ? { kind: 'spacesuit', tier: 0 }
+                  : r.kind === 'mech' ? { kind: 'mech', tier: 4 }
                   : r.kind === 'rocket' ? { kind: 'rocket', charge: 0 }
                   : r.kind === 'motorboat' ? { kind: 'motorboat', charge: 100 }
                   : r.kind === 'plane' ? { kind: 'plane', charge: 100 }
@@ -4339,6 +4382,15 @@ function makeTileDrawers(){
     [CORE.MAT.MOONROCK](ctx, rng){
       speckle(ctx, rng, '#5c5c66', '#50505a', '#686872', 0.32, 0.2);
       for (let i = 0; i < 4; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#7c7c88'; ctx.fillRect(x, y, 1, 2); }
+    },
+    [CORE.MAT.PLATING](ctx, rng){
+      speckle(ctx, rng, '#7a8494', '#6e7787', '#86909f', 0.22, 0.16);
+      ctx.fillStyle = '#5a6272'; ctx.fillRect(0, 7, 16, 1); ctx.fillRect(7, 0, 1, 16);
+      ctx.fillStyle = '#98a2b0'; for (let x = 2; x < 16; x += 4){ ctx.fillRect(x, 2, 1, 1); ctx.fillRect(x, 12, 1, 1); }
+    },
+    [CORE.MAT.LUNITE](ctx, rng){
+      speckle(ctx, rng, '#5c5c66', '#50505a', '#686872', 0.32, 0.2);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 13) | 0, y = (rng() * 13) | 0; ctx.fillStyle = '#9fd8ff'; ctx.fillRect(x, y, 2, 2); ctx.fillStyle = '#e4f6ff'; ctx.fillRect(x, y, 1, 1); }
     },
     logInnerS(ctx, rng){
       speckle(ctx, rng, '#d9b591', '#c8a27e', '#e6c6a4', 0.24, 0.24);
@@ -6184,7 +6236,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -6438,7 +6490,15 @@ const playerBody = {
       m.position.y = 0.26; m.rotation.x = 0.3;
       this.head.add(m); this.armorMeshes.push(m);
     }
-    if (A.chest){
+    if (A.chest && A.chest.kind === 'mech'){
+      // the mech suit: a slab torso, shoulder blocks, a core light in the chest
+      const grey = new THREE.MeshBasicMaterial({ color: 0x6a7078 }), dark = new THREE.MeshBasicMaterial({ color: 0x4a5058 });
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.7, 0.44), grey); torso.position.y = 1.08;
+      const belt = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.12, 0.48), dark); belt.position.y = 0.74;
+      const core = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.06), new THREE.MeshBasicMaterial({ color: 0x9fe8ff })); core.position.set(0, 1.18, -0.24);
+      this.upper.add(torso, belt, core); this.armorMeshes.push(torso, belt, core);
+      for (const sx of [-0.46, 0.46]){ const sh = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.24, 0.4), dark); sh.position.set(sx, 1.36, 0); this.upper.add(sh); this.armorMeshes.push(sh); }
+    } else if (A.chest){
       const m = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.62, 0.3), col(A.chest.tier));
       m.position.y = 1.1;
       this.upper.add(m); this.armorMeshes.push(m);
@@ -6508,7 +6568,7 @@ const playerBody = {
     this.root.visible = show;
     if (!show) return;
     const A = game.armor || {};
-    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? A.back.kind : '-');
+    const sig = (A.head ? A.head.kind + A.head.tier : '-') + ':' + (A.chest ? (A.chest.kind || 'plate') + A.chest.tier : '-') + ':' + (A.feet ? A.feet.tier : '-') + ':' + (A.back ? A.back.kind : '-');
     if (sig !== this.armorSig){ this.armorSig = sig; this.dressBody(); }
     if (game.driving){
       const e2 = game.driving;
@@ -7287,7 +7347,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7865,7 +7925,9 @@ const AudioSys = {
         const M = CORE.MAT, m = arg, det = 0.9 + Math.random() * 0.2;
         const wood = m === M.WOOD || m === M.PLANKS || m === M.JWOOD || m === M.JPLANKS || m === M.MWOOD || m === M.MPLANKS || m === M.SWOOD || m === M.SPLANKS || m === M.AWOOD || m === M.APLANKS;
         const wet = m === M.MUD || m === M.PEAT;
-        const soft = m === M.GRASS || m === M.SAND || m === M.DRYGRASS || m === M.LEAFLITTER;
+        const soft = m === M.GRASS || m === M.SAND || m === M.DRYGRASS || m === M.LEAFLITTER || m === M.REGOLITH;
+        // LIFTOFF B (Build 75): the mech suit lands every step like a dropped anvil
+        if (game.armor && game.armor.chest && game.armor.chest.kind === 'mech'){ this.tone({ freq: 90 * det, dur: 0.12, gain: 0.07, type: 'square' }); this.noise({ dur: 0.1, from: 320 * det, gain: 0.07, attack: 0.005 }); }
         if (m === M.SNOW) this.noise({ dur: 0.09, from: 2600 * det, ftype: 'highpass', gain: 0.05, attack: 0.01 });
         else if (wood){ this.tone({ freq: 190 * det, dur: 0.05, gain: 0.05, type: 'triangle' }); this.noise({ dur: 0.04, from: 1200 * det, ftype: 'bandpass', q: 1.5, gain: 0.04 }); }
         else if (wet) this.noise({ dur: 0.1, from: 380 * det, gain: 0.06, attack: 0.02 });
@@ -11724,6 +11786,7 @@ const ENT_DEF = {
   hare:     { hp: 8,  speed: 4.6, r: 0.25, h: 0.35, cap: 5, like: 'grazer' },
   zebra:    { hp: 26, speed: 3.8, r: 0.45, h: 1.2,  cap: 5, like: 'grazer' },
   crawler:  { hp: 22, speed: 5.2, r: 0.35, h: 0.6,  cap: 5, like: 'stalker', dmg: 5 },
+  dustcrawler: { hp: 30, speed: 5.6, r: 0.36, h: 0.6, cap: 6, like: 'stalker', dmg: 6 },      // LIFTOFF B (Build 75): the Moon's night
   bogwight: { hp: 90, speed: 1.3, r: 0.5,  h: 2.0,  cap: 3, like: 'husk', dmg: 20 },
   wolf:     { hp: 30, speed: 5.8, r: 0.36, h: 0.8,  cap: 4, like: 'stalker', dmg: 7, aggro: 30 },
   frostwisp:{ hp: 12, speed: 2.2, r: 0.3,  h: 0.5,  cap: 3, like: 'wisp', dmg: 20, fly: true },
@@ -11742,6 +11805,7 @@ const ENT_DEF = {
   drop:     { hp: 1e9, speed: 0, r: 0.01, h: 0.01, cap: 0 },   // a thing on the ground; untargetable
   // bosses: big hp, custom AI in bossSys, exempt from generic physics
   burrower:  { hp: 340, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE BURROWER' },
+  dustwyrm:  { hp: 460, speed: 7.5, r: 1.3, h: 2.4, cap: 0, boss: 'THE DUST WYRM' },
   warden:    { hp: 520, speed: 2.1, r: 1.4, h: 3.2, cap: 0, boss: 'THE WARDEN' },
   tyrant:    { hp: 650, speed: 2.6, r: 1.6, h: 3.6, cap: 0, boss: 'THE MAGMA TYRANT' },
   architect: { hp: 620, speed: 3.0, r: 1.0, h: 2.4, cap: 0, boss: 'THE ARCHITECT' },
@@ -11752,11 +11816,11 @@ const ENT_DEF = {
 };
 // by archetype: what grazes by day, what hunts by night (Build 71)
 const BIOME_DAY = { 9: 'monkey', 5: 'croc', 10: 'elk', 11: 'hare', 12: 'zebra' };
-const BIOME_NIGHT = { 9: { type: 'crawler', pack: 2 }, 5: { type: 'bogwight', pack: 1 }, 10: { type: 'wolf', pack: 3 }, 11: { type: 'frostwisp', pack: 1 }, 12: { type: 'hyena', pack: 2 } };
-const HOSTILE_BEASTS = new Set(['crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena']);
+const BIOME_NIGHT = { 9: { type: 'crawler', pack: 2 }, 5: { type: 'bogwight', pack: 1 }, 10: { type: 'wolf', pack: 3 }, 11: { type: 'frostwisp', pack: 1 }, 12: { type: 'hyena', pack: 2 }, 13: { type: 'dustcrawler', pack: 3 } };
+const HOSTILE_BEASTS = new Set(['crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler']);
 const BEAST_DROP = {
   monkey: [['meat', 1]], croc: [['meat', 3], ['coin', 4]], elk: [['meat', 4]], hare: [['meat', 1]], zebra: [['meat', 3]],
-  crawler: [['fang', 1], ['coin', 2]], bogwight: [['huskmeat', 2], ['coin', 6]], wolf: [['fang', 2], ['meat', 1]], frostwisp: [['wispcore', 1], ['coin', 3]], hyena: [['fang', 1], ['meat', 1]],
+  crawler: [['fang', 1], ['coin', 2]], dustcrawler: [['lunite', 1], ['coin', 3]], bogwight: [['huskmeat', 2], ['coin', 6]], wolf: [['fang', 2], ['meat', 1]], frostwisp: [['wispcore', 1], ['coin', 3]], hyena: [['fang', 1], ['meat', 1]],
 };
 const CREW_HAT = 0x4fc3f7;
 const VROLE = {
@@ -11886,17 +11950,17 @@ function entMesh(type, ent){
     g.add(torso, core, hips, legL, legR, head, eye, hornL, hornR, armL, armR, fistL, fistR);
     return g;
   }
-  if (type === 'burrower' || type === 'leviathan'){
+  if (type === 'burrower' || type === 'leviathan' || type === 'dustwyrm'){
     // a chitin worm: armored head with a glowing maw, body segments trail
     // behind along its real path (positioned each frame from ent.trail).
     // The leviathan is the same beast in deep-sea blues, longer, pale-fanged
-    const lev = type === 'leviathan';
-    const chitin = new THREE.MeshBasicMaterial({ color: lev ? 0x1f5f7a : 0x4a4058 });
-    const chitin2 = new THREE.MeshBasicMaterial({ color: lev ? 0x2f8aa8 : 0x635875 });
+    const lev = type === 'leviathan', dust = type === 'dustwyrm';
+    const chitin = new THREE.MeshBasicMaterial({ color: lev ? 0x1f5f7a : dust ? 0x9a9aa4 : 0x4a4058 });
+    const chitin2 = new THREE.MeshBasicMaterial({ color: lev ? 0x2f8aa8 : dust ? 0xc4c4d0 : 0x635875 });
     const head = new THREE.Group();
     const skull = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 2.2), chitin);
     const maw = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 0.5),
-      new THREE.MeshBasicMaterial({ color: lev ? 0xdff6ff : 0xff7a30 }));
+      new THREE.MeshBasicMaterial({ color: lev ? 0xdff6ff : dust ? 0x9fe8ff : 0xff7a30 }));
     maw.position.z = -1.05;
     const jawT = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 0.9), chitin2);
     jawT.position.set(0, 0.85, -0.9);
@@ -11906,8 +11970,8 @@ function entMesh(type, ent){
     g.add(head);
     g.userData.head = head;
     g.userData.segs = [];
-    for (let i = 0; i < (lev ? 10 : 7); i++){
-      const sc = (lev ? 1.7 : 1.5) - i * (lev ? 0.11 : 0.14);
+    for (let i = 0; i < (lev ? 10 : dust ? 8 : 7); i++){
+      const sc = (lev ? 1.7 : 1.5) - i * (lev ? 0.11 : dust ? 0.12 : 0.14);
       const seg = new THREE.Mesh(new THREE.BoxGeometry(sc, sc, 1.4), i % 2 ? chitin : chitin2);
       g.add(seg);
       g.userData.segs.push(seg);
@@ -12495,6 +12559,7 @@ function entMesh(type, ent){
     hare:    { bw: 0.26, bh: 0.22, bd: 0.4, body: 0xc9c0b0, by: 0.28, hw: 0.2, hh: 0.18, hd: 0.2, head: 0xd8d0c0, snout: 0xf0e8e0, hy: 0.38, ears: 0.24, tail: [0.08, 0.08], tailCol: 0xf0ece4, lw: 0.07, ly: 0.09 },
     zebra:   { bw: 0.6, bh: 0.55, bd: 1.2, body: 0xe8e6e0, by: 0.85, hw: 0.3, hh: 0.36, hd: 0.48, head: 0xe8e6e0, snout: 0x2a2a2a, hy: 1.06, ears: 0.12, tail: [0.06, 0.4], tailCol: 0x2a2a2a, lw: 0.13, ly: 0.29, stripes: 1 },
     crawler: { bw: 0.4, bh: 0.22, bd: 0.7, body: 0x2e5a2a, ridge: 0x1c3a1a, by: 0.3, hw: 0.3, hh: 0.2, hd: 0.26, head: 0x3a6a30, snout: 0x1c3a1a, hy: 0.34, eye: 0xd8ff60, lw: 0.07, ly: 0.15, six: 1 },
+    dustcrawler: { bw: 0.42, bh: 0.24, bd: 0.72, body: 0x8a8a92, ridge: 0x5a5a64, by: 0.3, hw: 0.3, hh: 0.2, hd: 0.26, head: 0x9a9aa2, snout: 0x5a5a64, hy: 0.34, eye: 0x9fe8ff, lw: 0.07, ly: 0.15, six: 1 },
     wolf:    { bw: 0.34, bh: 0.32, bd: 0.9, body: 0x8a8a8a, ridge: 0x5a5a5a, by: 0.5, hw: 0.28, hh: 0.24, hd: 0.36, head: 0x9a9a9a, snout: 0x3a3a3a, hy: 0.58, ears: 0.1, eye: 0xffe070, tail: [0.08, 0.45], tailCol: 0x6a6a6a, lw: 0.1, ly: 0.2 },
     hyena:   { bw: 0.36, bh: 0.34, bd: 0.85, body: 0xa08a5a, ridge: 0x3a3020, by: 0.55, hw: 0.3, hh: 0.26, hd: 0.34, head: 0xa89060, snout: 0x2a2420, hy: 0.62, ears: 0.12, eye: 0xffd060, tail: [0.06, 0.3], tailCol: 0x3a3020, lw: 0.1, ly: 0.22, spots: 1 },
   };
@@ -12895,6 +12960,18 @@ function killEntity(e, byPlayer){
       } else {
         addStackItem('coin', 160); addStackItem('diamond', 4);
         toast('THE LEVIATHAN sinks — +160 coins · +4 diamond');
+      }
+      markSave();
+    }
+    else if (e.bossType === 'dustwyrm'){
+      game.bossKills = game.bossKills || {};
+      if (!game.bossKills.dustwyrm){
+        game.bossKills.dustwyrm = true;
+        addStackItem('lunite', 12); addStackItem('coin', 120);
+        toast('THE DUST WYRM is slain — +12 lunite · +120 coins');
+      } else {
+        addStackItem('lunite', 6); addStackItem('coin', 80);
+        toast('THE DUST WYRM is slain again — +6 lunite · +80 coins');
       }
       markSave();
     }
@@ -15021,7 +15098,7 @@ const objectiveSys = {
   },
   frame(){
     const host = $('objlayer');
-    const show = game.running && game.ui === 'none' && !game.photo && !(spaceSys.flight && spaceSys.flight.phase !== 'landing');
+    const show = game.running && game.ui === 'none' && !game.photo && !(spaceSys.flight && spaceSys.flight.phase !== 'landing') && game.planet !== 'moon';   // the ledger's places are all on Earth
     // the world scan behind list() only changes on the seconds scale --
     // rebuild it at 4Hz and spend the per-frame work on projection only
     const tNow = performance.now();
@@ -15379,6 +15456,7 @@ const tradeSys = {
       { buy: { k: 'diamond', n: 5 }, price: 280, rep: 10, crep: 50 },
       { buy: { k: 'amber', n: 1 }, price: 45, rep: 0 },
       { buy: { k: 'peat', n: 8 }, price: 14, rep: 0 },
+      { buy: { k: 'lunite', n: 2 }, price: 90, rep: 0 },
     ];
     if (role === 'arms') return [
       { buy: { make: 'sword', tier: 1 }, price: 30, rep: 0 },
@@ -15716,6 +15794,19 @@ const bossSys = {
     if (this.accT < 2) return;
     this.accT = 0;
     if (this.anyBoss()) return;
+    if (game.planet === 'moon'){
+      // THE DUST WYRM (Build 75): at night, out on the open maria, it comes
+      // up under you; once it is dead it is a while before another smells you
+      if (game.dayF < 0.25 && !game.driving && game.pos.y > game.gen.height(game.pos.x, game.pos.z) - 3 &&
+          performance.now() - (this.wyrmT || 0) > 240000 && Math.random() < 0.06){
+        this.wyrmT = performance.now();
+        const a = Math.random() * Math.PI * 2;
+        this.spawn('dustwyrm', game.pos.x + Math.cos(a) * 34, game.pos.y - 8, game.pos.z + Math.sin(a) * 34);
+        toast('the dust shivers under your boots…');
+        AudioSys.sfx('boom');
+      }
+      return;
+    }
     // THE BURROWER stalks the deep: far under the surface, it can smell you
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     if (depth > 25 && Math.random() < 0.05){
@@ -15839,7 +15930,7 @@ const bossSys = {
       gain: Math.min(0.4, 8 / Math.max(6, d)), type: 'triangle' });
   },
   updateBoss(e, dt, now){
-    if (e.bossType === 'burrower') this.burrower(e, dt);
+    if (e.bossType === 'burrower' || e.bossType === 'dustwyrm') this.burrower(e, dt);
     else if (e.bossType === 'leviathan') this.leviathan(e, dt);
     else if (e.bossType === 'warden'){ this.warden(e, dt); return; }
     else if (e.bossType === 'tyrant'){ this.tyrant(e, dt); return; }
@@ -20762,7 +20853,15 @@ const FARM_TIP = {
 const farmSys = {
   GROW: 75, WATER: 3,
   plots(){ return (game.pnodes || []).filter(n => n.t === 'plot'); },
-  mul(kind){ const B = game.buff; if (!B || B.kind !== kind || B.left <= 0) return 1; return kind === 'dig' ? 0.5 : 1.5; },
+  mul(kind){
+    let m = 1;
+    const B = game.buff;
+    if (B && B.kind === kind && B.left > 0) m *= kind === 'dig' ? 0.5 : 1.5;
+    // the mech suit (Build 75): strength in the arms, weight on the feet
+    const C = game.armor && game.armor.chest;
+    if (C && C.kind === 'mech') m *= kind === 'dig' ? 0.6 : kind === 'jump' ? 1.2 : kind === 'speed' ? 0.85 : 1;
+    return m;
+  },
   invisible(){ const B = game.buff; return !!(B && B.kind === 'invis' && B.left > 0); },
   eat(it){
     const M = FARM_MEALS[it.kind]; if (!M) return;
@@ -20850,13 +20949,13 @@ const farmSys = {
 // is the one that went in: its record rides inside the item -- the
 // villager's house and crew, a boss's kind, an animal's hp.
 const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker', 'soldier',
-  'monkey', 'croc', 'elk', 'hare', 'zebra', 'crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena'];
+  'monkey', 'croc', 'elk', 'hare', 'zebra', 'crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler', 'dustwyrm'];
 const MENAGERIE_NAME = { grazer: 'grazer', sheep: 'sheep', lurker: 'lurker', stalker: 'stalker', husk: 'husk', wisp: 'wisp', angel: 'angel', guard: 'city guard', villager: 'villager',
   burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker', soldier: 'soldier',
-  monkey: 'monkey', croc: 'crocodile', elk: 'elk', hare: 'hare', zebra: 'zebra', crawler: 'crawler', bogwight: 'bogwight', wolf: 'wolf', frostwisp: 'frost wisp', hyena: 'hyena' };
+  monkey: 'monkey', croc: 'crocodile', elk: 'elk', hare: 'hare', zebra: 'zebra', crawler: 'crawler', bogwight: 'bogwight', wolf: 'wolf', frostwisp: 'frost wisp', hyena: 'hyena', dustcrawler: 'dust crawler', dustwyrm: 'Dust Wyrm' };
 const MENAGERIE_COL = { grazer: '#c8a24b', sheep: '#eceae2', lurker: '#3a5a3a', stalker: '#2c3444', husk: '#6a5040', wisp: '#9fe8ff', angel: '#e8e0ff', guard: '#2f4f7a', villager: '#d9b25a',
   burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78', soldier: '#556b3a',
-  monkey: '#6b4a2a', croc: '#3f5a2e', elk: '#6a4a30', hare: '#c9c0b0', zebra: '#e8e6e0', crawler: '#2e5a2a', bogwight: '#3f4a3a', wolf: '#8a8a8a', frostwisp: '#f0fbff', hyena: '#a08a5a' };
+  monkey: '#6b4a2a', croc: '#3f5a2e', elk: '#6a4a30', hare: '#c9c0b0', zebra: '#e8e6e0', crawler: '#2e5a2a', bogwight: '#3f4a3a', wolf: '#8a8a8a', frostwisp: '#f0fbff', hyena: '#a08a5a', dustcrawler: '#8a8a92', dustwyrm: '#b8b8c4' };
 const menagerieSys = {
   beam: null, hold: null,
   secs(e){
@@ -22253,7 +22352,7 @@ const citySys = {
 };
 
 function trySpawnEntities(){
-  if (game.planet === 'moon') return;                        // LIFTOFF (Build 74): nothing lives here yet
+  if (game.planet === 'moon' && game.dayF >= 0.25) return;   // LIFTOFF B (Build 75): the Moon's things come out at night only
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
   for (const e of game.entities) counts[e.type] = (counts[e.type] || 0) + 1;
@@ -22297,7 +22396,7 @@ function trySpawnEntities(){
   }
   // lurkers spawn in the dark (survival only): night surface, or an
   // underground air pocket
-  if (counts.lurker < ENT_DEF.lurker.cap){
+  if (counts.lurker < ENT_DEF.lurker.cap && game.planet !== 'moon'){
     if (night && nearestTorchDist(x, h, z) > 12){
       spawnEntity('lurker', x, h + 0.5, z); return;
     }
@@ -26995,7 +27094,8 @@ function tryAction(dt, now){
         game.lastMelee = now; game.punchT = now;
         AudioSys.burst({ dur: 0.05, freq: 900, gain: 0.05 });
         const ent = entityOnRay(2.6);
-        const pdm = CORE.countItem(game.slots, 'wfist') > 0 ? 15 : 3;
+        const mechOn = game.armor && game.armor.chest && game.armor.chest.kind === 'mech';
+        const pdm = mechOn ? 24 : CORE.countItem(game.slots, 'wfist') > 0 ? 15 : 3;
         if (ent) hurtEntity(ent, pdm, (ent.x - game.pos.x) * 1.6, (ent.z - game.pos.z) * 1.6);
       }
     } else if (edge){
@@ -27771,7 +27871,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -27990,6 +28090,16 @@ function itemIconURL(it){
     c.fillStyle = '#8a6237'; for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
     c.fillStyle = '#d9d9e0'; c.fillRect(13, 2, 1, 8);
     c.fillStyle = '#e04848'; c.fillRect(12, 10, 3, 2); c.fillStyle = '#f7f2e8'; c.fillRect(12, 9, 3, 1);
+  } else if (it.kind === 'mech'){
+    c.fillStyle = '#6a7078'; c.fillRect(3, 3, 10, 10); c.fillRect(1, 4, 2, 5); c.fillRect(13, 4, 2, 5);
+    c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
+    c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
+    c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'lunite'){
+    c.fillStyle = '#5c5c66'; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
+    c.fillStyle = '#50505a'; c.fillRect(3, 11, 10, 2);
+    c.fillStyle = '#9fd8ff'; c.fillRect(5, 6, 2, 2); c.fillRect(9, 8, 2, 2); c.fillRect(7, 10, 2, 2);
+    c.fillStyle = '#e4f6ff'; c.fillRect(5, 6, 1, 1); c.fillRect(9, 8, 1, 1); c.fillRect(7, 10, 1, 1);
   } else if (it.kind === 'spacesuit'){
     c.fillStyle = '#e4e4ea'; c.fillRect(4, 2, 8, 10); c.fillRect(3, 3, 10, 8);
     c.fillStyle = '#e0a020'; c.fillRect(5, 4, 6, 4);
@@ -28575,6 +28685,8 @@ function itemLabel(it){
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'spacesuit') return 'space suit';
+  if (it.kind === 'mech') return 'mech suit';
+  if (it.kind === 'lunite') return 'lunite';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
@@ -28887,7 +28999,7 @@ function sortInventory(){
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'rocket', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'wings'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'gate', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
@@ -28975,7 +29087,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -29407,7 +29519,7 @@ function uiMove(from, to){
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
   if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit'){ toast('that slot wants a helmet'); return 'none'; }
-  if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
+  if (to === 'achest' && A.kind !== 'plate' && A.kind !== 'mech'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings'){ toast('that slot wants a jetpack or wings'); return 'none'; }
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
@@ -29512,9 +29624,9 @@ function quickMove(key, n){
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
-  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm' || it.kind === 'spacesuit')){
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm' || it.kind === 'spacesuit' || it.kind === 'mech')){
     // shift-click armor in your inventory = wear it (swaps what you had on)
-    const slot = it.kind === 'helm' || it.kind === 'divehelm' || it.kind === 'spacesuit' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const slot = it.kind === 'helm' || it.kind === 'divehelm' || it.kind === 'spacesuit' ? 'head' : it.kind === 'plate' || it.kind === 'mech' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
     const prev = game.armor[slot];
     game.armor[slot] = it;
     game.slots[key] = prev || null;
@@ -29577,7 +29689,7 @@ function slotRefuses(to, A){
   if (to === 'sfuel' && !CORE.fuelOps(A)) return 'fuel is coal or wood';
   if (to === 'gfuel' && A.kind !== 'coal') return 'generators burn coal';
   if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit') return 'that slot wants a helmet';
-  if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
+  if (to === 'achest' && A.kind !== 'plate' && A.kind !== 'mech') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings') return 'that slot wants a jetpack or wings';
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
@@ -29843,6 +29955,10 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">ticket to ' + it.to + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">from ' + it.from + ' · when the train stands at the platform, right click a car to board · space steps off at a station</div>';
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
+  } else if (it.kind === 'mech'){
+    html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'lunite'){
+    html = '<div class="t1">lunite ×' + it.count + '</div><div class="t2">the Moon\'s own ore, from veins under the regolith · the mech suit is made of it · the ore broker pays well</div>';
   } else if (it.kind === 'spacesuit'){
     html = '<div class="t1">space suit</div><div class="t2">wear it in the helmet slot (E, shift-click) — air on the Moon, and under water for as long as you like</div>';
   } else if (it.kind === 'divehelm'){
@@ -30109,7 +30225,7 @@ function armorRed(){
   const A = game.armor || {};
   let r = 0;
   for (const p of [A.head, A.chest, A.feet])
-    if (p) r += [0.06, 0.09, 0.12, 0.16, 0.2][p.tier] || 0;
+    if (p) r += p.kind === 'mech' ? 0.34 : ([0.06, 0.09, 0.12, 0.16, 0.2][p.tier] || 0);   // the mech suit (Build 75) shrugs off a third on its own
   return Math.min(0.6, r);
 }
 function damagePlayer(dmg, kx, kz){
@@ -30200,7 +30316,7 @@ function updateSurvival(dt){
                    inWater(game.pos.x, game.pos.y + playerHeight() - PLAYER.eyeGap, game.pos.z);
   if (game.breath == null) game.breath = 100;
   const dive = game.armor && game.armor.head && game.armor.head.kind === 'divehelm';
-  const suit = game.armor && game.armor.head && game.armor.head.kind === 'spacesuit';
+  const suit = game.armor && ((game.armor.head && game.armor.head.kind === 'spacesuit') || (game.armor.chest && game.armor.chest.kind === 'mech'));
   // LIFTOFF (Build 74): the Moon has no air. The suit is sealed, and so is the rocket's cabin
   const vac = game.planet === 'moon' && !suit && !game.driving;
   if (vac && !game.vacWarned){ game.vacWarned = true; toast('no air — you need a SPACE SUIT'); }
@@ -31028,6 +31144,7 @@ function buildSaveData(){
     spires: game.spires || {},
     expedition: game.expedition || null,
     zigs: game.zigs || {},
+    mbases: game.mbases || {},
     wrecks: game.wrecks || {},
     cities: game.cities || {},
     bossKills: game.bossKills || {},
@@ -31095,6 +31212,7 @@ function startWorldData(id, data){
   game.bases = data.bases || {};
   game.spires = data.spires || {};
   game.zigs = data.zigs || {};
+  game.mbases = data.mbases || {};
   game.wrecks = data.wrecks || {};
   endFishing();
   game.cities = data.cities || {};
@@ -31244,6 +31362,72 @@ function quitToTitle(){
   game.ui = 'none';
   show('mainmenu');
 }
+
+// ---------- LIFTOFF B (Build 75): the abandoned moon bases ----------
+// A pad of plating, a dome with a door, a corridor to a smaller module
+// with a mast; inside, a bed and the chest the last crew left. Cut into
+// the ground as edits the first time you come within reach, so they save
+// with the Moon and mine like anything else.
+const moonBaseSys = {
+  accT: 0,
+  tick(dt){
+    if (game.planet !== 'moon' || !game.gen || !game.gen.mbaseAt) return;
+    this.accT += dt;
+    if (this.accT < 1) return;
+    this.accT = 0;
+    const C = game.gen.MBASE_CELL;
+    const cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    game.mbases = game.mbases || {};
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const B = game.gen.mbaseAt(cx + dx, cz + dz);
+      if (!B || game.mbases[B.key]) continue;
+      if (Math.hypot(B.x - game.pos.x, B.z - game.pos.z) > 150) continue;
+      this.stamp(B);
+      game.mbases[B.key] = 1;
+      markSave();
+    }
+  },
+  nearest(){
+    if (game.planet !== 'moon' || !game.gen || !game.gen.mbaseAt) return null;
+    const C = game.gen.MBASE_CELL;
+    const cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    let best = null, bd = 1e9;
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++){
+      const B = game.gen.mbaseAt(cx + dx, cz + dz);
+      if (!B) continue;
+      const d = Math.hypot(B.x - game.pos.x, B.z - game.pos.z);
+      if (d < bd){ bd = d; best = B; }
+    }
+    return best;
+  },
+  stamp(B){
+    const M = CORE.MAT;
+    const g = game.gen.height(B.x, B.z) + 0.2;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0); e.sy = sy; e.sz = sz; e.noLod = 1; applyEdit(e); };
+    const ES = (op, x, y, z, r, mat) => { const e = CORE.makeEdit(op, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r, mat || 0, 0); e.noLod = 1; applyEdit(e); };
+    const rng = CORE.mulberry32(B.seed >>> 0);
+    EB(0, B.x, g + 6.5, B.z + 6, 32, 12, 40, 0);                 // level the site
+    EB(1, B.x, g - 0.5, B.z + 6, 32, 1.0, 40, M.PLATING);        // the pad
+    ES(1, B.x, g, B.z, 14, M.PLATING); ES(0, B.x, g, B.z, 12.4, 0);         // the dome (a sphere edit's size is its diameter), hollow
+    EB(1, B.x, g - 0.5, B.z, 14, 1.0, 14, M.PLATING);            // its floor back
+    EB(0, B.x + 6.5, g + 1.5, B.z, 2.4, 2.6, 2.2, 0);            // the door, east
+    EB(1, B.x, g + 1.4, B.z + 10, 2.6, 2.6, 8, M.PLATING); EB(0, B.x, g + 1.4, B.z + 10, 2.0, 2.0, 8.6, 0);   // the corridor
+    ES(1, B.x, g, B.z + 17.5, 9, M.PLATING); ES(0, B.x, g, B.z + 17.5, 7.6, 0);   // the module
+    EB(1, B.x, g - 0.5, B.z + 17.5, 9, 1.0, 9, M.PLATING);
+    EB(1, B.x, g + 6.8, B.z + 17.5, 0.4, 6, 0.4, M.PLATING); EB(1, B.x, g + 9.6, B.z + 17.5, 2.6, 0.2, 0.2, M.PLATING);   // the mast
+    // what the last crew left
+    const ch = pnodeSys.add('chest', B.x - 3.6, g + 0.95, B.z, Math.PI / 2, { sc: 0.7 });
+    ch.inv = new Array(chestSlots(0.7)).fill(null);
+    ch.inv[0] = { kind: 'lunite', count: 4 + ((rng() * 5) | 0) };
+    ch.inv[1] = { kind: 'jetfuel', count: 1 + ((rng() * 2) | 0) };
+    ch.inv[2] = { kind: 'cookedmeat', count: 3 };
+    ch.inv[3] = { kind: 'coin', count: 20 + ((rng() * 30) | 0) };
+    if (rng() < 0.5) ch.inv[4] = { kind: 'aetheringot', count: 2 };
+    if (rng() < 0.3) ch.inv[5] = { kind: 'rounds', count: 24 };
+    bedSys.add(+(B.x + 3.2).toFixed(2), +(g + 0.2).toFixed(2), +(B.z - 2.6).toFixed(2), 0);
+    farShapeSys.dirty = true;
+  },
+};
 
 // ---------- LIFTOFF (Build 74): the rocket, the flight, the Moon ----------
 // The save holds one world per planet (edits, player, entities, torches,
@@ -33013,6 +33197,7 @@ function frameBody(now){
 
   loadSys.tick();
   spaceSys.tick(dt);
+  moonBaseSys.tick(dt);
   const onEarth = game.planet !== 'moon';       // LIFTOFF (Build 74): the Moon has no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -33104,7 +33289,7 @@ function frameBody(now){
   if (onEarth) roadSys.tick(dt);
   if (onEarth) fallsSys.tick(dt);
   if (onEarth) lineSys.tick(dt);
-  if (!netSys.guest && onEarth) bossSys.tick(dt);
+  if (!netSys.guest) bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
     let bb = null, bd = 90;
@@ -33336,7 +33521,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, spawnEntity, gravityNow, MOON_G, skySys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

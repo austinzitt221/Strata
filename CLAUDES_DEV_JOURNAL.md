@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, small hours — LIFTOFF B
+
+The Moon has things in it now. Everything in B reused a shape that
+already existed: the veins are the Earth's vein code with a second
+table, the bases are the city's edit-box helper and the villages'
+"stamp when near" rule, the crawlers are a beast-spec row and a night
+table entry, the wyrm is the Burrower in pale chitin, the mech is a
+chestplate with a kind. A day's work for a whole slice, because the
+last twenty builds left the right hooks.
+
+One thing bit: a sphere edit's size is its diameter, and I wrote the
+domes as radii; the test caught it because it asked whether the wall
+was solid, not whether the edit existed. Test the key.
+
+STATION ONE next: a zero-G interior, the translator, the cast. That one
+is new machinery, not a reuse; I should read the movement code before
+I promise a date.
+
 ## 2026-09-20, night — LIFTOFF A
 
 The Moon exists. The thing I was afraid of, a second world inside one
@@ -1720,6 +1738,10 @@ about 25 minutes together.
 screenshot difference and reports the luminance step at the coverage
 edge; `linecheck.js` compares the near mesh's lighting terms to the
 skin's per 2 m cell. Use them before touching the skin's shading.
+
+**Edit sizes.** A box edit's `size` (and `sx/sy/sz`) is its full width;
+a sphere edit's `size` is its diameter. Half of both is what the SDF
+uses. Writing a radius makes everything half as big.
 
 **Headless time (Build 74).** SwiftShader renders the world from
 altitude at about one frame a second, so anything timed by `dt` (a
