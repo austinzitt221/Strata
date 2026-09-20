@@ -701,12 +701,14 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               PLATING:35, LUNITE:36,
               SELENITE:37, ASTRIUM:38,
               VMOSS:39, DUSKROCK:40,
-              ASH:41, BONE:42, SCARGLASS:43, CORRUPT:44, VOIDORE:45 };   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 45;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore'];
+              ASH:41, BONE:42, SCARGLASS:43, CORRUPT:44, VOIDORE:45,
+              GLOWSTALK:46, GLOWPLANK:47, ASHSTALK:48, ASHPLANK:49, BONESTALK:50, BONEPLANK:51 };   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 51;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
-const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
-const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
+const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD, MAT.GLOWSTALK, MAT.ASHSTALK, MAT.BONESTALK];
+const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS,
+                    [MAT.GLOWSTALK]: MAT.GLOWPLANK, [MAT.ASHSTALK]: MAT.ASHPLANK, [MAT.BONESTALK]: MAT.BONEPLANK };
 
 // ---- tools ----
 // MOON TIERS (Build 76): three tiers past diamond, from the Moon's ores
@@ -2714,8 +2716,21 @@ function makeStrataGen(seed){
     }
     return { x: 0, z: 0 };
   }
+  // the maws (Build 86): the plants that are not trees, one per cell where the dice say, on the real surface
+  const sT = hashInt(seed ^ 0x7ee5);
+  function treeAt(cx, cz){
+    const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    const x = cx * TREE_CELL + (hashInt(h0 ^ 1) / 4294967296) * TREE_CELL, z = cz * TREE_CELL + (hashInt(h0 ^ 2) / 4294967296) * TREE_CELL;
+    const b = biome(x, z);
+    if ((h0 & 255) >= [120, 55, 85][b]) return null;
+    const hh = height(x, z);
+    if (b === 1 && hh < 6 && fbm2(sB + 5, x * 0.03, z * 0.03, 2) > 0.5) return null;      // not in the blight
+    let y = hh + 10; for (let i = 0; i < 80 && sdf(x, y, z) > 0; i++) y -= 0.25;      // down to the ground as it really is
+    if (y < hh - 10) return null;
+    return { x, z, y, s: 0.8 + (hashInt(h0 ^ 3) / 4294967296) * 0.6, key: cx + ',' + cz, type: ['maw', 'ashmaw', 'bonemaw'][b] };
+  }
   const nil = () => null, no = () => false;
-  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: true, caveFloorY: -90, seed, seaLevel: null,
+  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt: nil, caves: true, caveFloorY: -90, seed, seaLevel: null,
     ruinInCell: nil, wetAt: no, archAt: (x, z) => 14 + biome(x, z), lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
     caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
     skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL };
@@ -3788,7 +3803,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05, 0.5, 0.9, 1.3, 0.7, 1.6]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05, 0.5, 0.9, 1.3, 0.7, 1.6, 0.8, 0.4, 0.8, 0.4, 0.9, 0.4]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -3857,7 +3872,7 @@ const RECIPES = [];
   // basic
   RECIPES.push({ kind: 'matout', matOut: MAT.PLANKS, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
   // STATION TWO (Build 80): plating, for the build (and for anything else)
-  RECIPES.push({ kind: 'matout', matOut: MAT.PLATING, yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'lunite', n: 1 }] });
+  RECIPES.push({ kind: 'matout', matOut: MAT.PLATING, yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'lunite', n: 1 }], world: 'moon' });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
   // BIOMES A: every wood saws into its own planks, every planks into sticks
   RECIPES.push({ kind: 'matout', matOut: MAT.JPLANKS, yields: 4, costs: [{ mat: MAT.JWOOD, n: 1 }] });
@@ -3868,6 +3883,14 @@ const RECIPES = [];
   RECIPES.push({ kind: 'matout', matOut: MAT.APLANKS, yields: 4, costs: [{ mat: MAT.AWOOD, n: 1 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.SPLANKS, n: 2 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.APLANKS, n: 2 }] });
+  // STRATA B (Build 86): the maws' stalks saw into planks, and planks into sticks, at Strata's own table
+  for (const [st, pl] of [[MAT.GLOWSTALK, MAT.GLOWPLANK], [MAT.ASHSTALK, MAT.ASHPLANK], [MAT.BONESTALK, MAT.BONEPLANK]]){
+    RECIPES.push({ kind: 'matout', matOut: pl, yields: 4, costs: [{ mat: st, n: 1 }], world: 'alien' });
+    RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: pl, n: 2 }], world: 'alien' });
+  }
+  // a table per planet: the Moon's is made at the Earth's, Strata's at the Moon's
+  RECIPES.push({ kind: 'mtable', yields: 1, station: true, costs: [{ item: 'selenite', n: 4 }, { item: 'ironingot', n: 8 }] });
+  RECIPES.push({ kind: 'atable', yields: 1, station: true, costs: [{ item: 'voidore', n: 6 }, { item: 'lunite', n: 4 }], world: 'moon' });
   RECIPES.push({ kind: 'matout', matOut: MAT.STONEBRICK, yields: 4, costs: [{ mat: MAT.ROCK, n: 4 }] });
   RECIPES.push({ kind: 'torch', yields: 6, costs: [{ item: 'stick', n: 2 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'rope', yields: 2, costs: [{ item: 'wool', n: 2 }, { item: 'stick', n: 1 }] });
@@ -3909,18 +3932,19 @@ const RECIPES = [];
     t === 4 ? { item: 'diamond', n } :
     t === 5 ? { item: 'selenite', n } :
     t === 6 ? { item: 'lunite', n } : { item: 'astrium', n };
+  const wOf = t => t >= 5 ? 'moon' : undefined;                 // the moon tiers are made at the Moon's table (Build 86)
   for (let t = 0; t <= 7; t++){
-    RECIPES.push({ kind: 'sword', tier: t, station: true,
+    RECIPES.push({ kind: 'sword', tier: t, station: true, world: wOf(t),
       costs: [{ item: 'stick', n: 2 }, tierCost(t, 12)] });
   }
   for (let t = 1; t <= 7; t++){
-    RECIPES.push({ kind: 'drill', tier: t, station: true, costs: [tierCost(t, 24)] });
-    RECIPES.push({ kind: 'disp',  tier: t, station: true, costs: [tierCost(t, 18)] });
+    RECIPES.push({ kind: 'drill', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 24)] });
+    RECIPES.push({ kind: 'disp',  tier: t, station: true, world: wOf(t), costs: [tierCost(t, 18)] });
   }
   for (let t = 0; t <= 7; t++){
-    RECIPES.push({ kind: 'helm',  tier: t, station: true, costs: [tierCost(t, 5)] });
-    RECIPES.push({ kind: 'plate', tier: t, station: true, costs: [tierCost(t, 8)] });
-    RECIPES.push({ kind: 'boots', tier: t, station: true, costs: [tierCost(t, 4)] });
+    RECIPES.push({ kind: 'helm',  tier: t, station: true, world: wOf(t), costs: [tierCost(t, 5)] });
+    RECIPES.push({ kind: 'plate', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 8)] });
+    RECIPES.push({ kind: 'boots', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 4)] });
   }
   RECIPES.push({ kind: 'astand', yields: 1, costs: [{ item: 'stick', n: 4 }, { mat: MAT.PLANKS, n: 3 }] });
   RECIPES.push({ kind: 'jetpack', station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 4 }] });
@@ -3974,7 +3998,7 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'divehelm', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }, { item: 'wire', n: 2 }] });
   // LIFTOFF (Build 74): the space suit, and the rocket
   RECIPES.push({ kind: 'spacesuit', station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 6 }, { item: 'aetheringot', n: 2 }] });
-  RECIPES.push({ kind: 'mech', station: true,
+  RECIPES.push({ kind: 'mech', station: true, world: 'moon',
     costs: [{ item: 'lunite', n: 10 }, { item: 'ironingot', n: 24 }, { item: 'rubyingot', n: 6 }, { item: 'wire', n: 10 }, { item: 'aetheringot', n: 4 }] });
   RECIPES.push({ kind: 'rocket', station: true,
     costs: [{ item: 'ironingot', n: 40 }, { item: 'rubyingot', n: 10 }, { item: 'wire', n: 16 }, { item: 'aetheringot', n: 6 }, { item: 'jetfuel', n: 2 }] });
@@ -4823,6 +4847,16 @@ function makeTileDrawers(){
       for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#a8805c' : '#bd9370'; ctx.fillRect(x, 0, 1, 16); } }
       ctx.fillStyle = '#8a6a48'; ctx.beginPath(); ctx.arc(8, 8, 3.5, 0, 6.3); ctx.stroke();
     },
+    // STRATA B (Build 86): the stalks, their planks, and the pith at a cut end
+    [CORE.MAT.GLOWSTALK](ctx, rng){ speckle(ctx, rng, '#4a2a6a', '#3e2258', '#563278', 0.28, 0.2); for (let y = 0; y < 16; y += 3){ ctx.fillStyle = '#6a3aaa'; ctx.fillRect(0, y, 16, 1); } for (let i = 0; i < 4; i++){ ctx.fillStyle = '#b070ff'; ctx.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 1, 1); } },
+    [CORE.MAT.GLOWPLANK](ctx, rng){ speckle(ctx, rng, '#8a5aaa', '#7c4e9c', '#9866b8', 0.22, 0.2); ctx.fillStyle = '#5a3a7a'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); ctx.fillStyle = '#b898d0'; ctx.fillRect(3, 2, 1, 1); ctx.fillRect(11, 8, 1, 1); },
+    [CORE.MAT.ASHSTALK](ctx, rng){ speckle(ctx, rng, '#2a2426', '#221e20', '#322c2e', 0.28, 0.2); for (let y = 1; y < 16; y += 4){ ctx.fillStyle = '#4a3a3a'; ctx.fillRect(0, y, 16, 1); } for (let i = 0; i < 3; i++){ ctx.fillStyle = '#ff7a20'; ctx.fillRect((rng() * 15) | 0, (rng() * 15) | 0, 1, 1); } },
+    [CORE.MAT.ASHPLANK](ctx, rng){ speckle(ctx, rng, '#5a4e50', '#4e4244', '#665a5c', 0.22, 0.2); ctx.fillStyle = '#3a3032'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); ctx.fillStyle = '#8a7a7a'; ctx.fillRect(5, 2, 1, 1); ctx.fillRect(12, 8, 1, 1); },
+    [CORE.MAT.BONESTALK](ctx, rng){ speckle(ctx, rng, '#b8b0a0', '#aaa292', '#c6beae', 0.26, 0.2); for (let y = 0; y < 16; y += 3){ ctx.fillStyle = '#8a8274'; ctx.fillRect(0, y, 16, 1); } ctx.fillStyle = '#d8d0c0'; ctx.fillRect(4, 1, 1, 2); ctx.fillRect(10, 7, 1, 2); },
+    [CORE.MAT.BONEPLANK](ctx, rng){ speckle(ctx, rng, '#d8d0c0', '#ccc4b4', '#e4dccc', 0.22, 0.2); ctx.fillStyle = '#a89e84'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1); ctx.fillStyle = '#f0e8d8'; ctx.fillRect(3, 2, 1, 1); ctx.fillRect(9, 8, 1, 1); },
+    stalkInnerG(ctx, rng){ speckle(ctx, rng, '#8a5aaa', '#7c4e9c', '#9866b8', 0.24, 0.24); ctx.fillStyle = '#e0c0ff'; ctx.beginPath(); ctx.arc(8, 8, 3.5, 0, 6.3); ctx.fill(); ctx.fillStyle = '#4a2a6a'; ctx.beginPath(); ctx.arc(8, 8, 1.5, 0, 6.3); ctx.fill(); },
+    stalkInnerX(ctx, rng){ speckle(ctx, rng, '#5a4e50', '#4e4244', '#665a5c', 0.24, 0.24); ctx.fillStyle = '#ff7a20'; ctx.beginPath(); ctx.arc(8, 8, 3.2, 0, 6.3); ctx.fill(); ctx.fillStyle = '#2a2426'; ctx.beginPath(); ctx.arc(8, 8, 1.4, 0, 6.3); ctx.fill(); },
+    stalkInnerB(ctx, rng){ speckle(ctx, rng, '#d8d0c0', '#ccc4b4', '#e4dccc', 0.24, 0.24); ctx.fillStyle = '#f0a0b0'; ctx.beginPath(); ctx.arc(8, 8, 3.2, 0, 6.3); ctx.fill(); ctx.fillStyle = '#a89e84'; ctx.beginPath(); ctx.arc(8, 8, 1.4, 0, 6.3); ctx.fill(); },
     logInnerA(ctx, rng){
       speckle(ctx, rng, '#d19a5e', '#bf8850', '#dfaa70', 0.24, 0.24);
       for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#9e6a34' : '#b07a40'; ctx.fillRect(x, 0, 1, 16); } }
@@ -4944,7 +4978,8 @@ const ATLAS_SLOTS = CORE.NMAT + CORE.LOG_MATS.length;
 const LOG_END_SLOT = CORE.NMAT;          // 0-based column index of the extra
 // one end tile per log material, after the materials (Build 70: an array)
 const LOG_END_SLOTS = CORE.LOG_MATS.map((m, i) => CORE.NMAT + i);
-const LOG_END_DRAWER = { [CORE.MAT.WOOD]: 'logInner', [CORE.MAT.JWOOD]: 'logInnerJ', [CORE.MAT.MWOOD]: 'logInnerM', [CORE.MAT.SWOOD]: 'logInnerS', [CORE.MAT.AWOOD]: 'logInnerA' };
+const LOG_END_DRAWER = { [CORE.MAT.WOOD]: 'logInner', [CORE.MAT.JWOOD]: 'logInnerJ', [CORE.MAT.MWOOD]: 'logInnerM', [CORE.MAT.SWOOD]: 'logInnerS', [CORE.MAT.AWOOD]: 'logInnerA',
+                         [CORE.MAT.GLOWSTALK]: 'stalkInnerG', [CORE.MAT.ASHSTALK]: 'stalkInnerX', [CORE.MAT.BONESTALK]: 'stalkInnerB' };
 function buildAtlas(seed){
   const cv = document.createElement('canvas');
   cv.width = TEX_SIZE * ATLAS_SLOTS; cv.height = TEX_SIZE;
@@ -5005,8 +5040,8 @@ const TERRAIN_FRAG = `
 precision highp float;
 uniform sampler2D uAtlas;
 uniform float uNMat;
-uniform float uLogMats[5];
-uniform float uLogEnds[5];
+uniform float uLogMats[8];
+uniform float uLogEnds[8];
 uniform vec3 uSunDir;
 uniform vec3 uSunCol;
 uniform vec3 uAmbCol;
@@ -5069,7 +5104,7 @@ void main(){
   // ends. Which faces those are follows the BLOCK's rotation, not the world:
   // vAxis is the trunk direction baked in by the mesher. A zero axis (a wood
   // sphere) never matches, so it stays bark all over.
-  for (int li = 0; li < 5; li++){
+  for (int li = 0; li < 8; li++){
     if (abs(m - uLogMats[li]) < 0.5){
       float axLen = length(vAxis);
       if (axLen > 0.5 && abs(dot(n, vAxis / axLen)) > 0.7) m = uLogEnds[li];
@@ -6664,7 +6699,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e, 0x4a2a6a, 0x8a5aaa, 0x2a2426, 0x5a4e50, 0xb8b0a0, 0xd8d0c0];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -7775,7 +7810,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -11057,6 +11092,9 @@ const farTreeSys = {
     oak:      { th: 1,    tw: 1,   cy: 5.9,  cw: 1,   ch: 1,   cc: new THREE.Color(1, 1, 1),          tc: new THREE.Color(1, 1, 1) },
     jungle:   { th: 2.0,  tw: 1.2, cy: 11.2, cw: 1.7, ch: 1.0, cc: new THREE.Color(0.72, 0.9, 0.62),  tc: new THREE.Color(0.85, 1.0, 0.7) },
     mangrove: { th: 0.75, tw: 1,   cy: 4.6,  cw: 1.2, ch: 0.5, cc: new THREE.Color(0.7, 0.72, 0.6),   tc: new THREE.Color(0.55, 0.5, 0.5) },
+    maw:      { th: 0.55, tw: 0.4, cy: 3.6,  cw: 0.45, ch: 0.4, cc: new THREE.Color(1.2, 0.35, 1.0),  tc: new THREE.Color(0.5, 0.3, 0.7) },
+    ashmaw:   { th: 0.55, tw: 0.4, cy: 3.6,  cw: 0.45, ch: 0.4, cc: new THREE.Color(1.3, 0.6, 0.2),   tc: new THREE.Color(0.25, 0.22, 0.24) },
+    bonemaw:  { th: 0.6,  tw: 0.4, cy: 3.8,  cw: 0.45, ch: 0.4, cc: new THREE.Color(1.2, 0.85, 0.9),  tc: new THREE.Color(0.8, 0.76, 0.7) },
     spruce:   { th: 1.7,  tw: 0.7, cy: 7.0,  cw: 0.8, ch: 1.9, cc: new THREE.Color(0.5, 0.72, 0.62),  tc: new THREE.Color(0.85, 0.7, 0.66) },
     acacia:   { th: 0.85, tw: 0.9, cy: 5.0,  cw: 1.5, ch: 0.32, cc: new THREE.Color(0.95, 0.95, 0.62), tc: new THREE.Color(1.0, 0.92, 0.82) },
   },
@@ -11421,11 +11459,17 @@ const treeSys = {
       leafJ2: new THREE.MeshBasicMaterial({ map: leafJ2 }),
       barkM: new THREE.MeshBasicMaterial({ map: barkM }),
       leafM: new THREE.MeshBasicMaterial({ map: leafM }),
+      // the maws (Build 86)
+      stalkG: new THREE.MeshBasicMaterial({ color: 0x4a2a6a }), bulbG: new THREE.MeshBasicMaterial({ color: 0xc02a9a }),
+      stalkX: new THREE.MeshBasicMaterial({ color: 0x2a2426 }), bulbX: new THREE.MeshBasicMaterial({ color: 0xff7a20 }),
+      stalkB: new THREE.MeshBasicMaterial({ color: 0xb8b0a0 }), bulbB: new THREE.MeshBasicMaterial({ color: 0xf0a0b0 }),
     };
     return this.mats;
   },
   // what a tree is made of, and what it gives when it falls
-  woodOf(t){ return t && t.type === 'jungle' ? CORE.MAT.JWOOD : t && t.type === 'mangrove' ? CORE.MAT.MWOOD : t && t.type === 'spruce' ? CORE.MAT.SWOOD : t && t.type === 'acacia' ? CORE.MAT.AWOOD : CORE.MAT.WOOD; },
+  MAW: { maw: CORE.MAT.GLOWSTALK, ashmaw: CORE.MAT.ASHSTALK, bonemaw: CORE.MAT.BONESTALK },
+  isMaw(k){ const v = this.visible.get(k); return !!(v && this.MAW[v.t.type]); },
+  woodOf(t){ if (t && this.MAW[t.type]) return this.MAW[t.type]; return t && t.type === 'jungle' ? CORE.MAT.JWOOD : t && t.type === 'mangrove' ? CORE.MAT.MWOOD : t && t.type === 'spruce' ? CORE.MAT.SWOOD : t && t.type === 'acacia' ? CORE.MAT.AWOOD : CORE.MAT.WOOD; },
   mesh(t){
     // round "true 3d" tree: tapered trunk + a cluster of leaf-ball blobs,
     // deterministic per tree so it never changes between visits
@@ -11445,6 +11489,24 @@ const treeSys = {
       blob(R0 * 0.55, 0, H * 0.62, 0, M.leafJ2, 0.5);                     // a lower tier on the bole
       g.scale.setScalar(t.s); g.position.set(t.x, t.y - 0.15, t.z);
       g.userData.trunkH = H;
+      return g;
+    }
+    if (this.MAW[t.type]){
+      // STRATA B (Build 86): a maw. A stalk with a bulb on it and a mouth in
+      // the bulb, facing the way it faces; tendrils at the foot. It bites
+      const P = t.type === 'maw' ? { stalk: M.stalkG, bulb: M.bulbG, lip: 0x3a1a5a, tooth: 0xf0e8ff } : t.type === 'ashmaw' ? { stalk: M.stalkX, bulb: M.bulbX, lip: 0x1a1214, tooth: 0xffd090 } : { stalk: M.stalkB, bulb: M.bulbB, lip: 0x8a7a70, tooth: 0xfff8f0 };
+      const H = 2.6 + rng() * 2.2;
+      const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.34, H, 7), P.stalk); stalk.position.y = H / 2; stalk.rotation.z = (rng() - 0.5) * 0.25; g.add(stalk);
+      for (let i = 0; i < 3; i++){ const a = rng() * Math.PI * 2; const td = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.2), P.stalk); td.position.set(Math.cos(a) * 0.6, 0.12, Math.sin(a) * 0.6); td.rotation.y = -a + Math.PI / 2; g.add(td); }
+      const head = new THREE.Group(); head.position.y = H; head.rotation.y = rng() * Math.PI * 2; g.add(head);
+      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 8), P.bulb); bulb.scale.set(1, 0.85, 1.1); head.add(bulb);
+      const jawU = new THREE.Group(), jawL = new THREE.Group(); jawU.position.set(0, 0.05, -0.5); jawL.position.set(0, -0.05, -0.5); head.add(jawU, jawL);
+      const lipM = new THREE.MeshBasicMaterial({ color: P.lip }), toothM = new THREE.MeshBasicMaterial({ color: P.tooth });
+      const up = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.9), lipM); up.position.set(0, 0.15, -0.35); jawU.add(up);
+      const lo = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 0.9), lipM); lo.position.set(0, -0.15, -0.35); jawL.add(lo);
+      for (let k = -2; k <= 2; k++){ const tu = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), toothM); tu.position.set(k * 0.24, -0.08, -0.72); jawU.add(tu); const tl = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.12), toothM); tl.position.set(k * 0.24 + 0.12, 0.08, -0.72); jawL.add(tl); }
+      g.scale.setScalar(t.s); g.position.set(t.x, t.y - 0.1, t.z);
+      g.userData.trunkH = H; g.userData.jawU = jawU; g.userData.jawL = jawL; g.userData.head = head;
       return g;
     }
     if (t.type === 'spruce'){
@@ -11559,7 +11621,8 @@ const treeSys = {
     this.group.remove(v.m);
     this.visible.delete(k);
     const wm = this.woodOf(v.t);
-    const wood = Math.round((v.t.type === 'jungle' ? 10 : v.t.type === 'mangrove' ? 5 : v.t.type === 'spruce' ? 8 : 6) + 4 * v.t.s);
+    const wood = Math.round((v.t.type === 'jungle' ? 10 : v.t.type === 'mangrove' ? 5 : v.t.type === 'spruce' ? 8 : this.MAW[v.t.type] ? 5 : 6) + 4 * v.t.s);
+    delete this.hurt[k];
     if (grant){
       CORE.addMat(game.slots, wm, wood);
       let extra = '';
@@ -11572,6 +11635,44 @@ const treeSys = {
     AudioSys.sfx('break', 0.8);
     refreshHotbar(); refreshToolHUD();
     markSave();
+  },
+  // ---- the maws bite (Build 86) ----
+  // a maw has hit points; a drill, a sword or a shot wears them down and it
+  // falls like a tree. Mine it from too close and the mouth has you
+  hurt: {},
+  mawHp(t){ return Math.round((t.type === 'bonemaw' ? 70 : t.type === 'ashmaw' ? 55 : 45) * t.s); },
+  hitMaw(k, dmg){
+    const v = this.visible.get(k);
+    if (!v || !this.MAW[v.t.type]) return false;
+    this.hurt[k] = (this.hurt[k] || 0) + dmg;
+    if (v.m.userData.jawU) v.m.userData.snapT = performance.now();
+    Particles.burst(v.t.x, v.t.y + (v.m.userData.trunkH || 3) * v.t.s, v.t.z, 0.5, [MAT_COLOR[this.woodOf(v.t)] || 0x6a3aaa, 0xc02a9a], 6, 1.6);
+    if (this.hurt[k] >= this.mawHp(v.t)){ this.fell(k, true); return true; }
+    return false;
+  },
+  bite(k, chance){
+    const v = this.visible.get(k);
+    if (!v || !this.MAW[v.t.type] || game.mode !== 'survival') return false;
+    if (Math.random() > (chance == null ? 0.7 : chance)) return false;
+    const my = v.t.y + (v.m.userData.trunkH || 3) * v.t.s;
+    const d = Math.hypot(game.pos.x - v.t.x, game.pos.y + 1.2 - my, game.pos.z - v.t.z);
+    if (d > 3.6) return false;
+    if (v.m.userData.head) v.m.userData.head.rotation.y = Math.atan2(-(game.pos.x - v.t.x), -(game.pos.z - v.t.z));
+    v.m.userData.snapT = performance.now();
+    damagePlayer(v.t.type === 'bonemaw' ? 14 : 10, (game.pos.x - v.t.x) * 4, (game.pos.z - v.t.z) * 4);
+    toast('it BITES');
+    AudioSys.sfx('punch');
+    return true;
+  },
+  snaps(){
+    const now = performance.now();
+    for (const [, v] of this.visible){
+      const u = v.m.userData; if (!u.jawU || !u.snapT) continue;
+      const t = (now - u.snapT) / 1000;
+      const a = t < 0.35 ? Math.sin(t / 0.35 * Math.PI) * 0.7 : 0;
+      u.jawU.rotation.x = -a; u.jawL.rotation.x = a;
+      if (t > 0.4) u.snapT = 0;
+    }
   },
   // ray vs trunk cylinders; returns visible-tree key
   onRay(maxDist){
@@ -11705,20 +11806,29 @@ const tableSys = {
     if (!this.group) return;
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     for (const t of game.tables){
-      const g = this.model();
+      const g = this.model(t[4] || 'earth');
       g.position.set(t[0], t[1], t[2]);
       g.rotation.y = t[3] || 0;
       this.group.add(g);
     }
     rebuildSolidProps();
   },
-  model(){
+  model(kind){
     if (!this.mats){
       this.mats = { top: pixMat(PROP_TEX.tableTop), side: pixMat(PROP_TEX.planksV),
                     leg: pixMat(PROP_TEX.bark, null, 1, 2), tool: pixMat(PROP_TEX.energy, 0x59c8d8) };
     }
     const g = new THREE.Group();
-    // top: tableTop texture up, plank sides
+    // top: tableTop texture up, plank sides; the Moon's and Strata's tables (Build 86) are plating and stalk, with a glow on top
+    if (kind === 'moon' || kind === 'alien'){
+      if (!this.mats[kind]) this.mats[kind] = { side: new THREE.MeshBasicMaterial({ color: kind === 'moon' ? 0x7a8494 : 0x4a2a6a }), top: new THREE.MeshBasicMaterial({ color: kind === 'moon' ? 0x5a6272 : 0x8a5aaa }), leg: new THREE.MeshBasicMaterial({ color: kind === 'moon' ? 0x3a4250 : 0x2a1a3a }), tool: new THREE.MeshBasicMaterial({ color: kind === 'moon' ? 0x9fd8ff : 0x8aff9e }) };
+      const K = this.mats[kind];
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1), [K.side, K.side, K.top, K.side, K.side, K.side]); top.position.y = 0.85;
+      for (const [sx, sz] of [[-0.45,-0.45],[0.45,-0.45],[-0.45,0.45],[0.45,0.45]]){ const leg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.85, 0.12), K.leg); leg.position.set(sx, 0.42, sz); g.add(leg); }
+      const tools = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.12, 0.3), K.tool); tools.position.set(0.2, 0.98, -0.15);
+      g.add(top); g.add(tools);
+      return g;
+    }
     const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.14, 1.1),
       [this.mats.side, this.mats.side, this.mats.top, this.mats.side, this.mats.side, this.mats.side]);
     top.position.y = 0.85;
@@ -11732,7 +11842,7 @@ const tableSys = {
     g.add(top); g.add(tools);
     return g;
   },
-  add(x, y, z, yaw){ game.tables.push(yaw ? [x, y, z, yaw] : [x, y, z]); propRebuild(this); markSave(); },
+  add(x, y, z, yaw, kind){ game.tables.push(kind && kind !== 'earth' ? [x, y, z, yaw || 0, kind] : yaw ? [x, y, z, yaw] : [x, y, z]); propRebuild(this); markSave(); },
   onRay(maxDist){
     maxDist += game.camBack || 0;
     const dir = new THREE.Vector3();
@@ -12008,12 +12118,18 @@ const placePreview = {
   },
 };
 
-function nearTable(){
+function nearTable(){ return !!nearTableKind(); }
+// the nearest table in reach, by the planet it belongs to (Build 86): a
+// table's row carries its kind; the old rows are the Earth's
+function nearTableKind(){
+  let best = null, bd = 4;
   for (const t of game.tables){
-    if (Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z) < 4) return true;
+    const d = Math.hypot(t[0] - game.pos.x, t[1] - game.pos.y, t[2] - game.pos.z);
+    if (d < bd){ bd = d; best = t[4] || 'earth'; }
   }
-  return false;
+  return best;
 }
+const TABLE_NAME = { earth: 'crafting table', moon: "the Moon's table", alien: "Strata's table" };
 // Build 43: the static prop systems draw MERGED. After a rebuild, every
 // part of every model is baked (world transform, per material, per face
 // group of a multi-material box) into one mesh per material; the originals
@@ -23424,6 +23540,8 @@ function fireHitscan(G){
   if (best){
     hurtEntity(best, G.dmg, (best.x - game.pos.x) * 0.6, (best.z - game.pos.z) * 0.6);
     Particles.burst(best.x, best.y + 0.6, best.z, 0.3, [0xff5544], 8, 2);
+  } else if (treeSys.visible && treeSys.visible.size && (() => { const mk = treeSys.onRay(bestT); return mk && treeSys.isMaw(mk) ? (treeSys.hitMaw(mk, G.dmg), true) : false; })()){
+    // a maw shot (Build 86)
   } else if (bestT < R - 0.5){
     Particles.burst(hx, hy, hz, 0.2, [0x9a9aa5, 0x77747f], 6, 1.6);   // wall dust
   }
@@ -26125,7 +26243,7 @@ function activeTool(){
   if (it.kind === 'door') return { kind: 'door', tier: 0, item: it };
   if (it.kind === 'gate') return { kind: 'door', gate: 1, tier: 0, item: it };
   if (it.kind === 'mender') return { kind: 'mender', tier: 0, item: it };
-  if (it.kind === 'table') return { kind: 'table', tier: 0, item: it };
+  if (it.kind === 'table' || it.kind === 'mtable' || it.kind === 'atable') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
@@ -27795,6 +27913,7 @@ function tryAction(dt, now){
       const ent = entityOnRay(3.6);
       const sdm = (10 + tool.tier * 4) * (CORE.countItem(game.slots, 'wfist') > 0 ? 2 : 1);
       if (ent) hurtEntity(ent, sdm, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
+      else { const mk = treeSys.onRay(3.4); if (mk && treeSys.isMaw(mk)){ treeSys.hitMaw(mk, sdm); treeSys.bite(mk, 0.45); } }
     }
     return;
   }
@@ -27876,7 +27995,7 @@ function tryAction(dt, now){
       if (game.mode !== 'creative') tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       const pY = game.tool.pYaw || 0;
-      if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2], pY);
+      if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2], pY, tool.item.kind === 'mtable' ? 'moon' : tool.item.kind === 'atable' ? 'alien' : 'earth');
       else if (tool.kind === 'beacon') beaconSys.add(hit[0], hit[1], hit[2], pY);
       else if (tool.kind === 'stove') stoveSys.add(hit[0], hit[1], hit[2], pY + Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2));
       else bedSys.add(hit[0], hit[1], hit[2], pY + Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2));
@@ -28268,7 +28387,8 @@ function tryAction(dt, now){
       AudioSys.setHum(true, tool.tier, game.actProgress);
       if (game.act.t >= chopDur){
         game.act.t = 0;
-        treeSys.fell(treeKey, true);
+        if (treeSys.isMaw(treeKey)){ treeSys.bite(treeKey); treeSys.hitMaw(treeKey, 12 + tool.tier * 6); }   // a maw takes hits, and bites back (Build 86)
+        else treeSys.fell(treeKey, true);
       }
       return;
     }
@@ -28423,7 +28543,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -29153,6 +29273,11 @@ function itemIconURL(it){
     c.fillStyle = '#8a6237'; c.fillRect(4, 2, 8, 12);
     c.fillStyle = '#6b4a26'; c.fillRect(4, 2, 8, 1); c.fillRect(4, 7, 8, 1);
     c.fillStyle = '#d8c485'; c.fillRect(10, 8, 1, 2);
+  } else if (it.kind === 'mtable' || it.kind === 'atable'){
+    const A = it.kind === 'atable';
+    c.fillStyle = A ? '#6a3aaa' : '#7a8494'; c.fillRect(2, 5, 12, 2);
+    c.fillStyle = A ? '#3a1a5a' : '#5a6272'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
+    c.fillStyle = A ? '#8aff9e' : '#9fd8ff'; c.fillRect(6, 3, 4, 2);
   } else if (it.kind === 'table'){
     c.fillStyle = '#9c7344'; c.fillRect(2, 5, 12, 2);
     c.fillStyle = '#6b4a26'; c.fillRect(3, 7, 2, 7); c.fillRect(11, 7, 2, 7);
@@ -29366,6 +29491,8 @@ function itemLabel(it){
   if (it.kind === 'lathe') return 'lathe';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'table') return 'crafting table';
+  if (it.kind === 'mtable') return "the Moon's table";
+  if (it.kind === 'atable') return "Strata's table";
   const t = CORE.TIER_NAME[it.tier];
   if (it.kind === 'sword') return t + ' sword';
   if (it.kind === 'drill') return t + ' drill';
@@ -29584,7 +29711,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spike
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
-const CAT_SPECIAL  = ['door', 'gate', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -29669,7 +29796,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30630,8 +30757,12 @@ function itemInfoHTML(it, tool){
            (game.snapOn
              ? '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span></div>'
              : '<div class="t2">snap: off (F)</div>');
+  } else if (it.kind === 'mtable'){
+    html = '<div class="t1">the Moon\'s table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q: the moon tiers, the mech suit, plating, and Strata\'s table are made here</div>';
+  } else if (it.kind === 'atable'){
+    html = '<div class="t1">Strata\'s table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q: what Strata gives is worked here — stalks into planks, planks into sticks, and more to come</div>';
   } else if (it.kind === 'table'){
-    html = '<div class="t1">crafting table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q for full crafting</div>';
+    html = '<div class="t1">crafting table ×' + it.count + '</div><div class="t2">place it, stand near it, press Q for the Earth\'s catalog</div>';
   } else if (it.kind === 'torch'){
     html = '<div class="t1">torches ×' + it.count + '</div><div class="t2">left click to place on a surface</div>';
   } else if (it.kind === 'rope'){
@@ -31085,14 +31216,15 @@ function openCraft(){
 function buildCraftUI(){
   const list = $('craftlist'); list.innerHTML = '';
   const creative = game.mode === 'creative';
-  const atTable = creative || nearTable();
+  const tableKind = nearTableKind();
+  const atTable = creative || !!tableKind;
   if (game.craftTab == null) game.craftTab = 0;
   buildCatTabs($('crafttabs'), game.craftTab, i => { game.craftTab = i; buildCraftUI(); });
   const head = document.createElement('div');
   head.className = 'sub';
   const q = ($('craftsearch') && $('craftsearch').value || '').trim().toLowerCase();
   head.textContent = creative ? 'creative — everything in the game, free, any amount'
-    : atTable ? 'crafting table in range — full catalog' : 'basic recipes — stand near a crafting table for tools';
+    : atTable ? TABLE_NAME[tableKind] + ' in range — its catalog' : 'basic recipes — stand near a crafting table for tools';
   list.appendChild(head);
   let shown = 0;
   const matches = (label) => !q || label.toLowerCase().includes(q);
@@ -31100,6 +31232,7 @@ function buildCraftUI(){
   for (const r of CORE.RECIPES){
     if (r.kind === 'matout') madeMats.add(r.matOut); else madeKinds.add(r.kind);
     if (r.station && !atTable) continue;
+    if (!creative && (r.world || 'earth') !== (tableKind || 'earth')) continue;   // each planet's things at its own table (Build 86)
     if (!q && recipeCat(r) !== game.craftTab) continue;
     const item = r.kind === 'drill' ? CORE.makeDrill(r.tier)
                : r.kind === 'disp' ? CORE.makeDispenser(r.tier)
@@ -34778,6 +34911,7 @@ function frameBody(now){
   updateSunShadow(dt);
   farTerrain.update();
   farShapeSys.update();
+  treeSys.snaps();
   if (game.ui === 'none' && !netSys.guest) updateEntities(dt, now);
   netSys.tick(dt);
   torchSys.updateUniforms(now);
@@ -35036,7 +35170,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

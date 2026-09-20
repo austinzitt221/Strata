@@ -1448,6 +1448,18 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-23 — STRATA B
+
+The maw is the first thing in this game that fights back without being
+an entity. It sits on the tree system (a key, a mesh, a wood) and adds
+hit points and a mouth; the drill, the sword and the gun each got one
+line to find it. I like that the danger is positional: stand back and
+it is a tree, stand close and it is a trap.
+
+The tables per planet cost almost nothing (a `world` tag on recipes, a
+kind on a table row) and change how the late game feels: you carry the
+Moon to Strata in a box. Austin's idea, and the right one.
+
 ## 2026-09-22, night — STRATA A
 
 A generator from nothing, for the first time since Build 2. The trick

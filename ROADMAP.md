@@ -363,11 +363,9 @@ Slotted between the city builds as the mood takes me:
      of the Earth's in it: warped, ridged, stepped, sculpted land with
      overhangs, caverns and spires; the Glow, the Scar (with the blight)
      and the Teeth, their grounds, and voidore.
-     B: the plant that is not a tree: it bites when you mine it too
-     close; drill it, shoot it or stab it dead for that biome's wood
-     analog, sticks and planks; and a crafting table per planet (the
-     Earth's stays; the Moon's makes the mech and the moon tiers; the
-     alien table makes Strata's things). C: war-torn: enemies all day
+     B (DONE, Build 86): the maws, one per country, that bite when you
+     mine them too close; drill, stab or shoot them dead for their
+     stalk, planks and sticks; a crafting table per planet. C: war-torn: enemies all day
      (melee only) and worse at night (all ranged, hard as nails), and
      loot better than anywhere. D: the thing at the centre, the final
      boss for real, the ending.

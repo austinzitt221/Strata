@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 86 — STRATA B: the maws, and a table per planet (2026-09-23)
+
+- **The maws.** Strata's answer to a tree, and not a tree: a stalk with a
+  bulb on it and a mouth in the bulb, tendrils at the foot, one per
+  cell where the dice say (densest in the Glow, thinnest in the Scar,
+  never in the blight), standing on the ground as it really is. Three
+  kinds by country: the maw (violet stalk, magenta bulb), the ashmaw
+  (black, an ember mouth), the bonemaw (pale, the biggest). Far off
+  they draw as their own shapes.
+- **They bite.** A maw has hit points (45, 55, 70 by kind, times its
+  size). A drill wears it down a hit at a time (12 plus six per tier),
+  a sword swing hits it, a shot hits it; when it falls it gives its
+  **stalk** (five plus four per size). Mine it from inside three and a
+  half metres and it snaps at you: ten damage (fourteen from a bonemaw)
+  and a shove, seven times in ten from a drill, half the time from a
+  sword. The jaws snap on every hit and every bite.
+- **Three stalks, three planks.** Glowstalk, ashstalk, bonestalk, each
+  sawn into its planks and the planks into sticks, with log ends the
+  shader paints (the log-end arrays grew from five to eight).
+- **A table per planet.** The Earth's crafting table keeps the Earth's
+  catalog and makes **the Moon's table** (four selenite, eight iron). The
+  Moon's table makes the moon tiers, the mech suit, plating and
+  **Strata's table** (six voidore, four lunite). Strata's table works
+  what Strata gives: stalks into planks, planks into sticks, and what
+  comes next. Each table has its own look; the crafting screen names
+  the table in reach and shows its catalog; creative shows all.
+
 ## Build 85 — STRATA A: a world from nothing (2026-09-22)
 
 The alien planet has a name and its own ground. Nothing of the Earth's

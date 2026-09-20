@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 86 — STRATA B
+- [ ] Mine a maw from close in survival. Then from range. Then kill one
+      with a sword and one with a gun. Is the bite fair? Is the stalk
+      worth it?
+- [ ] Make the Moon's table on Earth, Strata's table on the Moon. Does
+      the split make sense, or does it just make you carry tables?
+- [ ] Saw stalks on Strata's table; build with the three planks. Which
+      one would you build a house from?
+
 ## Build 85 — STRATA A
 - [ ] Walk the Teeth, the Glow and the Scar. Does the land read as
       another world? Is it hard to cross in the right way, or the wrong
