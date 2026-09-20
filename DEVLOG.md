@@ -2,6 +2,35 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 84 — STATION TWO, LIVED IN (2026-09-22)
+
+Once the main sections stand, the other two on the pad open up, and Kro
+sells the inside.
+
+- **Sef's rooms.** Six, three on the ring's outer face and three on the
+  quarters', 24 plating and 4 lunite each: a shell with a door cut
+  through the section's wall, a bed, a table, a light. Bring a bottled
+  villager, city person or alien (a spawner) and Sef puts them in; they
+  live there and pace the section (villagers roam the ring or the
+  quarters, aliens float at home). Talk to a resident and you get the
+  citizen's chatter.
+- **Umma's pens and tanks.** Four, on the ends of the ring and the
+  quarters: two pens and two tanks, 32 plating and 6 selenite each: a
+  shell with a barred far wall you can see through, a doorway over a
+  sill the beasts cannot climb, and a lit floor in the tanks. Any
+  bottled beast goes in a pen; the wet ones (crocs, and the leviathan
+  if you ever bottle one) go in a tank.
+- **Kro's upgrades.** The workshop (a crafting table, a stove and a
+  weapon bench in the hangar; 120 plating, 20 iron); the grid (a
+  generator with sixty-four coal, wired to six lights in the hangar's
+  ceiling and to the stove; 80 plating, 16 wire, 8 ruby); the
+  penthouse (a suite on the hangar roof with a hatch from below, a bed,
+  a table, a home beacon and a barred window on the way home; 160
+  plating, 6 astrium).
+- Residents and housed beasts live in the story (they travel with you)
+  and are remade each visit; they are not saved as entities, so they
+  never double. Faint outlines show what Sef, Umma and Kro can still add.
+
 ## Build 83 — STATION TWO, PRE-BUILT (2026-09-22)
 
 Austin's way: a set layout, paid for, built whole.

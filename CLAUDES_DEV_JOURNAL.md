@@ -1448,6 +1448,18 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, evening — STATION TWO, LIVED IN
+
+Rooms, pens, tanks and three upgrades in one build, because all of it
+is the same shape: a box shell with a way in, a record in the story, a
+row on a trade panel. The one design decision worth writing down is
+that residents and housed beasts are not entities in the save; they
+are records that make entities on arrival. Villagers already worked
+that way, and the one time I let an animal be both (saved and
+recorded) it doubled on the second visit. One source of truth, always.
+
+Next is STRATA, and that is a generator from nothing.
+
 ## 2026-09-22, afternoon — STATION TWO, PRE-BUILT
 
 Austin was right about the station. Building it by hand made the

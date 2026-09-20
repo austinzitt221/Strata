@@ -352,7 +352,7 @@ Slotted between the city builds as the mood takes me:
      shown see-through, three alien builders standing outside it. The
      first takes materials for a main section and it builds itself;
      main sections first, in order, then the road on as before.
-  7. **STATION TWO, LIVED IN** (Build 84). After the main sections: the
+  7. **STATION TWO, LIVED IN** (DONE, Build 84). After the main sections: the
      first builder sells upgrades (benches, stoves and weapon benches;
      a wired grid with lights; a penthouse of your own); the second
      sells pre-built rooms that attach and takes any villager spawner

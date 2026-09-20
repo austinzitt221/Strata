@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 84 — STATION TWO, LIVED IN
+- [ ] Bottle a villager on Earth, fly them to the site, buy a room from
+      Sef and put them in. Then visit them. Do they feel at home, or
+      lost in zero-G?
+- [ ] A grazer in a pen, a croc in a tank. Can they get out? Can you
+      get in and out over the sill?
+- [ ] Kro's three: the workshop, the grid (refuel the generator with
+      coal), the penthouse. Sleep in the penthouse; look out the window.
+- [ ] Prices for all of it: too cheap for the late game, or right?
+
 ## Build 83 — STATION TWO, PRE-BUILT
 - [ ] Land at the site with the translator. Talk to Kro, pay for the
       hangar, watch it stand. Is the price right for that moment? Is the

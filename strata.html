@@ -13669,6 +13669,7 @@ const villageSys = {
   },
   villagerRec(e){
     if (e.type === 'alien') return stationOneSys.rec(e.cast);
+    if (e.st2) return siteSys.residentRec(e);
     const rec = e.ckey ? (game.cities || {})[e.ckey] : game.villages[e.vkey];
     return rec ? rec.houses[e.vi] : null;
   },
@@ -15914,7 +15915,7 @@ const tradeSys = {
     const T = game.activeTrade;
     if (!T || game.ui !== 'trade') return;
     const hrec = T.hrec;
-    $('tradetitle').textContent = (hrec.vname + ' the ' + VROLE[T.e.role].name).toUpperCase();
+    $('tradetitle').textContent = ((T.e.sname || hrec.vname) + ' the ' + (VROLE[T.e.role] || VROLE.walker).name).toUpperCase();
     const crec = T.e.ckey ? game.cities[T.e.ckey] : null;
     $('tradesub').innerHTML = 'goodwill <b>' + (hrec.rep || 0) + '</b> · ' + this.TIER(hrec.rep || 0) +
       (crec ? ' · standing in ' + crec.name + ': <b>' + (crec.rep || 0) + '</b> · ' + citySys.TIER(crec.rep || 0) : '') +
@@ -31613,7 +31614,7 @@ function buildSaveData(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && e.type !== 'alien' && !e.bountyTag && !e.racer && !e.mailRaid && !e.posse && !e.convoy)
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && e.type !== 'alien' && !e.st2 && !e.bountyTag && !e.racer && !e.mailRaid && !e.posse && !e.convoy)
       .map(e => e.type === 'drop'
         ? ['drop', +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), 1, 0, 0, e.item, Math.round(e.ttl || 0)]
         : [e.type, e.x, e.y, e.z, e.hp,
@@ -31926,6 +31927,119 @@ const siteSys = {
   costText(F){ return F.cost.map(c => c.n + ' ' + (c.mat ? c.mat.toLowerCase() : c.item)).join(' + '); },
   canPay(F){ return game.mode === 'creative' || F.cost.every(c => c.mat ? CORE.countMat(game.slots, CORE.MAT[c.mat]) >= c.n : CORE.countItem(game.slots, c.item) >= c.n); },
   pay(F){ if (game.mode === 'creative') return; for (const c of F.cost){ if (c.mat) CORE.consumeMat(game.slots, CORE.MAT[c.mat], c.n); else CORE.consumeItem(game.slots, c.item, c.n); } },
+  // ---- STATION TWO, LIVED IN (Build 84) ----
+  // rooms on the ring and the quarters for your people, pens and tanks on
+  // their ends for your beasts, and Kro's upgrades to the hangar; all of
+  // it in the story so it travels, the occupants respawned each visit
+  ROOMS: [
+    { id: 'r0', side: 'ring', x: 33,  y: 8, z: -10 }, { id: 'r1', side: 'ring', x: 33,  y: 8, z: 0 }, { id: 'r2', side: 'ring', x: 33,  y: 8, z: 10 },
+    { id: 'q0', side: 'quarters', x: -33, y: 8, z: -10 }, { id: 'q1', side: 'quarters', x: -33, y: 8, z: 0 }, { id: 'q2', side: 'quarters', x: -33, y: 8, z: 10 },
+  ],
+  PENS: [
+    { id: 'p0', kind: 'pen',  x: 22,  y: 8, z: 21 }, { id: 'p1', kind: 'tank', x: 22,  y: 8, z: -21 },
+    { id: 'p2', kind: 'pen',  x: -22, y: 8, z: 21 }, { id: 'p3', kind: 'tank', x: -22, y: 8, z: -21 },
+  ],
+  UPGRADES: [
+    { id: 'workshop',  name: 'the workshop',  cost: [{ mat: 'PLATING', n: 120 }, { item: 'ironingot', n: 20 }],  text: 'a crafting table, a stove and a weapon bench in the hangar' },
+    { id: 'grid',      name: 'the grid',      cost: [{ mat: 'PLATING', n: 80 }, { item: 'wire', n: 16 }, { item: 'rubyingot', n: 8 }], text: 'a generator, wired to six lights and the stove; it burns coal' },
+    { id: 'penthouse', name: 'the penthouse', cost: [{ mat: 'PLATING', n: 160 }, { item: 'astrium', n: 6 }],   text: 'a suite of your own on the hangar roof, with a bed, a table, a beacon and a window on the way home' },
+  ],
+  ROOM_COST: [{ mat: 'PLATING', n: 24 }, { item: 'lunite', n: 4 }],
+  PEN_COST: [{ mat: 'PLATING', n: 32 }, { item: 'selenite', n: 6 }],
+  st2(){ game.story = game.story || {}; if (!game.story.st2) game.story.st2 = { rooms: {}, pens: {}, up: {} }; return game.story.st2; },
+  TANK_TYPES: ['croc', 'leviathan'],
+  animal(t){ return !!(t && ENT_DEF[t] && !ENT_DEF[t].boss && !['villager', 'guard', 'soldier', 'alien'].includes(t) && MENAGERIE_TYPES.includes(t)); },
+  person(t){ return t === 'villager' || t === 'alien'; },
+  EB(op, x, y, z, w, h, d, mat){ const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), w, mat || 0, 0); e.sy = h; e.sz = d; e.noLod = 1; applyEdit(e); },
+  buildRoom(R){
+    const M = CORE.MAT, EB = this.EB, sx = R.side === 'ring' ? 1 : -1;
+    EB(1, R.x, R.y, R.z, 8, 6, 8, M.PLATING); EB(0, R.x, R.y, R.z, 5.6, 3.6, 5.6, 0);
+    EB(0, R.x - sx * 4, R.y - 0.2, R.z, 3.2, 2.4, 2.2, 0);                 // the door, through the section's wall
+    bedSys.add(+(R.x + sx * 1.6).toFixed(2), +(R.y - 1.8).toFixed(2), +(R.z + 1.6).toFixed(2), sx > 0 ? Math.PI / 2 : -Math.PI / 2);
+    tableSys.add(+(R.x + sx * 1.4).toFixed(2), +(R.y - 1.8).toFixed(2), +(R.z - 1.6).toFixed(2), 0);
+    EB(1, R.x, R.y + 1.6, R.z, 1.0, 0.25, 1.0, M.LUNITE);
+    this.st2().rooms[R.id] = { occ: null };
+    toast('a room stands on ' + (R.side === 'ring' ? 'the ring' : 'the quarters'));
+    AudioSys.sfx('craft'); this.rebuild(); markSave();
+  },
+  buildPen(P){
+    const M = CORE.MAT, EB = this.EB, sz = P.z > 0 ? 1 : -1;
+    EB(1, P.x, P.y, P.z, 10, 6, 10, M.PLATING); EB(0, P.x, P.y, P.z, 7.6, 3.6, 7.6, 0);
+    EB(0, P.x, P.y + 0.4, P.z - sz * 5, 2.4, 2.0, 3.2, 0);                  // the way in, over a sill the beasts cannot climb
+    EB(0, P.x, P.y, P.z + sz * 4.6, 8, 3.6, 1.4, 0);                        // the far wall goes
+    for (let k = -3; k <= 3; k++) EB(1, P.x + k * 1.2, P.y, P.z + sz * 4.6, 0.3, 3.6, 0.3, M.PLATING);   // and bars stand in it
+    if (P.kind === 'tank') EB(1, P.x, P.y - 1.3, P.z, 7.6, 1.0, 7.6, M.LUNITE);   // a lit floor: the tank glows
+    this.st2().pens[P.id] = { occ: null };
+    toast((P.kind === 'tank' ? 'a tank' : 'a pen') + ' stands');
+    AudioSys.sfx('craft'); this.rebuild(); markSave();
+  },
+  buildUpgrade(U){
+    const M = CORE.MAT, EB = this.EB, fy = 5.2;
+    if (U.id === 'workshop'){
+      tableSys.add(7, fy, -7, 0); stoveSys.add(-7, fy, -7, 0); pnodeSys.add('wtable', 7, fy, 7, Math.PI, {});
+    } else if (U.id === 'grid'){
+      const gen = pnodeSys.add('gen2', -7, fy, 7, 0, { fuel: { kind: 'coal', count: 64 }, burn: 0 });
+      for (const [bx, bz] of [[-8, -8], [0, -8], [8, -8], [-8, 8], [0, 8], [8, 8]]){
+        bulbSys.add(bx, 18.7, bz, 0, -1, 0);
+        const bid = game.bulbs[game.bulbs.length - 1][6];
+        game.wires.push({ a: 'n' + gen.id, b: 'b' + bid, pa: [-7, fy + 0.8, 7], pb: [bx, 18.6, bz] });
+      }
+      const st = game.stoves.find(q => Math.abs(q.x + 7) < 0.1 && Math.abs(q.z + 7) < 0.1);
+      if (st) game.wires.push({ a: 'n' + gen.id, b: 's' + st.id, pa: [-7, fy + 0.8, 7], pb: [-7, fy + 0.6, -7] });
+      bulbSys.rebuild(); wireSys.rebuild();
+    } else if (U.id === 'penthouse'){
+      EB(1, 8, 23, 8, 12, 6, 12, M.PLATING); EB(0, 8, 23, 8, 9.6, 3.6, 9.6, 0);
+      EB(0, 8, 20.2, 8, 2.4, 2.4, 2.4, 0);                                  // the hatch from the hangar
+      EB(0, 8, 23.4, 13.6, 6, 2.6, 1.6, 0);                                 // the window on the way home
+      for (let k = -2; k <= 2; k++) EB(1, 8 + k * 1.5, 23.4, 13.6, 0.2, 2.6, 0.2, M.PLATING);
+      bedSys.add(11, 21.2, 4, Math.PI); tableSys.add(4.5, 21.2, 4, 0);
+      beaconSys.add(11.5, 21.2, 11.5, 0);
+      EB(1, 8, 25.6, 8, 1.2, 0.25, 1.2, M.LUNITE);
+    }
+    this.st2().up[U.id] = 1;
+    toast(U.name.toUpperCase() + ' — done');
+    AudioSys.sfx('craft'); this.rebuild(); markSave();
+  },
+  // a spawner into a room or a pen: the record keeps them, the entity is remade each visit
+  house(it, slotId, isPen){
+    const S = this.st2(), rec = isPen ? S.pens[slotId] : S.rooms[slotId];
+    if (!rec || rec.occ) return false;
+    rec.occ = { ent: it.ent, name: it.name || null, rec: it.rec || null };
+    const i = game.slots.indexOf(it); if (i >= 0) game.slots[i] = null;
+    if (it.hkey){ const store = it.city ? (game.cities || {}) : game.villages, hr = store[it.hkey], hh = hr && hr.houses && hr.houses[it.vi]; if (hh) hh.bottled = 0; }
+    this.occupants();
+    toast((it.name || MENAGERIE_NAME[it.ent] || it.ent) + (isPen ? ' — in the ' + (this.TANK_TYPES.includes(it.ent) ? 'tank' : 'pen') : ' — moved in'));
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    return true;
+  },
+  residentRec(e){
+    const S = this.st2(), rec = S.rooms[e.st2] || S.pens[e.st2];
+    if (!rec) return null;
+    if (!rec.hrec) rec.hrec = { vname: e.sname || (MENAGERIE_NAME[e.type] || e.type), rep: 5, role: 'walker' };
+    return rec.hrec;
+  },
+  occupants(){
+    if (game.planet !== 'site') return;
+    const S = this.st2();
+    for (const R of this.ROOMS){
+      const rec = S.rooms[R.id]; if (!rec || !rec.occ) continue;
+      if (game.entities.some(e => e.st2 === R.id)) continue;
+      const o = rec.occ;
+      const e = spawnEntity(o.ent, R.x, R.y - 1.6, R.z);
+      if (o.rec) for (const k in o.rec){ if (k === 'type' || k === 'bossType' || k === 'x' || k === 'y' || k === 'z') continue; e[k] = o.rec[k]; }
+      e.st2 = R.id; e.friendly = true; e.noburn = true; e.crew = null; e.vkey = null; e.ckey = null;
+      const F = this.frames().find(f => f.key === R.side);
+      if (o.ent === 'alien'){ e.home = { x: R.x, y: R.y - 1.2, z: R.z }; e.cast = e.cast || 'relics'; }
+      else { e.home = { x: R.x, y: R.y - 1.6, z: R.z }; e.post = { x: F ? F.x : R.x, z: F ? F.z : R.z }; e.roam = 11; e.role = e.role || 'walker'; e.walker = true; }
+      if (o.name) e.sname = o.name;
+    }
+    for (const P of this.PENS){
+      const rec = S.pens[P.id]; if (!rec || !rec.occ) continue;
+      if (game.entities.some(e => e.st2 === P.id || (e.type === rec.occ.ent && Math.hypot(e.x - P.x, e.z - P.z) < 5 && Math.abs(e.y - P.y) < 4))) continue;
+      const e = spawnEntity(rec.occ.ent, P.x, P.y - 1.4, P.z);
+      e.st2 = P.id; e.noburn = true; e.home = { x: P.x, y: P.y - 1.4, z: P.z };
+    }
+  },
   // a section, whole: a plating shell, hollow, its floor, and the way in
   // from the keel or the hangar
   build(i){
@@ -31974,6 +32088,7 @@ const siteSys = {
     if (this.accT < 1.5) return;
     this.accT = 0;
     this.cast();
+    if (this.stage() >= this.frames().length) this.occupants();
   },
   rebuild(){
     if (this.group){ game.scene.remove(this.group); this.group = null; }
@@ -31987,6 +32102,14 @@ const siteSys = {
       m.position.set(F.x, F.y, F.z);
       g.add(m);
     });
+    if (st >= this.frames().length){
+      // what Sef and Umma can still add, drawn faint (Build 84)
+      const S = this.st2();
+      const wire = (x, y, z, w, h, d, col) => { const m = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)), new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.35 })); m.position.set(x, y, z); g.add(m); };
+      for (const R of this.ROOMS) if (!S.rooms[R.id]) wire(R.x, R.y, R.z, 8, 6, 8, 0x59c8d8);
+      for (const P of this.PENS) if (!S.pens[P.id]) wire(P.x, P.y, P.z, 10, 6, 10, P.kind === 'tank' ? 0x4a8ad8 : 0x8ad84a);
+      if (!S.up.penthouse) wire(8, 23, 8, 12, 6, 12, 0xd9b25a);
+    }
     g.userData.noShadow = true;
     game.scene.add(g);
     this.group = g;
@@ -31997,10 +32120,35 @@ const siteSys = {
     if (F) out.push({ id: 'site_builder', x: this.POSTS.builder.x, z: this.POSTS.builder.z, y: 4, label: 'THE BUILDER', rec: { name: 'Station Two' } });
   },
   // the builder's panel, on the trade screen
+  payRow(list, line, label, cost, fn){
+    const F = { cost };
+    const can = this.canPay(F);
+    const r = line(label + ' · ' + this.costText(F), '#ffb44d');
+    const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = can ? '#8bff9e' : '#8a8494';
+    act.textContent = can ? 'PAY & BUILD' : 'not enough';
+    r.appendChild(act);
+    if (can) r.addEventListener('click', () => { this.pay(F); fn(); tradeSys.refresh(); });
+  },
+  spawnerRows(list, line, slotId, isPen, want){
+    const its = game.slots.filter(q => q && q.kind === 'spawner' && want(q.ent));
+    if (!its.length){ line('empty · bring a spawner with someone in it', '#6a6a76'); return; }
+    for (const it of its){
+      const r = line('PUT ' + (it.name || MENAGERIE_NAME[it.ent] || it.ent).toUpperCase() + ' HERE', '#8bff9e');
+      r.addEventListener('click', () => { this.house(it, slotId, isPen); tradeSys.refresh(); });
+    }
+  },
   rows(list, T, line){
     const cast = T.e.cast, st = this.stage(), FR = this.frames();
     if (cast === 'builder'){
-      if (st >= FR.length){ line('Kro: It stands. When you want more of it, the upgrades are mine to sell. (Soon.)'); return; }
+      if (st >= FR.length){
+        const S = this.st2();
+        line('Kro: It stands. Now the inside of it.');
+        for (const U of this.UPGRADES){
+          if (S.up[U.id]){ line(U.name + ' · DONE', '#6a6a76'); continue; }
+          this.payRow(list, line, U.name.toUpperCase() + ' (' + U.text + ')', U.cost, () => this.buildUpgrade(U));
+        }
+        return;
+      }
       FR.forEach((F, i) => {
         if (i < st){ line(F.name + ' · STANDS', '#6a6a76'); return; }
         if (i > st){ line(F.name + ' · after ' + FR[i - 1].name, '#6a6a76'); return; }
@@ -32013,8 +32161,32 @@ const siteSys = {
       });
       return;
     }
-    if (cast === 'roomer'){ line(st >= FR.length ? 'Sef: Rooms for your people, on the ring and the quarters. I am drawing them. (Soon.)' : 'Sef: Rooms for your people, once there is a station to put them on. Kro first.'); return; }
-    if (cast === 'keeper'){ line(st >= FR.length ? 'Umma: Pens and tanks for your beasts. I am drawing them. (Soon.)' : 'Umma: Beasts want walls first. Kro first.'); return; }
+    if (cast === 'roomer'){
+      if (st < FR.length){ line('Sef: Rooms for your people, once there is a station to put them on. Kro first.'); return; }
+      const S = this.st2();
+      line('Sef: Six rooms, three on the ring and three on the quarters. Bring me your people bottled and I put them in.');
+      for (const R of this.ROOMS){
+        const rec = S.rooms[R.id];
+        if (!rec){ this.payRow(list, line, 'ROOM on ' + (R.side === 'ring' ? 'the ring' : 'the quarters') + ' ' + (['north', 'middle', 'south'][this.ROOMS.indexOf(R) % 3]), this.ROOM_COST, () => this.buildRoom(R)); continue; }
+        if (rec.occ){ line(R.id.toUpperCase() + ' · ' + (rec.occ.name || MENAGERIE_NAME[rec.occ.ent] || rec.occ.ent) + ' lives here', '#59c8d8'); continue; }
+        line(R.id.toUpperCase() + ' · a room, empty', '#59c8d8');
+        this.spawnerRows(list, line, R.id, false, t => this.person(t));
+      }
+      return;
+    }
+    if (cast === 'keeper'){
+      if (st < FR.length){ line('Umma: Beasts want walls first. Kro first.'); return; }
+      const S = this.st2();
+      line('Umma: Two pens and two tanks, on the ends. Bottle a beast and bring it; the wet ones go in the tanks.');
+      for (const P of this.PENS){
+        const rec = S.pens[P.id];
+        if (!rec){ this.payRow(list, line, (P.kind === 'tank' ? 'TANK' : 'PEN') + ' on ' + (P.x > 0 ? 'the ring' : 'the quarters') + (P.z > 0 ? ', south' : ', north'), this.PEN_COST, () => this.buildPen(P)); continue; }
+        if (rec.occ){ line(P.id.toUpperCase() + ' · ' + (MENAGERIE_NAME[rec.occ.ent] || rec.occ.ent) + ' lives here', '#8ad84a'); continue; }
+        line(P.id.toUpperCase() + ' · ' + (P.kind === 'tank' ? 'a tank' : 'a pen') + ', empty', '#8ad84a');
+        this.spawnerRows(list, line, P.id, true, t => this.animal(t) && (P.kind === 'tank') === this.TANK_TYPES.includes(t));
+      }
+      return;
+    }
   },
 };
 
@@ -32112,8 +32284,8 @@ const stationOneSys = {
     charts: 'Tehk: Every world is a map that has not been drawn. I draw. I also buy.',
     relics: 'Sova: Fuel for the little ship. Metal from the sky islands. And the purple stone, if you find it, at any price you like to name.',
     builder: 'Kro: The keel is laid. The rest is plating and the Moon\'s stones, in the order I say, and I build it while you watch.',
-    roomer: 'Sef: I draw rooms.',
-    keeper: 'Umma: I draw pens.',
+    roomer: 'Sef: I draw rooms, and I fill them.',
+    keeper: 'Umma: I draw pens, and tanks for the wet ones.',
   },
   STORY: [
     'Vehl: You made the crossing in that. Good. Then you can make another.',
