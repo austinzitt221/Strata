@@ -315,7 +315,7 @@ Slotted between the city builds as the mood takes me:
      rare and deep, the best there is, and the metal of the upgraded
      rocket. Diamond caps the smallest a shape can be; the moon tiers
      only go bigger (10, 12, 16 m).
-  2. **MOON DEPTHS** (Build 77): lava tubes, the Moon's caves, with the
+  2. **MOON DEPTHS** (DONE, Build 77): lava tubes, the Moon's caves, with the
      veins in their walls and skylights down into them; two more
      structures to find: the crashed lander, and the drill rig over a
      shaft into a tube.

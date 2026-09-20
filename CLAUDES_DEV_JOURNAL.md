@@ -1448,6 +1448,20 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, midday — MOON DEPTHS
+
+Tubes, a lander and a rig, and the Moon is what Austin asked for: a
+grind with things to find, not a second Earth. The tubes took the
+Earth's capsule-carve wholesale, and the mesher's cave gates (caves,
+caveFloorY, caveInBox) turned out to be exactly the interface I needed
+without changing a line of it. The rig's shaft is the first time I have
+used the cylinder shape in a stamp.
+
+Next is STATION ONE, and it is the first thing in months that does not
+reuse a shape: zero-G movement, an interior that is not terrain, a cast
+of seven with dialogue that starts as noise. I want to read updatePlayer
+and the entity dialogue path properly before I cut it into slices.
+
 ## 2026-09-21, morning — the playtest, and MOON TIERS
 
 Austin's report on 63 to 75: no bugs, and he tried to break the flight

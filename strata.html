@@ -2274,9 +2274,89 @@ function makeMoonGen(seed){
     if ((h0 & 255) >= 120) return null;
     const x = cx * MBASE_CELL + 60 + (hashInt(h0 ^ 1) / 4294967296) * (MBASE_CELL - 120);
     const z = cz * MBASE_CELL + 60 + (hashInt(h0 ^ 2) / 4294967296) * (MBASE_CELL - 120);
-    return { x: Math.round(x), z: Math.round(z), key: cx + ',' + cz, seed: hashInt(h0 ^ 7) };
+    const kind = ['base', 'base', 'lander', 'lander', 'rig'][hashInt(h0 ^ 9) % 5];   // MOON DEPTHS (Build 77): two more things to find
+    return { x: Math.round(x), z: Math.round(z), key: cx + ',' + cz, seed: hashInt(h0 ^ 7), kind };
   }
-  function sdf(x, y, z){ return y - height(x, z); }
+  // MOON DEPTHS (Build 77): lava tubes. One winding tube in most cells,
+  // ten to thirty metres down, with a skylight where the roof fell in.
+  // Capsules, like the Earth's cave network, so the collider can trust
+  // the field; the veins run through their walls like anywhere else
+  const TUBE_CELL = 96;
+  const sT = hashInt(seed ^ 0x7ab3c1d9);
+  const tubeCache = new Map();
+  function tubeCell(cx, cz){
+    const key = cx + ',' + cz;
+    let R = tubeCache.get(key);
+    if (R) return R;
+    const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    const rnd = k => hashInt(h0 ^ k) / 4294967296;
+    const prims = [], lights = [];
+    if ((h0 & 255) < 200){
+      const cap = (ax, ay, az, bx, by, bz, r) => prims.push({ t: 1, ax, ay, az, bx, by, bz, r,
+        x0: Math.min(ax, bx) - r - 1, y0: Math.min(ay, by) - r - 1, z0: Math.min(az, bz) - r - 1,
+        x1: Math.max(ax, bx) + r + 1, y1: Math.max(ay, by) + r + 1, z1: Math.max(az, bz) + r + 1 });
+      let x = cx * TUBE_CELL + 16 + rnd(1) * (TUBE_CELL - 32), z = cz * TUBE_CELL + 16 + rnd(2) * (TUBE_CELL - 32);
+      let a = rnd(3) * Math.PI * 2;
+      let y = height(x, z) - 10 - rnd(4) * 18;
+      const r0 = 2.6 + rnd(5) * 1.8;
+      const n = 4 + ((rnd(6) * 3) | 0);
+      for (let i = 0; i < n; i++){
+        const L = 14 + rnd(10 + i) * 10;
+        a += (rnd(20 + i) - 0.5) * 1.2;
+        const nx = x + Math.cos(a) * L, nz = z + Math.sin(a) * L;
+        let ny = y + (rnd(30 + i) - 0.5) * 6;
+        ny = Math.max(-60, Math.min(ny, height(nx, nz) - 7));       // never surfaces on its own
+        cap(x, y, z, nx, ny, nz, r0 * (0.8 + rnd(40 + i) * 0.4));
+        if (i === ((n / 2) | 0) && rnd(50) < 0.6){                    // the skylight: a shaft up to the day
+          cap(nx, ny, nz, nx, height(nx, nz) + 3, nz, 2.2 + rnd(51) * 1.2);
+          lights.push({ x: nx, y: ny, z: nz });
+        }
+        x = nx; y = ny; z = nz;
+      }
+    }
+    R = { prims, lights };
+    if (tubeCache.size > 3000) tubeCache.clear();
+    tubeCache.set(key, R);
+    return R;
+  }
+  function gatherTubes(x0, z0, x1, z1){
+    const out = [];
+    for (let cz = Math.floor(z0 / TUBE_CELL) - 2; cz <= Math.floor(z1 / TUBE_CELL) + 2; cz++)
+      for (let cx = Math.floor(x0 / TUBE_CELL) - 2; cx <= Math.floor(x1 / TUBE_CELL) + 2; cx++)
+        for (const p of tubeCell(cx, cz).prims)
+          if (p.x1 >= x0 && p.x0 <= x1 && p.z1 >= z0 && p.z0 <= z1) out.push(p);
+    return out;
+  }
+  function primCarve(x, y, z, prims){
+    let m = 1e9;
+    for (let i = 0; i < prims.length; i++){
+      const p = prims[i];
+      if (x < p.x0 || x > p.x1 || y < p.y0 || y > p.y1 || z < p.z0 || z > p.z1) continue;
+      const dx = p.bx - p.ax, dy = p.by - p.ay, dz = p.bz - p.az;
+      const px = x - p.ax, py = y - p.ay, pz = z - p.az;
+      let t = (px * dx + py * dy + pz * dz) / (dx * dx + dy * dy + dz * dz || 1);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const qx = px - dx * t, qy = py - dy * t, qz = pz - dz * t;
+      const d = Math.sqrt(qx * qx + qy * qy + qz * qz) - p.r;
+      if (d < m) m = d;
+    }
+    return m;
+  }
+  function caveInBox(box){
+    for (let cz = Math.floor(box[2] / TUBE_CELL) - 2; cz <= Math.floor(box[5] / TUBE_CELL) + 2; cz++)
+      for (let cx = Math.floor(box[0] / TUBE_CELL) - 2; cx <= Math.floor(box[3] / TUBE_CELL) + 2; cx++)
+        for (const p of tubeCell(cx, cz).prims)
+          if (p.x1 >= box[0] && p.x0 <= box[3] && p.y1 >= box[1] && p.y0 <= box[4] && p.z1 >= box[2] && p.z0 <= box[5]) return true;
+    return false;
+  }
+  function skylightsNear(x, z, r){
+    const out = [];
+    for (let cz = Math.floor((z - r) / TUBE_CELL); cz <= Math.floor((z + r) / TUBE_CELL); cz++)
+      for (let cx = Math.floor((x - r) / TUBE_CELL); cx <= Math.floor((x + r) / TUBE_CELL); cx++)
+        for (const L of tubeCell(cx, cz).lights) if (Math.hypot(L.x - x, L.z - z) <= r) out.push(L);
+    return out;
+  }
+  function sdf(x, y, z){ return Math.max(y - height(x, z), -primCarve(x, y, z, gatherTubes(x, z, x, z))); }
   const hrCache = new Map();
   function heightRange(x0, z0, x1, z1){
     const k = x0 + ',' + z0 + ',' + x1 + ',' + z1;
@@ -2301,6 +2381,7 @@ function makeMoonGen(seed){
     const hit = localCache.get(lk);
     if (hit) return hit;
     x0 -= 2 * st; z0 -= 2 * st; x1 += 2 * st; z1 += 2 * st;
+    const lPrims = gatherTubes(x0 - 3, z0 - 3, x1 + 3, z1 + 3);
     const nx = Math.round((x1 - x0) / st) + 1, nz = Math.round((z1 - z0) / st) + 1;
     const grid = new Float32Array(nx * nz);
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) grid[i + j * nx] = height(x0 + i * st, z0 + j * st);
@@ -2313,7 +2394,7 @@ function makeMoonGen(seed){
       const c = grid[i + (j + 1) * nx], d = grid[i + 1 + (j + 1) * nx];
       return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
     }
-    const built = Object.assign({}, gen, { height: lh, sdf: (x, y, z) => y - lh(x, z) });
+    const built = Object.assign({}, gen, { height: lh, sdf: lPrims.length ? (x, y, z) => Math.max(y - lh(x, z), -primCarve(x, y, z, lPrims)) : (x, y, z) => y - lh(x, z) });
     if (localCache.size > 64) localCache.clear();
     localCache.set(lk, built);
     return built;
@@ -2338,10 +2419,10 @@ function makeMoonGen(seed){
     return { x: 0, z: 0 };
   }
   const nil = () => null, no = () => false;
-  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: false, caveFloorY: -86, seed, seaLevel: null,
+  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: true, caveFloorY: -70, seed, seaLevel: null,
     ruinInCell: nil, wetAt: no, archAt: () => MOON_ARCH, lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
-    caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
-    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'moon', mbaseAt, MBASE_CELL };
+    caveInBox, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'moon', mbaseAt, MBASE_CELL, tubeCell, skylightsNear, TUBE_CELL };
   return gen;
 }
 function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : makeEarthGen(seed); }
@@ -13388,6 +13469,10 @@ const EXPEDITION_PAGES = [
   `Day {D}. The first hall. Someone built this: a floor, pillars, a doorway at the far end with a lintel I could not have lifted. The bones by the door were laid out the way the ones on the hill were. They do not come to light. I sat a whole day with the torch burning and nothing came. They come to sound. I struck the wall once with the pick to hear the echo and heard them turn over in the second hall, all of them, like one thing. Whoever you are: work quietly, or do not work. Take the drill; it is the quiet one. The way on is the door. I am going to see.`,
   // 10 — an older hand, found in the works (THE DEEP B)
   `We were forty when we came down, and we built the hall so the council at {C} would see we meant to stay. The sound is under the works. We dug toward it for a year and it never once came up to meet us. It is not a sound. It has hands. It knocks because it wants the roof down, and one day the roof will come down, and it will walk up our drift and out through the hall we built for it. If you are reading this you have come past the fall, and you have a choice we never had: the winch is behind you, and it goes up. Or go on, and make it stop. — the foreman`,
+  // 11 — the crashed lander (MOON DEPTHS, Build 77)
+  `LANDER 3. Day 61. The descent stage cut out at forty metres and we came down on the tank. Ruiz is fine. The hull is not. We have the suits, the stove, the last of the cells and the sound of the dust on the plating, which never stops. If you are reading this: the base is east of here and it has beds. Take the fuel. We walked.`,
+  // 12 — the drill rig
+  `RIG 7. Shaft to twenty-eight metres, then the tube. The lunite is in the wall like frost on a window, and under it, once, a purple grain the size of a thumbnail that the assay calls astrium. Bring a bigger drill. Bring a rope; ours is the only one.`,
 ];
 const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
 function riverNameOf(ck){ return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + ck) % RIVER_NAMES.length]; }
@@ -13464,7 +13549,7 @@ const expeditionSys = {
     return { x: tx, z: tz };
   },
   text(i){
-    const E = game.expedition;
+    const E = game.expedition || { L: '', S: '', C: '', R: '' };     // the Moon's pages name nobody
     return EXPEDITION_PAGES[i - 1].replace(/\{L\}/g, E.L).replace(/\{S\}/g, E.S).replace(/\{C\}/g, E.C).replace(/\{R\}/g, E.R).replace(/\{D\}/g, String(this.DAYS[i - 1]));
   },
   // the camp appears when you come within reach, once
@@ -31431,7 +31516,79 @@ const moonBaseSys = {
     }
     return best;
   },
+  nearestOf(kind){
+    if (game.planet !== 'moon' || !game.gen || !game.gen.mbaseAt) return null;
+    const C = game.gen.MBASE_CELL;
+    const cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    let best = null, bd = 1e9;
+    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++){
+      const B = game.gen.mbaseAt(cx + dx, cz + dz);
+      if (!B || (kind && B.kind !== kind)) continue;
+      const d = Math.hypot(B.x - game.pos.x, B.z - game.pos.z);
+      if (d < bd){ bd = d; best = B; }
+    }
+    return best;
+  },
+  // the crashed lander (Build 77): a module half sunk in the dust with a
+  // rip in its side, the furrow it made coming in, plating strewn behind
+  // it, and inside, the chest and the crew's last page
+  stampLander(B){
+    const M = CORE.MAT;
+    const g = game.gen.height(B.x, B.z) + 0.2;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0); e.sy = sy; e.sz = sz; e.noLod = 1; applyEdit(e); };
+    const ES = (op, x, y, z, r, mat) => { const e = CORE.makeEdit(op, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r, mat || 0, 0); e.noLod = 1; applyEdit(e); };
+    const rng = CORE.mulberry32(B.seed >>> 0);
+    for (let i = 1; i <= 4; i++) EB(0, B.x - i * 7, g + 0.6 - i * 0.15, B.z - i * 2, 6 - i * 0.6, 1.6, 4 - i * 0.4, 0);   // the furrow
+    ES(1, B.x, g - 1.2, B.z, 13, M.PLATING); ES(0, B.x, g - 1.2, B.z, 11.6, 0);      // the module, sunk and hollow
+    EB(1, B.x, g - 3.4, B.z, 12.4, 5, 12.4, M.PLATING);                             // a deck through it
+    EB(0, B.x + 5.6, g + 0.9, B.z + 1.0, 3.0, 2.6, 2.8, 0);                          // the rip you climb in through
+    EB(1, B.x - 2.5, g + 1.2, B.z - 3.6, 0.3, 4.0, 0.3, M.PLATING);                  // the snapped mast
+    for (let i = 0; i < 7; i++){                                                     // plating along the furrow
+      const dx = -6 - rng() * 28, dz = (rng() - 0.5) * 12;
+      const hh = game.gen.height(B.x + dx, B.z + dz);
+      EB(1, B.x + dx, hh + 0.15, B.z + dz, 1 + rng() * 1.6, 0.3, 0.8 + rng() * 1.4, M.PLATING);
+    }
+    const ch = pnodeSys.add('chest', B.x - 1.6, g - 0.9 + 0.95, B.z - 0.5, Math.PI / 2, { sc: 0.7 });
+    ch.inv = new Array(chestSlots(0.7)).fill(null);
+    ch.inv[0] = { kind: 'page', page: 11 };
+    ch.inv[1] = { kind: 'selenite', count: 6 + ((rng() * 5) | 0) };
+    ch.inv[2] = { kind: 'jetfuel', count: 2 };
+    ch.inv[3] = { kind: 'cookedmeat', count: 2 };
+    ch.inv[4] = { kind: 'coin', count: 10 + ((rng() * 20) | 0) };
+    farShapeSys.dirty = true;
+  },
+  // the drill rig (Build 77): a plating pad and a tower over a shaft
+  // twenty-eight metres down to a chamber, a rope the whole way, the vein
+  // they were after in the wall and the chest they filled from it
+  stampRig(B){
+    const M = CORE.MAT;
+    const g = game.gen.height(B.x, B.z) + 0.2;
+    const EB = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0); e.sy = sy; e.sz = sz; e.noLod = 1; applyEdit(e); };
+    const ES = (op, x, y, z, r, mat) => { const e = CORE.makeEdit(op, 0, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), r, mat || 0, 0); e.noLod = 1; applyEdit(e); };
+    const EC = (op, x, y, z, d, h, mat) => { const e = CORE.makeEdit(op, 2, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), d, mat || 0, 0); e.sy = h; e.noLod = 1; applyEdit(e); };
+    const rng = CORE.mulberry32(B.seed >>> 0);
+    EB(0, B.x, g + 5.5, B.z, 16, 10, 16, 0);                       // level the site
+    EB(1, B.x, g - 0.5, B.z, 16, 1.0, 16, M.PLATING);              // the pad
+    for (const [sx, sz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) EB(1, B.x + sx, g + 5, B.z + sz, 0.5, 10, 0.5, M.PLATING);   // the legs
+    for (const [sx, sz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) EB(1, B.x + sx * 0.5, g + 10, B.z + sz * 0.5, sx ? 6.5 : 0.4, 0.4, sz ? 6.5 : 0.4, M.PLATING);   // the top frame
+    EB(1, B.x, g + 10.9, B.z, 2.2, 1.4, 2.2, M.PLATING);           // the winch house
+    EC(0, B.x, g - 14, B.z, 3.2, 30, 0);                            // the shaft
+    ES(0, B.x, g - 30, B.z, 9, 0);                                  // the chamber
+    EB(1, B.x, g - 34, B.z, 9, 1.6, 9, M.MOONROCK);                 // its floor
+    ES(1, B.x + 3.6, g - 30.5, B.z + 2.2, 3.2, M.LUNITE);           // the vein they were after
+    if (rng() < 0.5) ES(1, B.x - 3.4, g - 31.5, B.z - 2.4, 1.4, M.ASTRIUM);   // and, sometimes, the grain of the other thing
+    ropeSys.add(B.x + 1.2, g + 9.6, B.z + 1.2, 43);
+    const ch = pnodeSys.add('chest', B.x - 2.4, g - 33.2 + 0.95, B.z + 0.5, 0, { sc: 0.7 });
+    ch.inv = new Array(chestSlots(0.7)).fill(null);
+    ch.inv[0] = { kind: 'lunite', count: 8 + ((rng() * 7) | 0) };
+    ch.inv[1] = { kind: 'page', page: 12 };
+    ch.inv[2] = { kind: 'rounds', count: 24 };
+    if (rng() < 0.4) ch.inv[3] = { kind: 'astrium', count: 1 + ((rng() * 2) | 0) };
+    farShapeSys.dirty = true;
+  },
   stamp(B){
+    if (B.kind === 'lander') return this.stampLander(B);
+    if (B.kind === 'rig') return this.stampRig(B);
     const M = CORE.MAT;
     const g = game.gen.height(B.x, B.z) + 0.2;
     const EB = (op, x, y, z, sx, sy, sz, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), sx, mat || 0, 0); e.sy = sy; e.sz = sz; e.noLod = 1; applyEdit(e); };

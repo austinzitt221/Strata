@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 77 — MOON DEPTHS: lava tubes, the lander, the rig (2026-09-21)
+
+The Moon's caves and its last two finds. With this the Moon is where I
+want it for now: a place to grind, with things to find on the way.
+
+- **Lava tubes.** One winding tube in most 96 m cells, ten to thirty
+  metres down, four to six legs of fourteen to twenty-four metres with a
+  radius near three; a skylight to the surface in about six of ten. They
+  are capsules, like the Earth's cave network, so the collider trusts
+  the field and the mesher's quick-reject knows where they are. The
+  veins run through their walls.
+- **The crashed lander.** A module half sunk in the dust with a rip in
+  its side, the furrow it made coming in and plating strewn along it,
+  a snapped mast; inside, a chest with selenite, jet fuel, rations, coin
+  and the crew's last page ("the base is east of here and it has
+  beds").
+- **The drill rig.** A plating pad and a tower over a shaft
+  twenty-eight metres down to a chamber, a rope the whole way, the
+  lunite vein they were after in the wall (and, half the time, a grain
+  of astrium), the chest they filled from it and their page.
+- Finds are now three kinds by hash: bases two in five, landers two in
+  five, rigs one in five, still one per 320 m cell at most and never in
+  the landing cell.
+- The Moon's pages name nobody, so the page text no longer needs an
+  expedition to exist.
+
 ## Build 76 — MOON TIERS: three ores, three tiers past diamond (2026-09-21)
 
 Austin's idea from the 2026-09-20 playtest, built first because the

@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 77 — MOON DEPTHS
+- [ ] Find a skylight and drop in (a sixth of the gravity: you will be
+      fine). Walk the tube to its end. Does it feel like a cave, or a
+      pipe? Any holes in the walls, any seams?
+- [ ] Find a lander and a rig. Read both pages. Climb the rig's rope
+      down and up.
+- [ ] Is the Moon done enough for now? What is it still missing before
+      it is worth the grind?
+
 ## Build 76 — MOON TIERS
 - [ ] Survival, on the Moon: dig for selenite near the surface and make
       a selenite drill. Does the 10 m cap feel like a real step up?
