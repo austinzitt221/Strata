@@ -5,6 +5,21 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 74 — LIFTOFF A
+- [ ] Creative: take a rocket from the catalog, deploy it, board it,
+      SPACE. Does the climb feel like a launch? Is the crossing too long,
+      too short? Did you turn around to look at Earth?
+- [ ] The landing: does it read as a landing, or as a lift going down?
+- [ ] Step out on the Moon without the suit. Then with it. Jump. Fall
+      off a crater rim. Mine a cube; build a hut of regolith.
+- [ ] Find the Earth in the sky by day and by night.
+- [ ] Fly home, and check the hole you dug on Earth is still there. Fly
+      back and check the hut is still on the Moon.
+- [ ] Survival: craft the suit and the rocket. Are the costs right? Is
+      jet fuel from the quarter enough of a chore?
+- [ ] Save mid-flight (quit during the crossing) and reload. Where are
+      you, and is it sane?
+
 ## Build 73 — SMALL THINGS
 - [ ] Look at the HUD's position line in a few biomes: do the names
       sound like the places? Any that are funny for the wrong reason?

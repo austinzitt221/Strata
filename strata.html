@@ -398,6 +398,7 @@ body.pad{cursor:none;}
     <div class="sub" id="phonesub" style="margin-top:8px;">E to close</div>
   </div>
 </div>
+<div id="visor" class="hidden" style="position:fixed; inset:0; pointer-events:none; z-index:12; box-shadow: inset 0 0 140px 50px rgba(18,14,6,0.6); background: radial-gradient(ellipse at center, rgba(255,210,120,0) 58%, rgba(255,200,90,0.10) 100%);"></div>
 <div id="fade" style="position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity .45s; z-index:90;"></div>
 <div id="pitscreen" class="screen hidden dim">
   <div class="panel" style="min-width:560px; max-width:760px;">
@@ -690,9 +691,10 @@ const CY_MIN = -32, CY_MAX = 13; // vertical chunk range: y in [-256, +112) mete
 const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7, SAND:8, GLOWSHROOM:9, WOOD:10, PLANKS:11, SNOW:12, STONEBRICK:13, COAL:14, BASALT:15, LAVA:16, CRYSTAL:17, AETHER:18, MARBLE:19,
               MUD:20, JWOOD:21, JPLANKS:22, MWOOD:23, MPLANKS:24,    // BIOMES A (Build 69): the swamp's mud, jungle and mangrove wood and their planks
               SWOOD:25, SPLANKS:26, AWOOD:27, APLANKS:28,             // BIOMES B (Build 70): spruce and acacia
-              DRYGRASS:29, PERMAFROST:30, LEAFLITTER:31, PEAT:32 };   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 32;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat'];
+              DRYGRASS:29, PERMAFROST:30, LEAFLITTER:31, PEAT:32,
+              REGOLITH:33, MOONROCK:34 };                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 34;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
@@ -776,11 +778,11 @@ const ORE_TYPES = [
   { mat: MAT.COAL,       yMin: -60,   yMax: -1,   p: 0.62, rMin: 0.8, rMax: 1.5 },
 ];
 const VEIN_CELL = 4;
-const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands','jungle','taiga','tundra','savanna'];
+const ARCH_NAME = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands','jungle','taiga','tundra','savanna','moon'];
 const REGION = 260;            // macro-region cell edge (m) -- biomes change FAST
 const LM_CELL = 520;           // landmark set-piece grid (decoupled from biomes)
 const CAVE_CELL = 160;         // cave-network graph cell edge (m)
-function makeGen(seed){
+function makeEarthGen(seed){
   seed = seed >>> 0;
   const sH = hashInt(seed ^ 0x68e31da4), sR = hashInt(seed ^ 0xb5297a4d);
   const sB = hashInt(seed ^ 0x1b56c4e9), sD = hashInt(seed ^ 0x7feb352d);
@@ -2176,6 +2178,127 @@ function makeGen(seed){
   return { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt, caves: true, caveFloorY: -86, seed, seaLevel, ruinInCell, wetAt, archAt, lmAt, riverAt, fallsNear, waterYAt,
            caveInBox, floodedAt, chamberAt, caveNetCell, villageAt, fortAt, wreckAt, cityAt, skyInCell, skyNear, zigAt, regionAt, spawn: findSpawn };
 }
+// ---------- THE MOON (LIFTOFF, Build 74) ----------
+// A second world in the same save: grey regolith over moonrock, craters of
+// every size, no water, no air, a sixth of the gravity. It answers the same
+// interface as the Earth generator, so the mesher, the skin, the map and the
+// streamer need no new code; everything Earth-only answers null.
+const MOON_ARCH = 13;
+function makeMoonGen(seed){
+  seed = seed >>> 0;
+  const sH = hashInt(seed ^ 0x6d00e1a7), sC = hashInt(seed ^ 0xc7a7e5b3), sRg = hashInt(seed ^ 0x5bd1e995), sD = hashInt(seed ^ 0x7feb352d);
+  const CR_CELL = 64;
+  const crCache = new Map();
+  // up to one crater per cell: most small, a few wide, each a bowl with a rim
+  function craterCell(cx, cz){
+    const k = cx + ',' + cz;
+    const hit = crCache.get(k);
+    if (hit !== undefined) return hit;
+    const h0 = hashInt(sC ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    let out = null;
+    if ((h0 & 255) < 170){
+      const u = hashInt(h0 ^ 1) / 4294967296;
+      const r = 4 + u * u * u * 30;
+      out = { x: cx * CR_CELL + (hashInt(h0 ^ 2) / 4294967296) * CR_CELL,
+              z: cz * CR_CELL + (hashInt(h0 ^ 3) / 4294967296) * CR_CELL,
+              r, d: r * (0.16 + 0.1 * (hashInt(h0 ^ 4) / 4294967296)) };
+    }
+    if (crCache.size > 6000) crCache.clear();
+    crCache.set(k, out);
+    return out;
+  }
+  function craterH(x, z){
+    let dh = 0;
+    const cx = Math.floor(x / CR_CELL), cz = Math.floor(z / CR_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const C = craterCell(cx + dx, cz + dz);
+      if (!C) continue;
+      const d = Math.hypot(x - C.x, z - C.z) / C.r;
+      if (d < 0.9){ const q = d / 0.9; dh -= C.d * (1 - q * q); }                     // the bowl
+      else if (d < 1.3) dh += C.d * 0.3 * Math.sin(Math.PI * (d - 0.9) / 0.4);       // the rim
+    }
+    return dh;
+  }
+  function height(x, z){
+    return 8 + (fbm2(sH, x * 0.006, z * 0.006, 4) - 0.5) * 26        // the maria and the highlands
+             + (fbm2(sH + 77, x * 0.04, z * 0.04, 3) - 0.5) * 3.5      // the dust's own roll
+             + craterH(x, z);
+  }
+  function mat(x, y, z){
+    const h = height(x, z);
+    if (y > h - 2.4) return MAT.REGOLITH;
+    if (y < -70 - noise2(sD, x * 0.05, z * 0.05) * 10) return MAT.BASALT;
+    return MAT.MOONROCK;
+  }
+  function sdf(x, y, z){ return y - height(x, z); }
+  const hrCache = new Map();
+  function heightRange(x0, z0, x1, z1){
+    const k = x0 + ',' + z0 + ',' + x1 + ',' + z1;
+    const hit = hrCache.get(k);
+    if (hit) return hit;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++){
+      const h = height(x0 + (x1 - x0) * i / 4, z0 + (z1 - z0) * j / 4);
+      if (h < mn) mn = h;
+      if (h > mx) mx = h;
+    }
+    const out = [mn - 6, mx + 6];      // a crater rim can sit between the samples
+    if (hrCache.size > 8000) hrCache.clear();
+    hrCache.set(k, out);
+    return out;
+  }
+  // chunk-local gen, as on Earth: heights on the sample grid, bilinear between
+  const localCache = new Map();
+  function makeLocal(x0, z0, x1, z1, st){
+    st = st || VOX;
+    const lk = x0 + ',' + z0 + ',' + x1 + ',' + z1 + ',' + st;
+    const hit = localCache.get(lk);
+    if (hit) return hit;
+    x0 -= 2 * st; z0 -= 2 * st; x1 += 2 * st; z1 += 2 * st;
+    const nx = Math.round((x1 - x0) / st) + 1, nz = Math.round((z1 - z0) / st) + 1;
+    const grid = new Float32Array(nx * nz);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) grid[i + j * nx] = height(x0 + i * st, z0 + j * st);
+    function lh(x, z){
+      let fx = (x - x0) / st, fz = (z - z0) / st;
+      fx = Math.min(Math.max(fx, 0), nx - 1.001);
+      fz = Math.min(Math.max(fz, 0), nz - 1.001);
+      const i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j;
+      const a = grid[i + j * nx], b = grid[i + 1 + j * nx];
+      const c = grid[i + (j + 1) * nx], d = grid[i + 1 + (j + 1) * nx];
+      return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
+    }
+    const built = Object.assign({}, gen, { height: lh, sdf: (x, y, z) => y - lh(x, z) });
+    if (localCache.size > 64) localCache.clear();
+    localCache.set(lk, built);
+    return built;
+  }
+  function regionAt(x, z){
+    const kx = Math.floor(x / 512), kz = Math.floor(z / 512);
+    return { sx: kx * 512 + 256, sz: kz * 512 + 256, arch: MOON_ARCH, key: kx + ',' + kz,
+             seed: hashInt(sRg ^ hashInt(Math.imul(kx, 73856093)) ^ hashInt(Math.imul(kz, 19349663))) };
+  }
+  // the pad: flat ground, as near the origin as there is any
+  function findSpawn(){
+    for (let r = 0; r <= 1200; r += 24){
+      for (let k = 0; k < (r ? 12 : 1); k++){
+        const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
+        const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
+        const h = height(x, z);
+        let flat = true;
+        for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6]]) if (Math.abs(height(x + dx, z + dz) - h) > 0.7) flat = false;
+        if (flat) return { x, z };
+      }
+    }
+    return { x: 0, z: 0 };
+  }
+  const nil = () => null, no = () => false;
+  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: false, caveFloorY: -86, seed, seaLevel: null,
+    ruinInCell: nil, wetAt: no, archAt: () => MOON_ARCH, lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
+    caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'moon' };
+  return gen;
+}
+function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : makeEarthGen(seed); }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
@@ -3242,7 +3365,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -3421,6 +3544,10 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   // the rod, the diving helmet
   RECIPES.push({ kind: 'rod', costs: [{ item: 'stick', n: 3 }, { item: 'wire', n: 2 }] });
   RECIPES.push({ kind: 'divehelm', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'rubyingot', n: 1 }, { item: 'wire', n: 2 }] });
+  // LIFTOFF (Build 74): the space suit, and the rocket
+  RECIPES.push({ kind: 'spacesuit', station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'rubyingot', n: 4 }, { item: 'wire', n: 6 }, { item: 'aetheringot', n: 2 }] });
+  RECIPES.push({ kind: 'rocket', station: true,
+    costs: [{ item: 'ironingot', n: 40 }, { item: 'rubyingot', n: 10 }, { item: 'wire', n: 16 }, { item: 'aetheringot', n: 6 }, { item: 'jetfuel', n: 2 }] });
   // boats: the paddle boat is planks and honesty; the motorboat drinks a battery
   RECIPES.push({ kind: 'boat', station: true, costs: [{ mat: MAT.PLANKS, n: 12 }, { item: 'stick', n: 4 }] });
   RECIPES.push({ kind: 'motorboat', station: true,
@@ -3586,6 +3713,8 @@ function craft(slots, r, free){
                   : r.kind === 'boat' ? { kind: 'boat' }
                   : r.kind === 'rod' ? { kind: 'rod' }
                   : r.kind === 'divehelm' ? { kind: 'divehelm', tier: 0 }
+                  : r.kind === 'spacesuit' ? { kind: 'spacesuit', tier: 0 }
+                  : r.kind === 'rocket' ? { kind: 'rocket', charge: 0 }
                   : r.kind === 'motorboat' ? { kind: 'motorboat', charge: 100 }
                   : r.kind === 'plane' ? { kind: 'plane', charge: 100 }
                   : r.kind === 'hover' ? { kind: 'hover', charge: 100 }
@@ -4203,6 +4332,14 @@ function makeTileDrawers(){
       speckle(ctx, rng, '#2e2418', '#221a10', '#3a2e1e', 0.34, 0.2);
       for (let x = 0; x < 16; x += 2){ if (rng() < 0.5){ ctx.fillStyle = '#4a3a24'; ctx.fillRect(x, (rng() * 12) | 0, 1, 3 + ((rng() * 3) | 0)); } }
     },
+    [CORE.MAT.REGOLITH](ctx, rng){
+      speckle(ctx, rng, '#8f8f94', '#7e7e84', '#9e9ea4', 0.3, 0.22);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 15) | 0, y = (rng() * 15) | 0; ctx.fillStyle = '#66666c'; ctx.fillRect(x, y, 2, 1); ctx.fillStyle = '#b0b0b6'; ctx.fillRect(x, y + 1, 1, 1); }
+    },
+    [CORE.MAT.MOONROCK](ctx, rng){
+      speckle(ctx, rng, '#5c5c66', '#50505a', '#686872', 0.32, 0.2);
+      for (let i = 0; i < 4; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#7c7c88'; ctx.fillRect(x, y, 1, 2); }
+    },
     logInnerS(ctx, rng){
       speckle(ctx, rng, '#d9b591', '#c8a27e', '#e6c6a4', 0.24, 0.24);
       for (let x = 0; x < 16; x++){ const r = rng(); if (r < 0.26){ ctx.fillStyle = r < 0.10 ? '#a8805c' : '#bd9370'; ctx.fillRect(x, 0, 1, 16); } }
@@ -4556,7 +4693,7 @@ const meshPool = {
         'let gen = CORE.FLAT_GEN;\n' +
         'onmessage = (ev) => {\n' +
         '  const m = ev.data;\n' +
-        '  if (m.t === "init"){ gen = CORE.makeGen(m.seed); return; }\n' +
+        '  if (m.t === "init"){ gen = CORE.makeGen(m.seed, m.planet); return; }\n' +
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
@@ -4597,14 +4734,14 @@ const meshPool = {
     this.gridQ = []; this.gridJobs.clear(); this.gridBusy = false;
     this.ok = false;
   },
-  setSeed(seed){
+  setSeed(seed, planet){
     // a new world: everything in flight belongs to the old one
-    this.seed = seed;
+    this.seed = seed; this.planet = planet || 'earth';
     this.jobs.clear(); this.inflight.clear();
     this.idle = this.workers.slice();
-    for (const w of this.workers) w.postMessage({ t: 'init', seed });
+    for (const w of this.workers) w.postMessage({ t: 'init', seed, planet: this.planet });
     this.gridQ = []; this.gridJobs.clear(); this.gridBusy = false;
-    if (this.gridW) this.gridW.postMessage({ t: 'init', seed });
+    if (this.gridW) this.gridW.postMessage({ t: 'init', seed, planet: this.planet });
   },
   // HORIZON: the far skin's grids run on a worker of their own, so a level
   // rebuild never queues behind the chunk backlog and never stalls it
@@ -4618,7 +4755,7 @@ const meshPool = {
     if (!this.gridW){
       try {
         const w = new Worker(this.url);
-        w.postMessage({ t: 'init', seed: this.seed });
+        w.postMessage({ t: 'init', seed: this.seed, planet: this.planet || 'earth' });
         w.onmessage = (ev) => {
           const j = this.gridJobs.get(ev.data.id);
           this.gridJobs.delete(ev.data.id);
@@ -5244,6 +5381,7 @@ function deleteWorldData(id){ localStorage.removeItem('strata:world:' + id); }
 const game = {
   running: false,
   worldId: null, worldName: '', seed: 0,
+  planet: 'earth',                     // LIFTOFF (Build 74): 'earth' | 'moon' -- the world you stand on
   edits: [],
   renderer: null, scene: null, camera: null, terrain: null, atlas: null,
   opts: loadOpts(),
@@ -5296,6 +5434,9 @@ const PLAYER = {
 };
 
 function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.height; }
+// LIFTOFF (Build 74): the Moon pulls a sixth as hard. Same jump, six times the air
+const MOON_G = 4.0;
+function gravityNow(){ return game.planet === 'moon' ? MOON_G : PLAYER.gravity; }
 // how far a ghost — drill/dispenser shape, paste, blueprint — can be pushed
 // out. A copied build is easiest to line up from OUTSIDE it.
 const TOOL_REACH_MAX = 96;
@@ -6043,7 +6184,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -6348,6 +6489,17 @@ const playerBody = {
         new THREE.MeshBasicMaterial({ color: 0xd9b25a }));
       collar.position.y = -0.1;
       this.head.add(dome, collar); this.armorMeshes.push(dome, collar);
+    }
+    if (A.head && A.head.kind === 'spacesuit'){
+      // the space suit: a white helmet with a gold visor, and the pack on the back
+      const helm = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 10), new THREE.MeshBasicMaterial({ color: 0xe4e4ea }));
+      helm.position.y = 0.2;
+      const visor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.22, 0.12), new THREE.MeshBasicMaterial({ color: 0xe0a020 }));
+      visor.position.set(0, 0.24, -0.32);
+      this.head.add(helm, visor); this.armorMeshes.push(helm, visor);
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.28), new THREE.MeshBasicMaterial({ color: 0xd6d6dc }));
+      pack.position.set(0, 1.1, 0.3);
+      this.upper.add(pack); this.armorMeshes.push(pack);
     }
   },
   update(dt){
@@ -7135,7 +7287,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -7847,6 +7999,14 @@ function updateDayNight(dt){
     treeSys.mats.leaf2.color.setRGB(b * tint[0], b * tint[1], b * tint[2]);
   }
   if (farTreeSys && farTreeSys.canopy) farTreeSys.canopy.material.color.setRGB(b2(dayF) * tint[0], b2(dayF) * tint[1], b2(dayF) * tint[2]);
+  if (game.planet === 'moon'){
+    // LIFTOFF (Build 74): no atmosphere. A hard sun, a black sky at noon, the night lit a little by the Earth
+    u.uSunCol.value.copy(SUN_BASE).multiplyScalar(0.2 + 1.0 * game.dayF);
+    u.uAmbCol.value.setRGB(0.09, 0.10, 0.14).lerp(new THREE.Color(0.30, 0.30, 0.34), game.dayF);
+    game.skyNow.setRGB(0.004, 0.004, 0.008);
+    u.uFogCol.value.copy(game.skyNow);
+    u.uFogFar.value = FOG_BASE * 1.6;
+  }
 }
 function b2(dayF){ return 0.3 + 0.7 * dayF; }
 const FOG_BASE = 3200;
@@ -7874,6 +8034,7 @@ const REGION_WORDS = [
   ['{} wood', 'the {} pines', 'the {} dark'],              // taiga
   ['the {} barrens', '{} waste', 'the {} cold'],           // tundra
   ['the {} veldt', '{} flats', 'the {} gold'],             // savanna
+  ['the {} mare', '{} crater', 'the {} dust'],             // the Moon (Build 74)
 ];
 function regionNameOf(R){
   const A = ['Har', 'Kel', 'Mor', 'Tal', 'Bren', 'Dun', 'Fal', 'Gor', 'Hol', 'Ost', 'Vel', 'Wyn'];
@@ -7990,6 +8151,7 @@ const weatherSys = {
     return r < 0.52 ? 'clear' : r < 0.74 ? 'rain' : r < 0.82 ? 'storm' : r < 0.9 ? 'fog' : 'clear';
   },
   dawn(day){
+    if (game.planet === 'moon'){ this.set('clear', 1e9); return; }
     let k = this.forecast(day);
     const snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
     if (snowy && (k === 'rain' || k === 'storm')) k = 'snow';
@@ -8001,6 +8163,7 @@ const weatherSys = {
     this.boltT = 4 + Math.random() * 6;
   },
   roll(){
+    if (game.planet === 'moon'){ this.set('clear', 1e9); return; }
     const r = Math.random(), snowy = seasonSys.winter || (game.gen.archAt && game.gen.archAt(game.pos.x, game.pos.z) === 6) || game.gen.height(game.pos.x, game.pos.z) >= 30;
     const morning = game.timeOfDay > 0.02 && game.timeOfDay < 0.12;
     if (r < 0.5) this.set('clear', 240 + Math.random() * 600);
@@ -8406,6 +8569,21 @@ const skySys = {
     const moonMat = new THREE.MeshBasicMaterial({ map: moonTex, transparent: true, depthWrite: false });
     this.moon = new THREE.Mesh(new THREE.PlaneGeometry(36, 36), moonMat);
     this.dome.add(this.sun); this.dome.add(this.moon);
+    // LIFTOFF (Build 74): from the Moon, the Earth hangs in one place in the sky
+    {
+      const cv = document.createElement('canvas'); cv.width = 32; cv.height = 32;
+      const c = cv.getContext('2d'), rng = CORE.mulberry32(0xea47);
+      c.fillStyle = '#2b64c8'; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#4c8a3c'; for (let i = 0; i < 9; i++) c.fillRect((3 + rng() * 24) | 0, (4 + rng() * 22) | 0, (2 + rng() * 6) | 0, (2 + rng() * 4) | 0);
+      c.fillStyle = '#a08a58'; for (let i = 0; i < 4; i++) c.fillRect((5 + rng() * 20) | 0, (6 + rng() * 18) | 0, 2, 2);
+      c.fillStyle = '#eef4ff'; c.fillRect(12, 1, 8, 2); c.fillRect(11, 29, 9, 2);
+      for (let i = 0; i < 10; i++) c.fillRect((2 + rng() * 26) | 0, (4 + rng() * 24) | 0, 3, 1);
+      c.globalCompositeOperation = 'destination-in'; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill();
+      const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      this.earth = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+      this.earth.visible = false;
+      this.dome.add(this.earth);
+    }
     // stars: points on the upper dome
     const starPos = [];
     for (let i = 0; i < 420; i++){
@@ -8454,6 +8632,18 @@ const skySys = {
     this.moon.visible = sh < 0.18;
     this.moon.lookAt(cam);
     this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
+    if (game.planet === 'moon'){
+      // no air: the stars stay out by day, the clouds are gone, the Earth hangs where it always hangs
+      this.stars.material.opacity = 0.95;
+      this.moon.visible = false;
+      this.earth.visible = true;
+      this.earth.position.set(0.32, 0.72, -0.62).normalize().multiplyScalar(330);
+      this.earth.lookAt(cam);
+      this.cloudGroup.visible = false;
+      return;
+    }
+    this.earth.visible = false;
+    this.cloudGroup.visible = true;
     // clouds: slow drift, wrapped into a band around the player; fade and
     // darken at night
     const wd = weatherSys.cur.dark == null ? 1 : weatherSys.cur.dark;
@@ -11475,6 +11665,9 @@ const VEH = {
                seat: { seatX: -0.4, seatY: 1.5, seatZ: -1.1, back: 12, up: 4.5, look: 1.8 } },
   jet:       { name: 'jet', top: 75, rev: 0, accel: 14, brake: 8, steer: 1.5, drain: 0.5, r: 1.3, ride: 0.7, kmh: 280, repair: 40, fly: true, jet: true, fuel: true, stall: 22, ceiling: 320,
                seat: { seatX: 0, seatY: 1.62, seatZ: -1.7, back: 14, up: 5, look: 2.2 } },
+  // LIFTOFF (Build 74): the rocket. It goes nowhere on the ground; SPACE lights it
+  rocket:    { name: 'rocket', top: 0, rev: 0, accel: 0, brake: 0, steer: 0, drain: 0, r: 1.8, ride: 2.6, kmh: 0, repair: 40, fly: true, rocket: true, fuel: true, stall: 0, ceiling: 99999,
+               seat: { seatX: 0, seatY: 6.2, seatZ: -0.6, back: 22, up: 9, look: 4.5 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
                seat: { seatX: -0.42, seatY: 2.32, seatZ: -1.75, back: 13, up: 4.5, look: 2.0 } },
@@ -11539,6 +11732,7 @@ const ENT_DEF = {
   tank:     { hp: 480, speed: 0, r: 1.6, h: 2.3, cap: 0 },
   heli:     { hp: 300, speed: 0, r: 1.7, h: 2.4, cap: 0 },
   jet:      { hp: 240, speed: 0, r: 1.5, h: 2.2, cap: 0 },
+  rocket:   { hp: 400, speed: 0, r: 1.8, h: 9.5, cap: 0 },
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
   boat:     { hp: 120, speed: 0, r: 1.0, h: 1.0, cap: 0 },
@@ -11748,6 +11942,30 @@ function entMesh(type, ent){
     box(0.42, 0.42, 0.5, steel, 0, 0.4, -4.1, turret);        // the muzzle brake
     if (ent && ent.crewed) box(0.5, 0.06, 0.5, 0xd9b25a, 0, 1.02, -0.2, turret);
     g.userData.turret = turret; g.userData.barrel = barrel;
+    return g;
+  }
+  if (type === 'rocket'){
+    // LIFTOFF (Build 74): a tall white rocket on four legs -- a body, a red
+    // nose, four fins, a porthole, an engine bell, and the flame under it
+    g.rotation.order = 'YXZ';
+    const white = skin('rocketskin', (c, w, h, rng) => { pxSpeckle(c, rng, '#e4e4ea', '#d6d6dc', '#f0f0f4', 10); c.fillStyle = '#c93a3a'; c.fillRect(0, 6, w, 2); rivets(c, 12, '#b8b8c0'); });
+    const dark = skin('rocketdark', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2a30', '#222227', '#35353c', 12); }, 1);
+    const red = skin('rocketred', (c, w, h, rng) => { pxSpeckle(c, rng, '#c93a3a', '#b53232', '#d94a4a', 12); }, 1);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 6.4, 12), white); body.position.y = 4.4; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 12), red); nose.position.y = 8.9; g.add(nose);
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 1.0, 10), dark); bell.position.y = 0.75; g.add(bell);
+    for (let i = 0; i < 4; i++){
+      const a = i * Math.PI / 2, b = a + Math.PI / 4;
+      const fin = box(0.14, 2.4, 1.3, red, Math.sin(a) * 1.5, 2.0, Math.cos(a) * 1.5); fin.rotation.y = a;
+      const leg = box(0.16, 2.2, 0.16, dark, Math.sin(b) * 1.6, 1.0, Math.cos(b) * 1.6); leg.rotation.z = Math.sin(b) * 0.35; leg.rotation.x = -Math.cos(b) * 0.35;
+      box(0.5, 0.1, 0.5, dark, Math.sin(b) * 1.95, 0.02, Math.cos(b) * 1.95);   // a foot
+    }
+    const glassM = new THREE.MeshBasicMaterial({ color: 0x9fd4e8, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+    box(0.9, 0.9, 0.12, dark, 0, 6.3, -1.08);
+    const port = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.1, 10), glassM); port.rotation.x = Math.PI / 2; port.position.set(0, 6.3, -1.12); g.add(port);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.7, 3.2, 10), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.85 }));
+    flame.rotation.x = Math.PI; flame.position.set(0, -1.4, 0); flame.visible = false; g.add(flame);
+    g.userData.flame = flame;
     return g;
   }
   if (type === 'heli'){
@@ -14803,7 +15021,7 @@ const objectiveSys = {
   },
   frame(){
     const host = $('objlayer');
-    const show = game.running && game.ui === 'none' && !game.photo;
+    const show = game.running && game.ui === 'none' && !game.photo && !(spaceSys.flight && spaceSys.flight.phase !== 'landing');
     // the world scan behind list() only changes on the seconds scale --
     // rebuild it at 4Hz and spend the per-frame work on projection only
     const tNow = performance.now();
@@ -22035,6 +22253,7 @@ const citySys = {
 };
 
 function trySpawnEntities(){
+  if (game.planet === 'moon') return;                        // LIFTOFF (Build 74): nothing lives here yet
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
   for (const e of game.entities) counts[e.type] = (counts[e.type] || 0) + 1;
@@ -22147,7 +22366,7 @@ function updateEntities(dt, now){
       e.ttl = (e.ttl == null ? DROP_TTL : e.ttl) - dt;
       if (e.ttl <= 0 || !e.item){ if (e.mesh) game.scene.remove(e.mesh); game.entities.splice(i, 1); continue; }
       // fall until the ground, then rest and slide to a stop
-      e.vy -= 24 * dt;
+      e.vy -= (game.planet === 'moon' ? MOON_G : 24) * dt;
       let nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
       const ed = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
       if (sdfWorld(nx, ny + 0.15, nz, ed) < 0.15){
@@ -22436,7 +22655,7 @@ function updateEntities(dt, now){
       if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, [0x9fe8ff, 0xd8f6ff], 1, 0.4);
       continue;
     }
-    e.vy -= 22 * dt;
+    e.vy -= (game.planet === 'moon' ? MOON_G : 22) * dt;
     const ox = e.x;
     const oz = e.z;
     e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
@@ -24293,7 +24512,8 @@ function enterCar(e){
   game.vel.set(0, 0, 0);
   e.air = 0; e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.trickMsg = '';
   const V0 = VEH[e.type] || VEH.car;
-  toast((V0.air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
+  toast((V0.rocket ? 'in the seat — SPACE to launch · right click to step out'
+         : V0.air ? 'riding — W/S throttle · A/D steer · SPACE hops · tricks in the air'
          : V0.paddle ? 'rowing — W/S stroke · A/D steer'
          : V0.water ? 'at the helm — W/S throttle · A/D steer'
          : 'driving — W/S throttle · A/D steer') + ' · right click to step out' +
@@ -24303,6 +24523,8 @@ function enterCar(e){
 }
 function exitCar(){
   const e = game.driving;
+  if (spaceSys.flight){ toast('not while it flies'); return; }
+  if (e && VEH[e.type] && VEH[e.type].rocket && spaceSys.camWas != null){ game.camView = spaceSys.camWas; spaceSys.camWas = null; }
   game.driving = null;
   game.chase = null;
   AudioSys.setHum(false, 0, 0);
@@ -24310,7 +24532,8 @@ function exitCar(){
   if (e){
     crewSys.dismountAll(e);
     // step out on the driver's side
-    game.pos.set(e.x - Math.cos(e.heading || 0) * 1.9, e.y + 1.0, e.z + Math.sin(e.heading || 0) * 1.9);
+    { const off = VEH[e.type] && VEH[e.type].rocket ? 3.4 : 1.9;
+      game.pos.set(e.x - Math.cos(e.heading || 0) * off, e.y + 1.0, e.z + Math.sin(e.heading || 0) * off); }
     e.speed = 0;
     if (e.mesh) e.mesh.rotation.set(0, e.heading || 0, 0);
     e.tPitch = 0; e.tYaw = 0; e.tRoll = 0; e.air = 0;
@@ -24324,6 +24547,7 @@ function driveCar(dt){
   const e = game.driving;
   if (!e || e.hp <= 0 || game.entities.indexOf(e) < 0){ game.driving = null; return; }
   const V = VEH[e.type] || VEH.car;
+  if (V.rocket) return spaceSys.drive(e, V, dt);
   if (V.heli) return driveHeli(e, V, dt);
   if (V.jet) return driveJet(e, V, dt);
   if (V.fly) return drivePlane(e, V, dt);
@@ -25058,7 +25282,7 @@ function updatePlayer(dt){
     const a = game.grounded ? 22 : game.gliding ? 0.4 : 6;
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
-    game.vel.y -= PLAYER.gravity * dt;
+    game.vel.y -= gravityNow() * dt;
     // worn jetpack: hold space in the air to thrust (survival's short flight)
     const jp = game.armor && game.armor.back;
     if (jp && jp.kind === 'jetpack' && canMove && k['Space'] && !game.grounded && (jp.fuel || 0) > 0){
@@ -27547,7 +27771,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -27766,6 +27990,16 @@ function itemIconURL(it){
     c.fillStyle = '#8a6237'; for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
     c.fillStyle = '#d9d9e0'; c.fillRect(13, 2, 1, 8);
     c.fillStyle = '#e04848'; c.fillRect(12, 10, 3, 2); c.fillStyle = '#f7f2e8'; c.fillRect(12, 9, 3, 1);
+  } else if (it.kind === 'spacesuit'){
+    c.fillStyle = '#e4e4ea'; c.fillRect(4, 2, 8, 10); c.fillRect(3, 3, 10, 8);
+    c.fillStyle = '#e0a020'; c.fillRect(5, 4, 6, 4);
+    c.fillStyle = '#ffe08a'; c.fillRect(6, 5, 2, 1);
+    c.fillStyle = '#b8b8c0'; c.fillRect(3, 12, 10, 2); c.fillRect(2, 14, 12, 1);
+  } else if (it.kind === 'rocket'){
+    c.fillStyle = '#e4e4ea'; c.fillRect(6, 4, 4, 8);
+    c.fillStyle = '#c93a3a'; c.fillRect(7, 2, 2, 2); c.fillRect(6, 3, 4, 1); c.fillRect(4, 10, 2, 3); c.fillRect(10, 10, 2, 3);
+    c.fillStyle = '#9fd4e8'; c.fillRect(7, 6, 2, 2);
+    c.fillStyle = '#ff9a30'; c.fillRect(6, 13, 4, 2); c.fillStyle = '#ffe08a'; c.fillRect(7, 13, 2, 1);
   } else if (it.kind === 'divehelm'){
     c.fillStyle = '#9fd4e8'; c.fillRect(4, 2, 8, 9); c.fillRect(3, 3, 10, 7);
     c.fillStyle = '#d9b25a'; c.fillRect(2, 11, 12, 3); c.fillRect(6, 1, 4, 1);
@@ -28340,6 +28574,8 @@ function itemLabel(it){
   if (it.kind === 'nightcap') return 'nightcap soup';
   if (it.kind === 'rod') return 'fishing rod';
   if (it.kind === 'divehelm') return 'diving helmet';
+  if (it.kind === 'spacesuit') return 'space suit';
+  if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
   if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
@@ -28649,9 +28885,9 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'rocket', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'wings'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
 const CAT_SPECIAL  = ['door', 'gate', 'table', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
@@ -28739,6 +28975,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -29169,7 +29406,7 @@ function uiMove(from, to){
   if (to === 'sin' && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
   if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
-  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm'){ toast('that slot wants a helmet'); return 'none'; }
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit'){ toast('that slot wants a helmet'); return 'none'; }
   if (to === 'achest' && A.kind !== 'plate'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings'){ toast('that slot wants a jetpack or wings'); return 'none'; }
@@ -29275,9 +29512,9 @@ function quickMove(key, n){
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
-  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm')){
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm' || it.kind === 'spacesuit')){
     // shift-click armor in your inventory = wear it (swaps what you had on)
-    const slot = it.kind === 'helm' || it.kind === 'divehelm' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const slot = it.kind === 'helm' || it.kind === 'divehelm' || it.kind === 'spacesuit' ? 'head' : it.kind === 'plate' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
     const prev = game.armor[slot];
     game.armor[slot] = it;
     game.slots[key] = prev || null;
@@ -29339,7 +29576,7 @@ function slotRefuses(to, A){
   if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
   if (to === 'sfuel' && !CORE.fuelOps(A)) return 'fuel is coal or wood';
   if (to === 'gfuel' && A.kind !== 'coal') return 'generators burn coal';
-  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm') return 'that slot wants a helmet';
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit') return 'that slot wants a helmet';
   if (to === 'achest' && A.kind !== 'plate') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings') return 'that slot wants a jetpack or wings';
@@ -29578,6 +29815,7 @@ function itemInfoHTML(it, tool){
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
        : it.kind === 'tank' ? 'left click to deploy · right click to mount · W/S A/D drive · LEFT CLICK fires the gun: a shell, a real crater where it lands · it climbs a kerb and a half'
        : it.kind === 'heli' ? 'left click to deploy · right click to board · SPACE up, C down, W/S forward and back, A/D turn · it holds its height · LEFT CLICK the door gun · come down gently'
+       : it.kind === 'rocket' ? 'left click to deploy · right click to take the seat · jet fuel goes in by right click, a launch burns half a tank · SPACE launches: for the Moon, or for home'
        : it.kind === 'jet' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 22 m/s · at the stop keep pulling: a LOOP · SHIFT + A/D: a ROLL · LEFT CLICK the cannon · R a missile (a rocket from your pack) · burns JET FUEL only'
        : it.kind === 'plane' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 15 m/s to take off · A/D bank · C nose down · land slow, level and gentle or it explodes'
        : it.kind === 'hover' ? 'left click to deploy · right click to ride · hovers two metres over anything, water included · drinks its battery'
@@ -29605,6 +29843,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">ticket to ' + it.to + (it.count > 1 ? ' ×' + it.count : '') + '</div><div class="t2">from ' + it.from + ' · when the train stands at the platform, right click a car to board · space steps off at a station</div>';
   } else if (it.kind === 'fish' || it.kind === 'cookedfish'){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
+  } else if (it.kind === 'spacesuit'){
+    html = '<div class="t1">space suit</div><div class="t2">wear it in the helmet slot (E, shift-click) — air on the Moon, and under water for as long as you like</div>';
   } else if (it.kind === 'divehelm'){
     html = '<div class="t1">diving helmet</div><div class="t2">wear it in the helmet slot (E, shift-click) — ninety seconds of air under water</div>';
   } else if (it.kind === 'idol'){
@@ -29834,6 +30074,16 @@ function refreshToolHUD(){
   if (game.driving){
     const e = game.driving;
     const V = VEH[e.type] || VEH.car;
+    if (V.rocket){
+      const F = spaceSys.flight;
+      const ok = game.mode === 'creative' || (e.charge || 0) >= 50;
+      el.innerHTML = '<div class="t1">rocket' + (F ? ' · ' + (F.phase === 'climb' ? 'LIFTOFF' : F.phase === 'landing' ? 'COMING DOWN' : 'THE CROSSING') : '') + '</div>' +
+        '<div class="t2">fuel ' + Math.round(e.charge || 0) + '% · a launch burns half a tank' +
+          (F && F.phase === 'transit' ? ' · ' + spaceSys.nameOf(F.from) + ' behind, ' + spaceSys.nameOf(F.to) + ' ahead · the mouse looks around' : '') + '</div>' +
+        '<div class="t2">' + (F ? 'hold on' : ok ? 'SPACE to launch for ' + spaceSys.nameOf(spaceSys.destOf()) : 'step out and right click it with JET FUEL') + '</div>' +
+        (F ? '' : '<div class="t2">right click to step out</div>');
+      return;
+    }
     el.innerHTML = '<div class="t1">' + V.name + (e.air > 0.15 ? ' · AIR ' + e.air.toFixed(1) + 's' : '') + '</div>' +
       '<div class="t2">' + (V.paddle ? 'rowing' : 'charge ' + Math.round(e.charge || 0) + '%') + ' · ' + Math.abs(e.speed || 0).toFixed(0) + ' m/s' +
       (V.water ? (waterTopAt(e.x, e.z, e.y) != null ? ' · afloat' : ' · BEACHED') : '') +
@@ -29950,9 +30200,15 @@ function updateSurvival(dt){
                    inWater(game.pos.x, game.pos.y + playerHeight() - PLAYER.eyeGap, game.pos.z);
   if (game.breath == null) game.breath = 100;
   const dive = game.armor && game.armor.head && game.armor.head.kind === 'divehelm';
-  if (eyeUnder) game.breath = Math.max(0, game.breath - dt * (dive ? 1.1 : 8));   // 90s in the helmet
+  const suit = game.armor && game.armor.head && game.armor.head.kind === 'spacesuit';
+  // LIFTOFF (Build 74): the Moon has no air. The suit is sealed, and so is the rocket's cabin
+  const vac = game.planet === 'moon' && !suit && !game.driving;
+  if (vac && !game.vacWarned){ game.vacWarned = true; toast('no air — you need a SPACE SUIT'); }
+  if (!vac) game.vacWarned = false;
+  if (eyeUnder) game.breath = Math.max(0, game.breath - dt * (suit ? 0 : dive ? 1.1 : 8));   // 90s in the helmet, forever in the suit
+  else if (vac) game.breath = Math.max(0, game.breath - dt * 5);                             // twenty seconds of held breath
   else game.breath = Math.min(100, game.breath + dt * 30);
-  if (eyeUnder && game.breath <= 0) damagePlayer(dt * 6, 0, 0);
+  if ((eyeUnder || vac) && game.breath <= 0) damagePlayer(dt * 6, 0, 0);
   const bb = $('breathbar');
   if (game.breath < 100){
     bb.classList.remove('hidden');
@@ -30756,6 +31012,9 @@ function saveNow(){
 function buildSaveData(){
   const data = {
     v: 5, name: game.worldName, seed: game.seedStr, mode: game.mode,
+    planet: game.planet || 'earth',                                      // LIFTOFF (Build 74): the other planet rides along, as you left it
+    earth: game.planet === 'moon' ? spaceSys.other || undefined : undefined,
+    moon: game.planet === 'moon' ? undefined : spaceSys.other || undefined,
     edits: CORE.serializeEdits(game.edits),
     player: { x: game.pos.x, y: game.pos.y, z: game.pos.z, yaw: game.yaw, pitch: game.pitch, fly: game.fly },
     slots: game.slots, dispSlot: game.dispSlot, tool: game.tool,
@@ -30820,6 +31079,8 @@ function startWorldData(id, data){
   game.worldName = data.name || (ixEntry && ixEntry.name) || 'world';
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
+  game.planet = data.planet === 'moon' ? 'moon' : 'earth';
+  spaceSys.other = (game.planet === 'moon' ? data.earth : data.moon) || null;
   game.edits = CORE.deserializeEdits(data.edits || []);
   wrenchSys.clearSelection();
   game.mode = data.mode || 'creative';   // pre-survival saves stay creative
@@ -30864,6 +31125,7 @@ function startWorldData(id, data){
   game.day = data.day || 0;
   if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
   weatherSys.fires = []; weatherSys.thunder = []; weatherSys.puddles = (data.weather && data.weather.puddles) || [];
+  if (game.planet === 'moon') weatherSys.set('clear', 1e9);      // no air, no weather
   game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
@@ -30890,6 +31152,7 @@ function startWorldData(id, data){
   game.explored = new Set(data.explored || []);
   game.mapColCache = new Map();
   game.mapRiverCache = new Map();
+  game.mapRegionCache = new Map();
   game.removedTreeSet = new Set(data.removedTrees || []);
   game.decorRemovedSet = new Set(data.removedDecor || []);
   game.decorPlaced = data.placedDecor || [];
@@ -30912,15 +31175,15 @@ function startWorldData(id, data){
   game.snapOn = !!data.snapOn;
   game.gridIdx = Math.min(9, Math.max(0, data.gridIdx | 0));
   const p = data.player || {};
-  game.gen = CORE.makeGen(game.seed);
+  game.gen = CORE.makeGen(game.seed, game.planet);
   meshPool.init();
-  meshPool.setSeed(game.seed);
+  meshPool.setSeed(game.seed, game.planet);
   // fresh world: spawn on dry land -- (0,0) can be mid-ocean now
   const sp0 = p.x == null ? game.gen.spawn() : { x: p.x, z: p.z || 0 };
   const spawnY = game.gen.height(sp0.x, sp0.z) + 1.5;
   game.pos.set(sp0.x, p.y == null ? spawnY : p.y, sp0.z);
-  if (!game.expedition) expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
-  else if (!game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
+  if (!game.expedition && game.planet === 'earth') expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
+  else if (game.expedition && !game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
   if (game.expedition && game.expedition.hall && !game.expedition.hall2) deepSys.lay2(game.expedition, CORE.mulberry32((game.seed ^ 0xbeef) >>> 0));   // a world from before the second
   farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
   // terrain gen changed under an old save? lift the player out of the ground
@@ -30958,7 +31221,7 @@ function startWorldData(id, data){
   game.forceStream = true;
   game.photo = null;          // never inherit photo mode from the last world
   game.scope = 0;
-  loadSys.begin(game.worldName || 'the world');
+  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : ''));
 }
 function reviveItem(it){
   return it || null;
@@ -30981,6 +31244,219 @@ function quitToTitle(){
   game.ui = 'none';
   show('mainmenu');
 }
+
+// ---------- LIFTOFF (Build 74): the rocket, the flight, the Moon ----------
+// The save holds one world per planet (edits, player, entities, torches,
+// the lot); what is yours (the pack, the armor, the coins, the clock) is
+// shared and copied across when you fly. The flight is three scenes: the
+// climb out of the near world, the crossing (the world you left behind you,
+// the one you fly to ahead, both as models in the black), and the descent
+// into the far one, which streams in under you while you come down.
+const spaceSys = {
+  other: null,                   // the planet you are not on, as you left it
+  flight: null,                  // { phase, t, e, from, to, h0, burn }
+  scene: null, cam: null, ship: null, bodies: null, camWas: null, spaceWas: false,
+  TRANSIT_T: 18, CLIMB_H: 240,
+  SHARED: ['name', 'seed', 'mode', 'slots', 'dispSlot', 'tool', 'armor', 'ledger', 'news', 'market', 'phoneLog', 'monPending', 'bank', 'shops', 'casino', 'races', 'charts',
+           'surveyBought', 'surveySold', 'mail', 'guardRun', 'buff', 'guests', 'bossKills', 'hotSel', 'snapOn', 'gridIdx', 'hp', 'heal', 'timeOfDay', 'day'],
+  destOf(){ return game.planet === 'moon' ? 'earth' : 'moon'; },
+  nameOf(p){ return p === 'moon' ? 'the Moon' : 'Earth'; },
+  // the seat: the rocket is flown from outside; look around, and SPACE lights it
+  drive(e, V, dt){
+    const F = this.flight;
+    if (game.camView !== 1){ if (this.camWas == null) this.camWas = game.camView; game.camView = 1; game.chase = null; }
+    if (e.mesh){
+      e.mesh.position.set(e.x, e.y, e.z);
+      e.mesh.rotation.set(0, e.heading || 0, 0);
+      const fl = e.mesh.userData.flame;
+      if (fl){
+        fl.visible = !!(F && (F.phase === 'climb' || F.phase === 'landing') && F.burn);
+        if (fl.visible) fl.scale.set(1 + Math.random() * 0.2, 1 + Math.random() * 0.4, 1 + Math.random() * 0.2);
+      }
+    }
+    if (F && F.phase === 'landing' && loadSys.on) return;      // the ground is still being made: the streamer keeps you at the pad
+    game.pos.set(e.x, e.y + V.ride, e.z);
+    game.vel.set(0, 0, 0);
+    game.grounded = true;
+    vehicleCamera(e.x, e.y, e.z, e.heading || 0, dt, V.seat, null);
+    if (!F){
+      const k = game.keys;
+      if (k['Space'] && !this.spaceWas) this.launch(e);
+      this.spaceWas = !!k['Space'];
+    }
+    game.carHud2T = (game.carHud2T || 0) + dt;
+    if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
+  },
+  launch(e){
+    if (this.flight) return false;
+    if (netSys.guest || netSys.host){ toast('not with company in the world'); return false; }
+    const to = this.destOf();
+    if (game.mode !== 'creative'){
+      if ((e.charge || 0) < 50){ toast('not enough fuel — a launch burns half a tank (jet fuel, right click it in)'); AudioSys.sfx('deny'); return false; }
+      e.charge -= 50;
+    }
+    const h0 = game.gen.height(e.x, e.z);
+    this.flight = { phase: 'climb', t: 0, e, from: game.planet, to, h0: Math.min(h0, e.y), burn: true };
+    e.vy = 0;
+    game.camView = 1; game.chase = null; game.pitch = 0.25;
+    AudioSys.sfx('boom', 6);
+    AudioSys.setHum(true, 1, 0.9);
+    toast('LIFTOFF — for ' + this.nameOf(to));
+    refreshToolHUD();
+    return true;
+  },
+  tick(dt){
+    const F = this.flight;
+    if (!F || !game.running) return;
+    F.t += dt;
+    const e = F.e;
+    if (F.phase === 'climb'){
+      // a slow start on a column of fire, then it gets away from you
+      e.vy = Math.min(75, (e.vy || 0) + (6 + F.t * 5) * dt);
+      e.y += e.vy * dt;
+      if (Math.random() < 0.9) Particles.burst(e.x, e.y - 0.5, e.z, 1.2, [0xffb060, 0xff7a20, 0xd0d0d0], 3, 4 + Math.min(10, e.vy * 0.3));
+      if (e.y - F.h0 > this.CLIMB_H){ F.phase = 'fadeout'; F.t = 0; $('fade').style.opacity = '1'; }
+    } else if (F.phase === 'fadeout'){
+      if (F.t > 0.55){ this.beginTransit(F); F.phase = 'transit'; F.t = 0; $('fade').style.opacity = '0'; }
+    } else if (F.phase === 'transit'){
+      this.transitTick(F, dt);
+      if (F.t > this.TRANSIT_T){ F.phase = 'fadein'; F.t = 0; $('fade').style.opacity = '1'; }
+    } else if (F.phase === 'fadein'){
+      if (F.t > 0.55){ this.endTransit(); this.arrive(F); $('fade').style.opacity = '0'; }
+    } else if (F.phase === 'landing'){
+      if (loadSys.on) return;
+      const r = F.e;
+      const box = [r.x - 2, r.y - 3, r.z - 2, r.x + 2, r.y + 2, r.z + 2];
+      const d = sdfWorld(r.x, r.y - 0.05, r.z, nearEdits(box));
+      // retro-burn: fast until the last thirty metres, then feather it in. The
+      // SDF only knows the last few metres; the heightfield gives the rest
+      const alt = Math.max(d, r.y - game.gen.height(r.x, r.z));
+      r.vy = -Math.max(2.5, Math.min(18, alt * 0.45));
+      if (d < 3) r.vy = -Math.max(2.5, d * 0.9);
+      r.y += r.vy * dt;
+      if (Math.random() < 0.8) Particles.burst(r.x, r.y - 0.5, r.z, 1.4, [0xffb060, 0xbdbdbd, 0x8f8f94], 3, 5);
+      if (d <= 0.12){
+        for (let i = 0; i < 60 && sdfWorld(r.x, r.y + 0.02, r.z, nearEdits(box)) < 0; i++) r.y += 0.05;
+        r.vy = 0;
+        this.flight = null;
+        if (r.mesh && r.mesh.userData.flame) r.mesh.userData.flame.visible = false;
+        AudioSys.setHum(false, 0, 0);
+        AudioSys.sfx('boom', 30);
+        Particles.burst(r.x, r.y, r.z, 4, [0xbdbdbd, 0x8f8f94, 0x6a6a70], 40, 6);
+        toast('touchdown on ' + this.nameOf(game.planet) + ' — right click to step out');
+        refreshToolHUD();
+        markSave(); saveNow();
+      }
+    }
+  },
+  // the crossing: a scene of its own. The world you left sits at the origin,
+  // the one you fly to a kilometre down the z axis; the ship crosses in
+  // TRANSIT_T seconds and the camera hangs off it, turned by the mouse
+  beginTransit(F){
+    const S = new THREE.Scene();
+    S.background = new THREE.Color(0x000004);
+    const mk = (kind, r) => {
+      const cv = document.createElement('canvas'); cv.width = 64; cv.height = 32;
+      const c = cv.getContext('2d'), rng = CORE.mulberry32(kind === 'earth' ? 0xea47 : 0x300d);
+      if (kind === 'earth'){
+        c.fillStyle = '#2b64c8'; c.fillRect(0, 0, 64, 32);
+        c.fillStyle = '#4c8a3c'; for (let i = 0; i < 16; i++) c.fillRect((rng() * 60) | 0, (4 + rng() * 22) | 0, (2 + rng() * 9) | 0, (2 + rng() * 6) | 0);
+        c.fillStyle = '#a08a58'; for (let i = 0; i < 7; i++) c.fillRect((rng() * 60) | 0, (8 + rng() * 14) | 0, 2, 2);
+        c.fillStyle = '#eef4ff'; c.fillRect(0, 0, 64, 2); c.fillRect(0, 30, 64, 2);
+        for (let i = 0; i < 26; i++) c.fillRect((rng() * 62) | 0, (2 + rng() * 28) | 0, (2 + rng() * 5) | 0, 1);
+      } else {
+        c.fillStyle = '#8f8f94'; c.fillRect(0, 0, 64, 32);
+        c.fillStyle = '#6a6a70'; for (let i = 0; i < 18; i++) c.fillRect((rng() * 62) | 0, (rng() * 30) | 0, (1 + rng() * 5) | 0, (1 + rng() * 3) | 0);
+        c.fillStyle = '#a8a8ae'; for (let i = 0; i < 24; i++) c.fillRect((rng() * 63) | 0, (rng() * 31) | 0, 1, 1);
+      }
+      const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      return new THREE.Mesh(new THREE.SphereGeometry(r, 24, 16), new THREE.MeshLambertMaterial({ map: tex }));
+    };
+    const from = mk(F.from, F.from === 'earth' ? 70 : 19), to = mk(F.to, F.to === 'earth' ? 70 : 19);
+    from.position.set(0, 0, 0); to.position.set(0, 0, 1000);
+    S.add(from, to);
+    const pos = [];
+    for (let i = 0; i < 1600; i++){ const a = Math.random() * Math.PI * 2, b = Math.acos(Math.random() * 2 - 1); pos.push(Math.cos(a) * Math.sin(b) * 4000, Math.cos(b) * 4000, Math.sin(a) * Math.sin(b) * 4000); }
+    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+    const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 2, sizeAttenuation: false }));
+    S.add(stars);
+    const sun = new THREE.DirectionalLight(0xfff2dc, 1.6); sun.position.set(0.8, 0.5, -0.7); S.add(sun);
+    S.add(new THREE.AmbientLight(0x404050, 0.6));
+    const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(40, 12, 8), new THREE.MeshBasicMaterial({ color: 0xfff6e0 }));
+    sunDisc.position.set(2600, 1600, -2300); S.add(sunDisc);
+    const ship = entMesh('rocket', F.e);
+    ship.rotation.set(Math.PI / 2, 0, 0);       // nose along +z
+    if (ship.userData.flame) ship.userData.flame.visible = true;
+    S.add(ship);
+    this.scene = S; this.ship = ship; this.bodies = { from, to, stars, sunDisc };
+    this.cam = new THREE.PerspectiveCamera(game.camera.fov, game.camera.aspect, 0.5, 20000);
+    game.yaw = 0; game.pitch = 0.18;
+    AudioSys.setHum(true, 0.6, 0.25);
+  },
+  transitTick(F, dt){
+    const p = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, F.t / this.TRANSIT_T));
+    const rFrom = this.bodies.from.geometry.parameters.radius, rTo = this.bodies.to.geometry.parameters.radius;
+    const z = (rFrom + 30) + (1000 - rTo - 30 - rFrom - 30) * p;
+    this.ship.position.set(0, 0, z);
+    this.ship.rotation.z += dt * 0.15;       // a slow roll
+    this.bodies.from.rotation.y += dt * 0.02; this.bodies.to.rotation.y += dt * 0.02;
+    const R = 16, cp = Math.cos(game.pitch), sp = Math.sin(game.pitch);
+    this.cam.position.set(Math.sin(game.yaw) * cp * R, sp * R + 1.5, z - Math.cos(game.yaw) * cp * R);
+    this.cam.lookAt(0, 0, z + 2);
+    this.cam.aspect = game.camera.aspect; this.cam.fov = game.camera.fov; this.cam.updateProjectionMatrix();
+    if (this.ship.userData.flame) this.ship.userData.flame.scale.set(1, 0.6 + Math.random() * 0.3, 1);
+    game.carHud2T = (game.carHud2T || 0) + dt;
+    if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
+  },
+  endTransit(){
+    if (this.bodies){
+      for (const o of [this.bodies.from, this.bodies.to, this.bodies.stars, this.bodies.sunDisc]){
+        if (o.geometry) o.geometry.dispose();
+        if (o.material){ if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+      }
+    }
+    this.scene = null; this.ship = null; this.bodies = null; this.cam = null;
+  },
+  // the far world takes over: this one is put away as it stands, the other
+  // planet's save comes up (or is born), and the rocket appears high over
+  // the pad with you in it
+  arrive(F){
+    const idx = game.entities.indexOf(F.e);
+    if (idx >= 0) game.entities.splice(idx, 1);          // the rocket leaves with you
+    game.driving = null;
+    const live = buildSaveData();
+    delete live.earth; delete live.moon;
+    const prev = this.other;
+    const next = prev ? Object.assign({}, prev) : { v: 5, edits: [], entities: [] };
+    for (const k of this.SHARED) if (live[k] !== undefined) next[k] = live[k];
+    next.planet = F.to;
+    // where it comes down: where you last stood on that world (the pad you left from), or the flat ground the generator picks
+    const land = prev && prev.player && prev.player.x != null ? { x: prev.player.x, z: prev.player.z } : null;
+    next.player = land ? { x: land.x, y: null, z: land.z, yaw: F.e.heading || 0, pitch: 0, fly: false } : null;
+    if (F.to === 'moon') next.earth = live; else next.moon = live;
+    this.teardown();
+    startWorldData(game.worldId, next);
+    const r = spawnEntity('rocket', game.pos.x, game.pos.y + 110, game.pos.z);
+    r.charge = F.e.charge || 0; r.hp = F.e.hp; r.heading = F.e.heading || 0; r.vy = -4;
+    r.mesh = entMesh('rocket', r); game.scene.add(r.mesh);
+    game.driving = r;
+    game.camView = 1; game.chase = null; game.pitch = 0.2;
+    F.e = r; F.phase = 'landing'; F.t = 0; F.burn = true;
+    AudioSys.setHum(true, 0.8, 0.5);
+    refreshToolHUD();
+  },
+  teardown(){
+    game.photo = null; game.scope = 0;
+    for (const e of game.entities) e.mesh = null;
+    game.running = false;
+    AudioSys.setHum(false, 0, 0);
+    if (game.terrain) game.terrain.disposeAll();
+    lodTerrain.teardown();
+    farTreeSys.teardown();
+    if (game.scene) game.scene.clear();
+    game.driving = null; game.chase = null;
+  },
+};
 
 // ---------- main loop ----------
 let lastT = performance.now();
@@ -32536,6 +33012,8 @@ function frameBody(now){
   if (!game.running || !game.scene){ return; }
 
   loadSys.tick();
+  spaceSys.tick(dt);
+  const onEarth = game.planet !== 'moon';       // LIFTOFF (Build 74): the Moon has no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
   } else if (game.ui === 'none'){
@@ -32589,7 +33067,7 @@ function frameBody(now){
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
   if (!netSys.guest) waterSys.tick(dt);
   fishingTick(dt);
-  if (!netSys.guest) wreckSys.tick(dt);
+  if (!netSys.guest && onEarth) wreckSys.tick(dt);
   lodTerrain.update(game.pos.x, game.pos.y, game.pos.z);
   lodTerrain.frame();
   if (!meshPool.ok) lodTerrain.processSync(2);
@@ -32605,28 +33083,28 @@ function frameBody(now){
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
   powerSys.update(dt);
-  if (!netSys.guest) villageSys.tick(dt);
+  if (!netSys.guest && onEarth) villageSys.tick(dt);
   if (!netSys.guest) crewSys.tick(dt);
-  if (!netSys.guest) expeditionSys.tick(dt);
-  if (!netSys.guest) deepSys.tick(dt);
-  if (!netSys.guest) raidSys.tick(dt);
-  if (!netSys.guest) raidSys.update(dt);
-  if (!netSys.guest){ raidBaseSys.tick(dt); baseSys.tick(dt); }
-  if (!netSys.guest) spireSys.tick(dt);
-  if (!netSys.guest) zigSys.tick(dt);
+  if (!netSys.guest && onEarth) expeditionSys.tick(dt);
+  if (!netSys.guest && onEarth) deepSys.tick(dt);
+  if (!netSys.guest && onEarth) raidSys.tick(dt);
+  if (!netSys.guest && onEarth) raidSys.update(dt);
+  if (!netSys.guest && onEarth){ raidBaseSys.tick(dt); baseSys.tick(dt); }
+  if (!netSys.guest && onEarth) spireSys.tick(dt);
+  if (!netSys.guest && onEarth) zigSys.tick(dt);
   weatherSys.tick(dt);
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); menagerieSys.tick(dt); }
-  cityLightSys.tick(dt);
-  hearthSys.tick(dt);
+  if (!netSys.guest && onEarth){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); menagerieSys.tick(dt); }
+  if (onEarth) cityLightSys.tick(dt);
+  if (onEarth) hearthSys.tick(dt);
   boreSys.tick(dt);
   mirrorSys.tick(dt);
   if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
-  if (!netSys.guest) siegeSys.tick(dt);
-  roadSys.tick(dt);
-  fallsSys.tick(dt);
-  lineSys.tick(dt);
-  if (!netSys.guest) bossSys.tick(dt);
+  if (!netSys.guest && onEarth) siegeSys.tick(dt);
+  if (onEarth) roadSys.tick(dt);
+  if (onEarth) fallsSys.tick(dt);
+  if (onEarth) lineSys.tick(dt);
+  if (!netSys.guest && onEarth) bossSys.tick(dt);
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
     let bb = null, bd = 90;
@@ -32700,7 +33178,7 @@ function frameBody(now){
   {
     const fb = $('flightbox');
     const dv = game.driving;
-    if (dv && VEH[dv.type] && VEH[dv.type].fly){
+    if (dv && VEH[dv.type] && VEH[dv.type].fly && !VEH[dv.type].rocket){
       fb.classList.remove('hidden');
       const ground = game.gen.height(dv.x, dv.z);
       $('flighttext').textContent = 'ALT ' + Math.round(dv.y - ground) + 'm · ' + Math.round((dv.speed || 0) * 3.6) + ' km/h · ' +
@@ -32749,7 +33227,9 @@ function frameBody(now){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
     }
-    $('navpos').textContent = posTxt + '  ·  ' + seasonSys.name + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + ' · ' + regionNameAt(game.pos.x, game.pos.z);
+    { const vis = !!(game.armor && game.armor.head && game.armor.head.kind === 'spacesuit' && game.camView === 0 && !game.photo && !game.driving);
+      if (vis !== game.visorOn){ game.visorOn = vis; $('visor').classList.toggle('hidden', !vis); } }
+    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + ' · ' + regionNameAt(game.pos.x, game.pos.z);
   }
 
   // autosave: 2.5s after last change
@@ -32757,7 +33237,8 @@ function frameBody(now){
 
   shadowSys.decide();
   godRays.prepass();
-  game.renderer.render(game.scene, game.camera);
+  if (spaceSys.scene && spaceSys.flight && spaceSys.flight.phase === 'transit') game.renderer.render(spaceSys.scene, spaceSys.cam);
+  else game.renderer.render(game.scene, game.camera);
   godRays.composite();
   if (game.shotReq){ game.shotReq = false; saveSnapshot(); }
 
@@ -32855,7 +33336,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, spawnEntity, gravityNow, MOON_G, skySys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

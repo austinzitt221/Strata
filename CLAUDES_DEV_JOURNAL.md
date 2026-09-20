@@ -1448,6 +1448,27 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-20, night — LIFTOFF A
+
+The Moon exists. The thing I was afraid of, a second world inside one
+save, turned out to be the cheap part: the save was already one big
+object, so the other planet is that object stashed under a key, and
+travelling is quit-to-title-without-the-menu followed by start-world
+with the other blob. Two lines of the world start assumed an
+expedition exists; on the Moon nothing does, and that was the whole
+bug list.
+
+The flight is three scenes because the honest version (the LOD ladder
+one scale up) would have cost a build on its own and shown a grey
+sphere. Models in the black, eighteen seconds, the mouse free: it
+reads. The headless renderer runs at a frame a second from altitude,
+so the test drives the flight clock itself; a note for the standing
+notes.
+
+The Moon has nothing in it yet and that is fine for a first landing;
+B is where it gets ores, ruins and a thing that hunts you. What I want
+to hear from Austin is whether the crossing is a moment or a wait.
+
 ## 2026-09-20, later — small things, and a stale test
 
 Place names and footsteps while the regression chain ran. The names
@@ -1699,6 +1720,12 @@ about 25 minutes together.
 screenshot difference and reports the luminance step at the coverage
 edge; `linecheck.js` compares the near mesh's lighting terms to the
 skin's per 2 m cell. Use them before touching the skin's shading.
+
+**Headless time (Build 74).** SwiftShader renders the world from
+altitude at about one frame a second, so anything timed by `dt` (a
+flight, a descent) crawls in a test. Drive the system's clock from the
+test (`spaceSys.tick(0.05)` a few times per poll) and test the sequence,
+not the seconds.
 
 **Performance instruments (Build 42).** `b42shot.js <file> <prefix>
 [sun]` renders one world at fixed poses (weather clear, clock held,

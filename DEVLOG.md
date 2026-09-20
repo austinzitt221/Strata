@@ -2,6 +2,54 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 74 — LIFTOFF A: the rocket, the crossing, the Moon (2026-09-20)
+
+The Space Arc opens. The sky stops being a ceiling.
+
+- **A second world in the same save.** Every world now holds one planet
+  per blob: edits, entities, torches, beds, beacons, explored map, the
+  lot. What is yours (pack, dispenser, armor, coins, bank, phone, hp,
+  the clock) is shared and copied across when you fly. Old saves load
+  as Earth with no Moon yet. The save format is `planet` + `moon`
+  (or `earth`) beside the live blob.
+- **The Moon.** A generator of its own behind the same interface as the
+  Earth's: rolling maria and highlands, craters of every size (a bowl
+  and a rim, up to a cell of 64 m), two new materials (**regolith** on
+  top, **moonrock** under, basalt far down), bedrock as ever. No water,
+  no trees, no villages, roads, rivers, raids, bosses or weather. A
+  sixth of the gravity: the same jump goes eight metres up and takes
+  four seconds to land. The sky is black at noon with the stars out; the
+  sun is hard; the **Earth hangs in one place** in the sky, day and
+  night. Regions are named in the Moon's voice (*the Velmere mare*,
+  *Kelrow crater*, *the Ostgarth dust*). Mining and building work
+  exactly as on Earth, and the map draws it.
+- **The vacuum.** Without a space suit your breath drains in twenty
+  seconds and then you take damage; the rocket's cabin is sealed. The
+  **space suit** is a helmet-slot item (iron, ruby, wire, two aether
+  ingots at a station): air on the Moon, and unlimited air under
+  water. A white helmet with a gold visor and a pack on the body; a
+  faint visor vignette in first person.
+- **The rocket.** A vehicle kit (iron 40, ruby 10, wire 16, aether 6,
+  jet fuel 2): deploy it, take the seat (it is flown from outside, in
+  the chase view), fuel it with jet fuel by right click, and SPACE
+  launches for the Moon, or for home. A launch burns half a tank;
+  creative launches free. It travels with you and stands where it
+  lands; on the way home it comes down where you left from.
+- **The flight.** Three scenes: the climb on a column of fire out of
+  the near world; the crossing in a scene of its own, the world you
+  left behind you and the one you fly to ahead, both as pixel models in
+  the black, the mouse looking around from the ship, eighteen seconds;
+  then the far world loads under the loading screen and the rocket
+  comes down on its retro-burn onto the pad, fast until the last thirty
+  metres.
+- Not yet (LIFTOFF B): moon ores, abandoned moon bases, the moon boss,
+  the mech suit, sound in a vacuum. Beacons already work off-world
+  because the blob carries them; untested in anger.
+- Known: the transit is models, not the LOD ladder the roadmap
+  imagined; that version can come once the Moon has more to look at.
+  The touchdown's dust particles drift past the camera as large
+  squares for a second or two.
+
 ## Build 73 — SMALL THINGS: place names and footsteps (2026-09-20)
 
 Two of the small things from the roadmap, built while the regression

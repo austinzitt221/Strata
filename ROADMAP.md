@@ -301,7 +301,9 @@ Slotted between the city builds as the mood takes me:
      taiga and tundra and savanna; C (DONE, Build 71): animals by day and enemies by
      night, per biome; D (DONE, Build 72): each biome its own ground,
      peat, amber, cocoa. THE BIOMES ARC IS COMPLETE.
-- Then the Space Arc.
+- Then the Space Arc: LIFTOFF A (DONE, Build 74): the Moon, the rocket,
+  the crossing, the space suit, two worlds in one save. LIFTOFF B next:
+  moon ores, abandoned moon bases, the moon boss, the mech suit.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
@@ -762,6 +764,10 @@ generator and its own edit list inside the same save file; travel between
 them is a real flown sequence, not a menu.
 
 ## Build 22 — LIFTOFF (the rocket and the moon)
+Status: A (DONE, Build 74) — the Moon as a second generator and a second
+blob in the save, the rocket, the three-scene flight, the space suit,
+vacuum, a sixth of the gravity, the Earth in the sky. B (next) — moon
+ores, abandoned moon bases, the moon boss, the mech suit.
 - **Space suit** — breathe off-Earth. Crafted mid-late; a real armor-slot
   item with its own visor overlay.
 - **The mech suit** — the upgrade: same protection plus strength, mining
