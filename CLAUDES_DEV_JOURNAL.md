@@ -1448,6 +1448,43 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-23, later — STRATA C
+
+The war. Four enemies, two shifts. The day's two borrow the husk and
+the stalker brains with a `dayOk` flag so they neither burn nor flee
+at dawn and mind no light; the night's two got a brain of their own,
+the first ranged one in the game outside the garrisons: hold a
+distance, sidestep, face, fire on the beat, walk off at dawn.
+
+Two things I am glad I caught before they shipped. The garrison's
+`strafe` explodes where a miss lands, and an explosion is a CSG edit:
+three lancers missing half the night would have pitted the ground
+and grown the save by hundreds of edits an hour. The bolt got its
+own march that carves nothing. And the first suite run had my player
+die in the first duel, silently: `damagePlayer` does nothing once the
+death screen is up, `prey` sees no one, and every number after it was
+zero or nonsense. Then the second run had reinforcements: the spawner
+runs inside `updateEntities`, so a twelve-second duel at night on
+Strata is not a duel. Freeze `spawnT` for the fight you are measuring.
+Also: a sixty-metre cube union and then a sixty-metre cube subtract
+is not a floor, it is a pit. Air first, then the floor under it.
+
+The bolts are hitscan, and my first draft aimed them at where you
+are, which meant moving did nothing and only the scatter decided. I
+worked the standing-still hit rate out on paper (three quarters at
+the lancer's scatter, nine in ten at the hollow's) and it came to
+fifty-odd damage a second at full caps with no way to dodge. So the
+aim is taken at the start of the wind-up and fired half a second
+later: stand still and it lands, sidestep and it goes where you
+were. That is a rule a player can learn in one night. If the
+playtest still says death, the knobs are the wind-up length and
+`spread`, not the damage.
+
+The null core is the hook for D: the thing at the centre is opened
+with them, so the night is worth fighting rather than hiding from.
+
+Next: STRATA D, the centre, the boss, the ending.
+
 ## 2026-09-23 — STRATA B
 
 The maw is the first thing in this game that fights back without being

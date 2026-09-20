@@ -3676,7 +3676,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'w
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -7810,7 +7810,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -12371,6 +12371,14 @@ const ENT_DEF = {
   zebra:    { hp: 26, speed: 3.8, r: 0.45, h: 1.2,  cap: 5, like: 'grazer' },
   crawler:  { hp: 22, speed: 5.2, r: 0.35, h: 0.6,  cap: 5, like: 'stalker', dmg: 5 },
   dustcrawler: { hp: 30, speed: 5.6, r: 0.36, h: 0.6, cap: 6, like: 'stalker', dmg: 6 },      // LIFTOFF B (Build 75): the Moon's night
+  // STRATA C (Build 87): the war. By day the melee things, which fear no
+  // sun and no light and are never off duty; by night the ranged ones,
+  // which are worse (`ranged`: bolt damage, seconds between bolts, the
+  // distance they hold, how far they see; `night`: they walk off at dawn)
+  thrall:   { hp: 80,  speed: 3.5, r: 0.42, h: 1.9, cap: 6, like: 'husk', aggro: 40, dmg: 14, dayOk: true, war: 1 },
+  gnasher:  { hp: 48,  speed: 6.2, r: 0.4,  h: 0.7, cap: 8, like: 'stalker', aggro: 36, dmg: 9, dayOk: true, war: 1 },
+  lancer:   { hp: 150, speed: 3.0, r: 0.42, h: 2.3, cap: 3, ranged: { dmg: 16, rate: 1.7, keep: 14, range: 46, spread: 1.7, col: 0x9affb0 }, night: 1, war: 1 },
+  hollow:   { hp: 90,  speed: 4.4, r: 0.5,  h: 1.0, cap: 4, ranged: { dmg: 10, rate: 1.4, keep: 9, range: 36, spread: 1.5, col: 0xff4a8a }, fly: true, hover: 3.0, night: 1, war: 1 },
   bogwight: { hp: 90, speed: 1.3, r: 0.5,  h: 2.0,  cap: 3, like: 'husk', dmg: 20 },
   wolf:     { hp: 30, speed: 5.8, r: 0.36, h: 0.8,  cap: 4, like: 'stalker', dmg: 7, aggro: 30 },
   frostwisp:{ hp: 12, speed: 2.2, r: 0.3,  h: 0.5,  cap: 3, like: 'wisp', dmg: 20, fly: true },
@@ -12403,10 +12411,14 @@ const ENT_DEF = {
 // by archetype: what grazes by day, what hunts by night (Build 71)
 const BIOME_DAY = { 9: 'monkey', 5: 'croc', 10: 'elk', 11: 'hare', 12: 'zebra' };
 const BIOME_NIGHT = { 9: { type: 'crawler', pack: 2 }, 5: { type: 'bogwight', pack: 1 }, 10: { type: 'wolf', pack: 3 }, 11: { type: 'frostwisp', pack: 1 }, 12: { type: 'hyena', pack: 2 }, 13: { type: 'dustcrawler', pack: 3 } };
-const HOSTILE_BEASTS = new Set(['crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler']);
+const HOSTILE_BEASTS = new Set(['crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler', 'thrall', 'gnasher', 'lancer', 'hollow']);
 const BEAST_DROP = {
   monkey: [['meat', 1]], croc: [['meat', 3], ['coin', 4]], elk: [['meat', 4]], hare: [['meat', 1]], zebra: [['meat', 3]],
   crawler: [['fang', 1], ['coin', 2]], dustcrawler: [['lunite', 1], ['coin', 3]], bogwight: [['huskmeat', 2], ['coin', 6]], wolf: [['fang', 2], ['meat', 1]], frostwisp: [['wispcore', 1], ['coin', 3]], hyena: [['fang', 1], ['meat', 1]],
+  // STRATA C (Build 87): loot better than anywhere (a third number is the
+  // odds of that line; none means always)
+  thrall: [['voidore', 2], ['coin', 14], ['astrium', 1, 0.12]], gnasher: [['voidore', 1], ['coin', 8], ['voidfruit', 1, 0.5]],
+  lancer: [['nullcore', 1], ['voidore', 3], ['coin', 34], ['astrium', 1, 0.5]], hollow: [['nullcore', 1], ['coin', 24], ['diamond', 2, 0.5]],
 };
 const CREW_HAT = 0x4fc3f7;
 const VROLE = {
@@ -13181,6 +13193,8 @@ function entMesh(type, ent){
     zebra:   { bw: 0.6, bh: 0.55, bd: 1.2, body: 0xe8e6e0, by: 0.85, hw: 0.3, hh: 0.36, hd: 0.48, head: 0xe8e6e0, snout: 0x2a2a2a, hy: 1.06, ears: 0.12, tail: [0.06, 0.4], tailCol: 0x2a2a2a, lw: 0.13, ly: 0.29, stripes: 1 },
     crawler: { bw: 0.4, bh: 0.22, bd: 0.7, body: 0x2e5a2a, ridge: 0x1c3a1a, by: 0.3, hw: 0.3, hh: 0.2, hd: 0.26, head: 0x3a6a30, snout: 0x1c3a1a, hy: 0.34, eye: 0xd8ff60, lw: 0.07, ly: 0.15, six: 1 },
     dustcrawler: { bw: 0.42, bh: 0.24, bd: 0.72, body: 0x8a8a92, ridge: 0x5a5a64, by: 0.3, hw: 0.3, hh: 0.2, hd: 0.26, head: 0x9a9aa2, snout: 0x5a5a64, hy: 0.34, eye: 0x9fe8ff, lw: 0.07, ly: 0.15, six: 1 },
+    // STRATA C (Build 87): six legs, a ridge of magenta spines, pink eyes
+    gnasher: { bw: 0.46, bh: 0.28, bd: 0.82, body: 0x3a2a4a, ridge: 0x8a3aaa, by: 0.34, hw: 0.36, hh: 0.26, hd: 0.34, head: 0x4a3458, snout: 0x1a1020, hy: 0.4, eye: 0xff4a8a, ears: 0.12, lw: 0.08, ly: 0.17, six: 1 },
     wolf:    { bw: 0.34, bh: 0.32, bd: 0.9, body: 0x8a8a8a, ridge: 0x5a5a5a, by: 0.5, hw: 0.28, hh: 0.24, hd: 0.36, head: 0x9a9a9a, snout: 0x3a3a3a, hy: 0.58, ears: 0.1, eye: 0xffe070, tail: [0.08, 0.45], tailCol: 0x6a6a6a, lw: 0.1, ly: 0.2 },
     hyena:   { bw: 0.36, bh: 0.34, bd: 0.85, body: 0xa08a5a, ridge: 0x3a3020, by: 0.55, hw: 0.3, hh: 0.26, hd: 0.34, head: 0xa89060, snout: 0x2a2420, hy: 0.62, ears: 0.12, eye: 0xffd060, tail: [0.06, 0.3], tailCol: 0x3a3020, lw: 0.1, ly: 0.22, spots: 1 },
   };
@@ -13347,6 +13361,49 @@ function entMesh(type, ent){
       g.scale.setScalar(2.1);
     }
     g.userData.wings = wings;
+  } else if (type === 'thrall' || type === 'lancer'){
+    // STRATA C (Build 87): Strata's own, gone wrong. A thrall is Vehl's
+    // shape broadened and bent, bone plates strapped on, a stalk for a
+    // club, eyes lit red; a lancer is the same shape drawn tall and hooded,
+    // with a staff that carries a null core at its head
+    const L = type === 'lancer', skinC = L ? 0x5a4a6a : 0x6a5a6a, plate = 0xd8d0c0, dark = 0x1a1424;
+    const sc = L ? 1.2 : 1;
+    legs.push(box(0.14, 0.7 * sc, 0.16, 0x3a2a3a, -0.11, 0.35 * sc, 0));
+    legs.push(box(0.14, 0.7 * sc, 0.16, 0x3a2a3a, 0.11, 0.35 * sc, 0));
+    box(L ? 0.34 : 0.5, 0.62 * sc, L ? 0.22 : 0.3, L ? dark : skinC, 0, 1.0 * sc, L ? 0 : 0.04);
+    if (!L){ box(0.56, 0.2, 0.36, plate, 0, 1.22, 0.04); box(0.3, 0.3, 0.06, plate, 0, 0.95, -0.14); }   // the plates
+    const arms = [];
+    for (const sx of [-1, 1]) arms.push(box(0.1, 0.56 * sc, 0.12, skinC, sx * (L ? 0.24 : 0.34), 1.0 * sc, 0));
+    box(0.14, 0.14, 0.14, skinC, 0, 1.38 * sc, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), new THREE.MeshBasicMaterial({ color: skinC }));
+    head.position.set(0, 1.68 * sc, 0); head.scale.set(1, 1.2, 0.95); g.add(head);
+    if (L) box(0.62, 0.42, 0.52, dark, 0, 1.86 * sc, 0.1);    // the hood
+    const eyeM = new THREE.MeshBasicMaterial({ color: L ? 0x9affb0 : 0xff3a3a });
+    for (const sx of [-1, 1]){ const e2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.05), eyeM); e2.position.set(sx * 0.11, 1.7 * sc, -0.26); g.add(e2); }
+    if (L){
+      const st = box(0.06, 2.4, 0.06, 0x2a1a2a, 0.36, 1.3, -0.1);            // the staff, right hand
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial({ color: 0x9affb0 }));
+      tip.position.set(0, 1.28, 0); st.add(tip); g.userData.tip = tip;
+    } else {
+      const club = box(0.14, 0.9, 0.14, 0x3a2848, 0, -0.5, -0.1, arms[1]); club.rotation.x = 0.5;   // hangs from the right arm
+      box(0.22, 0.24, 0.22, 0x8a3aaa, 0, -0.5, 0, club);
+    }
+    g.userData.noShadow = false;
+  } else if (type === 'hollow'){
+    // STRATA C (Build 87): an eye with nothing behind it, hung in the air
+    // on a tangle of tendrils; the iris is a null core's green
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), new THREE.MeshBasicMaterial({ color: 0x1a1424 })); g.add(ball);
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), new THREE.MeshBasicMaterial({ color: 0x9affb0 })); iris.position.set(0, 0, -0.32); g.add(iris);
+    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.08), new THREE.MeshBasicMaterial({ color: 0x050308 })); pupil.position.set(0, 0, -0.5); g.add(pupil);
+    for (let i = 0; i < 5; i++){ const a = i / 5 * Math.PI * 2; const t = box(0.05, 0.7, 0.05, 0x2a1a34, Math.cos(a) * 0.2, -0.62, Math.sin(a) * 0.2); t.rotation.z = Math.cos(a) * 0.3; t.rotation.x = -Math.sin(a) * 0.3; }
+    const hc = document.createElement('canvas'); hc.width = hc.height = 32;
+    const hx = hc.getContext('2d');
+    const grd = hx.createRadialGradient(16, 16, 2, 16, 16, 16);
+    grd.addColorStop(0, 'rgba(154,255,176,0.8)'); grd.addColorStop(0.5, 'rgba(90,200,120,0.3)'); grd.addColorStop(1, 'rgba(40,120,80,0)');
+    hx.fillStyle = grd; hx.fillRect(0, 0, 32, 32);
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(hc), transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+    halo.scale.set(2.2, 2.2, 1); g.add(halo);
+    g.userData.core = iris; g.userData.flecks = []; g.userData.halo = halo; g.userData.noShadow = true;
   } else if (type === 'wisp' || type === 'frostwisp'){
     // a caged light: a bright core, two flecks that orbit it, a soft halo
     // (the tundra's is paler and colder)
@@ -13478,7 +13535,7 @@ function killEntity(e, byPlayer){
   if (byPlayer){
     if (BEAST_DROP[e.type]){
       const parts = [];
-      for (const [k, n] of BEAST_DROP[e.type]){ addStackItem(k, n); parts.push('+' + n + ' ' + itemLabel({ kind: k, count: n })); }
+      for (const [k, n, p] of BEAST_DROP[e.type]){ if (p != null && Math.random() > p) continue; addStackItem(k, n); parts.push('+' + n + ' ' + itemLabel({ kind: k, count: n })); }
       toast(parts.join('  ·  '));
     }
     else if (e.type === 'grazer'){ const n = seasonSys.summer ? 4 : 2; addStackItem('meat', n); toast('+' + n + ' meat' + (n > 2 ? ' (summer)' : '')); }
@@ -21587,13 +21644,13 @@ const farmSys = {
 // is the one that went in: its record rides inside the item -- the
 // villager's house and crew, a boss's kind, an animal's hp.
 const MENAGERIE_TYPES = ['grazer', 'sheep', 'lurker', 'stalker', 'husk', 'wisp', 'angel', 'guard', 'villager', 'burrower', 'warden', 'tyrant', 'architect', 'leviathan', 'archangel', 'guardian', 'knocker', 'soldier',
-  'monkey', 'croc', 'elk', 'hare', 'zebra', 'crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler', 'dustwyrm'];
+  'monkey', 'croc', 'elk', 'hare', 'zebra', 'crawler', 'bogwight', 'wolf', 'frostwisp', 'hyena', 'dustcrawler', 'dustwyrm', 'thrall', 'gnasher', 'lancer', 'hollow'];
 const MENAGERIE_NAME = { grazer: 'grazer', sheep: 'sheep', lurker: 'lurker', stalker: 'stalker', husk: 'husk', wisp: 'wisp', angel: 'angel', guard: 'city guard', villager: 'villager',
   burrower: 'Burrower', warden: 'Warden', tyrant: 'Magma Tyrant', architect: 'Architect', leviathan: 'Leviathan', archangel: 'Archangel', guardian: 'Tomb Guardian', knocker: 'Knocker', soldier: 'soldier',
-  monkey: 'monkey', croc: 'crocodile', elk: 'elk', hare: 'hare', zebra: 'zebra', crawler: 'crawler', bogwight: 'bogwight', wolf: 'wolf', frostwisp: 'frost wisp', hyena: 'hyena', dustcrawler: 'dust crawler', dustwyrm: 'Dust Wyrm' };
+  monkey: 'monkey', croc: 'crocodile', elk: 'elk', hare: 'hare', zebra: 'zebra', crawler: 'crawler', bogwight: 'bogwight', wolf: 'wolf', frostwisp: 'frost wisp', hyena: 'hyena', dustcrawler: 'dust crawler', dustwyrm: 'Dust Wyrm', thrall: 'thrall', gnasher: 'gnasher', lancer: 'lancer', hollow: 'hollow' };
 const MENAGERIE_COL = { grazer: '#c8a24b', sheep: '#eceae2', lurker: '#3a5a3a', stalker: '#2c3444', husk: '#6a5040', wisp: '#9fe8ff', angel: '#e8e0ff', guard: '#2f4f7a', villager: '#d9b25a',
   burrower: '#8a5a3a', warden: '#7a7a8a', tyrant: '#ff6a2a', architect: '#c9c9d9', leviathan: '#2a6a9a', archangel: '#ffe680', guardian: '#8a7a4a', knocker: '#6f6f78', soldier: '#556b3a',
-  monkey: '#6b4a2a', croc: '#3f5a2e', elk: '#6a4a30', hare: '#c9c0b0', zebra: '#e8e6e0', crawler: '#2e5a2a', bogwight: '#3f4a3a', wolf: '#8a8a8a', frostwisp: '#f0fbff', hyena: '#a08a5a', dustcrawler: '#8a8a92', dustwyrm: '#b8b8c4' };
+  monkey: '#6b4a2a', croc: '#3f5a2e', elk: '#6a4a30', hare: '#c9c0b0', zebra: '#e8e6e0', crawler: '#2e5a2a', bogwight: '#3f4a3a', wolf: '#8a8a8a', frostwisp: '#f0fbff', hyena: '#a08a5a', dustcrawler: '#8a8a92', dustwyrm: '#b8b8c4', thrall: '#6a5a6a', gnasher: '#3a2a4a', lancer: '#1a1424', hollow: '#9affb0' };
 const menagerieSys = {
   beam: null, hold: null,
   secs(e){
@@ -23001,6 +23058,7 @@ function trySpawnEntities(){
   const h = game.gen.height(x, z);
   if (game.gen.wetAt && game.gen.wetAt(x, z, h)) return;   // nothing spawns in the sea
   const night = game.dayF < 0.25;
+  if (game.planet === 'alien'){ warSys.spawn(counts, x, h, z, night); return; }   // STRATA C (Build 87): the war
   // the night shift: stalkers (in pairs), husks and wisps come out on the
   // surface after dark. Their odds scale with how far the spot is from
   // your lights — 12 m of a torch spawns nothing, 50 m out is open season
@@ -23183,7 +23241,12 @@ function updateEntities(dt, now){
         Particles.burst(e.x, e.y, e.z, 0.4, [0x9fe8ff, 0xffffff], 10, 1.2);
         killEntity(e, false); continue;
       }
-      if (kind === 'stalker' && !e.pit && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+      if (kind === 'stalker' && !e.pit && !def.dayOk && (e.dawnT > 12 || pd > 34)){ killEntity(e, false); continue; }
+    }
+    // STRATA C (Build 87): the night's shooters walk off at dawn and are gone
+    if (def.night && game.dayF > 0.45){
+      e.dawnT = (e.dawnT || 0) + dt;
+      if (e.dawnT > 10 || pd > 34){ Particles.burst(e.x, e.y + 0.8, e.z, 0.4, [0x9affb0, 0x1a1424], 8, 1.2); killEntity(e, false); continue; }
     }
     // night hunters can't survive the sun: surface lurkers and husks ignite at dawn
     if ((e.type === 'lurker' || (kind === 'husk' && !def.dayOk)) && game.dayF > 0.45 && !e.noburn && e.y > game.gen.height(e.x, e.z) - 1.5){
@@ -23219,13 +23282,42 @@ function updateEntities(dt, now){
         e.atkT = 1;
         crewSys.hitPrey(P, 8, (P.x - e.x) * 2.5, (P.z - e.z) * 2.5);
       }
+    } else if (def.ranged){
+      // STRATA C (Build 87): the night's shooters. They hold their distance
+      // (in when you are far, out when you crowd them, sideways between),
+      // face you while they do it, and fire on the beat; at dawn they walk
+      // off. A hollow does the same in the air
+      const RG = def.ranged;
+      const P = game.dayF > 0.45 ? null : crewSys.prey(e, RG.range);
+      e.aimT = e.aimT || 0;
+      if (game.dayF > 0.45){ sx = e.x - TP.x; sz = e.z - TP.z; e.face = null; e.charge = 0; }
+      else if (P){
+        const dx = P.x - e.x, dz = P.z - e.z;
+        e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
+        if (e.tt <= 0){ e.tt = 3 + Math.random() * 4; if (Math.random() < 0.4) e.orbit = -e.orbit; }
+        const far = P.d > RG.keep + 4, near = P.d < RG.keep - 3;
+        if (far){ sx = dx; sz = dz; } else if (near){ sx = -dx; sz = -dz; } else { sx = -dz * e.orbit; sz = dx * e.orbit; sp *= 0.55; }
+        e.face = Math.atan2(-dx, -dz);
+        e.aimT += dt;
+        // the wind-up: the core brightens for half a second, and the aim is
+        // taken at its start -- move in that half second and the bolt is stale
+        const wind = e.aimT > RG.rate - 0.45;
+        if (wind && !e.charge) e.aimLock = { x: P.x, y: P.y, z: P.z };
+        e.charge = wind ? 1 : 0;
+        if (e.aimT > RG.rate){ e.aimT = 0; e.charge = 0; warSys.bolt(e, e.aimLock || P, RG); e.aimLock = null; }
+      } else {
+        e.face = null; e.charge = 0;
+        if (e.tt <= 0){ e.tt = 3 + Math.random() * 4; e.tx = e.x + (Math.random() - 0.5) * 20; e.tz = e.z + (Math.random() - 0.5) * 20; }
+        sx = e.tx - e.x; sz = e.tz - e.z;
+        if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
+      }
     } else if (kind === 'stalker'){
       // fast and low: it circles in rather than charging, backs off from
       // torchlight, and at dawn it runs
       const ld = nearestLightDist(e.x, e.y, e.z);
       e.orbit = e.orbit || (Math.random() < 0.5 ? 1 : -1);
-      if (game.dayF > 0.45 && !e.pit){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
-      else if (ld < 9 && !e.pit){
+      if (game.dayF > 0.45 && !e.pit && !def.dayOk){ sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.2; }
+      else if (ld < 9 && !e.pit && !def.dayOk){
         // find the light and run from it
         let lx = e.x, lz = e.z, bd = 1e9;
         for (const t of game.torches){ const d = Math.hypot(t[0]-e.x, t[2]-e.z); if (d < bd){ bd = d; lx = t[0]; lz = t[2]; } }
@@ -23383,7 +23475,8 @@ function updateEntities(dt, now){
       // a floating thing: no gravity, it holds a height over the ground (or
       // over you), bobs, and slides around solid rock rather than through it
       const gh = game.gen.height(e.x, e.z);
-      const want = (pd < 30 ? Math.max(gh + 1.4, TP.y + 1.1) : gh + 1.8) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
+      const hv = def.hover || 1.4;
+      const want = (pd < 30 ? Math.max(gh + hv, TP.y + hv - 0.3) : gh + hv + 0.4) + Math.sin(now * 0.003 + (e.tx || 0)) * 0.25;
       e.vy += ((want - e.y) * 2.2 - e.vy) * Math.min(1, 4 * dt);
       const nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
       const le2 = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
@@ -23391,16 +23484,17 @@ function updateEntities(dt, now){
       else { e.vx *= -0.3; e.vz *= -0.3; e.vy = Math.max(e.vy, 1.5); }
       if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
       e.mesh.position.set(e.x, e.y, e.z);
+      if (e.face != null) e.mesh.rotation.y = e.face;
       const ud = e.mesh.userData;
-      ud.phase += dt * (3 + (e.fuse || 0) * 12);
+      ud.phase += dt * (3 + (e.fuse || 0) * 12 + (e.charge || 0) * 6);
       if (ud.flecks) for (let fi = 0; fi < ud.flecks.length; fi++){
         const a = ud.phase * 1.7 + fi * 2.1;
         ud.flecks[fi].position.set(Math.cos(a) * 0.36, Math.sin(a * 1.3) * 0.2, Math.sin(a) * 0.36);
       }
-      if (ud.core){ const pulse = 1 + Math.sin(ud.phase * 4) * 0.12 + (e.fuse || 0) * 0.5; ud.core.scale.setScalar(pulse); }
+      if (ud.core){ const pulse = 1 + Math.sin(ud.phase * 4) * 0.12 + (e.fuse || 0) * 0.5 + (e.charge || 0) * 0.6; ud.core.scale.setScalar(pulse); }
       if (ud.halo) ud.halo.material.opacity = 0.55 + Math.sin(ud.phase * 4) * 0.2 + (e.fuse || 0) * 0.3;
       e.mesh.scale.setScalar(e.flash > 0 ? 1.15 : 1);
-      if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, [0x9fe8ff, 0xd8f6ff], 1, 0.4);
+      if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, def.ranged ? [0x9affb0, 0x4a2a5a] : [0x9fe8ff, 0xd8f6ff], 1, 0.4);
       continue;
     }
     e.vy -= (game.planet === 'moon' ? MOON_G : zeroG() ? 0 : 22) * dt;
@@ -23431,7 +23525,8 @@ function updateEntities(dt, now){
     if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
     e.mesh.position.set(e.x, e.y, e.z);
     const spd = Math.hypot(e.vx, e.vz);
-    if (spd > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
+    if (e.face != null) e.mesh.rotation.y = e.face;
+    else if (spd > 0.3) e.mesh.rotation.y = Math.atan2(-e.vx, -e.vz);
     // limb swing scales with travel speed
     const ud = e.mesh.userData;
     ud.phase += spd * dt * 3.2;
@@ -23440,6 +23535,7 @@ function updateEntities(dt, now){
       legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * Math.min(0.7, spd * 0.3);
     }
     e.mesh.scale.setScalar((e.big || (e.bountyTag ? 1.25 : 1)) * (e.flash > 0 ? 1.1 : 1));
+    if (ud.tip) ud.tip.scale.setScalar(e.charge ? 1.9 : 1);
     if (e.crew && ud.hpbar){
       const f = Math.max(0, Math.min(1, e.hp / 60)), hurt = f < 0.99;
       ud.hpbar.bg.visible = ud.hpbar.fg.visible = hurt;
@@ -28543,7 +28639,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -28767,6 +28863,13 @@ function itemIconURL(it){
     c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
     c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
     c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'nullcore'){
+    // a null core: a dark knot with a green light in it that is not quite there
+    c.fillStyle = '#1a1424'; c.fillRect(4, 4, 8, 8); c.fillRect(6, 2, 4, 2); c.fillRect(6, 12, 4, 2); c.fillRect(2, 6, 2, 4); c.fillRect(12, 6, 2, 4);
+    c.fillStyle = '#2a1a34'; c.fillRect(5, 5, 6, 6);
+    c.fillStyle = '#9affb0'; c.fillRect(6, 6, 4, 4);
+    c.fillStyle = '#eaffee'; c.fillRect(7, 7, 2, 2);
+    c.fillStyle = '#5a2a6a'; c.fillRect(4, 4, 1, 1); c.fillRect(11, 4, 1, 1); c.fillRect(4, 11, 1, 1); c.fillRect(11, 11, 1, 1);
   } else if (it.kind === 'voidore'){
     c.fillStyle = '#1e2a1e'; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
     c.fillStyle = '#182218'; c.fillRect(3, 11, 10, 2);
@@ -29392,6 +29495,7 @@ function itemLabel(it){
   if (it.kind === 'translator') return 'translator';
   if (it.kind === 'band') return 'teleport band';
   if (it.kind === 'voidore') return 'voidore';
+  if (it.kind === 'nullcore') return 'null core';
   if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'rocket2') return (it.wrecked ? 'wrecked ' : '') + 'star rocket';
@@ -29796,7 +29900,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30667,6 +30771,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'mech'){
     html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'nullcore'){
+    html = '<div class="t1">null core ×' + it.count + '</div><div class="t2">out of a lancer or a hollow: the thing that drives them, and it is not of Strata either · Sova pays well for one · Vehl wants them kept for the centre</div>';
   } else if (it.kind === 'voidore'){
     html = '<div class="t1">voidore ×' + it.count + '</div><div class="t2">Strata\'s own ore, in veins under every ground of it · nothing of the Earth\'s is made from it: its table comes next · Sova buys it</div>';
   } else if (it.kind === 'band'){
@@ -32209,6 +32315,75 @@ const alienSys = {
   },
 };
 
+// ---------- STRATA C (Build 87): the war ----------
+// Strata is overrun. By country: the Glow's gnashers, the Scar's thralls,
+// both in the Teeth; by night lancers everywhere and hollows over the Glow
+// and the Teeth. The day's things spawn at any hour of daylight and mind
+// no light; the night's keep ten metres from a torch, which is the only
+// mercy in it. Dug in six metres under the ground, nothing finds you
+const warSys = {
+  DAY: { 14: ['gnasher'], 15: ['thrall'], 16: ['thrall', 'gnasher'] },
+  NIGHT: { 14: ['lancer', 'hollow'], 15: ['lancer'], 16: ['lancer', 'hollow'] },
+  PACK: { thrall: 2, gnasher: 3, lancer: 1, hollow: 2 },
+  spawn(counts, x, h, z, night){
+    if (game.pos.y < game.gen.height(game.pos.x, game.pos.z) - 6) return;
+    const list = (night ? this.NIGHT : this.DAY)[game.gen.archAt(x, z)]; if (!list) return;
+    if (Math.random() > (night ? 0.45 : 0.6)) return;
+    if (night && nearestLightDist(x, h, z) < 10) return;
+    const T = list[(Math.random() * list.length) | 0], D = ENT_DEF[T], n = this.PACK[T];
+    if ((counts[T] || 0) + n > D.cap) return null;
+    // the ground as it really is: open air over it, or no spawn
+    const le = nearEdits([x - 3, h - 2, z - 3, x + 3, h + 6, z + 3]);
+    if (CORE.evalSDF(x, h + 0.8, z, le, game.gen) < 0.4 || CORE.evalSDF(x, h + 2.2, z, le, game.gen) < 0.4) return null;
+    let e0 = null;
+    for (let k = 0; k < n; k++){
+      const a = Math.random() * Math.PI * 2;
+      const e = spawnEntity(T, x + Math.cos(a) * 2.2 * k, h + (D.fly ? D.hover || 2 : 0.4), z + Math.sin(a) * 2.2 * k);
+      if (k) e.pairOf = 1;
+      e.war = 1; e0 = e0 || e;
+    }
+    return e0;
+  },
+  // a bolt from a shooter at its prey: a straight line with a little
+  // scatter (stand still and most of them land; keep moving and fewer
+  // do). It stops at the ground, at you, or at one of yours, and carves
+  // nothing: the war does not eat the world
+  bolt(e, P, RG){
+    const def = ENT_DEF[e.type];
+    const from = { x: e.x, y: e.y + (def.fly ? 0 : def.h * 0.8), z: e.z };
+    const J = RG.spread || 1;
+    const tx = P.x + (Math.random() - 0.5) * J, ty = P.y + 0.9 + (Math.random() - 0.5) * J * 0.6, tz = P.z + (Math.random() - 0.5) * J;
+    let ux = tx - from.x, uy = ty - from.y, uz = tz - from.z;
+    const L = Math.hypot(ux, uy, uz) || 1; ux /= L; uy /= L; uz /= L;
+    const R = RG.range + 6;
+    const ex = from.x + ux * R, ey = from.y + uy * R, ez = from.z + uz * R;
+    const le = nearEdits([Math.min(from.x, ex) - 1, Math.min(from.y, ey) - 1, Math.min(from.z, ez) - 1, Math.max(from.x, ex) + 1, Math.max(from.y, ey) + 1, Math.max(from.z, ez) + 1]);
+    let hit = R;
+    for (let t = 1; t < R; t += 0.5){ if (CORE.evalSDF(from.x + ux * t, from.y + uy * t, from.z + uz * t, le, game.gen) < 0.1){ hit = t; break; } }
+    const along = (x, y, z, r) => {
+      const t = (x - from.x) * ux + (y - from.y) * uy + (z - from.z) * uz;
+      if (t < 0.5 || t >= hit) return null;
+      return Math.hypot(from.x + ux * t - x, from.y + uy * t - y, from.z + uz * t - z) < r ? t : null;
+    };
+    let td = hit, who = null;
+    const tp = along(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.7);
+    if (tp != null && !farmSys.invisible()){ td = tp; who = 'you'; }
+    for (const c of game.entities){
+      if (!c.crew) continue;
+      const d2 = ENT_DEF[c.type]; if (!d2) continue;
+      const t2 = along(c.x, c.y + d2.h * 0.5, c.z, d2.r + 0.4);
+      if (t2 != null && t2 < td){ td = t2; who = c; }
+    }
+    const ax = from.x + ux * td, ay = from.y + uy * td, az = from.z + uz * td;
+    beamFX.add(from.x, from.y, from.z, ax, ay, az, RG.col || 0x9affb0);
+    Particles.burst(ax, ay, az, 0.2, [RG.col || 0x9affb0, 0xffffff], 4, 1.4);
+    if (who === 'you') damagePlayer(RG.dmg, ux * 2.5, uz * 2.5);
+    else if (who) crewSys.hurt(who, RG.dmg, ux * 1.5, uz * 1.5);
+    if (Math.hypot(from.x - game.pos.x, from.z - game.pos.z) < 48) AudioSys.sfx('laser');
+    return who;
+  },
+};
+
 // ---------- STATION TWO (Build 80): the build ----------
 // Four frames along the keel, filled one after another with anything
 // solid (plating is the material for it: two iron and a lunite make
@@ -32617,7 +32792,8 @@ const stationOneSys = {
     'Vehl: So that is what it looks like from the inside. The station is gone. I am sorry for it; it was well built. We are on my world, and it is as I told you: overrun.',
     'Vehl: You are alive because of a thing I was not sure of: a teleport, experimental, mine. It took me to your hull and it took us both through. The band on your wrist is the same thing, tuned to the beacons you plant and the ships you own. Open your map. Go anywhere you have been.',
     'Vehl: The ship can be raised. Iron from the ground, plating you know how to make, two grains of astrium: I saw you carry more. Then we find what is at the centre of this, and we end it.',
-    '(THE ALIEN WORLD, its people, its things and its end, is the next chapter.)',
+    'Vehl: They will come for us at every hour. The ones that walk by day you can outrun; the ones that come at night you cannot, so dig in or build a wall before dark. Keep the cores the tall ones carry. I will want them at the centre.',
+    '(THE CENTRE, and the end of it, is the next chapter.)',
   ],
   offers(cast){
     if (cast === 'ores') return [
@@ -32641,7 +32817,7 @@ const stationOneSys = {
     ];
     if (cast === 'relics') return [
       { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
-      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 },
+      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 },
     ];
     return [];
   },
@@ -35170,7 +35346,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

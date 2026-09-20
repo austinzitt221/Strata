@@ -365,10 +365,12 @@ Slotted between the city builds as the mood takes me:
      and the Teeth, their grounds, and voidore.
      B (DONE, Build 86): the maws, one per country, that bite when you
      mine them too close; drill, stab or shoot them dead for their
-     stalk, planks and sticks; a crafting table per planet. C: war-torn: enemies all day
-     (melee only) and worse at night (all ranged, hard as nails), and
-     loot better than anywhere. D: the thing at the centre, the final
-     boss for real, the ending.
+     stalk, planks and sticks; a crafting table per planet.
+     C (DONE, Build 87): war-torn: thralls and gnashers all day (melee,
+     no fear of light or dawn), lancers and hollows at night (all
+     ranged, hard as nails), loot better than anywhere, and the null
+     core they carry. D: the thing at the centre, the final boss for
+     real, the ending; the null cores are its key.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

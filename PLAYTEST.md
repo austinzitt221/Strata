@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 87 — STRATA C
+- [ ] Spend a day on Strata in survival. Thralls and gnashers: can you
+      fight them with what you brought (the astrium sword, a gun, the
+      mech)? Can you outrun them? Is the day a war or a nuisance?
+- [ ] Spend a night. Lancers and hollows: does the wind-up read (the
+      green core brightens)? Can you dodge by moving? Is a wall or a
+      hole enough? Is it hard in the right way, or just death?
+- [ ] Kill a lancer. Sell the null core to Sova, or keep it. Is the
+      loot worth the night?
+- [ ] Bottle a gnasher with a spawner and put it in a pen at Station
+      Two. Does it stay put?
+
 ## Build 86 — STRATA B
 - [ ] Mine a maw from close in survival. Then from range. Then kill one
       with a sword and one with a gun. Is the bite fair? Is the stalk

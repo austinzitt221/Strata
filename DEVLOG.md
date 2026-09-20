@@ -2,6 +2,51 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 87 — STRATA C: the war (2026-09-23)
+
+Strata is overrun, as Vehl said. The spawner has its own table there,
+and nothing of the Earth's night runs on it.
+
+- **By day, the melee things.** The **thrall**: Vehl's shape gone wrong,
+  broad and bent, bone plates strapped on, a stalk for a club, red
+  eyes; it walks straight at you and hits for fourteen (80 hp, six at a
+  time). The **gnasher**: six legs, a ridge of magenta spines, pink
+  eyes; a fast circler that bites for nine (48 hp, packs of three,
+  eight at a time). Thralls in the Scar, gnashers in the Glow, both in
+  the Teeth. They come at any hour of daylight, mind no torch, and
+  never burn or slink off at dawn, because there is no dawn they fear.
+- **By night, the ranged ones, and they are worse.** The **lancer**:
+  tall, hooded, green-eyed, a staff with a null core at its head; it
+  holds fourteen metres off, sidesteps, and fires a bolt for sixteen
+  every 1.7 s (150 hp, three at a time). The **hollow**: an eye with
+  nothing behind it, hung three metres up on a tangle of tendrils; it
+  fires for ten every 1.4 s (90 hp, pairs, four at a time). Lancers
+  everywhere, hollows over the Glow and the Teeth. The core brightens
+  for half a second before each bolt, and the aim is taken when it
+  does: a sidestep in that half second and the bolt goes where you
+  were. Stand still and most of them land (there is scatter, so not
+  quite all). Bolts
+  stop at the ground, at you or at one of yours and carve nothing (the
+  war does not eat the world or the save). At dawn they walk off and
+  are gone in ten seconds. The one mercy: nothing of the night spawns
+  within ten metres of a light, and nothing at all finds you six metres
+  under the ground.
+- **Loot better than anywhere.** A thrall: two voidore, fourteen coins,
+  an astrium one time in eight. A gnasher: a voidore, eight coins, a
+  voidfruit half the time. A lancer: a **null core**, three voidore,
+  thirty-four coins, an astrium half the time. A hollow: a null core,
+  twenty-four coins, two diamond half the time. The null core is a new
+  item: Sova pays 260 for one, Vehl wants them kept for the centre (that
+  is STRATA D's key). The drop table grew an optional odds column.
+- The four are in the menagerie (a spawner bottles them; Station Two's
+  pens can hold them). Voidore and null cores merge on drag-and-drop
+  now (voidore was missing from the stackable list).
+- Numbers to watch: three lancers and four hollows all up is roughly
+  forty-five damage a second on someone standing still in the open
+  with no armor, and close to nothing on someone who keeps moving.
+  That is the intent (move, dig in, or build a wall before dark); the
+  playtest will say whether it is fun or just death.
+
 ## Build 86 — STRATA B: the maws, and a table per planet (2026-09-23)
 
 - **The maws.** Strata's answer to a tree, and not a tree: a stalk with a
