@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 82 — THE BAND & THE FALL (2026-09-22)
+
+Austin's retelling of the crash, and the teleport band.
+
+- **The ambush, retold.** It appears first, close, in a flash, and
+  haunts the ship: a slow circle round the hull, always facing it. Then
+  it goes to stand between you and Station Two, turns to it, and raises
+  two long arms; the view swings round with it. The black opens where
+  the station hangs: a disc of nothing with a white rim and four arcs of
+  spun light in violet, amber and blue turning at their own speeds. The
+  station spins and spirals in and is gone. Then it has the ship:
+  pulled back, spun, shaken. Vehl teleports in beside the hull with a
+  flash and the band's sound; a second teleport sound, and the white.
+- **The fall.** You load in standing on Vehl's world, in third person,
+  looking up at an empty sky. Then the teleport effect, and the ship is
+  in the sky with it, and it falls the way it did before (that part was
+  already right), and you follow it down.
+- **The teleport band.** Vehl fits it at the wreck: "experimental,
+  mine". With it in the pack the map marks every beacon (a violet ring)
+  and every rocket (its own icon) on this world, and a list beside the
+  map names every beacon and rocket on every world. Click a mark for
+  the menu's TELEPORT, or a list entry twice, and a loading screen
+  later you are there; another world needs no flight. Beacons are
+  fast-travel points anywhere now.
+- A new sound (teleport), `goTo` as the road to any world without a
+  rocket, the map's list panel.
+
 ## Build 81 — THE CROSSING: the ambush, the crash, the alien world (2026-09-22)
 
 The star rocket flies, and the first flight goes wrong the way the

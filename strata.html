@@ -162,6 +162,8 @@ body.pad{cursor:none;}
 #mapmenu{position:absolute; z-index:3; background:var(--ui-bg); border:2px solid var(--ui-border); padding:4px; box-shadow:0 0 0 2px #111, 0 8px 24px rgba(0,0,0,.6); line-height:normal; min-width:150px;}
 #mapmenu .btn{display:block; width:100%; margin:0 0 3px 0; text-align:left; font-size:11px; padding:5px 8px;}
 #mapmenu .mlabel{font-size:10px; color:var(--ui-hi); padding:2px 6px 5px; letter-spacing:1px;}
+#tplist .btn{display:block; width:100%; margin:0 0 3px 0; text-align:left; font-size:11px; padding:5px 8px;}
+#tplist .mlabel{font-size:10px; color:var(--ui-hi); padding:2px 6px 5px; letter-spacing:1px;}
 .mapname{display:block; width:100%; box-sizing:border-box; margin:0 0 4px 0; padding:4px 6px; font:11px monospace; background:#0a0910; color:#7dff9b; border:2px solid rgba(74,68,88,0.8); outline:none;}
 .mapname:focus{border-color:#7dff9b;}
 
@@ -301,9 +303,12 @@ body.pad{cursor:none;}
   <div class="panel">
     <h2>MAP</h2>
     <div class="sub" style="margin-bottom:8px;">surface survey — explored on foot · caves stay unmapped · M to close</div>
+    <div style="display:flex; gap:10px; align-items:flex-start;">
     <div id="mapwrap">
       <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
       <div id="mapmenu" class="hidden"></div>
+    </div>
+    <div id="tplist" class="hidden" style="width:240px; max-height:640px; overflow-y:auto;"></div>
     </div>
     <div class="sub" style="margin-top:8px; max-width:640px;">right-drag pans · scroll zooms · left-click sets, moves or removes your own marks</div>
   </div>
@@ -7607,7 +7612,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8148,6 +8153,13 @@ const AudioSys = {
         break;
       }
       case 'laser': this.tone({ freq: 1400, dur: 0.08, gain: 0.2, type: 'square' }); this.tone({ freq: 700, dur: 0.1, gain: 0.1, type: 'sine' }); break;
+      case 'teleport':
+        // a rising shimmer and a snap: the band, and Vehl's own way of arriving (Build 82)
+        this.sweep({ dur: 0.55, from: 220, to: 1760, gain: 0.16, type: 'sine' });
+        this.sweep({ dur: 0.55, from: 330, to: 2640, gain: 0.08, type: 'triangle' });
+        this.noise({ dur: 0.4, from: 2000, to: 6000, ftype: 'bandpass', q: 3, gain: 0.12, attack: 0.05 });
+        this.noise({ dur: 0.05, from: 4000, ftype: 'highpass', gain: 0.2 });
+        break;
       case 'rocket':
         // the whoosh: noise swept up through a bandpass over a rising drone
         this.noise({ dur: 0.6, from: 300, to: 2400, ftype: 'bandpass', q: 1.2, gain: 0.35, attack: 0.02 });
@@ -28242,7 +28254,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -28466,6 +28478,10 @@ function itemIconURL(it){
     c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
     c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
     c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'band'){
+    c.fillStyle = '#6a3aaa'; c.fillRect(3, 6, 10, 5); c.fillRect(2, 7, 12, 3);
+    c.fillStyle = '#b070ff'; c.fillRect(4, 7, 8, 1); c.fillStyle = '#e0c0ff'; c.fillRect(7, 6, 2, 5);
+    c.fillStyle = '#2a1a3a'; c.fillRect(5, 9, 6, 1);
   } else if (it.kind === 'translator'){
     c.fillStyle = '#3a3a44'; c.fillRect(4, 2, 8, 12); c.fillStyle = '#5a5a66'; c.fillRect(5, 3, 6, 10);
     c.fillStyle = '#8bff9e'; c.fillRect(6, 4, 4, 3); c.fillStyle = '#2a2a30'; c.fillRect(6, 9, 4, 1); c.fillRect(6, 11, 4, 1);
@@ -29075,6 +29091,7 @@ function itemLabel(it){
   if (it.kind === 'selenite') return 'selenite';
   if (it.kind === 'astrium') return 'astrium';
   if (it.kind === 'translator') return 'translator';
+  if (it.kind === 'band') return 'teleport band';
   if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'rocket2') return (it.wrecked ? 'wrecked ' : '') + 'star rocket';
@@ -29477,7 +29494,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30348,6 +30365,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'mech'){
     html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'band'){
+    html = '<div class="t1">teleport band</div><div class="t2">Vehl\'s experimental gift · while it rides in your pack, the MAP (M) marks every beacon and every rocket on every world — click one to go there, no flight</div>';
   } else if (it.kind === 'translator'){
     html = '<div class="t1">translator</div><div class="t2">Vehl\'s gift · while it rides in your pack, STATION ONE speaks your language: talk, trade, and the leader\'s story</div>';
   } else if (it.kind === 'voidfruit'){
@@ -31129,7 +31148,17 @@ function drawMap(){
     else dia(o.x, o.z, '#ffd75e', 5, V.zoom >= 2 ? o.label : '');
   }
   c.globalAlpha = 1;
-  for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
+  if (teleportSys.has()){
+    // the band (Build 82): beacons as rings, rockets as their own icon, both places you can be in a click
+    const icon = (x, z, rocket) => {
+      const sx = W / 2 + (x / MAP_CELL - pcx) * px, sy = H / 2 + (z / MAP_CELL - pcz) * px;
+      if (sx < 6 || sx > W - 6 || sy < 6 || sy > H - 6) return;
+      if (rocket){ c.fillStyle = '#e0c0ff'; c.beginPath(); c.moveTo(sx, sy - 7); c.lineTo(sx + 4, sy + 4); c.lineTo(sx, sy + 2); c.lineTo(sx - 4, sy + 4); c.closePath(); c.fill(); c.fillStyle = '#ffb060'; c.fillRect(sx - 1, sy + 4, 2, 3); }
+      else { c.strokeStyle = '#b070ff'; c.lineWidth = 2; c.beginPath(); c.arc(sx, sy, 6, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#e0c0ff'; c.fillRect(sx - 1.5, sy - 1.5, 3, 3); }
+    };
+    for (const bcn of game.beacons || []) icon(bcn[0], bcn[2], false);
+    for (const e of game.entities) if (e.type === 'rocket' || e.type === 'rocket2') icon(e.x, e.z, true);
+  } else for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
   for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
   for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
   for (const k in (game.cities || {})) if (game.cities[k].stamped) mark(game.cities[k].x, game.cities[k].z, '#ffb44d', 9);
@@ -31154,6 +31183,7 @@ function openMap(){
   mapMenu.close();
   wireMapInput();
   game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
+  teleportSys.list();
 }
 // the left-click menu on the map: set a mark here, move one of yours here,
 // or (clicking on one) remove it / hide it
@@ -31182,6 +31212,12 @@ const mapMenu = {
       return b;
     };
     let first;
+    if (teleportSys.has()){
+      // the band (Build 82): a click by a beacon or a rocket goes there
+      const reach = 12 / (5 * V.zoom) * MAP_CELL;
+      const T = teleportSys.targets().filter(t => t.planet === game.planet && Math.hypot(t.x - w.x, t.z - w.z) < reach);
+      for (const t of T){ const b = add('TELEPORT TO ' + teleportSys.label(t).toUpperCase(), () => teleportSys.go(t)); b.style.color = '#e0c0ff'; if (!first) first = b; }
+    }
     if (near){
       const nm = ledgerSys.label(near);
       first = add('RENAME', () => ledgerSys.rename(near, inp.value));
@@ -31774,6 +31810,69 @@ function quitToTitle(){
   show('mainmenu');
 }
 
+// ---------- THE BAND (Build 82): fast travel to any beacon or rocket ----------
+// With the band in the pack, the map lists every beacon and every rocket
+// on every world (this one drawn with its own icons; the others in a list
+// beside the map). One click, one yes, one loading screen
+const teleportSys = {
+  has(){ return CORE.countItem(game.slots, 'band') > 0; },
+  targets(){
+    const out = [];
+    const add = (planet, beacons, rockets) => {
+      for (const b of beacons || []) out.push({ planet, kind: 'beacon', x: b[0], y: b[1], z: b[2] });
+      for (const r of rockets || []) out.push({ planet, kind: 'rocket', type: r.type, x: r.x, y: r.y, z: r.z });
+    };
+    add(game.planet, game.beacons, game.entities.filter(e => e.type === 'rocket' || e.type === 'rocket2'));
+    for (const p in spaceSys.others){
+      const B = spaceSys.others[p];
+      add(p, B.beacons, (B.entities || []).filter(r => r[0] === 'rocket' || r[0] === 'rocket2').map(r => ({ type: r[0], x: r[1], y: r[2], z: r[3] })));
+    }
+    return out;
+  },
+  label(t){ return (t.kind === 'beacon' ? 'beacon' : t.type === 'rocket2' ? 'star rocket' : 'rocket') + ' · ' + Math.round(t.x) + ', ' + Math.round(t.z) + (t.planet === game.planet ? '' : ' · ' + spaceSys.nameOf(t.planet)); },
+  fx(x, y, z){ Particles.burst(x, y + 1, z, 1.2, [0xb070ff, 0xe0c0ff, 0x9fe8ff], 40, 3); AudioSys.sfx('teleport'); },
+  go(t){
+    if (!this.has()){ toast('you have no band'); return false; }
+    if (game.driving){ toast('step out first'); return false; }
+    if (netSys.guest || netSys.host){ toast('not with company in the world'); return false; }
+    this.fx(game.pos.x, game.pos.y, game.pos.z);
+    closeOverlay();
+    const lx = t.x + 1.6, lz = t.z + 1.6, ly = t.y + 0.4;
+    if (t.planet === game.planet){
+      game.pos.set(lx, ly, lz); game.vel.set(0, 0, 0);
+      for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++) game.pos.y += 0.5;
+      game.forceStream = true; game.holdT = 0;
+      loadSys.begin(this.label(t));
+    } else {
+      spaceSys.goTo(t.planet, { x: lx, y: ly, z: lz });
+    }
+    game.story = game.story || {}; game.story.tps = (game.story.tps || 0) + 1;
+    setTimeout(() => this.fx(game.pos.x, game.pos.y, game.pos.z), 50);
+    markSave();
+    return true;
+  },
+  // the list beside the map
+  list(){
+    const el = $('tplist');
+    if (!el) return;
+    if (!this.has() || game.ui !== 'map'){ el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    el.innerHTML = '<div class="mlabel">TELEPORT BAND</div>';
+    const T = this.targets();
+    if (!T.length){ const d = document.createElement('div'); d.className = 'sub'; d.textContent = 'no beacons, no rockets, anywhere'; el.appendChild(d); return; }
+    for (const t of T){
+      const b = document.createElement('button');
+      b.className = 'btn'; b.textContent = (t.kind === 'beacon' ? '◈ ' : '▲ ') + this.label(t);
+      b.onclick = () => {
+        if (b.dataset.ask){ this.go(t); return; }
+        b.dataset.ask = 1; b.textContent = 'go there? click again · ' + this.label(t); b.style.color = '#8bff9e';
+        setTimeout(() => { if (b.isConnected){ delete b.dataset.ask; b.textContent = (t.kind === 'beacon' ? '◈ ' : '▲ ') + this.label(t); b.style.color = ''; } }, 4000);
+      };
+      el.appendChild(b);
+    }
+  },
+};
+
 // ---------- THE ALIEN WORLD (Build 81): what is here so far ----------
 // Vehl, beside the wreck, until the world gets its people; the wreck as an
 // objective until it stands again
@@ -31932,6 +32031,14 @@ const stationOneSys = {
       return;
     }
     e.role = 'x_' + (R.role || 'leader');
+    if (R.leader && game.planet === 'alien' && !(game.story && game.story.band)){
+      // the band (Build 82), at the wreck
+      game.story = game.story || {}; game.story.band = 1;
+      addStackItem('band', 1);
+      teleportSys.fx(e.x, e.y, e.z);
+      toast('Vehl fits a TELEPORT BAND to your wrist — open the map');
+      refreshHotbar(); markSave();
+    }
     tradeSys.open(e);
   },
   // ---- what they say, once you can hear it ----
@@ -31964,6 +32071,7 @@ const stationOneSys = {
   ],
   STORY6: [
     'Vehl: So that is what it looks like from the inside. The station is gone. I am sorry for it; it was well built. We are on my world, and it is as I told you: overrun.',
+    'Vehl: You are alive because of a thing I was not sure of: a teleport, experimental, mine. It took me to your hull and it took us both through. The band on your wrist is the same thing, tuned to the beacons you plant and the ships you own. Open your map. Go anywhere you have been.',
     'Vehl: The ship can be raised. Iron from the ground, plating you know how to make, two grains of astrium: I saw you carry more. Then we find what is at the centre of this, and we end it.',
     '(THE ALIEN WORLD, its people, its things and its end, is the next chapter.)',
   ],
@@ -32305,6 +32413,22 @@ const spaceSys = {
       if (F.t > this.TRANSIT_T){ F.phase = 'fadein'; F.t = 0; $('fade').style.opacity = '1'; }
     } else if (F.phase === 'fadein'){
       if (F.t > 0.55){ const crash = !!F.ambush; this.endTransit(); this.arrive(F, crash); $('fade').style.opacity = '0'; $('fade').style.background = '#000'; }
+    } else if (F.phase === 'appear'){
+      if (loadSys.on){ F.t = 0; return; }
+      if (F.t > 1.8){
+        // the teleport effect, and the ship is in the sky with it
+        const S = F.ship;
+        const r = spawnEntity(S.type, game.pos.x + 6, game.pos.y + 70, game.pos.z + 6);
+        r.charge = S.charge; r.hp = S.hp; r.heading = S.heading; r.vy = -22; r.tilt = 0.1;
+        r.mesh = entMesh(r.type, r); game.scene.add(r.mesh);
+        teleportSys.fx(r.x, r.y + 3, r.z);
+        Particles.burst(r.x, r.y + 3, r.z, 4, [0xb070ff, 0xe0c0ff], 60, 5);
+        game.driving = r; game.camView = 1; game.chase = null; game.pitch = 0.35;
+        F.e = r; F.phase = 'crash'; F.t = 0; F.burn = false;
+        AudioSys.setHum(true, 0.8, 0.5);
+        toast('the ship');
+        refreshToolHUD();
+      }
     } else if (F.phase === 'crash'){
       // THE CROSSING (Build 81): thrown out of the hole over Vehl's world, and down
       if (loadSys.on) return;
@@ -32325,6 +32449,7 @@ const spaceSys = {
         Particles.burst(r.x, r.y + 2, r.z, 6, [0xff7a20, 0x2a2a30, 0x6a3aaa], 60, 8);
         game.camView = 1; game.chase = null;
         toast('CRASH. The star rocket is wrecked. Vehl is here.');
+        game.pitch = 0.1;
         alienSys.tick(2);
         refreshToolHUD();
         markSave(); saveNow();
@@ -32444,61 +32569,95 @@ const spaceSys = {
   // tears the black open where the station was, Vehl is on your hull, and
   // the hole takes you
   ambushTick(F, dt, z){
-    const A = F.ambush, q = F.t / this.TRANSIT_T, S = this.scene;
-    if (A.stage === 0 && q > 0.3){
-      A.stage = 1;
+    const A = F.ambush, q = F.t / this.TRANSIT_T, S = this.scene, ship = this.ship;
+    A.t = (A.t || 0) + dt;
+    if (A.stage === 0 && q > 0.12){
+      // it appears, close, out of nothing, and circles the ship
+      A.stage = 1; A.t = 0;
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.SphereGeometry(26, 16, 12), new THREE.MeshBasicMaterial({ color: 0x120a1e }));
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(34, 2.2, 8, 40), new THREE.MeshBasicMaterial({ color: 0xb070ff }));
-      g.add(body, ring);
-      for (const [ex, ey] of [[-9, 6], [9, 6], [0, -8]]){ const eye = new THREE.Mesh(new THREE.SphereGeometry(4, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe0c0ff })); eye.position.set(ex, ey, 24); g.add(eye); }
-      g.position.set(0, 30, z - 320);
+      g.add(new THREE.Mesh(new THREE.SphereGeometry(20, 16, 12), new THREE.MeshBasicMaterial({ color: 0x120a1e })));
+      g.add(new THREE.Mesh(new THREE.TorusGeometry(27, 1.6, 8, 40), new THREE.MeshBasicMaterial({ color: 0xb070ff })));
+      for (const [ex, ey] of [[-7, 5], [7, 5], [0, -7]]){ const eye = new THREE.Mesh(new THREE.SphereGeometry(3, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe0c0ff })); eye.position.set(ex, ey, 18); g.add(eye); }
+      A.arms = [];
+      for (const sx of [-1, 1]){ const arm = new THREE.Group(); arm.position.set(sx * 21, 2, 0); const a = new THREE.Mesh(new THREE.BoxGeometry(3, 26, 3), new THREE.MeshBasicMaterial({ color: 0x1e1230 })); a.position.y = -12; arm.add(a); const hand = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 6), new THREE.MeshBasicMaterial({ color: 0xb070ff })); hand.position.y = -25; arm.add(hand); arm.rotation.z = sx * 0.5; g.add(arm); A.arms.push(arm); }
+      g.position.set(ship.position.x + 40, 12, z + 50);
       S.add(g); A.boss = g;
-      game.yaw = Math.PI; game.pitch = 0.1;                       // you look back
-      toast('something is behind you');
-      AudioSys.sfx('boom', 60);
+      const burst = new THREE.Mesh(new THREE.SphereGeometry(30, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe0c0ff, transparent: true, opacity: 0.6 })); burst.position.copy(g.position); S.add(burst); A.burst = burst;
+      toast('something is out there');
+      AudioSys.sfx('teleport'); AudioSys.sfx('boom', 30);
     }
-    if (A.boss){ const tz = z - 90; A.boss.position.z += (tz - A.boss.position.z) * Math.min(1, 0.5 * dt); A.boss.rotation.z += dt * 0.3; A.boss.lookAt(this.ship.position); }
-    if (A.stage === 1 && q > 0.45){
-      A.stage = 2;
+    if (A.burst){ A.burst.scale.multiplyScalar(1 + dt * 2); A.burst.material.opacity -= dt * 1.2; if (A.burst.material.opacity <= 0){ S.remove(A.burst); A.burst = null; } }
+    if (A.stage === 1 && A.boss){
+      // haunting: a slow circle round the hull, always facing it
+      const a = A.t * 0.55;
+      A.boss.position.set(ship.position.x + Math.cos(a) * 46, 8 + Math.sin(a * 0.7) * 8, z + Math.sin(a) * 46);
+      A.boss.lookAt(ship.position);
+      if (q > 0.36){ A.stage = 2; A.t = 0; A.zHold = z; game.yaw = Math.PI; game.pitch = 0.12; toast('it turns to the station'); }   // and so do you; the ship loses way here
+    }
+    if (A.stage === 2 && A.boss){
+      // it goes to stand between you and the station, turns to it, and raises its arms
+      const tx = 0, ty = 22, tz = A.zHold - 60;
+      A.boss.position.x += (tx - A.boss.position.x) * Math.min(1, 1.2 * dt); A.boss.position.y += (ty - A.boss.position.y) * Math.min(1, 1.2 * dt); A.boss.position.z += (tz - A.boss.position.z) * Math.min(1, 1.2 * dt);
+      A.boss.lookAt(0, 0, A.zHold - 110);
+      const k = Math.min(1, Math.max(0, (A.t - 1.2) / 1.6));
+      A.arms[0].rotation.z = -0.5 - 2.3 * k; A.arms[1].rotation.z = 0.5 + 2.3 * k;
+      if (k >= 1 && q > 0.5){ A.stage = 3; A.t = 0; }
+    }
+    if (A.stage === 3 && !A.hole){
+      // the black opens: a disc of nothing, a bright rim, and the light of what it eats spun round it
       const hole = new THREE.Group();
-      hole.add(new THREE.Mesh(new THREE.CircleGeometry(1, 40), new THREE.MeshBasicMaterial({ color: 0x000000 })));
-      hole.add(new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 8, 60), new THREE.MeshBasicMaterial({ color: 0xb070ff })));
-      hole.position.set(0, 0, 40);
+      hole.add(new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color: 0x000000 })));
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(1.03, 0.05, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffffff })); hole.add(rim);
+      A.disc = [];
+      const cols = [0xb070ff, 0xffb060, 0xe0c0ff, 0x9fe8ff];
+      for (let i = 0; i < 4; i++){
+        const r = new THREE.Mesh(new THREE.TorusGeometry(1.15 + i * 0.16, 0.035 + i * 0.01, 6, 64, Math.PI * (1.2 + i * 0.25)), new THREE.MeshBasicMaterial({ color: cols[i], transparent: true, opacity: 0.85 - i * 0.15 }));
+        r.rotation.z = i * 1.7; hole.add(r); A.disc.push(r);
+      }
+      hole.position.set(0, 0, A.zHold - 110); hole.scale.setScalar(0.01);
       S.add(hole); A.hole = hole;
       toast('Vehl: It found us. Hold on.');
       AudioSys.sfx('thunder');
     }
     if (A.hole){
-      const r = Math.min(70, (q - 0.45) / 0.25 * 70);
-      A.hole.scale.setScalar(Math.max(0.01, r));
+      const grow = Math.min(1, A.t / 3.5);
+      A.hole.scale.setScalar(Math.max(0.01, 90 * grow));
       A.hole.lookAt(this.cam.position);
-      const st = this.bodies.from; const sc = Math.max(0.001, 1 - (q - 0.5) / 0.22);   // the station goes into it
-      if (q > 0.5) st.scale.setScalar(sc);
-      if (q > 0.5) st.position.z += (40 - st.position.z) * Math.min(1, 1.5 * dt);
+      A.disc.forEach((r, i) => { r.rotation.z += dt * (1.6 - i * 0.3); });
+      // the station goes round and in
+      const st = this.bodies.from;
+      const sk = Math.max(0.001, 1 - A.t / 4.5);
+      st.scale.setScalar(sk);
+      st.rotation.z += dt * (1 + (1 - sk) * 6);
+      st.position.x = Math.cos(A.t * 2.5) * 40 * sk; st.position.y = Math.sin(A.t * 2.5) * 40 * sk; st.position.z += (A.zHold - 110 - st.position.z) * Math.min(1, 1.6 * dt);
+      if (A.boss){ A.boss.position.z += (A.zHold - 110 - A.boss.position.z) * Math.min(1, 0.25 * dt); }
     }
-    if (A.stage === 2 && q > 0.7){
-      A.stage = 3;
-      const v = entMesh('alien', { cast: 'leader' }); v.scale.setScalar(0.7); v.position.set(1.4, 0.4, 3.2); v.rotation.x = -Math.PI / 2;
-      this.ship.add(v); A.vehl = v;
-      toast('Vehl is on your hull. "Through, or nothing."');
-      AudioSys.sfx('rocket');
-    }
-    if (A.stage >= 3){
-      // pulled back: the ship loses way, then goes in
-      const pull = Math.min(1, (q - 0.7) / 0.3);
-      this.ship.position.z = z - pull * pull * (z - 40);
-      this.ship.position.x += (Math.random() - 0.5) * pull * 1.2;
-      this.ship.position.y += (Math.random() - 0.5) * pull * 1.2;
-      if (q > 0.92 && !A.white){ A.white = 1; const f = $('fade'); f.style.background = '#fff'; f.style.opacity = '1'; }
+    if (A.stage === 3 && q > 0.68){ A.stage = 4; A.t = 0; toast('it has the ship'); }
+    if (A.stage >= 4){
+      // pulled back, spun, and shaken
+      const pull = Math.min(1, A.t / (this.TRANSIT_T * 0.28));
+      ship.position.z = A.zHold - pull * pull * 104;
+      ship.position.x += (Math.random() - 0.5) * pull * 1.4;
+      ship.position.y += (Math.random() - 0.5) * pull * 1.4;
+      ship.rotation.z += dt * pull * 2.5;
+      if (A.stage === 4 && q > 0.8){
+        A.stage = 5;
+        const v = entMesh('alien', { cast: 'leader' }); v.scale.setScalar(0.7); v.position.set(2.6, 0.4, 0.8); v.rotation.x = -Math.PI / 2;
+        ship.add(v); A.vehl = v;
+        const burst = new THREE.Mesh(new THREE.SphereGeometry(2.4, 10, 8), new THREE.MeshBasicMaterial({ color: 0xe0c0ff, transparent: true, opacity: 0.7 })); burst.position.copy(v.position); ship.add(burst); A.vburst = burst;
+        toast('Vehl is beside your hull. "Through, or nothing."');
+        AudioSys.sfx('teleport');
+      }
+      if (A.vburst){ A.vburst.scale.multiplyScalar(1 + dt * 2); A.vburst.material.opacity -= dt * 1.4; if (A.vburst.material.opacity <= 0){ ship.remove(A.vburst); A.vburst = null; } }
+      if (A.stage === 5 && q > 0.93){ A.stage = 6; AudioSys.sfx('teleport'); const f = $('fade'); f.style.background = '#fff'; f.style.opacity = '1'; }
     }
   },
   transitTick(F, dt){
     const p = 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, F.t / this.TRANSIT_T));
     const rFrom = this.bodies.from.userData.rad, rTo = this.bodies.to.userData.rad;
     const z = (rFrom + 30) + (1000 - rTo - 30 - rFrom - 30) * p;
-    this.ship.position.set(0, 0, z);
-    if (F.ambush) this.ambushTick(F, dt, z);
+    this.ship.position.set(0, 0, F.ambush && F.ambush.zHold != null ? F.ambush.zHold : z);
+    if (F.ambush) this.ambushTick(F, dt, F.ambush.zHold != null ? F.ambush.zHold : z);
     this.ship.rotation.z += dt * 0.15;       // a slow roll
     this.bodies.from.rotation.y += dt * 0.02; this.bodies.to.rotation.y += dt * 0.02;
     const R = 16, cp = Math.cos(game.pitch), sp = Math.sin(game.pitch);
@@ -32522,6 +32681,24 @@ const spaceSys = {
   // the far world takes over: this one is put away as it stands, the other
   // planet's save comes up (or is born), and the rocket appears high over
   // the pad with you in it
+  // another world, no flight: this one is put away as it stands and the
+  // other comes up (or is born), you at `land` (y null: on the ground)
+  goTo(to, land, opts){
+    opts = opts || {};
+    const live = buildSaveData();
+    delete live.others;
+    const prev = this.others[to] || null;
+    const next = prev ? Object.assign({}, prev) : { v: 5, edits: [], entities: [] };
+    for (const k of this.SHARED) if (live[k] !== undefined) next[k] = live[k];
+    next.planet = to;
+    next.player = land ? { x: land.x, y: land.y == null ? null : land.y, z: land.z, yaw: opts.yaw != null ? opts.yaw : game.yaw, pitch: opts.pitch || 0, fly: false } : null;
+    next.others = Object.assign({}, this.others);
+    delete next.others[to];
+    if (!opts.dropFrom) next.others[game.planet] = live;
+    this.dest = null;
+    this.teardown();
+    startWorldData(game.worldId, next);
+  },
   arrive(F, crash){
     if (crash){
       // the station is gone, and so is the road that went through it
@@ -32532,28 +32709,24 @@ const spaceSys = {
     const idx = game.entities.indexOf(F.e);
     if (idx >= 0) game.entities.splice(idx, 1);          // the rocket leaves with you
     game.driving = null;
-    const live = buildSaveData();
-    delete live.others;
     const prev = this.others[F.to] || null;
-    const next = prev ? Object.assign({}, prev) : { v: 5, edits: [], entities: [] };
-    for (const k of this.SHARED) if (live[k] !== undefined) next[k] = live[k];
-    next.planet = F.to;
     // where it comes down: where you last stood on that world (the pad you left from), the flat ground the generator picks, or the station's hangar
     const land = F.to === 'station' ? { x: 0, z: 0 } : F.to === 'site' ? { x: 0, z: -53 } : prev && prev.player && prev.player.x != null ? { x: prev.player.x, z: prev.player.z } : null;
-    next.player = land ? { x: land.x, y: null, z: land.z, yaw: F.e.heading || 0, pitch: 0, fly: false } : null;
-    next.others = Object.assign({}, this.others);
-    delete next.others[F.to];
-    if (!crash) next.others[F.from] = live;
-    this.dest = null;
-    this.teardown();
-    startWorldData(game.worldId, next);
+    this.goTo(F.to, land, { yaw: F.e.heading || 0, dropFrom: !!crash });
+    if (crash){
+      // thrown through (Build 82): you arrive standing, looking at an empty sky; the ship follows
+      F.phase = 'appear'; F.t = 0; F.ship = { type: F.e.type || 'rocket', charge: F.e.charge || 0, hp: F.e.hp, heading: F.e.heading || 0 };
+      game.camView = 1; game.chase = null; game.pitch = 0.75; game.yaw = (F.e.heading || 0) + Math.PI;
+      AudioSys.setHum(false, 0, 0);
+      refreshToolHUD();
+      return;
+    }
     const r = spawnEntity(F.e.type || 'rocket', game.pos.x, game.pos.y + 110, game.pos.z);
     r.charge = F.e.charge || 0; r.hp = F.e.hp; r.heading = F.e.heading || 0; r.vy = -4;
     r.mesh = entMesh(r.type, r); game.scene.add(r.mesh);
     game.driving = r;
     game.camView = 1; game.chase = null; game.pitch = 0.2;
-    F.e = r; F.phase = crash ? 'crash' : 'landing'; F.t = 0; F.burn = !crash;
-    if (crash){ r.vy = -22; r.tilt = 0.1; }
+    F.e = r; F.phase = 'landing'; F.t = 0; F.burn = true;
     AudioSys.setHum(true, 0.8, 0.5);
     refreshToolHUD();
   },
@@ -34451,7 +34624,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

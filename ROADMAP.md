@@ -336,7 +336,7 @@ Slotted between the city builds as the mood takes me:
 - **After the 2026-09-22 playtest** (Austin: 76 to 81, no bugs, a page
   of notes). The alien planet is named **STRATA**: the game is named for
   where it ends. Claude's order:
-  5. **THE BAND & THE FALL** (Build 82). The crash retold Austin's way:
+  5. **THE BAND & THE FALL** (DONE, Build 82). The crash retold Austin's way:
      the boss appears first and haunts the rocket, turns to the station,
      raises its hands, a black hole that looks like one (a swirling disc
      with a bright rim) takes the station and then the ship; Vehl

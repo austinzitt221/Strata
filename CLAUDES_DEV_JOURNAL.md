@@ -1448,6 +1448,21 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, midday — the notes, and THE BAND & THE FALL
+
+Austin played 76 to 81 in one go and found no bugs, and then wrote the
+best page of notes he has written: Station Two should be built by
+paying builders, not by hand; the ambush wants staging (appear, haunt,
+turn, arms up, the hole, the station, the ship, Vehl, a second sound,
+an empty sky, the ship from the sky); the band; Strata as the alien
+planet's name and the reason the game is called that; the alien world
+remade from nothing; a crafting table per planet. I put it on the
+roadmap in my order and built the band and the fall first, because the
+crash is the moment he will replay to show people.
+
+The band is the item I am proudest of this month: it makes a Build 3
+item, the beacon, the best thing to plant in the late game.
+
 ## 2026-09-22, morning — THE CROSSING
 
 The ambush is the first scripted scene in the game and it went in as a

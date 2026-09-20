@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 82 — THE BAND & THE FALL
+- [ ] The crossing again (a new world, or a world where you have not
+      crossed yet). Does it read as you described it: it appears, it
+      haunts, it turns, it raises its arms, the hole, the station, the
+      ship, Vehl, the second sound, the sky, the ship falling?
+- [ ] Does the black hole look like one?
+- [ ] Plant beacons on three worlds and bounce between them with M. Is
+      the list beside the map enough, or do you want a world picker on
+      the map itself?
+
 ## Build 81 — THE CROSSING
 - [ ] Fly the star rocket from the site. Did you turn to look when the
       view swung back? Did the station going into the hole land? Was
