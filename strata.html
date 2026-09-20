@@ -7532,7 +7532,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -12036,6 +12036,14 @@ const VROLE = {
   soldier: { name: 'soldier',      coat: 0x556b3a, hat: 0x3c4a2c },
   quarter: { name: 'quartermaster', coat: 0x4f5a3a, hat: 0xd9b25a },
   commander:{ name: 'commander',   coat: 0x3f4a2e, hat: 0x1e2416 },
+  // STATION ONE (Build 79): the cast's trades, by their own names for them
+  x_leader: { name: 'leader',        coat: 0x3a2a5a, hat: 0xd9b25a },
+  x_ores:   { name: 'ore trader',    coat: 0x5a4a2a, hat: 0x5a4a2a },
+  x_arms:   { name: 'armourer',      coat: 0x6a2a2a, hat: 0x6a2a2a },
+  x_tools:  { name: 'toolwright',    coat: 0x2a4a5a, hat: 0x2a4a5a },
+  x_food:   { name: 'provisioner',   coat: 0x4a6a2a, hat: 0x4a6a2a },
+  x_charts: { name: 'chartkeeper',   coat: 0x2a3a6a, hat: 0x2a3a6a },
+  x_relics: { name: 'relic dealer',  coat: 0x6a5a2a, hat: 0x6a5a2a },
 };
 const dropTexCache = new Map();
 function entMesh(type, ent){
@@ -13539,6 +13547,7 @@ const villageSys = {
     }
   },
   villagerRec(e){
+    if (e.type === 'alien') return stationOneSys.rec(e.cast);
     const rec = e.ckey ? (game.cities || {})[e.ckey] : game.villages[e.vkey];
     return rec ? rec.houses[e.vi] : null;
   },
@@ -15211,6 +15220,7 @@ const objectiveSys = {
   // every active objective in the world right now
   list(){
     const out = [];
+    if (game.planet === 'station'){ stationOneSys.objectives(out); return out; }
     expeditionSys.markers(out);
     for (const key in game.villages){
       const rec = game.villages[key];
@@ -15313,7 +15323,7 @@ const objectiveSys = {
   },
   frame(){
     const host = $('objlayer');
-    const show = game.running && game.ui === 'none' && !game.photo && !(spaceSys.flight && spaceSys.flight.phase !== 'landing') && game.planet === 'earth';   // the ledger's places are all on Earth
+    const show = game.running && game.ui === 'none' && !game.photo && !(spaceSys.flight && spaceSys.flight.phase !== 'landing') && game.planet !== 'moon';   // the ledger's places are on Earth; the station lists its own
     // the world scan behind list() only changes on the seconds scale --
     // rebuild it at 4Hz and spend the per-frame work on projection only
     const tNow = performance.now();
@@ -15653,6 +15663,7 @@ const missionSys = {
 const tradeSys = {
   TIER: r => r >= 25 ? 'partner' : r >= 10 ? 'regular' : 'stranger',
   offers(role){
+    if (role && role.slice(0, 2) === 'x_') return stationOneSys.offers(role.slice(2));
     if (role === 'clerk' || role === 'press' || role === 'stock' || role === 'floor') return [];   // they sell tickets, papers, shares -- not wares
     if (role === 'broker') return [
       { sell: { k: 'coal', n: 5 }, price: 10, rep: 0 },
@@ -15786,6 +15797,7 @@ const tradeSys = {
     document.querySelectorAll('#trademain .slot, #tradehot .slot').forEach(paintSlot);
     const list = $('tradelist');
     list.innerHTML = '';
+    if (T.e.type === 'alien'){ stationOneSys.rows(list, T); return; }   // the cast (Build 79): their own greeting, story and wares
     // ---- the mission block sits above the offers ----
     {
       const rec = T.e.ckey ? game.cities[T.e.ckey] : game.villages[T.e.vkey];
@@ -21055,6 +21067,7 @@ const FARM_CROPS = {
   lettuce: { seed: 'lettuceseed', n: 2, h: 0.14, leaf: 0x7ac04a, fruit: 0xa8e070 },
 };
 const FARM_MEALS = {
+  voidfruit: { buff: 'speed', secs: 90, heal: 100, line: 'whole again, and quick for ninety seconds' },   // STATION ONE B (Build 79)
   burger:    { buff: 'speed', secs: 90, heal: 30, line: 'speed ×1.5 for ninety seconds' },
   spaghetti: { buff: 'dig',   secs: 90, heal: 30, line: 'the drill and the dispenser twice as fast for ninety seconds' },
   salad:     { buff: 'jump',  secs: 90, heal: 20, line: 'jump ×1.5 for ninety seconds' },
@@ -28119,7 +28132,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -28343,6 +28356,14 @@ function itemIconURL(it){
     c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
     c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
     c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'translator'){
+    c.fillStyle = '#3a3a44'; c.fillRect(4, 2, 8, 12); c.fillStyle = '#5a5a66'; c.fillRect(5, 3, 6, 10);
+    c.fillStyle = '#8bff9e'; c.fillRect(6, 4, 4, 3); c.fillStyle = '#2a2a30'; c.fillRect(6, 9, 4, 1); c.fillRect(6, 11, 4, 1);
+    c.fillStyle = '#d9b25a'; c.fillRect(7, 1, 2, 1);
+  } else if (it.kind === 'voidfruit'){
+    c.fillStyle = '#3a1a5a'; c.fillRect(5, 5, 7, 8); c.fillRect(4, 6, 9, 6);
+    c.fillStyle = '#7a3aaa'; c.fillRect(6, 6, 2, 3); c.fillStyle = '#c070ff'; c.fillRect(6, 6, 1, 1);
+    c.fillStyle = '#4a8a2a'; c.fillRect(8, 3, 1, 2); c.fillRect(9, 2, 2, 1);
   } else if (it.kind === 'selenite' || it.kind === 'astrium'){
     const A = it.kind === 'astrium';
     c.fillStyle = A ? '#2e2438' : '#8f8f94'; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
@@ -28943,6 +28964,8 @@ function itemLabel(it){
   if (it.kind === 'lunite') return 'lunite';
   if (it.kind === 'selenite') return 'selenite';
   if (it.kind === 'astrium') return 'astrium';
+  if (it.kind === 'translator') return 'translator';
+  if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
@@ -29343,7 +29366,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'voidfruit', count: 8 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30213,6 +30236,10 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'mech'){
     html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'translator'){
+    html = '<div class="t1">translator</div><div class="t2">Vehl\'s gift · while it rides in your pack, STATION ONE speaks your language: talk, trade, and the leader\'s story</div>';
+  } else if (it.kind === 'voidfruit'){
+    html = '<div class="t1">voidfruit ×' + it.count + '</div><div class="t2">grown nowhere you have been · right click to eat: a full mend, and speed ×1.5 for ninety seconds</div>';
   } else if (it.kind === 'selenite'){
     html = '<div class="t1">selenite ×' + it.count + '</div><div class="t2">the Moon\'s first ore, near the surface · tools and armor a tier past diamond (Q, at a station): shapes to 10 m</div>';
   } else if (it.kind === 'astrium'){
@@ -31398,6 +31425,7 @@ function buildSaveData(){
     ledger: game.ledger || null,
     news: game.news || [], market: game.market || null, phoneLog: game.phoneLog || [], monPending: game.monPending || [], bank: game.bank || null, shops: game.shops || [], casino: game.casino || null, races: game.races || null, charts: game.charts || [], surveyBought: game.surveyBought || 0, surveySold: game.surveySold || 0, mail: game.mail || {}, guardRun: game.guardRun || null, buff: game.buff || null,
     guests: game.guests || {},
+    story: game.story || {}, stationCast: game.stationCast || {},
     forts: game.forts || {},
     bases: game.bases || {},
     spires: game.spires || {},
@@ -31470,6 +31498,7 @@ function startWorldData(id, data){
   game.ledger = data.ledger || ledgerSys.fresh();
   game.news = data.news || []; game.market = data.market || null; game.phoneLog = data.phoneLog || []; game.monPending = data.monPending || []; game.bank = data.bank || null; game.shops = data.shops || []; game.casino = data.casino || null; game.races = data.races || null; game.charts = data.charts || []; game.surveyBought = data.surveyBought || 0; game.surveySold = data.surveySold || 0; game.mail = data.mail || {}; game.guardRun = data.guardRun || null; game.buff = data.buff || null;
   game.guests = data.guests || {};
+  game.story = data.story || {}; game.stationCast = data.stationCast || {};
   game.mapView = { ox: 0, oz: 0, zoom: (game.mapView && game.mapView.zoom) || 1 };
   game.forts = data.forts || {};
   game.bases = data.bases || {};
@@ -31656,7 +31685,7 @@ const stationOneSys = {
       if (game.entities.some(e => e.type === 'alien' && e.cast === key)) continue;
       const P = posts[key];
       const e = spawnEntity('alien', P.x, P.y, P.z);
-      e.cast = key; e.home = P; e.friendly = true; e.noburn = true;
+      e.cast = key; e.home = P; e.friendly = true; e.noburn = true; e.role = 'x_' + ((this.CAST[key] && this.CAST[key].role) || 'leader');
     }
   },
   // their tongue: a seeded string of their syllables, the same line every time for the same speaker and mood
@@ -31672,11 +31701,122 @@ const stationOneSys = {
     }
     return w.join(' ');
   },
+  hasTranslator(){ return CORE.countItem(game.slots, 'translator') > 0; },
+  rec(cast){
+    game.stationCast = game.stationCast || {};
+    const R = this.CAST[cast] || this.CAST.leader;
+    if (!game.stationCast[cast]) game.stationCast[cast] = { vname: R.name, rep: 0, role: 'x_' + (R.role || 'leader'), station: 1 };
+    return game.stationCast[cast];
+  },
   talk(e){
     const R = this.CAST[e.cast] || this.CAST.leader;
-    const line = this.babble(CORE.hashSeed(R.name + ':' + ((Math.random() * 4) | 0)), 4 + ((Math.random() * 5) | 0));
-    toast(R.name + ': ' + line + (R.leader ? '  (a wall of it. You would need a translator.)' : ''));
-    AudioSys.sfx('toggle');
+    if (!this.hasTranslator()){
+      const line = this.babble(CORE.hashSeed(R.name + ':' + ((Math.random() * 4) | 0)), 4 + ((Math.random() * 5) | 0));
+      if (R.leader){
+        // the leader knows a blank look when they see one
+        game.story = game.story || {};
+        addStackItem('translator', 1);
+        game.story.translator = 1;
+        toast('Vehl: ' + line + '  …and presses a small device into your hand: a TRANSLATOR. Try again.');
+        AudioSys.sfx('craft'); refreshHotbar(); markSave();
+      } else {
+        toast(R.name + ': ' + line);
+        AudioSys.sfx('toggle');
+      }
+      return;
+    }
+    e.role = 'x_' + (R.role || 'leader');
+    tradeSys.open(e);
+  },
+  // ---- what they say, once you can hear it ----
+  GREET: {
+    leader: null,
+    ores:   'Orrun: The Moon\'s stones. Bring them. I pay in the coin you use, and I pay more than the ones below.',
+    arms:   'Kessa: Rounds, cells, the heavy things. And I want teeth: the beasts of your world have good teeth.',
+    tools:  'Dral: Your drills are quaint. Mine are not. Goodwill first.',
+    food:   'Mim: You eat the dead things of your world. Try the fruit. It grew where the light does not reach.',
+    charts: 'Tehk: Every world is a map that has not been drawn. I draw. I also buy.',
+    relics: 'Sova: Fuel for the little ship. Metal from the sky islands. And the purple stone, if you find it, at any price you like to name.',
+  },
+  STORY: [
+    'Vehl: You made the crossing in that. Good. Then you can make another.',
+    'Vehl: Our world is overrun. It was not always so: something at its centre is the reason, and it has been the reason for longer than I have been leader. We fled to this station and we cannot go back, because nothing here can make the crossing to our home.',
+    'Vehl: A ship that can is built, not found, and it is built of what your Moon hides. Bring me twelve of the blue stone the Moon grows under its dust, and I will know you mean it.',
+  ],
+  STORY2: [
+    'Vehl: Lunite. So you can dig, and you can find. Now the harder thing: the purple stone, deep, four grains of it. The ship\'s heart is astrium or it is nothing.',
+  ],
+  STORY3: [
+    'Vehl: Then you have my word, and my word is this: between here and our world there must be a second station, and a second station is a build, not a gift. Station Two. When you are ready, we begin.',
+    '(STATION TWO is the next chapter of the road map.)',
+  ],
+  offers(cast){
+    if (cast === 'ores') return [
+      { sell: { k: 'lunite', n: 2 }, price: 120, rep: 0 }, { sell: { k: 'selenite', n: 2 }, price: 55, rep: 0 }, { sell: { k: 'astrium', n: 1 }, price: 320, rep: 0 },
+      { sell: { k: 'diamond', n: 1 }, price: 70, rep: 0 }, { buy: { k: 'ironingot', n: 6 }, price: 30, rep: 0 }, { buy: { k: 'rubyingot', n: 3 }, price: 60, rep: 10 },
+    ];
+    if (cast === 'arms') return [
+      { buy: { k: 'rounds', n: 48 }, price: 14, rep: 0 }, { buy: { k: 'cells', n: 32 }, price: 18, rep: 0 }, { buy: { k: 'rockets', n: 6 }, price: 130, rep: 10 },
+      { buy: { make: 'fw', g: 6 }, price: 900, rep: 25 }, { sell: { k: 'fang', n: 4 }, price: 24, rep: 0 }, { sell: { k: 'wispcore', n: 1 }, price: 30, rep: 0 },
+    ];
+    if (cast === 'tools') return [
+      { buy: { k: 'wire', n: 12 }, price: 30, rep: 0 }, { buy: { k: 'repair', n: 1 }, price: 60, rep: 0 },
+      { buy: { make: 'drill', tier: 5 }, price: 700, rep: 10 }, { buy: { make: 'disp', tier: 5 }, price: 520, rep: 10 }, { buy: { make: 'sword', tier: 6 }, price: 640, rep: 25 },
+    ];
+    if (cast === 'food') return [
+      { buy: { k: 'cookedmeat', n: 4 }, price: 24, rep: 0 }, { buy: { k: 'voidfruit', n: 1 }, price: 60, rep: 0 }, { buy: { k: 'voidfruit', n: 3 }, price: 150, rep: 10 },
+      { sell: { k: 'meat', n: 4 }, price: 14, rep: 0 }, { sell: { k: 'cocoa', n: 2 }, price: 12, rep: 0 }, { sell: { k: 'amber', n: 1 }, price: 60, rep: 0 },
+    ];
+    if (cast === 'charts') return [
+      { buy: { make: 'tmap' }, price: 30, rep: 0 }, { buy: { k: 'survey', n: 1 }, price: 40, rep: 0 }, { sell: { k: 'page', n: 1 }, price: 35, rep: 0 },
+    ];
+    if (cast === 'relics') return [
+      { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
+      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 },
+    ];
+    return [];
+  },
+  stage(){ return (game.story && game.story.stage) || 0; },
+  rows(list, T){
+    const cast = T.e.cast, hrec = T.hrec;
+    const line = (txt, col) => { const r = document.createElement('div'); r.className = 'craftrow'; r.style.borderLeft = '3px solid ' + (col || '#9fe8ff'); const d = document.createElement('div'); d.className = 'cname'; d.textContent = txt; r.appendChild(d); list.appendChild(r); return r; };
+    if (cast === 'leader'){
+      const st = this.stage();
+      const lines = st === 0 ? this.STORY : st === 1 ? this.STORY2 : this.STORY3;
+      for (const t of lines) line(t);
+      if (st < 2){
+        const want = st === 0 ? { k: 'lunite', n: 12 } : { k: 'astrium', n: 4 };
+        const have = CORE.countItem(game.slots, want.k);
+        const r = line((st === 0 ? 'THE BLUE STONE: bring 12 lunite' : 'THE SHIP\'S HEART: bring 4 astrium') + ' · you carry ' + have, '#ffb44d');
+        const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = have >= want.n ? '#8bff9e' : '#8a8494';
+        act.textContent = have >= want.n ? 'HAND OVER' : 'not yet';
+        r.appendChild(act);
+        if (have >= want.n) r.addEventListener('click', () => this.handOver(want, st));
+      }
+      return;
+    }
+    line(this.GREET[cast] || '');
+    tradeSys.rows(list, T);
+  },
+  handOver(want, st){
+    if (CORE.countItem(game.slots, want.k) < want.n) return;
+    CORE.consumeItem(game.slots, want.k, want.n);
+    game.story = game.story || {};
+    const coins = st === 0 ? 300 : 600;
+    addStackItem('coin', coins);
+    for (const c in this.CAST) this.rec(c).rep = Math.min(40, (this.rec(c).rep || 0) + (st === 0 ? 10 : 15));   // the station hears of it
+    game.story.stage = st + 1;
+    if (st === 1) game.story.word = 1;
+    toast(st === 0 ? 'Vehl takes the lunite — +300 coins · the station\'s goodwill rises' : 'Vehl takes the astrium — +600 coins · you have the leader\'s WORD');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    tradeSys.refresh();
+  },
+  objectives(out){
+    if (!game.gen || !game.gen.modules) return;
+    const hall = game.gen.modules.find(m => m.role === 'hall');
+    if (!hall) return;
+    if (!this.hasTranslator()) out.push({ id: 'st_leader', x: hall.x, z: hall.z, y: hall.y, label: this.babble(CORE.hashSeed('vehl-hall'), 2).toUpperCase(), rec: { name: 'the hall below' } });
+    else if (this.stage() < 2) out.push({ id: 'st_story', x: hall.x, z: hall.z, y: hall.y, label: 'VEHL · ' + (this.stage() === 0 ? '12 LUNITE' : '4 ASTRIUM'), rec: { name: 'the hall below' } });
   },
 };
 
@@ -31832,7 +31972,7 @@ const spaceSys = {
   scene: null, cam: null, ship: null, bodies: null, camWas: null, spaceWas: false,
   TRANSIT_T: 18, CLIMB_H: 240,
   SHARED: ['name', 'seed', 'mode', 'slots', 'dispSlot', 'tool', 'armor', 'ledger', 'news', 'market', 'phoneLog', 'monPending', 'bank', 'shops', 'casino', 'races', 'charts',
-           'surveyBought', 'surveySold', 'mail', 'guardRun', 'buff', 'guests', 'bossKills', 'hotSel', 'snapOn', 'gridIdx', 'hp', 'heal', 'timeOfDay', 'day'],
+           'surveyBought', 'surveySold', 'mail', 'guardRun', 'buff', 'guests', 'bossKills', 'hotSel', 'snapOn', 'gridIdx', 'hp', 'heal', 'timeOfDay', 'day', 'story', 'stationCast'],
   // the route (Build 78): the station sits between the Earth and the Moon.
   // The first stop is always the next one along; R in the seat picks the other
   routes(){ return game.planet === 'earth' ? ['station', 'moon'] : game.planet === 'station' ? ['moon', 'earth'] : ['station', 'earth']; },
@@ -33941,7 +34081,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, talkTo, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, stationOneSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 79 — STATION ONE B
+- [ ] Land without a translator. Did the marker in their script take
+      you to the hall? Did the moment Vehl hands it over land?
+- [ ] Read Vehl's story. Is it enough to want the ship? Too much text?
+- [ ] Sell Orrun a run of lunite; buy fuel from Sova; eat a voidfruit.
+      Are the prices right against the Earth's broker and the quarter?
+- [ ] Do both missions. Does "the leader's word" feel like a key?
+
 ## Build 78 — STATION ONE A
 - [ ] Launch from Earth: the rocket now stops at the station first. Did
       the station's shape resolving in the crossing read? The landing

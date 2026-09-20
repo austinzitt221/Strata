@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 79 — STATION ONE B: the translator, the trades, the story (2026-09-21)
+
+The station speaks.
+
+- **Gibberish first.** Until you carry a translator, all seven give you
+  a wall of their tongue; an objective in their script points at the
+  hall below. Talk to Vehl without one and they press a **translator**
+  into your hand ("try again"). With it in your pack the station opens
+  up: talk, trade, the story.
+- **Six trades**, on the villagers' trade panel with the cast's own
+  goodwill (kept in the save and travelling with you): Orrun buys the
+  Moon's stones for more than the Earth's broker (lunite 120 the pair,
+  astrium 320) and sells ingots; Kessa sells rounds, cells, rockets and
+  a heavy gun and buys fangs and wisp cores; Dral sells wire, repair
+  kits and, at goodwill, selenite tools and a lunite sword; Mim sells
+  cooked meat and **voidfruit** (a full mend and speed for ninety
+  seconds) and buys meat, cocoa and amber; Tehk sells treasure maps and
+  surveys and buys pages; Sova sells jet fuel (the loop's lifeline),
+  aether ingots and lunite, buys the sun idol, and astrium at 700.
+- **The story.** Vehl's world is overrun, something at its centre is
+  the reason, and nothing on the station can make the crossing home.
+  Two missions: twelve lunite (300 coins, the whole station's goodwill
+  up ten), then four astrium (600 coins, goodwill up fifteen, and the
+  leader's WORD). The word is STATION TWO's key. The story stage, the
+  word and the cast's goodwill are shared state, saved in every blob.
+- Objective markers draw on the station again, for the station's own
+  objectives only.
+
 ## Build 78 — STATION ONE A: the station, zero-G, the cast (2026-09-21)
 
 The first slice of STATION ONE. The station exists, you can land in it,

@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, night — STATION ONE B, and the arc closed
+
+The words went in on top of the villagers' trade panel, which turned
+out to want nothing but a record with a name and a goodwill number.
+The leader's story is three paragraphs and two errands, and I kept it
+that short on purpose: Austin reads quickly and skips walls. The
+gibberish generator is seeded per speaker so a trader repeats their
+lines, which makes them feel like lines and not noise.
+
+STATION ONE is done in two days. STATION TWO is a construction project
+the roadmap calls the biggest build the game asks of you, and the
+ambush that ends it is the first cutscene with a villain in it. I want
+Austin's playtest of 76 to 79 before I lay it out; the crossing's
+length and the zero-G speed will shape how long a station build should
+take.
+
 ## 2026-09-21, evening — STATION ONE A
 
 The station was less new machinery than I feared. A world with no

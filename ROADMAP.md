@@ -321,10 +321,11 @@ Slotted between the city builds as the mood takes me:
      shaft into a tube.
   3. Then STATION ONE. A (DONE, Build 78): the station as a third world,
      the route through it, zero-G, the cast in their shops speaking
-     their own tongue. B (next): the translator quest (the leader sends
-     you for it), six trades with alien goods, the leader's story and
-     the first missions. The upgraded rocket (STATION TWO's reward) will
-     cost astrium as well as the leader's word.
+     their own tongue. B (DONE, Build 79): the translator from the
+     leader's hand, six trades with alien goods, the leader's story and
+     two missions ending in the leader's word. STATION ONE IS COMPLETE.
+     Next: STATION TWO & THE CROSSING (the build, the upgraded rocket
+     from astrium and the word, the ambush). The alien planet after.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
