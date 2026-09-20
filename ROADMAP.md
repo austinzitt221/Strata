@@ -304,7 +304,23 @@ Slotted between the city builds as the mood takes me:
 - Then the Space Arc: LIFTOFF A (DONE, Build 74): the Moon, the rocket,
   the crossing, the space suit, two worlds in one save. LIFTOFF B (DONE,
   Build 75): lunite, abandoned moon bases, dust crawlers, the Dust Wyrm,
-  the mech suit. STATION ONE next.
+  the mech suit.
+- **THE MOON, finished** (Austin's 2026-09-20 playtest: no bugs; ideas).
+  The Moon is the grind on the way to the alien planet, not a second
+  Earth, so it gets exactly this and no more for now:
+  1. **MOON TIERS** (DONE, Build 76): three moon ores, each a tool tier past
+     diamond (drills, dispensers, swords, helm/plate/boots): **selenite**,
+     common and near the surface, the step up from diamond; **lunite**,
+     the second, the mech suit's metal, with its own set; **astrium**,
+     rare and deep, the best there is, and the metal of the upgraded
+     rocket. Diamond caps the smallest a shape can be; the moon tiers
+     only go bigger (10, 12, 16 m).
+  2. **MOON DEPTHS** (Build 77): lava tubes, the Moon's caves, with the
+     veins in their walls and skylights down into them; two more
+     structures to find: the crashed lander, and the drill rig over a
+     shaft into a tube.
+  3. Then STATION ONE. The upgraded rocket (STATION TWO's reward) will
+     cost astrium as well as the leader's word.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

@@ -1448,6 +1448,19 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-21, morning — the playtest, and MOON TIERS
+
+Austin's report on 63 to 75: no bugs, and he tried to break the flight
+by quitting in the middle of it. That is the first report with nothing
+to fix since the console builds. His Moon ideas are good and, better,
+they are bounded: three ores with tiers past diamond, caves, two more
+structures, and then leave the Moon alone because the alien planet is
+where the effort goes. I put them on the roadmap in that order and
+built the tiers first: the tier tables were already arrays, so eight
+tiers cost a dozen lines and a rule (diamond caps the small end; the
+moon tiers only go bigger). The ore is the reason to dig; the size is
+the reason to want it.
+
 ## 2026-09-21, small hours — LIFTOFF B
 
 The Moon has things in it now. Everything in B reused a shape that

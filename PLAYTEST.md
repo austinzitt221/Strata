@@ -5,6 +5,13 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 76 — MOON TIERS
+- [ ] Survival, on the Moon: dig for selenite near the surface and make
+      a selenite drill. Does the 10 m cap feel like a real step up?
+- [ ] Find astrium (below a hundred metres). Too rare, or rare enough to
+      be a prize? A 16 m sphere: does the game keep up?
+- [ ] Wear a full astrium set on Earth for a night. Is anything a threat?
+
 ## Build 75 — LIFTOFF B
 - [ ] Walk from the landing until you find a base (the HUD's region
       name changes every 512 m; bases are one per 320 m cell, roughly

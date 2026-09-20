@@ -2,6 +2,27 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 76 — MOON TIERS: three ores, three tiers past diamond (2026-09-21)
+
+Austin's idea from the 2026-09-20 playtest, built first because the
+Moon's grind needs a reason.
+
+- **Three moon ores, three tiers.** Selenite (tier 6: common, in the top
+  forty-five metres, pale crystal in dust-grey rock), lunite (tier 7:
+  the mech suit's metal, from eight metres down), astrium (tier 8: rare,
+  below a hundred metres, violet in near-black rock). Each makes the
+  full set at a station: drill, dispenser, sword, helmet, chestplate,
+  boots, at the same counts as the Earth tiers, from the raw ore.
+- **Bigger, never smaller.** Diamond caps the smallest a shape can be
+  and the moon tiers only go up: diamond stops at 8 m, selenite at 10,
+  lunite at 12, astrium at 16. All four are smooth-sized and instant.
+  The sword's damage keeps its line (30, 34, 38); armor adds 0.24, 0.28,
+  0.32 a piece, still capped at 0.6 in total.
+- The ore broker buys selenite (40 for two) and astrium (220 apiece);
+  tier colours, icons, tooltips, the creative catalog and the crafting
+  screen carry all three.
+- Astrium's other use, the upgraded rocket, comes with STATION TWO.
+
 ## Build 75 — LIFTOFF B: what the Moon holds (2026-09-20)
 
 The Moon gets its ore, its ruins, its night and its prize.
