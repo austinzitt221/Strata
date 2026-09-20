@@ -1448,6 +1448,95 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, morning — THE CROSSING
+
+The ambush is the first scripted scene in the game and it went in as a
+timeline over the crossing's own clock, in the crossing's own scene,
+with nothing new but four models and a fade to white. The view swings
+back on its own when the thing rises; Austin will either love or hate
+being turned, and I want to know which. The alien world is the Earth's
+field in violet because that is honest for a first landing and because
+the next chapter is where it earns its own generator.
+
+Two vehicle bugs came out of the same assumption: that "the rocket"
+was a type and not a kind. The star rocket landed as a plain rocket and
+flew the crossing as one. Both are one word each now.
+
+Austin asked for a couple of builds and got 80 and 81; the teleport
+bands slipped to the next chapter so this one could end on the crash.
+Now the big playtest, 76 to 81.
+
+## 2026-09-22, small hours — STATION TWO A
+
+Austin cannot play tonight and asked for a couple more builds, so the
+station build went in without the playtest I wanted first. I made the
+choices I would have asked about: four frames, four fifths of a shell,
+plating from iron and lunite, and the whole thing at the player's own
+speed. The build is the player's edits and nothing else, which means a
+finished Station Two looks like whoever built it, which is the point.
+
+The alien world is in the sky from the site. That is deliberate: the
+next build flies at it and something is waiting on the way.
+
+## 2026-09-21, night — STATION ONE B, and the arc closed
+
+The words went in on top of the villagers' trade panel, which turned
+out to want nothing but a record with a name and a goodwill number.
+The leader's story is three paragraphs and two errands, and I kept it
+that short on purpose: Austin reads quickly and skips walls. The
+gibberish generator is seeded per speaker so a trader repeats their
+lines, which makes them feel like lines and not noise.
+
+STATION ONE is done in two days. STATION TWO is a construction project
+the roadmap calls the biggest build the game asks of you, and the
+ambush that ends it is the first cutscene with a villain in it. I want
+Austin's playtest of 76 to 79 before I lay it out; the crossing's
+length and the zero-G speed will shape how long a station build should
+take.
+
+## 2026-09-21, evening — STATION ONE A
+
+The station was less new machinery than I feared. A world with no
+ground is a generator whose heightfield says "nothing here" and whose
+SDF is the station; the mesher, the streamer, the collider and the
+landing all took it without a change, once heightRange told the truth
+about where the plating was. Zero-G is the ground branch skipped and
+a small thruster model in its place. The one real bug was mine: I put
+the hall's corridor under the landing spot, and the rocket fell
+through its own hangar floor into the hall. Layouts have to be read
+against where things land.
+
+The shop screenshot, a trader floating in front of the port with the
+Earth in it, is the first picture from this game I would put on a
+poster. B is the words: the translator, the trades, the leader's story.
+
+## 2026-09-21, midday — MOON DEPTHS
+
+Tubes, a lander and a rig, and the Moon is what Austin asked for: a
+grind with things to find, not a second Earth. The tubes took the
+Earth's capsule-carve wholesale, and the mesher's cave gates (caves,
+caveFloorY, caveInBox) turned out to be exactly the interface I needed
+without changing a line of it. The rig's shaft is the first time I have
+used the cylinder shape in a stamp.
+
+Next is STATION ONE, and it is the first thing in months that does not
+reuse a shape: zero-G movement, an interior that is not terrain, a cast
+of seven with dialogue that starts as noise. I want to read updatePlayer
+and the entity dialogue path properly before I cut it into slices.
+
+## 2026-09-21, morning — the playtest, and MOON TIERS
+
+Austin's report on 63 to 75: no bugs, and he tried to break the flight
+by quitting in the middle of it. That is the first report with nothing
+to fix since the console builds. His Moon ideas are good and, better,
+they are bounded: three ores with tiers past diamond, caves, two more
+structures, and then leave the Moon alone because the alien planet is
+where the effort goes. I put them on the roadmap in that order and
+built the tiers first: the tier tables were already arrays, so eight
+tiers cost a dozen lines and a rule (diamond caps the small end; the
+moon tiers only go bigger). The ore is the reason to dig; the size is
+the reason to want it.
+
 ## 2026-09-21, small hours — LIFTOFF B
 
 The Moon has things in it now. Everything in B reused a shape that

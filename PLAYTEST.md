@@ -5,6 +5,65 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 81 — THE CROSSING
+- [ ] Fly the star rocket from the site. Did you turn to look when the
+      view swung back? Did the station going into the hole land? Was
+      the white-out too long, too short?
+- [ ] The crash: does the wreck read as a wreck? Find the iron, make the
+      plating, raise it. Is the repair cost right for that moment?
+- [ ] Walk the alien world for a day. What is the first thing it needs
+      to stop being Earth in violet?
+- [ ] Talk to Vehl at the wreck. Then fly back to Station One and talk
+      to them there too. (They are in both places; call it out if it
+      bothers you.)
+
+## Build 80 — STATION TWO A
+- [ ] Get the word from Vehl, read the blueprint, fly to the site (R in
+      the seat on the Moon). Does landing on the keel's pad read?
+- [ ] Build the hangar frame for real, in zero-G, with a dispenser and
+      plating. How long did it take? Was that the right length? Did
+      the four-fifths rule ever feel unfair?
+- [ ] The other three. Did you use the frames' order, or your own?
+- [ ] Take the star rocket from Vehl. Does it look like the prize?
+
+## Build 79 — STATION ONE B
+- [ ] Land without a translator. Did the marker in their script take
+      you to the hall? Did the moment Vehl hands it over land?
+- [ ] Read Vehl's story. Is it enough to want the ship? Too much text?
+- [ ] Sell Orrun a run of lunite; buy fuel from Sova; eat a voidfruit.
+      Are the prices right against the Earth's broker and the quarter?
+- [ ] Do both missions. Does "the leader's word" feel like a key?
+
+## Build 78 — STATION ONE A
+- [ ] Launch from Earth: the rocket now stops at the station first. Did
+      the station's shape resolving in the crossing read? The landing
+      through the open roof?
+- [ ] Step out into zero-G. Is it fun or is it sick-making? Is seven
+      too fast a top speed, is the brake enough, does the tether feel
+      fair when you drift out the roof?
+- [ ] Find all six shops and the hall below. Did you get lost? Should
+      the corridors be lit or marked?
+- [ ] Look out a port. Talk to all seven. Which one do you want to
+      understand first?
+- [ ] R in the seat: fly Earth to the Moon direct, then Moon to Earth
+      direct. Does the routing make sense?
+
+## Build 77 — MOON DEPTHS
+- [ ] Find a skylight and drop in (a sixth of the gravity: you will be
+      fine). Walk the tube to its end. Does it feel like a cave, or a
+      pipe? Any holes in the walls, any seams?
+- [ ] Find a lander and a rig. Read both pages. Climb the rig's rope
+      down and up.
+- [ ] Is the Moon done enough for now? What is it still missing before
+      it is worth the grind?
+
+## Build 76 — MOON TIERS
+- [ ] Survival, on the Moon: dig for selenite near the surface and make
+      a selenite drill. Does the 10 m cap feel like a real step up?
+- [ ] Find astrium (below a hundred metres). Too rare, or rare enough to
+      be a prize? A 16 m sphere: does the game keep up?
+- [ ] Wear a full astrium set on Earth for a night. Is anything a threat?
+
 ## Build 75 — LIFTOFF B
 - [ ] Walk from the landing until you find a base (the HUD's region
       name changes every 512 m; bases are one per 320 m cell, roughly

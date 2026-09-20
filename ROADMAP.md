@@ -304,7 +304,38 @@ Slotted between the city builds as the mood takes me:
 - Then the Space Arc: LIFTOFF A (DONE, Build 74): the Moon, the rocket,
   the crossing, the space suit, two worlds in one save. LIFTOFF B (DONE,
   Build 75): lunite, abandoned moon bases, dust crawlers, the Dust Wyrm,
-  the mech suit. STATION ONE next.
+  the mech suit.
+- **THE MOON, finished** (Austin's 2026-09-20 playtest: no bugs; ideas).
+  The Moon is the grind on the way to the alien planet, not a second
+  Earth, so it gets exactly this and no more for now:
+  1. **MOON TIERS** (DONE, Build 76): three moon ores, each a tool tier past
+     diamond (drills, dispensers, swords, helm/plate/boots): **selenite**,
+     common and near the surface, the step up from diamond; **lunite**,
+     the second, the mech suit's metal, with its own set; **astrium**,
+     rare and deep, the best there is, and the metal of the upgraded
+     rocket. Diamond caps the smallest a shape can be; the moon tiers
+     only go bigger (10, 12, 16 m).
+  2. **MOON DEPTHS** (DONE, Build 77): lava tubes, the Moon's caves, with the
+     veins in their walls and skylights down into them; two more
+     structures to find: the crashed lander, and the drill rig over a
+     shaft into a tube.
+  3. Then STATION ONE. A (DONE, Build 78): the station as a third world,
+     the route through it, zero-G, the cast in their shops speaking
+     their own tongue. B (DONE, Build 79): the translator from the
+     leader's hand, six trades with alien goods, the leader's story and
+     two missions ending in the leader's word. STATION ONE IS COMPLETE.
+  4. STATION TWO & THE CROSSING. A (DONE, Build 80): the site past the
+     Moon, four frames to fill by hand, plating craftable, the star
+     rocket for eight astrium. B (DONE, Build 81): THE CROSSING: the
+     star rocket from the site toward the alien world, the ambush (the
+     boss behind, the black hole, the station lost, Vehl on your hull),
+     the crash landing, the wreck and its repair, the alien world's
+     first version (the Earth's field in violet, nothing of ours on it).
+     Still owed from this chapter: the **teleport bands** (Vehl's
+     parting gift: fast travel to any beacon or spawn on any world).
+  5. THE ALIEN WORLD & THE END (next): its own biomes, materials, trees,
+     people and beasts; the thing at the centre; the final boss for
+     real; the ending.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

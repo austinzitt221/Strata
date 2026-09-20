@@ -2,6 +2,181 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 81 — THE CROSSING: the ambush, the crash, the alien world (2026-09-22)
+
+The star rocket flies, and the first flight goes wrong the way the
+roadmap said it would.
+
+- **The route.** From the site, the star rocket (and only it) can go for
+  the alien world. The crossing draws the world ahead as a violet
+  sphere with dark bands and teal seas.
+- **The ambush.** The first crossing is scripted on the crossing's own
+  clock: at a third of the way something rises behind you and the view
+  swings back to it (a dark mass in a violet ring, three pale eyes); at
+  half, it tears the black open where Station Two hangs and the station
+  goes into it; Vehl appears on your hull ("Through, or nothing"); then
+  the hole takes the ship and the screen goes white. Station Two is
+  gone from the save and its road with it. Every later crossing is a
+  crossing.
+- **The crash.** Thrown out over Vehl's world, the star rocket comes
+  down fast and tilted, blows a crater where it lands, and stands in it
+  **wrecked**. The wreck is an objective, the seat says what it needs
+  (16 iron ingots, 8 plating, 2 astrium; free in creative), and SPACE in
+  the seat repairs it with one launch's fuel. Wrecks survive a save.
+- **The alien world**, first version: the Earth's generator wearing
+  another world's skin. **Violet moss** for grass, **duskrock** for
+  rock, a lavender sky, foliage tinted toward violet, its own names
+  (*the Kelthwaite violet*, *Morrow hollow*), and nothing of ours built
+  on it: no villages, cities, forts, ziggurats or wrecks; what the
+  field carves and raises on its own (caves, ruins, sky islands, rivers,
+  weather) it keeps as the overrun world's. The Earth's animals and
+  night things spawn there for now.
+- **Vehl** stands beside the wreck on the alien world and speaks of it
+  (the station lost, the ship raisable, what is at the centre to be
+  found and ended). The alien world proper, its people, its things and
+  its end, is the next chapter.
+- Vehicles keep their kind across flights (the star rocket used to land
+  as a plain rocket); the crossing draws the vehicle you are in.
+
+## Build 80 — STATION TWO A: the build (2026-09-21)
+
+The biggest build the game asks of you, as the roadmap promised: a
+station you make with your own dispenser, wall by wall.
+
+- **The site.** A fourth world, past the Moon, opened by the leader's
+  word: a keel of plating ninety metres long with a pad at its end
+  (the rocket lands there) and a mast. Zero-G like Station One. The
+  Moon hangs small behind; ahead, for the first time, the alien world,
+  a violet disc with dark bands.
+- **Four frames**, along the keel, in order: the hangar over the keel,
+  the east ring, the west quarters, the beacon spire on top. Each is a
+  wire box; the current one is yellow, the rest grey, and the objective
+  marker on it reads how far its shell is filled. A frame counts when
+  four fifths of its shell (sampled at ninety-six points, six faces)
+  is solid. Anything solid counts; plating is the material for it.
+- **Plating** is craftable now: two iron ingots and one lunite make
+  eight, at any station.
+- **Vehl** hands over the blueprint (a page) with the word, tracks the
+  frames from the hall while you build, and when the station stands
+  asks for the ship's heart: eight astrium. Then the **star rocket**:
+  violet and gold with an astrium heart in its nose, a vehicle of its
+  own kind that flies everywhere the rocket does. Where it goes beyond
+  that is THE CROSSING.
+- Zero-G, the boss and spawner gates, the horizon skin, the depth
+  marker and the HUD all know the site; the crossing draws it as its
+  keel, its pad and whatever stands so far.
+
+## Build 79 — STATION ONE B: the translator, the trades, the story (2026-09-21)
+
+The station speaks.
+
+- **Gibberish first.** Until you carry a translator, all seven give you
+  a wall of their tongue; an objective in their script points at the
+  hall below. Talk to Vehl without one and they press a **translator**
+  into your hand ("try again"). With it in your pack the station opens
+  up: talk, trade, the story.
+- **Six trades**, on the villagers' trade panel with the cast's own
+  goodwill (kept in the save and travelling with you): Orrun buys the
+  Moon's stones for more than the Earth's broker (lunite 120 the pair,
+  astrium 320) and sells ingots; Kessa sells rounds, cells, rockets and
+  a heavy gun and buys fangs and wisp cores; Dral sells wire, repair
+  kits and, at goodwill, selenite tools and a lunite sword; Mim sells
+  cooked meat and **voidfruit** (a full mend and speed for ninety
+  seconds) and buys meat, cocoa and amber; Tehk sells treasure maps and
+  surveys and buys pages; Sova sells jet fuel (the loop's lifeline),
+  aether ingots and lunite, buys the sun idol, and astrium at 700.
+- **The story.** Vehl's world is overrun, something at its centre is
+  the reason, and nothing on the station can make the crossing home.
+  Two missions: twelve lunite (300 coins, the whole station's goodwill
+  up ten), then four astrium (600 coins, goodwill up fifteen, and the
+  leader's WORD). The word is STATION TWO's key. The story stage, the
+  word and the cast's goodwill are shared state, saved in every blob.
+- Objective markers draw on the station again, for the station's own
+  objectives only.
+
+## Build 78 — STATION ONE A: the station, zero-G, the cast (2026-09-21)
+
+The first slice of STATION ONE. The station exists, you can land in it,
+float through it and meet the seven who live there; they do not speak
+your language yet.
+
+- **A third world in the save.** The station is a generator behind the
+  same interface as the Earth and the Moon, but it has no ground: a
+  hangar (34 m, open above, you land through the roof), six shop
+  spheres on corridors in every direction with quarters beyond them,
+  and the leader's hall below, all plating shells cut by their insides
+  so every corridor opens into its room. The layout is rolled per world
+  (the corridors' angles and pitches, the lengths). Each shop and the
+  hall has a round port facing the Earth. Save blobs are now a map
+  (`others`) of every world you are not on; Build 74's two-world saves
+  load as before.
+- **The route.** The station sits between the Earth and the Moon. From
+  Earth the rocket goes to the station first; from the station to the
+  Moon; from the Moon back to the station. **R in the seat picks the
+  other stop** (Earth to the Moon direct, the Moon to Earth direct).
+  In the crossing the station is drawn from its own layout at a fifth
+  scale, a low shape that resolves as you close.
+- **Zero-G.** Nothing pulls: what you have you keep. WASD and SPACE/C
+  are thrusters, SHIFT brakes, top speed seven; past 120 m from the
+  hangar a tether hauls you back. No suit needed aboard.
+- **The sky.** Black, the stars out, the Earth large in the ports'
+  direction and the Moon opposite it.
+- **The cast.** Seven, the same in every world: Vehl the leader in the
+  hall, Orrun (ores), Kessa (arms), Dral (tools), Mim (food), Tehk
+  (charts), Sova (relics), each floating at their post before their
+  port. Talk to them and you get a wall of their tongue, seeded so a
+  speaker repeats their lines. The translator, trade and the story are
+  STATION ONE B.
+- Nothing wild spawns aboard, no bosses, no weather, no horizon skin,
+  no depth marker, no Earth markers.
+
+## Build 77 — MOON DEPTHS: lava tubes, the lander, the rig (2026-09-21)
+
+The Moon's caves and its last two finds. With this the Moon is where I
+want it for now: a place to grind, with things to find on the way.
+
+- **Lava tubes.** One winding tube in most 96 m cells, ten to thirty
+  metres down, four to six legs of fourteen to twenty-four metres with a
+  radius near three; a skylight to the surface in about six of ten. They
+  are capsules, like the Earth's cave network, so the collider trusts
+  the field and the mesher's quick-reject knows where they are. The
+  veins run through their walls.
+- **The crashed lander.** A module half sunk in the dust with a rip in
+  its side, the furrow it made coming in and plating strewn along it,
+  a snapped mast; inside, a chest with selenite, jet fuel, rations, coin
+  and the crew's last page ("the base is east of here and it has
+  beds").
+- **The drill rig.** A plating pad and a tower over a shaft
+  twenty-eight metres down to a chamber, a rope the whole way, the
+  lunite vein they were after in the wall (and, half the time, a grain
+  of astrium), the chest they filled from it and their page.
+- Finds are now three kinds by hash: bases two in five, landers two in
+  five, rigs one in five, still one per 320 m cell at most and never in
+  the landing cell.
+- The Moon's pages name nobody, so the page text no longer needs an
+  expedition to exist.
+
+## Build 76 — MOON TIERS: three ores, three tiers past diamond (2026-09-21)
+
+Austin's idea from the 2026-09-20 playtest, built first because the
+Moon's grind needs a reason.
+
+- **Three moon ores, three tiers.** Selenite (tier 6: common, in the top
+  forty-five metres, pale crystal in dust-grey rock), lunite (tier 7:
+  the mech suit's metal, from eight metres down), astrium (tier 8: rare,
+  below a hundred metres, violet in near-black rock). Each makes the
+  full set at a station: drill, dispenser, sword, helmet, chestplate,
+  boots, at the same counts as the Earth tiers, from the raw ore.
+- **Bigger, never smaller.** Diamond caps the smallest a shape can be
+  and the moon tiers only go up: diamond stops at 8 m, selenite at 10,
+  lunite at 12, astrium at 16. All four are smooth-sized and instant.
+  The sword's damage keeps its line (30, 34, 38); armor adds 0.24, 0.28,
+  0.32 a piece, still capped at 0.6 in total.
+- The ore broker buys selenite (40 for two) and astrium (220 apiece);
+  tier colours, icons, tooltips, the creative catalog and the crafting
+  screen carry all three.
+- Astrium's other use, the upgraded rocket, comes with STATION TWO.
+
 ## Build 75 — LIFTOFF B: what the Moon holds (2026-09-20)
 
 The Moon gets its ore, its ruins, its night and its prize.
