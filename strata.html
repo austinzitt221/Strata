@@ -2512,7 +2512,49 @@ function makeStationGen(seed){
     regionAt: () => ({ sx: 0, sz: 0, arch: MOON_ARCH, key: '0,0', seed }), spawn: () => ({ x: 0, z: 0 }), planet: 'station', modules, links, ED };
   return gen;
 }
-function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : makeEarthGen(seed); }
+// ---------- STATION TWO (Build 80): the site ----------
+// Between the Moon and the alien world: a keel of plating with a pad at its
+// end, and along it the frames of what must be built. The station itself
+// is the player's edits: every frame is filled by hand, wall by wall
+const SITE_FRAMES = [
+  { key: 'hangar',   x: 0,   y: 12, z: 0,   w: 26, h: 16, d: 26, name: 'the hangar' },
+  { key: 'ring',     x: 22,  y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the east ring' },
+  { key: 'quarters', x: -22, y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the west quarters' },
+  { key: 'spire',    x: 0,   y: 33, z: 0,   w: 5,  h: 24, d: 5,  name: 'the beacon spire' },
+];
+function makeSiteGen(seed){
+  seed = seed >>> 0;
+  const solids = [
+    { x: 0, y: 0, z: 0, w: 4, h: 4, d: 90 },          // the keel
+    { x: 0, y: -1, z: -53, w: 16, h: 2, d: 16 },       // the pad
+    { x: 0, y: 3, z: -44, w: 2, h: 6, d: 2 },          // the mast at the pad
+  ];
+  function dBox(px, py, pz, hx, hy, hz){
+    const qx = Math.abs(px) - hx, qy = Math.abs(py) - hy, qz = Math.abs(pz) - hz;
+    const ox = qx > 0 ? qx : 0, oy = qy > 0 ? qy : 0, oz = qz > 0 ? qz : 0;
+    return Math.sqrt(ox * ox + oy * oy + oz * oz) + Math.min(Math.max(qx, qy, qz), 0);
+  }
+  function sdf(x, y, z){
+    let m = 40;
+    for (const B of solids){ const d = dBox(x - B.x, y - B.y, z - B.z, B.w / 2, B.h / 2, B.d / 2); if (d < m) m = d; }
+    return m;
+  }
+  function height(x, z){ return Math.abs(x) < 8 && Math.abs(z + 53) < 8 ? 0 : -9999; }
+  const boxes = solids.map(B => [B.x - B.w / 2, B.y - B.h / 2, B.z - B.d / 2, B.x + B.w / 2, B.y + B.h / 2, B.z + B.d / 2]);
+  function heightRange(x0, z0, x1, z1){
+    let lo = Infinity, hi = -Infinity;
+    for (const b of boxes) if (b[3] >= x0 && b[0] <= x1 && b[5] >= z0 && b[2] <= z1){ if (b[1] < lo) lo = b[1]; if (b[4] > hi) hi = b[4]; }
+    return lo === Infinity ? [-1e9, -1e9] : [lo - 2, hi + 2];
+  }
+  const nil = () => null, no = () => false;
+  const gen = { height, heightRange, sdf, mat: () => MAT.PLATING, makeLocal: () => gen, treeAt: nil, decorAt: nil, caves: false, caveFloorY: null, seed, seaLevel: null,
+    ruinInCell: nil, wetAt: no, archAt: () => MOON_ARCH, lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
+    caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
+    skyInCell: nil, skyNear: nil, zigAt: nil,
+    regionAt: () => ({ sx: 0, sz: 0, arch: MOON_ARCH, key: '0,0', seed }), spawn: () => ({ x: 0, z: -53 }), planet: 'site', frames: SITE_FRAMES, solids };
+  return gen;
+}
+function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : makeEarthGen(seed); }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
@@ -3647,6 +3689,8 @@ const RECIPES = [];
   const ore = [0, MAT.IRON, MAT.RUBY, MAT.OBSIDIAN, MAT.DIAMOND];
   // basic
   RECIPES.push({ kind: 'matout', matOut: MAT.PLANKS, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
+  // STATION TWO (Build 80): plating, for the build (and for anything else)
+  RECIPES.push({ kind: 'matout', matOut: MAT.PLATING, yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'lunite', n: 1 }] });
   RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
   // BIOMES A: every wood saws into its own planks, every planks into sticks
   RECIPES.push({ kind: 'matout', matOut: MAT.JPLANKS, yields: 4, costs: [{ mat: MAT.JWOOD, n: 1 }] });
@@ -4325,7 +4369,7 @@ return {
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS, mirrorEdit, rotateEditY, evalRaw, smoothWeight,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
   snapSpacing, snapPlace, frameToWorld, worldToFrame, serializeEdits, deserializeEdits, copySelection, pasteSelection, mulberry32, hashSeed,
-  noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL, STATION_ROLES,
+  noise2, noise3, fbm2, makeGen, FLAT_GEN, UNIT_VOL, STATION_ROLES, SITE_FRAMES,
   mineYield, placeCost, paintCost, countMat, addMat, consumeMat, countItem, consumeItem, RECIPES, craft, canCraft,
   ORE_ITEM, SMELTS, SMELT_T, fuelOps,
   makeGun, GUNS, makeFirearm, makeTorches, makeSword, makeWrench, makeDoors, makeTables, stackableWith, STACKABLE_KINDS, TREE_CELL, DECOR_CELL, VILLAGE_CELL, FORT_CELL, WRECK_CELL, SKY_CELL, CITY_CELL, ZIG_CELL, FISH_NAME, fishFor,
@@ -5673,7 +5717,8 @@ const PLAYER = {
 function playerHeight(){ return game.crouch ? PLAYER.crouchHeight : PLAYER.height; }
 // LIFTOFF (Build 74): the Moon pulls a sixth as hard. Same jump, six times the air
 const MOON_G = 4.0;
-function gravityNow(){ return game.planet === 'moon' ? MOON_G : game.planet === 'station' ? 0 : PLAYER.gravity; }
+function zeroG(){ return game.planet === 'station' || game.planet === 'site'; }
+function gravityNow(){ return game.planet === 'moon' ? MOON_G : zeroG() ? 0 : PLAYER.gravity; }
 // how far a ghost — drill/dispenser shape, paste, blueprint — can be pushed
 // out. A copied build is easiest to line up from OUTSIDE it.
 const TOOL_REACH_MAX = 96;
@@ -7532,7 +7577,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8830,6 +8875,17 @@ const skySys = {
       this.earth = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
       this.earth.visible = false;
       this.dome.add(this.earth);
+      // STATION TWO (Build 80): the alien world, a violet disc with dark bands, ahead of the site
+      const cv2 = document.createElement('canvas'); cv2.width = 32; cv2.height = 32;
+      const c2 = cv2.getContext('2d');
+      c2.fillStyle = '#6a3aaa'; c2.beginPath(); c2.arc(16, 16, 15.5, 0, Math.PI * 2); c2.fill();
+      c2.fillStyle = '#3a1a5a'; c2.fillRect(2, 9, 28, 2); c2.fillRect(3, 19, 26, 3); c2.fillRect(6, 25, 20, 1);
+      c2.fillStyle = '#b070ff'; c2.fillRect(8, 5, 6, 1); c2.fillRect(12, 14, 9, 1); c2.fillRect(5, 23, 4, 1);
+      c2.globalCompositeOperation = 'destination-in'; c2.beginPath(); c2.arc(16, 16, 15.5, 0, Math.PI * 2); c2.fill();
+      const tex2 = new THREE.CanvasTexture(cv2); tex2.magFilter = THREE.NearestFilter; tex2.minFilter = THREE.NearestFilter;
+      this.alien = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex2, transparent: true, depthWrite: false }));
+      this.alien.visible = false;
+      this.dome.add(this.alien);
     }
     // stars: points on the upper dome
     const starPos = [];
@@ -8879,6 +8935,16 @@ const skySys = {
     this.moon.visible = sh < 0.18;
     this.moon.lookAt(cam);
     this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
+    if (game.planet === 'site'){
+      // the site (Build 80): the Moon behind, small; the alien world ahead, and nearer every time you look
+      this.stars.material.opacity = 0.95;
+      this.earth.visible = false;
+      this.moon.visible = true; this.moon.position.set(0.3, 0.2, -0.93).normalize().multiplyScalar(320); this.moon.scale.setScalar(1.3); this.moon.lookAt(cam);
+      this.alien.visible = true; this.alien.position.set(-0.3, -0.05, 0.94).normalize().multiplyScalar(320); this.alien.scale.setScalar(1.4); this.alien.lookAt(cam);
+      this.cloudGroup.visible = false;
+      return;
+    }
+    this.alien.visible = false;
     if (game.planet === 'moon' || game.planet === 'station'){
       // no air: the stars stay out by day, the clouds are gone, the Earth hangs where it always hangs;
       // from the station (Build 78) the Moon hangs opposite it, and both are near
@@ -11921,6 +11987,8 @@ const VEH = {
   // LIFTOFF (Build 74): the rocket. It goes nowhere on the ground; SPACE lights it
   rocket:    { name: 'rocket', top: 0, rev: 0, accel: 0, brake: 0, steer: 0, drain: 0, r: 1.8, ride: 2.6, kmh: 0, repair: 40, fly: true, rocket: true, fuel: true, stall: 0, ceiling: 99999,
                seat: { seatX: 0, seatY: 6.2, seatZ: -0.6, back: 22, up: 9, look: 4.5 } },
+  rocket2:   { name: 'star rocket', top: 0, rev: 0, accel: 0, brake: 0, steer: 0, drain: 0, r: 2.0, ride: 2.8, kmh: 0, repair: 60, fly: true, rocket: true, star: true, fuel: true, stall: 0, ceiling: 99999,
+               seat: { seatX: 0, seatY: 6.6, seatZ: -0.6, back: 24, up: 10, look: 5 } },
   // the sky: a plane that needs a runway, and a bike that needs nothing
   plane:     { name: 'cargo plane', top: 40, rev: 0, accel: 7, brake: 6, steer: 1.1, drain: 0.12, r: 1.3, ride: 0.7, kmh: 160, repair: 14, fly: true, stall: 15, ceiling: 150,
                seat: { seatX: -0.42, seatY: 2.32, seatZ: -1.75, back: 13, up: 4.5, look: 2.0 } },
@@ -11987,6 +12055,7 @@ const ENT_DEF = {
   heli:     { hp: 300, speed: 0, r: 1.7, h: 2.4, cap: 0 },
   jet:      { hp: 240, speed: 0, r: 1.5, h: 2.2, cap: 0 },
   rocket:   { hp: 400, speed: 0, r: 1.8, h: 9.5, cap: 0 },
+  rocket2:  { hp: 700, speed: 0, r: 2.0, h: 10.5, cap: 0 },
   alien:    { hp: 200, speed: 0, r: 0.4, h: 1.9, cap: 0 },                     // STATION ONE (Build 78): the cast
   sportscar:{ hp: 220, speed: 0, r: 1.0, h: 1.2, cap: 0 },
   bike:     { hp: 140, speed: 0, r: 0.6, h: 1.3, cap: 0 },
@@ -12227,13 +12296,18 @@ function entMesh(type, ent){
     if (R.leader) box(0.44, 0.06, 0.44, 0xd9b25a, 0, 1.98, 0);   // the leader's circlet
     return g;
   }
-  if (type === 'rocket'){
+  if (type === 'rocket' || type === 'rocket2'){
     // LIFTOFF (Build 74): a tall white rocket on four legs -- a body, a red
-    // nose, four fins, a porthole, an engine bell, and the flame under it
+    // nose, four fins, a porthole, an engine bell, and the flame under it.
+    // The star rocket (Build 80) wears violet and gold, with an astrium heart
+    const R2 = type === 'rocket2';
     g.rotation.order = 'YXZ';
-    const white = skin('rocketskin', (c, w, h, rng) => { pxSpeckle(c, rng, '#e4e4ea', '#d6d6dc', '#f0f0f4', 10); c.fillStyle = '#c93a3a'; c.fillRect(0, 6, w, 2); rivets(c, 12, '#b8b8c0'); });
+    const white = R2 ? skin('rocket2skin', (c, w, h, rng) => { pxSpeckle(c, rng, '#e4e4ea', '#d6d6dc', '#f0f0f4', 10); c.fillStyle = '#d9b25a'; c.fillRect(0, 6, w, 2); rivets(c, 12, '#b8b8c0'); })
+                     : skin('rocketskin', (c, w, h, rng) => { pxSpeckle(c, rng, '#e4e4ea', '#d6d6dc', '#f0f0f4', 10); c.fillStyle = '#c93a3a'; c.fillRect(0, 6, w, 2); rivets(c, 12, '#b8b8c0'); });
     const dark = skin('rocketdark', (c, w, h, rng) => { pxSpeckle(c, rng, '#2a2a30', '#222227', '#35353c', 12); }, 1);
-    const red = skin('rocketred', (c, w, h, rng) => { pxSpeckle(c, rng, '#c93a3a', '#b53232', '#d94a4a', 12); }, 1);
+    const red = R2 ? skin('rocket2fin', (c, w, h, rng) => { pxSpeckle(c, rng, '#6a3aaa', '#5a2e96', '#7a48bb', 12); c.fillStyle = '#d9b25a'; c.fillRect(0, 7, w, 1); }, 1)
+                   : skin('rocketred', (c, w, h, rng) => { pxSpeckle(c, rng, '#c93a3a', '#b53232', '#d94a4a', 12); }, 1);
+    if (R2){ const heart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xb070ff })); heart.position.set(0, 2.2, -1.15); g.add(heart); }
     const body = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 6.4, 12), white); body.position.y = 4.4; g.add(body);
     const nose = new THREE.Mesh(new THREE.ConeGeometry(1.1, 2.6, 12), red); nose.position.y = 8.9; g.add(nose);
     const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 1.0, 10), dark); bell.position.y = 0.75; g.add(bell);
@@ -13595,6 +13669,8 @@ const EXPEDITION_PAGES = [
   `LANDER 3. Day 61. The descent stage cut out at forty metres and we came down on the tank. Ruiz is fine. The hull is not. We have the suits, the stove, the last of the cells and the sound of the dust on the plating, which never stops. If you are reading this: the base is east of here and it has beds. Take the fuel. We walked.`,
   // 12 — the drill rig
   `RIG 7. Shaft to twenty-eight metres, then the tube. The lunite is in the wall like frost on a window, and under it, once, a purple grain the size of a thumbnail that the assay calls astrium. Bring a bigger drill. Bring a rope; ours is the only one.`,
+  // 13 — the blueprint (STATION TWO, Build 80)
+  `STATION TWO. The keel is laid at the site past the Moon, with a pad at its end for the rocket. Four frames stand along it, and the station is what you fill them with: the hangar over the keel, the east ring, the west quarters, the beacon spire on top. A frame counts when four fifths of its shell is solid. Plating: two iron, one lunite, eight sheets. Build in the order the frames light.`,
 ];
 const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
 function riverNameOf(ck){ return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + ck) % RIVER_NAMES.length]; }
@@ -15221,6 +15297,7 @@ const objectiveSys = {
   list(){
     const out = [];
     if (game.planet === 'station'){ stationOneSys.objectives(out); return out; }
+    if (game.planet === 'site'){ siteSys.objectives(out); return out; }
     expeditionSys.markers(out);
     for (const key in game.villages){
       const rec = game.villages[key];
@@ -16023,7 +16100,7 @@ const bossSys = {
     if (this.accT < 2) return;
     this.accT = 0;
     if (this.anyBoss()) return;
-    if (game.planet === 'station') return;
+    if (zeroG()) return;
     if (game.planet === 'moon'){
       // THE DUST WYRM (Build 75): at night, out on the open maria, it comes
       // up under you; once it is dead it is a while before another smells you
@@ -22583,7 +22660,7 @@ const citySys = {
 };
 
 function trySpawnEntities(){
-  if (game.planet === 'station') return;                     // STATION ONE (Build 78): nothing wild lives aboard
+  if (zeroG()) return;                                       // STATION ONE (Build 78): nothing wild lives aboard
   if (game.planet === 'moon' && game.dayF >= 0.25) return;   // LIFTOFF B (Build 75): the Moon's things come out at night only
   const survival = game.mode === 'survival';
   const counts = { grazer: 0, lurker: 0, sheep: 0, stalker: 0, husk: 0, wisp: 0 };
@@ -22707,7 +22784,7 @@ function updateEntities(dt, now){
       e.ttl = (e.ttl == null ? DROP_TTL : e.ttl) - dt;
       if (e.ttl <= 0 || !e.item){ if (e.mesh) game.scene.remove(e.mesh); game.entities.splice(i, 1); continue; }
       // fall until the ground, then rest and slide to a stop
-      e.vy -= (game.planet === 'moon' ? MOON_G : game.planet === 'station' ? 0 : 24) * dt;
+      e.vy -= (game.planet === 'moon' ? MOON_G : zeroG() ? 0 : 24) * dt;
       let nx = e.x + e.vx * dt, ny = e.y + e.vy * dt, nz = e.z + e.vz * dt;
       const ed = nearEdits([nx - 1, ny - 1, nz - 1, nx + 1, ny + 1, nz + 1]);
       if (sdfWorld(nx, ny + 0.15, nz, ed) < 0.15){
@@ -22996,7 +23073,7 @@ function updateEntities(dt, now){
       if (Math.random() < dt * 4) Particles.burst(e.x, e.y, e.z, 0.2, [0x9fe8ff, 0xd8f6ff], 1, 0.4);
       continue;
     }
-    e.vy -= (game.planet === 'moon' ? MOON_G : game.planet === 'station' ? 0 : 22) * dt;
+    e.vy -= (game.planet === 'moon' ? MOON_G : zeroG() ? 0 : 22) * dt;
     const ox = e.x;
     const oz = e.z;
     e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
@@ -25618,7 +25695,7 @@ function updatePlayer(dt){
     if (canMove && k['Space']) ty = 3.2;
     else if (canMove && k['KeyC']) ty = -3.6;
     game.vel.y += (ty - game.vel.y) * Math.min(1, 12 * dt);
-  } else if (game.planet !== 'station'){
+  } else if (!zeroG()){
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1) * farmSys.mul('speed');
     // snappy ground control, mild air control
     const a = game.grounded ? 22 : game.gliding ? 0.4 : 6;
@@ -25651,7 +25728,7 @@ function updatePlayer(dt){
     if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump * farmSys.mul('jump'); game.grounded = false; }
     if (game.vel.y < -40) game.vel.y = -40;
   }
-  if (game.planet === 'station' && !game.fly && !game.swim){
+  if (zeroG() && !game.fly && !game.swim){
     // STATION ONE (Build 78): zero-G. Nothing pulls, so the ground branch's
     // pull is undone and what you had, you keep: WASD and SPACE/C are
     // thrusters, SHIFT brakes, and past the station's edge a tether hauls
@@ -28132,7 +28209,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -28380,9 +28457,9 @@ function itemIconURL(it){
     c.fillStyle = '#e0a020'; c.fillRect(5, 4, 6, 4);
     c.fillStyle = '#ffe08a'; c.fillRect(6, 5, 2, 1);
     c.fillStyle = '#b8b8c0'; c.fillRect(3, 12, 10, 2); c.fillRect(2, 14, 12, 1);
-  } else if (it.kind === 'rocket'){
+  } else if (it.kind === 'rocket' || it.kind === 'rocket2'){
     c.fillStyle = '#e4e4ea'; c.fillRect(6, 4, 4, 8);
-    c.fillStyle = '#c93a3a'; c.fillRect(7, 2, 2, 2); c.fillRect(6, 3, 4, 1); c.fillRect(4, 10, 2, 3); c.fillRect(10, 10, 2, 3);
+    c.fillStyle = it.kind === 'rocket2' ? '#6a3aaa' : '#c93a3a'; c.fillRect(7, 2, 2, 2); c.fillRect(6, 3, 4, 1); c.fillRect(4, 10, 2, 3); c.fillRect(10, 10, 2, 3);
     c.fillStyle = '#9fd4e8'; c.fillRect(7, 6, 2, 2);
     c.fillStyle = '#ff9a30'; c.fillRect(6, 13, 4, 2); c.fillStyle = '#ffe08a'; c.fillRect(7, 13, 2, 1);
   } else if (it.kind === 'divehelm'){
@@ -28967,6 +29044,7 @@ function itemLabel(it){
   if (it.kind === 'translator') return 'translator';
   if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
+  if (it.kind === 'rocket2') return (it.wrecked ? 'wrecked ' : '') + 'star rocket';
   if (it.kind === 'coral') return 'coral';
   if (it.kind === 'kelp') return 'kelp';
   if (it.kind === 'lscale') return 'LEVIATHAN SCALE';
@@ -29276,7 +29354,7 @@ function sortInventory(){
 // table, so an item never sorts differently depending on which menu you
 // opened. Each tab is labelled by a picture of a representative item.
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
-const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'rocket', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
+const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'rocket', 'rocket2', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
@@ -29366,7 +29444,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'voidfruit', count: 8 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30206,6 +30284,7 @@ function itemInfoHTML(it, tool){
        : it.kind === 'bike' ? 'left click to deploy · right click to ride · SPACE hops · in the air W/S flip, A/D spin, hold both to whip — land square or crash'
        : it.kind === 'tank' ? 'left click to deploy · right click to mount · W/S A/D drive · LEFT CLICK fires the gun: a shell, a real crater where it lands · it climbs a kerb and a half'
        : it.kind === 'heli' ? 'left click to deploy · right click to board · SPACE up, C down, W/S forward and back, A/D turn · it holds its height · LEFT CLICK the door gun · come down gently'
+       : it.kind === 'rocket2' ? 'Vehl\'s ship, with a heart of astrium · left click to deploy · right click to take the seat · SPACE launches · it goes where the rocket goes, and, from the site, toward the alien world'
        : it.kind === 'rocket' ? 'left click to deploy · right click to take the seat · jet fuel goes in by right click, a launch burns half a tank · SPACE launches: for the Moon, or for home'
        : it.kind === 'jet' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 22 m/s · at the stop keep pulling: a LOOP · SHIFT + A/D: a ROLL · LEFT CLICK the cannon · R a missile (a rocket from your pack) · burns JET FUEL only'
        : it.kind === 'plane' ? 'left click to deploy on a runway · W throttle, SPACE nose up past 15 m/s to take off · A/D bank · C nose down · land slow, level and gentle or it explodes'
@@ -31483,7 +31562,7 @@ function startWorldData(id, data){
   game.worldName = data.name || (ixEntry && ixEntry.name) || 'world';
   game.seedStr = String(data.seed);
   game.seed = CORE.hashSeed(game.seedStr);
-  game.planet = data.planet === 'moon' ? 'moon' : data.planet === 'station' ? 'station' : 'earth';
+  game.planet = ['moon', 'station', 'site'].includes(data.planet) ? data.planet : 'earth';
   spaceSys.others = Object.assign({}, data.others || {});
   if (data.moon) spaceSys.others.moon = data.moon;                 // Build 74's two-world saves
   if (data.earth) spaceSys.others.earth = data.earth;
@@ -31621,6 +31700,7 @@ function startWorldData(id, data){
   tableSys.rebuild();
   treeSys.refresh();
   farTreeSys.refresh();
+  siteSys.rebuild();
   decorSys.lastCell = null;
   decorSys.refresh();
   game.cacheMarker = null;
@@ -31631,7 +31711,7 @@ function startWorldData(id, data){
   game.forceStream = true;
   game.photo = null;          // never inherit photo mode from the last world
   game.scope = 0;
-  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : ''));
+  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : game.planet === 'site' ? ' · the site of STATION TWO' : ''));
 }
 function reviveItem(it){
   return it || null;
@@ -31654,6 +31734,69 @@ function quitToTitle(){
   game.ui = 'none';
   show('mainmenu');
 }
+
+// ---------- STATION TWO (Build 80): the build ----------
+// Four frames along the keel, filled one after another with anything
+// solid (plating is the material for it: two iron and a lunite make
+// eight). A frame counts as built when four fifths of its shell is
+// solid; the wire boxes show what is left, the objective shows how far
+const siteSys = {
+  group: null, accT: 0, T: 1.2,
+  stage(){ return (game.story && game.story.site) || 0; },
+  frames(){ return game.gen && game.gen.frames ? game.gen.frames : CORE.SITE_FRAMES; },
+  progress(F){
+    const t = this.T / 2, hx = F.w / 2 - t, hy = F.h / 2 - t, hz = F.d / 2 - t;
+    let solid = 0, n = 0;
+    const test = (px, py, pz) => { n++; const eds = nearEdits([px - 1, py - 1, pz - 1, px + 1, py + 1, pz + 1]); if (CORE.evalSDF(px, py, pz, eds, game.gen) < -0.05) solid++; };
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++){
+      const u = -1 + (i + 0.5) / 2, v = -1 + (j + 0.5) / 2;
+      test(F.x + hx, F.y + v * hy, F.z + u * hz); test(F.x - hx, F.y + v * hy, F.z + u * hz);
+      test(F.x + u * hx, F.y + hy, F.z + v * hz); test(F.x + u * hx, F.y - hy, F.z + v * hz);
+      test(F.x + u * hx, F.y + v * hy, F.z + hz); test(F.x + u * hx, F.y + v * hy, F.z - hz);
+    }
+    return solid / n;
+  },
+  tick(dt){
+    if (game.planet !== 'site') return;
+    this.accT += dt;
+    if (this.accT < 1.5) return;
+    this.accT = 0;
+    const F = this.frames()[this.stage()];
+    if (!F) return;
+    const p = this.progress(F);
+    game.siteP = p;
+    if (p >= 0.8){
+      game.story = game.story || {};
+      game.story.site = this.stage() + 1;
+      game.siteP = 0;
+      toast(F.name.toUpperCase() + ' stands');
+      AudioSys.sfx('craft');
+      if (game.story.site >= this.frames().length){ game.story.built = 1; toast('STATION TWO stands. Vehl will want to hear it.'); }
+      this.rebuild();
+      markSave();
+    }
+  },
+  rebuild(){
+    if (this.group){ game.scene.remove(this.group); this.group = null; }
+    if (game.planet !== 'site' || !game.scene) return;
+    const g = new THREE.Group();
+    const st = this.stage();
+    this.frames().forEach((F, i) => {
+      if (i < st) return;
+      const m = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(F.w, F.h, F.d)),
+        new THREE.LineBasicMaterial({ color: i === st ? 0xffd75e : 0x6a6a76, transparent: true, opacity: i === st ? 0.9 : 0.4 }));
+      m.position.set(F.x, F.y, F.z);
+      g.add(m);
+    });
+    g.userData.noShadow = true;
+    game.scene.add(g);
+    this.group = g;
+  },
+  objectives(out){
+    const F = this.frames()[this.stage()];
+    if (F) out.push({ id: 'site_' + F.key, x: F.x, z: F.z, y: F.y + F.h / 2 + 2, label: F.name.toUpperCase() + ' · ' + Math.round((game.siteP || 0) * 100) + '%', rec: { name: 'Station Two' } });
+  },
+};
 
 // ---------- STATION ONE (Build 78): the cast ----------
 // Seven of them in every world, the same seven: six traders in six shops
@@ -31747,8 +31890,15 @@ const stationOneSys = {
     'Vehl: Lunite. So you can dig, and you can find. Now the harder thing: the purple stone, deep, four grains of it. The ship\'s heart is astrium or it is nothing.',
   ],
   STORY3: [
-    'Vehl: Then you have my word, and my word is this: between here and our world there must be a second station, and a second station is a build, not a gift. Station Two. When you are ready, we begin.',
-    '(STATION TWO is the next chapter of the road map.)',
+    'Vehl: Then you have my word, and my word is this: between here and our world there must be a second station, and a second station is a build, not a gift. The keel is laid; the rest is yours.',
+    'Vehl: The site lies past the Moon. Your rocket knows the way now. Take the blueprint. Plating is two iron and one lunite for eight, at any station. Fill the frames.',
+  ],
+  STORY4: [
+    'Vehl: Station Two stands. I did not think you would. One thing more: the ship that makes the crossing has a heart of astrium, eight grains. Bring them and the ship is yours.',
+  ],
+  STORY5: [
+    'Vehl: The STAR ROCKET. It will make the crossing. Fly it from the site, toward home. I will be watching from the hall.',
+    '(THE CROSSING is the next build.)',
   ],
   offers(cast){
     if (cast === 'ores') return [
@@ -31782,8 +31932,23 @@ const stationOneSys = {
     const line = (txt, col) => { const r = document.createElement('div'); r.className = 'craftrow'; r.style.borderLeft = '3px solid ' + (col || '#9fe8ff'); const d = document.createElement('div'); d.className = 'cname'; d.textContent = txt; r.appendChild(d); list.appendChild(r); return r; };
     if (cast === 'leader'){
       const st = this.stage();
-      const lines = st === 0 ? this.STORY : st === 1 ? this.STORY2 : this.STORY3;
+      const built = !!(game.story && game.story.built);
+      const lines = st === 0 ? this.STORY : st === 1 ? this.STORY2 : st === 2 ? (built ? this.STORY4 : this.STORY3) : this.STORY5;
       for (const t of lines) line(t);
+      if (st === 2 && !built){
+        const done = (game.story && game.story.site) || 0;
+        line('STATION TWO: ' + done + ' of ' + CORE.SITE_FRAMES.length + ' frames stand · fly to the site from the Moon (R in the seat)', '#ffb44d');
+        return;
+      }
+      if (st === 2 && built){
+        const have = CORE.countItem(game.slots, 'astrium');
+        const r = line('THE SHIP\'S HEART: bring 8 astrium · you carry ' + have, '#ffb44d');
+        const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = have >= 8 ? '#8bff9e' : '#8a8494';
+        act.textContent = have >= 8 ? 'HAND OVER' : 'not yet';
+        r.appendChild(act);
+        if (have >= 8) r.addEventListener('click', () => this.handOver({ k: 'astrium', n: 8 }, 2));
+        return;
+      }
       if (st < 2){
         const want = st === 0 ? { k: 'lunite', n: 12 } : { k: 'astrium', n: 4 };
         const have = CORE.countItem(game.slots, want.k);
@@ -31802,12 +31967,21 @@ const stationOneSys = {
     if (CORE.countItem(game.slots, want.k) < want.n) return;
     CORE.consumeItem(game.slots, want.k, want.n);
     game.story = game.story || {};
-    const coins = st === 0 ? 300 : 600;
-    addStackItem('coin', coins);
+    const coins = st === 0 ? 300 : st === 1 ? 600 : 0;
+    if (coins) addStackItem('coin', coins);
     for (const c in this.CAST) this.rec(c).rep = Math.min(40, (this.rec(c).rep || 0) + (st === 0 ? 10 : 15));   // the station hears of it
     game.story.stage = st + 1;
-    if (st === 1) game.story.word = 1;
-    toast(st === 0 ? 'Vehl takes the lunite — +300 coins · the station\'s goodwill rises' : 'Vehl takes the astrium — +600 coins · you have the leader\'s WORD');
+    if (st === 1){
+      game.story.word = 1;
+      const i = game.slots.findIndex(q => !q);                       // the blueprint (Build 80)
+      if (i >= 0) game.slots[i] = { kind: 'page', page: 13 };
+    }
+    if (st === 2){
+      game.story.ship = 1;
+      const i = game.slots.findIndex(q => !q);
+      if (i >= 0) game.slots[i] = { kind: 'rocket2', charge: 100 }; else addStackItem('astrium', 8);
+    }
+    toast(st === 0 ? 'Vehl takes the lunite — +300 coins · the station\'s goodwill rises' : st === 1 ? 'Vehl takes the astrium — +600 coins · you have the leader\'s WORD, and the blueprint' : 'Vehl takes the astrium — the STAR ROCKET is yours');
     AudioSys.sfx('craft'); refreshHotbar(); markSave();
     tradeSys.refresh();
   },
@@ -31975,10 +32149,14 @@ const spaceSys = {
            'surveyBought', 'surveySold', 'mail', 'guardRun', 'buff', 'guests', 'bossKills', 'hotSel', 'snapOn', 'gridIdx', 'hp', 'heal', 'timeOfDay', 'day', 'story', 'stationCast'],
   // the route (Build 78): the station sits between the Earth and the Moon.
   // The first stop is always the next one along; R in the seat picks the other
-  routes(){ return game.planet === 'earth' ? ['station', 'moon'] : game.planet === 'station' ? ['moon', 'earth'] : ['station', 'earth']; },
+  routes(){
+    const word = !!(game.story && game.story.word);
+    return game.planet === 'earth' ? ['station', 'moon'] : game.planet === 'station' ? ['moon', 'earth']
+         : game.planet === 'site' ? ['moon', 'station'] : word ? ['station', 'site', 'earth'] : ['station', 'earth'];   // the site (Build 80) opens with the leader's word, from the Moon
+  },
   destOf(){ const R = this.routes(); return R.includes(this.dest) ? this.dest : R[0]; },
   cycleDest(){ const R = this.routes(); this.dest = R[(R.indexOf(this.destOf()) + 1) % R.length]; refreshToolHUD(); toast('destination: ' + this.nameOf(this.dest)); },
-  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : 'Earth'; },
+  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : p === 'site' ? 'the SITE of Station Two' : 'Earth'; },
   // the seat: the rocket is flown from outside; look around, and SPACE lights it
   drive(e, V, dt){
     const F = this.flight;
@@ -32112,7 +32290,20 @@ const spaceSys = {
       g.userData.rad = 18;
       return g;
     };
-    const mkBody = (kind) => kind === 'station' ? mkStation() : mk(kind, kind === 'earth' ? 70 : 19);
+    // the site (Build 80): the keel, the pad, and whatever stands so far
+    const mkSite = () => {
+      const G = CORE.makeGen(game.seed, 'site'), g = new THREE.Group(), sc = 0.2;
+      const mat = new THREE.MeshLambertMaterial({ color: 0x8a94a4 }), wire = new THREE.LineBasicMaterial({ color: 0xffd75e });
+      for (const B of G.solids){ const m = new THREE.Mesh(new THREE.BoxGeometry(B.w * sc, B.h * sc, B.d * sc), mat); m.position.set(B.x * sc, B.y * sc, B.z * sc); g.add(m); }
+      const st = (game.story && game.story.site) || 0;
+      G.frames.forEach((F, i) => {
+        const m = i < st ? new THREE.Mesh(new THREE.BoxGeometry(F.w * sc, F.h * sc, F.d * sc), mat) : new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(F.w * sc, F.h * sc, F.d * sc)), wire);
+        m.position.set(F.x * sc, F.y * sc, F.z * sc); g.add(m);
+      });
+      g.userData.rad = 14;
+      return g;
+    };
+    const mkBody = (kind) => kind === 'station' ? mkStation() : kind === 'site' ? mkSite() : mk(kind, kind === 'earth' ? 70 : 19);
     const from = mkBody(F.from), to = mkBody(F.to);
     from.position.set(0, 0, 0); to.position.set(0, 0, 1000);
     S.add(from, to);
@@ -32172,7 +32363,7 @@ const spaceSys = {
     for (const k of this.SHARED) if (live[k] !== undefined) next[k] = live[k];
     next.planet = F.to;
     // where it comes down: where you last stood on that world (the pad you left from), the flat ground the generator picks, or the station's hangar
-    const land = F.to === 'station' ? { x: 0, z: 0 } : prev && prev.player && prev.player.x != null ? { x: prev.player.x, z: prev.player.z } : null;
+    const land = F.to === 'station' ? { x: 0, z: 0 } : F.to === 'site' ? { x: 0, z: -53 } : prev && prev.player && prev.player.x != null ? { x: prev.player.x, z: prev.player.z } : null;
     next.player = land ? { x: land.x, y: null, z: land.z, yaw: F.e.heading || 0, pitch: 0, fly: false } : null;
     next.others = Object.assign({}, this.others);
     delete next.others[F.to];
@@ -33759,6 +33950,7 @@ function frameBody(now){
   spaceSys.tick(dt);
   moonBaseSys.tick(dt);
   stationOneSys.tick(dt);
+  siteSys.tick(dt);
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -33814,7 +34006,7 @@ function frameBody(now){
   if (!netSys.guest) waterSys.tick(dt);
   fishingTick(dt);
   if (!netSys.guest && onEarth) wreckSys.tick(dt);
-  if (game.planet !== 'station'){ lodTerrain.update(game.pos.x, game.pos.y, game.pos.z); lodTerrain.frame(); }   // the station has no horizon
+  if (!zeroG()){ lodTerrain.update(game.pos.x, game.pos.y, game.pos.z); lodTerrain.frame(); }   // the stations have no horizon
   if (!meshPool.ok) lodTerrain.processSync(2);
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
@@ -33967,14 +34159,14 @@ function frameBody(now){
     $('navarrow').style.transform = 'rotate(' + (-(thv - thf) * 180 / Math.PI).toFixed(0) + 'deg)';
     $('navdist').textContent = (heldMap ? '\u2717 ' : '\u2302 ') + Math.round(dist) + 'm';
     let posTxt = Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z);
-    if (depth > 3 && game.planet !== 'station') posTxt += ' · \u2193' + Math.round(depth) + 'm';
+    if (depth > 3 && !zeroG()) posTxt += ' · \u2193' + Math.round(depth) + 'm';
     if (game.deathCache){
       const c = game.deathCache;
       posTxt += ' · \u2620 ' + Math.round(Math.hypot(c.x - game.pos.x, c.z - game.pos.z)) + 'm';
     }
     { const vis = !!(game.armor && game.armor.head && game.armor.head.kind === 'spacesuit' && game.camView === 0 && !game.photo && !game.driving);
       if (vis !== game.visorOn){ game.visorOn = vis; $('visor').classList.toggle('hidden', !vis); } }
-    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (game.planet === 'station' ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
+    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
   }
 
   // autosave: 2.5s after last change
@@ -34081,7 +34273,7 @@ window.__CORE = CORE;
 window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
-window.__api = { spaceSys, moonBaseSys, stationOneSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { spaceSys, moonBaseSys, stationOneSys, siteSys, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

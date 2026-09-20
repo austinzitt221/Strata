@@ -1448,6 +1448,18 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, small hours — STATION TWO A
+
+Austin cannot play tonight and asked for a couple more builds, so the
+station build went in without the playtest I wanted first. I made the
+choices I would have asked about: four frames, four fifths of a shell,
+plating from iron and lunite, and the whole thing at the player's own
+speed. The build is the player's edits and nothing else, which means a
+finished Station Two looks like whoever built it, which is the point.
+
+The alien world is in the sky from the site. That is deliberate: the
+next build flies at it and something is waiting on the way.
+
 ## 2026-09-21, night — STATION ONE B, and the arc closed
 
 The words went in on top of the villagers' trade panel, which turned

@@ -324,8 +324,13 @@ Slotted between the city builds as the mood takes me:
      their own tongue. B (DONE, Build 79): the translator from the
      leader's hand, six trades with alien goods, the leader's story and
      two missions ending in the leader's word. STATION ONE IS COMPLETE.
-     Next: STATION TWO & THE CROSSING (the build, the upgraded rocket
-     from astrium and the word, the ambush). The alien planet after.
+  4. STATION TWO & THE CROSSING. A (DONE, Build 80): the site past the
+     Moon, four frames to fill by hand, plating craftable, the star
+     rocket for eight astrium. B (next): THE CROSSING itself: fly the
+     star rocket from the site toward the alien world, the ambush (the
+     final boss, the black hole, the station lost, Vehl aboard your
+     hull), the crash landing on the alien world, and the teleport
+     bands. The alien planet proper after that.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

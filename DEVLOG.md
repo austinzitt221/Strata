@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 80 — STATION TWO A: the build (2026-09-21)
+
+The biggest build the game asks of you, as the roadmap promised: a
+station you make with your own dispenser, wall by wall.
+
+- **The site.** A fourth world, past the Moon, opened by the leader's
+  word: a keel of plating ninety metres long with a pad at its end
+  (the rocket lands there) and a mast. Zero-G like Station One. The
+  Moon hangs small behind; ahead, for the first time, the alien world,
+  a violet disc with dark bands.
+- **Four frames**, along the keel, in order: the hangar over the keel,
+  the east ring, the west quarters, the beacon spire on top. Each is a
+  wire box; the current one is yellow, the rest grey, and the objective
+  marker on it reads how far its shell is filled. A frame counts when
+  four fifths of its shell (sampled at ninety-six points, six faces)
+  is solid. Anything solid counts; plating is the material for it.
+- **Plating** is craftable now: two iron ingots and one lunite make
+  eight, at any station.
+- **Vehl** hands over the blueprint (a page) with the word, tracks the
+  frames from the hall while you build, and when the station stands
+  asks for the ship's heart: eight astrium. Then the **star rocket**:
+  violet and gold with an astrium heart in its nose, a vehicle of its
+  own kind that flies everywhere the rocket does. Where it goes beyond
+  that is THE CROSSING.
+- Zero-G, the boss and spawner gates, the horizon skin, the depth
+  marker and the HUD all know the site; the crossing draws it as its
+  keel, its pad and whatever stands so far.
+
 ## Build 79 — STATION ONE B: the translator, the trades, the story (2026-09-21)
 
 The station speaks.

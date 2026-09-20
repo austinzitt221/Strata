@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 80 — STATION TWO A
+- [ ] Get the word from Vehl, read the blueprint, fly to the site (R in
+      the seat on the Moon). Does landing on the keel's pad read?
+- [ ] Build the hangar frame for real, in zero-G, with a dispenser and
+      plating. How long did it take? Was that the right length? Did
+      the four-fifths rule ever feel unfair?
+- [ ] The other three. Did you use the frames' order, or your own?
+- [ ] Take the star rocket from Vehl. Does it look like the prize?
+
 ## Build 79 — STATION ONE B
 - [ ] Land without a translator. Did the marker in their script take
       you to the hall? Did the moment Vehl hands it over land?
