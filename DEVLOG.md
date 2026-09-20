@@ -2,6 +2,38 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 85 — STRATA A: a world from nothing (2026-09-22)
+
+The alien planet has a name and its own ground. Nothing of the Earth's
+is in it.
+
+- **The land.** Coordinates warped by ninety metres so nothing lies
+  straight; broad relief; ridges built from folded noise ("teeth");
+  the whole laid in steps of eight metres with a soft lip at each
+  edge, so every hill is a stair of strata; a three-dimensional term
+  near the surface that pushes it in and out (pockets, lips, ledges,
+  overhangs; six hundred of seventeen hundred sampled columns have
+  solid over the heightfield); worm caverns under all of it down to
+  minus ninety; and spires standing alone, knobbed and narrowing, up
+  to seventy metres, one in two cells outside the Scar. Eighty-six
+  metres from lowest to highest in a kilometre. It is hard to cross.
+- **Three countries.** The Glow (violet moss over duskrock; the
+  spires), the Scar (low, rough ash over black scarglass; the
+  **blight**, magenta pools in its lowest ground that burn like lava),
+  the Teeth (the tallest ridges, bone ground over bone rock). Named in
+  their own voices: *the Morden teeth*, *Ostwick scar*, *the Velness
+  glow*.
+- **Materials.** Ash, bone, scarglass, corruption, and **voidore**, the
+  one ore, in veins under every ground; the drill gives the item, Sova
+  buys it, and its table is the next build. Regolith and the Moon's
+  ores stay on the Moon; the Earth's stay on Earth.
+- Old alien saves: the ground under a wreck may have moved; any rocket
+  the new ground swallowed is lifted out on load. The crater and the
+  first edits stay where they were.
+- Not yet (STRATA B, C, D): the biting plant and its wood, the tables
+  per planet, the things that live here by day and by night, the
+  loot, the centre.
+
 ## Build 84 — STATION TWO, LIVED IN (2026-09-22)
 
 Once the main sections stand, the other two on the pad open up, and Kro

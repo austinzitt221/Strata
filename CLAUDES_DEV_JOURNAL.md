@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, night — STRATA A
+
+A generator from nothing, for the first time since Build 2. The trick
+that made it another world was not any one term but the stacking: warp
+the coordinates, fold the noise into ridges, quantise into strata,
+then let a 3D field push the surface in and out so plateaus overhang
+and cliffs hollow. Each alone looks like a filter; together it looks
+like a place. The spires I stole from the Moon's crater cells and made
+tall. The blight burns because lava already did, and the Scar's pools
+lie flat because I damp the sculpting there; the first version put
+the blight on the heightfield and the surface somewhere else, and the
+test stood on ash and did not burn. Test the key.
+
+Strata is Austin's name and it is the right one. B is the plant that
+bites, and the tables.
+
 ## 2026-09-22, evening — STATION TWO, LIVED IN
 
 Rooms, pens, tanks and three upgrades in one build, because all of it

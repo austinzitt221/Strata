@@ -359,9 +359,10 @@ Slotted between the city builds as the mood takes me:
      (village, city, alien) to put them in a room, where they live and
      roam the built sections; the third sells pens and aquariums that
      attach and takes animal spawners.
-  8. **STRATA, an arc.** A: its own generator, nothing of the Earth's in
-     it: wild elevation, shapes that read as another world, hard to
-     cross; several biomes, each with its own grounds and materials.
+  8. **STRATA, an arc.** A (DONE, Build 85): its own generator, nothing
+     of the Earth's in it: warped, ridged, stepped, sculpted land with
+     overhangs, caverns and spires; the Glow, the Scar (with the blight)
+     and the Teeth, their grounds, and voidore.
      B: the plant that is not a tree: it bites when you mine it too
      close; drill it, shoot it or stab it dead for that biome's wood
      analog, sticks and planks; and a crafting table per planet (the

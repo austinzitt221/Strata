@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 85 — STRATA A
+- [ ] Walk the Teeth, the Glow and the Scar. Does the land read as
+      another world? Is it hard to cross in the right way, or the wrong
+      way (stuck, or bored)?
+- [ ] Climb a spire; look under a ledge; find a cavern. Any holes in the
+      mesh, any seam you can see through?
+- [ ] Step in the blight. Mine voidore. Sell it to Sova.
+- [ ] Say the name out loud in the HUD. STRATA. Does it land?
+
 ## Build 84 — STATION TWO, LIVED IN
 - [ ] Bottle a villager on Earth, fly them to the site, buy a room from
       Sef and put them in. Then visit them. Do they feel at home, or

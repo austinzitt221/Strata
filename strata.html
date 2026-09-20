@@ -700,9 +700,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               REGOLITH:33, MOONROCK:34,
               PLATING:35, LUNITE:36,
               SELENITE:37, ASTRIUM:38,
-              VMOSS:39, DUSKROCK:40 };                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 40;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock'];
+              VMOSS:39, DUSKROCK:40,
+              ASH:41, BONE:42, SCARGLASS:43, CORRUPT:44, VOIDORE:45 };   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 45;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS };
@@ -2566,20 +2567,161 @@ function makeSiteGen(seed){
 // names, nothing of ours built on it (what the Earth's field carves and
 // raises on its own, ruins and sky islands, it keeps: they are the
 // overrun world's). Its own things come in the builds after
-function makeAlienGen(seed){
-  const E = makeEarthGen((seed ^ 0xa11e9a7e) >>> 0);
-  const SWAP = { [MAT.GRASS]: MAT.VMOSS, [MAT.ROCK]: MAT.DUSKROCK, [MAT.DRYGRASS]: MAT.VMOSS, [MAT.LEAFLITTER]: MAT.VMOSS, [MAT.STONEBRICK]: MAT.DUSKROCK, [MAT.MARBLE]: MAT.DUSKROCK };
-  const nil = () => null;
-  const wrapLocal = (L) => Object.assign({}, L, { mat: (x, y, z) => { const m = L.mat(x, y, z); return SWAP[m] || m; }, makeLocal: (...a) => wrapLocal(L.makeLocal(...a)) });
-  const gen = Object.assign({}, E, {
-    mat: (x, y, z) => { const m = E.mat(x, y, z); return SWAP[m] || m; },
-    makeLocal: (...a) => wrapLocal(E.makeLocal(...a)),
-    villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil, skyNear: nil, zigAt: nil,
-    regionAt: (x, z) => Object.assign({}, E.regionAt(x, z), { arch: 14 }),
-    planet: 'alien' });
+function makeStrataGen(seed){
+  // STRATA A (Build 85): Vehl's world, from nothing of the Earth's. Ridges
+  // like teeth, land laid in steps (strata), plateaus that overhang, spires
+  // that stand alone, cavities in the cliffs; three countries (the Glow,
+  // the Scar, the Teeth) with their own grounds; the blight in the low
+  // places of the Scar, which burns; one ore, and it is not ours
+  seed = seed >>> 0;
+  const sH = hashInt(seed ^ 0x57a7a1), sW = hashInt(seed ^ 0x9a5e11), sB = hashInt(seed ^ 0xb10e5), sR = hashInt(seed ^ 0x51de5), sC = hashInt(seed ^ 0xca7e5), sV = hashInt(seed ^ 0x2545f491), sRg = hashInt(seed ^ 0x5bd1e995), sS = hashInt(seed ^ 0x5b1de5);
+  const ridged = (x, z) => { let v = 0, amp = 0.55, f = 1; for (let i = 0; i < 4; i++){ const n = 1 - Math.abs(fbm2(sR + i * 131, x * f, z * f, 1) * 2 - 1); v += n * n * amp; amp *= 0.5; f *= 2.1; } return v; };
+  function biome(x, z){ const n = fbm2(sB, x * 0.0016, z * 0.0016, 3); return n < 0.42 ? 1 : n > 0.6 ? 2 : 0; }   // 0 the Glow, 1 the Scar, 2 the Teeth
+  function height(x, z){
+    // warped coordinates: the land was pushed about
+    const wx = x + (fbm2(sW, x * 0.004, z * 0.004, 3) - 0.5) * 90, wz = z + (fbm2(sW + 7, x * 0.004, z * 0.004, 3) - 0.5) * 90;
+    const b = biome(x, z);
+    const base = (fbm2(sH, wx * 0.0035, wz * 0.0035, 4) - 0.5) * 70;                 // broad relief
+    let h = 20 + base;
+    const rg = ridged(wx * 0.012, wz * 0.012);                                          // the teeth
+    h += rg * (b === 2 ? 46 : 18);
+    // the strata: the land in steps of eight metres, softened at the edge
+    const step = 8, q = Math.floor(h / step) * step, f = (h - q) / step;
+    const e = f < 0.75 ? f * 0.25 / 0.75 : 0.25 + (f - 0.75) * 0.75 / 0.25;
+    h = q + e * step;
+    if (b === 1) h -= 8 + fbm2(sH + 3, x * 0.02, z * 0.02, 2) * 6;                  // the Scar sits low and rough
+    return h;
+  }
+  // spires: tall thin stones standing alone, one per cell in the Glow and the Teeth
+  const SP_CELL = 48, spCache = new Map();
+  function spireCell(cx, cz){
+    const k = cx + ',' + cz; const hit = spCache.get(k); if (hit !== undefined) return hit;
+    const h0 = hashInt(sS ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    let out = null;
+    if ((h0 & 255) < 110){
+      const x = cx * SP_CELL + 8 + (hashInt(h0 ^ 1) / 4294967296) * (SP_CELL - 16), z = cz * SP_CELL + 8 + (hashInt(h0 ^ 2) / 4294967296) * (SP_CELL - 16);
+      if (biome(x, z) !== 1){ const hb = height(x, z); out = { x, z, y0: hb - 6, top: hb + 24 + (hashInt(h0 ^ 3) / 4294967296) * 46, r: 2.2 + (hashInt(h0 ^ 4) / 4294967296) * 3.2 }; }
+    }
+    if (spCache.size > 6000) spCache.clear();
+    spCache.set(k, out); return out;
+  }
+  function spireSDF(x, y, z){
+    let m = 1e9;
+    const cx = Math.floor(x / SP_CELL), cz = Math.floor(z / SP_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const S = spireCell(cx + dx, cz + dz); if (!S) continue;
+      const t = Math.max(0, Math.min(1, (y - S.y0) / (S.top - S.y0)));
+      const r = S.r * (1.1 - 0.8 * t * t) * (0.9 + 0.25 * Math.sin(y * 0.7 + S.x));       // narrowing, knobbed
+      const dxy = Math.hypot(x - S.x, z - S.z) - r;
+      const d = Math.max(dxy, y - S.top, S.y0 - y);
+      if (d < m) m = d;
+    }
+    return m;
+  }
+  // the cliffs are hollowed and the plateaus overhang: a 3D term near the surface
+  function shape(x, y, z, h){
+    const dy = y - h;
+    if (dy < -24 || dy > 6) return 0;
+    const n = noise3(sC, x * 0.045, y * 0.06, z * 0.045);
+    let w = dy > 0 ? 1 - dy / 6 : 1 - (-dy) / 24;
+    if (h < 6 && biome(x, z) === 1) w *= 0.2;    // the pools lie flat
+    return (n - 0.5) * 16 * w;                    // pushes the surface in and out: pockets, lips, ledges
+  }
+  function caveCarve(x, y, z, h){
+    if (y > h - 7 || y < -85) return 0;
+    const n = noise3(sC + 99, x * 0.05, y * 0.07, z * 0.05);
+    return n > 0.6 ? (n - 0.6) * 60 : 0;          // worm caverns under everything
+  }
+  function sdfFromH(h, x, y, z){
+    let d = y - h - shape(x, y, z, h);
+    const cv = caveCarve(x, y, z, h); if (cv > 0) d = Math.max(d, cv - 2.5);
+    const sp = spireSDF(x, y, z); if (sp < d) d = sp;
+    return d;
+  }
+  function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
+  const ORES = [{ mat: MAT.VOIDORE, yMin: -240, yMax: -4, p: 0.26, rMin: 0.7, rMax: 1.3 }];
+  function oreAt(x, y, z){
+    if (y > -1 || y < BEDROCK_Y) return 0;
+    const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
+    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+      const gx = cx + dx, gy = cy + dy, gz = cz + dz;
+      const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
+      const t = ORES[0];
+      if (h0 / 4294967296 > t.p) continue;
+      const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
+      if (oy < t.yMin || oy > t.yMax) continue;
+      const ox = gx * VEIN_CELL + (hashInt(h0 ^ 1) / 4294967296) * VEIN_CELL, oz = gz * VEIN_CELL + (hashInt(h0 ^ 3) / 4294967296) * VEIN_CELL;
+      const r = t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin);
+      const ddx = x - ox, ddy = (y - oy) * 1.4, ddz = z - oz;
+      if (ddx*ddx + ddy*ddy + ddz*ddz < r * r) return t.mat;
+    }
+    return 0;
+  }
+  function mat(x, y, z){
+    const h = height(x, z), b = biome(x, z);
+    if (b === 1 && y > h - 9 && h < 6 && fbm2(sB + 5, x * 0.03, z * 0.03, 2) > 0.5) return MAT.CORRUPT;   // the blight pools in the Scar's low ground, deep
+    if (y > h - 1.6) return b === 0 ? MAT.VMOSS : b === 1 ? MAT.ASH : MAT.BONE;
+    const ore = oreAt(x, y, z); if (ore) return ore;
+    if (b === 1 && y > h - 14) return MAT.SCARGLASS;
+    if (b === 2 && y > h - 6) return MAT.BONE;
+    return MAT.DUSKROCK;
+  }
+  const hrCache = new Map();
+  function heightRange(x0, z0, x1, z1){
+    const k = x0 + ',' + z0 + ',' + x1 + ',' + z1;
+    const hit = hrCache.get(k); if (hit) return hit;
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++){ const h = height(x0 + (x1 - x0) * i / 4, z0 + (z1 - z0) * j / 4); if (h < mn) mn = h; if (h > mx) mx = h; }
+    for (let cz = Math.floor((z0 - 8) / SP_CELL); cz <= Math.floor((z1 + 8) / SP_CELL); cz++) for (let cx = Math.floor((x0 - 8) / SP_CELL); cx <= Math.floor((x1 + 8) / SP_CELL); cx++){
+      const S = spireCell(cx, cz); if (S && S.x + 8 > x0 && S.x - 8 < x1 && S.z + 8 > z0 && S.z - 8 < z1 && S.top > mx) mx = S.top;
+    }
+    const out = [mn - 30, mx + 10];               // the shape term and the steps reach under and over the samples
+    if (hrCache.size > 8000) hrCache.clear();
+    hrCache.set(k, out); return out;
+  }
+  const localCache = new Map();
+  function makeLocal(x0, z0, x1, z1, st){
+    st = st || VOX;
+    const lk = x0 + ',' + z0 + ',' + x1 + ',' + z1 + ',' + st;
+    const hit = localCache.get(lk); if (hit) return hit;
+    x0 -= 2 * st; z0 -= 2 * st; x1 += 2 * st; z1 += 2 * st;
+    const nx = Math.round((x1 - x0) / st) + 1, nz = Math.round((z1 - z0) / st) + 1;
+    const grid = new Float32Array(nx * nz);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) grid[i + j * nx] = height(x0 + i * st, z0 + j * st);
+    function lh(x, z){
+      let fx = (x - x0) / st, fz = (z - z0) / st;
+      fx = Math.min(Math.max(fx, 0), nx - 1.001); fz = Math.min(Math.max(fz, 0), nz - 1.001);
+      const i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j;
+      const a = grid[i + j * nx], b = grid[i + 1 + j * nx], c = grid[i + (j + 1) * nx], d = grid[i + 1 + (j + 1) * nx];
+      return a + (b - a) * tx + (c - a) * tz + (a - b - c + d) * tx * tz;
+    }
+    const built = Object.assign({}, gen, { height: lh, sdf: (x, y, z) => sdfFromH(lh(x, z), x, y, z) });
+    if (localCache.size > 64) localCache.clear();
+    localCache.set(lk, built); return built;
+  }
+  function regionAt(x, z){
+    const kx = Math.floor(x / 512), kz = Math.floor(z / 512);
+    return { sx: kx * 512 + 256, sz: kz * 512 + 256, arch: 14 + biome(x, z), key: kx + ',' + kz, seed: hashInt(sRg ^ hashInt(Math.imul(kx, 73856093)) ^ hashInt(Math.imul(kz, 19349663))) };
+  }
+  function findSpawn(){
+    for (let r = 0; r <= 1600; r += 32) for (let k = 0; k < (r ? 12 : 1); k++){
+      const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
+      const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
+      if (biome(x, z) === 1) continue;
+      const h = height(x, z); let flat = true;
+      for (const [dx, dz] of [[7, 0], [-7, 0], [0, 7], [0, -7]]) if (Math.abs(height(x + dx, z + dz) - h) > 1.2) flat = false;
+      if (flat && sdf(x, h + 1, z) > 0.5 && sdf(x, h + 4, z) > 0.5 && spireSDF(x, h + 1, z) > 6) return { x, z };
+    }
+    return { x: 0, z: 0 };
+  }
+  const nil = () => null, no = () => false;
+  const gen = { height, heightRange, sdf, mat, makeLocal, treeAt: nil, decorAt: nil, caves: true, caveFloorY: -90, seed, seaLevel: null,
+    ruinInCell: nil, wetAt: no, archAt: (x, z) => 14 + biome(x, z), lmAt: nil, riverAt: nil, fallsNear: nil, waterYAt: nil,
+    caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL };
   return gen;
 }
-function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : planet === 'alien' ? makeAlienGen(seed) : makeEarthGen(seed); }
+function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : planet === 'alien' ? makeStrataGen(seed) : makeEarthGen(seed); }
 const TREE_CELL = 11;
 const VILLAGE_CELL = 512;
 const FORT_CELL = 900;
@@ -3524,7 +3666,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'stick', 'beacon', 'w
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
-const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat', [MAT.LUNITE]: 'lunite', [MAT.SELENITE]: 'selenite', [MAT.ASTRIUM]: 'astrium' };
+const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat', [MAT.LUNITE]: 'lunite', [MAT.SELENITE]: 'selenite', [MAT.ASTRIUM]: 'astrium', [MAT.VOIDORE]: 'voidore' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
 const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat', flour: 'bread' };
 // what bites where: the fish of each region
@@ -3646,7 +3788,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05, 0.5, 0.9, 1.3, 0.7, 1.6]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -4642,6 +4784,27 @@ function makeTileDrawers(){
     [CORE.MAT.DUSKROCK](ctx, rng){
       speckle(ctx, rng, '#2e3a4a', '#26303e', '#384658', 0.32, 0.2);
       for (let i = 0; i < 4; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#4a6a7a'; ctx.fillRect(x, y, 2, 1); }
+    },
+    [CORE.MAT.ASH](ctx, rng){
+      speckle(ctx, rng, '#4a4442', '#3e3936', '#56504c', 0.3, 0.22);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 15) | 0, y = (rng() * 15) | 0; ctx.fillStyle = '#6a6460'; ctx.fillRect(x, y, 1, 1); }
+      for (let i = 0; i < 2; i++){ const x = (rng() * 15) | 0, y = (rng() * 15) | 0; ctx.fillStyle = '#c04a2a'; ctx.fillRect(x, y, 1, 1); }
+    },
+    [CORE.MAT.BONE](ctx, rng){
+      speckle(ctx, rng, '#d8d0b8', '#cbc2a8', '#e4dcc6', 0.26, 0.2);
+      for (let i = 0; i < 3; i++){ const x = (rng() * 12) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#a89e84'; ctx.fillRect(x, y, 3 + ((rng() * 3) | 0), 1); ctx.fillRect(x + 2, y + 1, 1, 2); }
+    },
+    [CORE.MAT.SCARGLASS](ctx, rng){
+      speckle(ctx, rng, '#141018', '#0e0b12', '#1c1722', 0.3, 0.18);
+      for (let i = 0; i < 4; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#6a3aaa'; ctx.fillRect(x, y, 2, 1); ctx.fillStyle = '#e0c0ff'; ctx.fillRect(x, y, 1, 1); }
+    },
+    [CORE.MAT.CORRUPT](ctx, rng){
+      speckle(ctx, rng, '#c02a9a', '#a81e86', '#d838ae', 0.3, 0.24);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 14) | 0, y = (rng() * 14) | 0; ctx.fillStyle = '#2a0a22'; ctx.fillRect(x, y, 2, 2); ctx.fillStyle = '#ff9ae0'; ctx.fillRect(x + 1, y, 1, 1); }
+    },
+    [CORE.MAT.VOIDORE](ctx, rng){
+      speckle(ctx, rng, '#1e2a1e', '#182218', '#263426', 0.3, 0.2);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 13) | 0, y = (rng() * 13) | 0; ctx.fillStyle = '#8aff9e'; ctx.fillRect(x, y, 2, 2); ctx.fillStyle = '#eaffee'; ctx.fillRect(x, y, 1, 1); }
     },
     [CORE.MAT.SELENITE](ctx, rng){
       speckle(ctx, rng, '#8f8f94', '#7e7e84', '#9e9ea4', 0.3, 0.22);
@@ -6501,7 +6664,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e];
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -7612,7 +7775,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -8197,7 +8360,7 @@ const AudioSys = {
         const M = CORE.MAT, m = arg, det = 0.9 + Math.random() * 0.2;
         const wood = m === M.WOOD || m === M.PLANKS || m === M.JWOOD || m === M.JPLANKS || m === M.MWOOD || m === M.MPLANKS || m === M.SWOOD || m === M.SPLANKS || m === M.AWOOD || m === M.APLANKS;
         const wet = m === M.MUD || m === M.PEAT;
-        const soft = m === M.GRASS || m === M.SAND || m === M.DRYGRASS || m === M.LEAFLITTER || m === M.REGOLITH;
+        const soft = m === M.GRASS || m === M.SAND || m === M.DRYGRASS || m === M.LEAFLITTER || m === M.REGOLITH || m === M.VMOSS || m === M.ASH;
         // LIFTOFF B (Build 75): the mech suit lands every step like a dropped anvil
         if (game.armor && game.armor.chest && game.armor.chest.kind === 'mech'){ this.tone({ freq: 90 * det, dur: 0.12, gain: 0.07, type: 'square' }); this.noise({ dur: 0.1, from: 320 * det, gain: 0.07, attack: 0.005 }); }
         if (m === M.SNOW) this.noise({ dur: 0.09, from: 2600 * det, ftype: 'highpass', gain: 0.05, attack: 0.01 });
@@ -8370,7 +8533,9 @@ const REGION_WORDS = [
   ['the {} barrens', '{} waste', 'the {} cold'],           // tundra
   ['the {} veldt', '{} flats', 'the {} gold'],             // savanna
   ['the {} mare', '{} crater', 'the {} dust'],             // the Moon (Build 74)
-  ['the {} glow', '{} hollow', 'the {} violet'],           // the alien world (Build 81)
+  ['the {} glow', '{} hollow', 'the {} violet'],           // Strata, the Glow (Build 81, 85)
+  ['the {} scar', '{} ash', 'the {} blight'],              // Strata, the Scar
+  ['the {} teeth', '{} spines', 'the {} bone'],            // Strata, the Teeth
 ];
 function regionNameOf(R){
   const A = ['Har', 'Kel', 'Mor', 'Tal', 'Bren', 'Dun', 'Fal', 'Gor', 'Hol', 'Ost', 'Vel', 'Wyn'];
@@ -25873,8 +26038,8 @@ function updatePlayer(dt){
       game.lavaAcc = 0;
       const lbox = [game.pos.x - 1, game.pos.y - 1, game.pos.z - 1, game.pos.x + 1, game.pos.y + 1, game.pos.z + 1];
       const led = nearEdits(lbox);
-      if (CORE.materialAt(game.pos.x, game.pos.y - 0.2, game.pos.z, led, game.gen) === CORE.MAT.LAVA ||
-          CORE.materialAt(game.pos.x, game.pos.y + 0.1, game.pos.z, led, game.gen) === CORE.MAT.LAVA){
+      if ([CORE.MAT.LAVA, CORE.MAT.CORRUPT].includes(CORE.materialAt(game.pos.x, game.pos.y - 0.2, game.pos.z, led, game.gen)) ||
+          [CORE.MAT.LAVA, CORE.MAT.CORRUPT].includes(CORE.materialAt(game.pos.x, game.pos.y + 0.1, game.pos.z, led, game.gen))){
         if (CORE.countItem(game.slots, 'mheart') > 0){
           if (!game.mhToastT || performance.now() - game.mhToastT > 8000){
             game.mhToastT = performance.now();
@@ -28258,7 +28423,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -28482,6 +28647,11 @@ function itemIconURL(it){
     c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
     c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
     c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'voidore'){
+    c.fillStyle = '#1e2a1e'; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
+    c.fillStyle = '#182218'; c.fillRect(3, 11, 10, 2);
+    c.fillStyle = '#8aff9e'; c.fillRect(5, 6, 2, 2); c.fillRect(9, 8, 2, 2); c.fillRect(7, 10, 2, 2);
+    c.fillStyle = '#eaffee'; c.fillRect(5, 6, 1, 1); c.fillRect(9, 8, 1, 1); c.fillRect(7, 10, 1, 1);
   } else if (it.kind === 'band'){
     c.fillStyle = '#6a3aaa'; c.fillRect(3, 6, 10, 5); c.fillRect(2, 7, 12, 3);
     c.fillStyle = '#b070ff'; c.fillRect(4, 7, 8, 1); c.fillStyle = '#e0c0ff'; c.fillRect(7, 6, 2, 5);
@@ -29096,6 +29266,7 @@ function itemLabel(it){
   if (it.kind === 'astrium') return 'astrium';
   if (it.kind === 'translator') return 'translator';
   if (it.kind === 'band') return 'teleport band';
+  if (it.kind === 'voidore') return 'voidore';
   if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'rocket2') return (it.wrecked ? 'wrecked ' : '') + 'star rocket';
@@ -29498,7 +29669,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -30369,6 +30540,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'mech'){
     html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'voidore'){
+    html = '<div class="t1">voidore ×' + it.count + '</div><div class="t2">Strata\'s own ore, in veins under every ground of it · nothing of the Earth\'s is made from it: its table comes next · Sova buys it</div>';
   } else if (it.kind === 'band'){
     html = '<div class="t1">teleport band</div><div class="t2">Vehl\'s experimental gift · while it rides in your pack, the MAP (M) marks every beacon and every rocket on every world — click one to go there, no flight</div>';
   } else if (it.kind === 'translator'){
@@ -31734,6 +31907,8 @@ function startWorldData(id, data){
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
+  // STRATA (Build 85): a world remade under an old save: lift any ship the new ground swallowed
+  if (game.planet === 'alien') for (const e of game.entities) if (VEH[e.type] && VEH[e.type].rocket){ const g0 = CORE.makeGen(game.seed, 'alien'); for (let i = 0; i < 400 && g0.sdf(e.x, e.y + 0.6, e.z) < 0; i++) e.y += 0.5; }
   game.deathCache = data.deathCache || null;
   game.undoStack = [];
   game.tool = Object.assign({ shape: 0, size: 1.5, dist: 4.5, mode: 'build', rot: 0, rx: 0, rz: 0, scrollMode: 0, doorSize: 1.2, doorSide: 0 }, data.tool || {});
@@ -31790,7 +31965,7 @@ function startWorldData(id, data){
   game.forceStream = true;
   game.photo = null;          // never inherit photo mode from the last world
   game.scope = 0;
-  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : game.planet === 'site' ? ' · the site of STATION TWO' : game.planet === 'alien' ? ' · the ALIEN WORLD' : ''));
+  loadSys.begin((game.worldName || 'the world') + (game.planet === 'moon' ? ' · the Moon' : game.planet === 'station' ? ' · STATION ONE' : game.planet === 'site' ? ' · the site of STATION TWO' : game.planet === 'alien' ? ' · STRATA' : ''));
 }
 function reviveItem(it){
   return it || null;
@@ -32333,7 +32508,7 @@ const stationOneSys = {
     ];
     if (cast === 'relics') return [
       { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
-      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 },
+      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 },
     ];
     return [];
   },
@@ -32573,7 +32748,7 @@ const spaceSys = {
   },
   destOf(){ const R = this.routes(); return R.includes(this.dest) ? this.dest : R[0]; },
   cycleDest(){ const R = this.routes(); this.dest = R[(R.indexOf(this.destOf()) + 1) % R.length]; refreshToolHUD(); toast('destination: ' + this.nameOf(this.dest)); },
-  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : p === 'site' ? 'the SITE of Station Two' : p === 'alien' ? 'the ALIEN WORLD' : 'Earth'; },
+  nameOf(p){ return p === 'moon' ? 'the Moon' : p === 'station' ? 'STATION ONE' : p === 'site' ? 'the SITE of Station Two' : p === 'alien' ? 'STRATA' : 'Earth'; },
   // the seat: the rocket is flown from outside; look around, and SPACE lights it
   drive(e, V, dt){
     const F = this.flight;
@@ -34754,7 +34929,7 @@ function frameBody(now){
     }
     { const vis = !!(game.armor && game.armor.head && game.armor.head.kind === 'spacesuit' && game.camView === 0 && !game.photo && !game.driving);
       if (vis !== game.visorOn){ game.visorOn = vis; $('visor').classList.toggle('hidden', !vis); } }
-    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : game.planet === 'alien' ? 'the ALIEN WORLD · ' + seasonSys.name : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
+    $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : game.planet === 'alien' ? 'STRATA · ' + seasonSys.name : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
   }
 
   // autosave: 2.5s after last change
