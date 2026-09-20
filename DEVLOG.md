@@ -2,6 +2,52 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 88 — STRATA D: the centre, and the end (2026-09-23)
+
+The arc closes. Four hundred and eighty metres from the crash, in a
+direction the seed picks, is the thing that drives the war; kill it and
+the story ends. The world does not.
+
+- **The centre.** In the generator: a bowl a hundred and forty metres
+  across cut into the land in the same eight-metre steps as everything
+  else, its floor of ash at minus thirty, and at the middle a black
+  spike forty-four metres tall, knobbed, on a plate of the same stuff:
+  **nullstone**, a new material (hardness five; drill it if you have a
+  week). No caves under it, no spires or maws within a hundred metres,
+  no blight. Vehl's panel gives the distance and what the seal takes;
+  the compass marks THE CENTRE once you have the band; seen once, the
+  band lists it (the map's ◉).
+- **The seal.** A black plate with six sockets at the foot of the spike.
+  Right-click it with **six null cores** (lancers and hollows carry
+  them) and the spike opens like an eye. Once opened it stays open: a
+  return visit needs no cores.
+- **THE UNMAKER.** A hollow the size of a house: a ring of eight black
+  shards turning about it, tendrils under it, 1500 hp. It hangs seven
+  metres over you and circles at sixteen, firing bolts on the beat
+  (twenty damage, the same half-second-plus wind-up as its night: the
+  eye brightens, the aim is taken, sidestep). Every nine seconds it
+  **dives** to your height for two, and bites for eighteen if you are
+  within three and a half metres: that is when a sword reaches it.
+  From two thirds down it **unmakes**: it marks the ground under you
+  (green sparks in a ring) and a second and a half later that ground is
+  gone, a hole three metres deep; stand in it and take fourteen and the
+  fall. It calls three hollows then. From a third down it is faster,
+  unmakes every four seconds, and calls two lancers. Leave the bowl and
+  it goes home to the spike and mends twelve a second. The things it
+  calls do not walk off at dawn.
+- **The end.** When it dies: five hundred coins, twelve astrium, six
+  diamond, and the **null heart**, a tool: left-click unmakes a sphere
+  of the world five metres across where you point, up to forty metres
+  off, its rock into your pack, anything in it thrown. The war stops
+  where it stands (every thrall, gnasher, lancer and hollow in the
+  world falls, and none spawn again); Vehl comes through the band's
+  door beside you with four new things to say; five seconds later the
+  screen: STRATA, four lines, THE END, a game by Austin and Claude, and
+  a KEEP PLAYING button (Esc works too). Everything after is sandbox.
+- Bosses no longer come by chance on Strata (the burrower could have
+  smelled you in its caverns). The boss's position check slides round
+  rock instead of climbing through it.
+
 ## Build 87 — STRATA C: the war (2026-09-23)
 
 Strata is overrun, as Vehl said. The spawner has its own table there,

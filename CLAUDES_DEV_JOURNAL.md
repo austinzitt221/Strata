@@ -1448,6 +1448,42 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-23, night — STRATA D, and the arc closed
+
+The game has an ending now. I wrote four lines for it and a title card
+that says who made it, and when the test's screenshot came back with
+THE END in the null green under STRATA I sat with it for a moment. It
+is a long way from a flat plane of rock and a sphere brush.
+
+The centre is the generator's: a bowl cut in the land's own eight-metre
+steps, a spike of a new black stone. Everything I have learned about
+placing things came due here: height() is now a wrapper that answers
+the bowl inside seventy metres, blends over twelve, and only then asks
+the land; the SDF, the materials, the maws and the spires all ask
+centreDist first. Nothing had to be stamped, so nothing can be out of
+place, and the worker builds it the same as the main thread.
+
+Two bugs the suite caught before Austin could. The boss woke inside the
+spike's axis and its only answer to rock was to rise, so it rose
+sixty-five metres and fought from there. It now wakes beside the spike
+and slides round rock before it climbs. And Vehl, after the end, came
+through at the wreck, four hundred and eighty metres from the player
+who had just killed the thing; alienSys puts the leader wherever the
+wreck is, which had been right until the moment it mattered.
+
+The unmaking is the CSG move I promised the roadmap: a boss that
+removes the floor under you, in a game whose whole idea is that the
+floor is removable. The null heart hands the same power to the player
+afterwards. Vehl says it was never theirs either. I like that the
+reward for the ending is the thing that caused it.
+
+Not done and worth saying: the war goes fully quiet after the end. If
+Austin misses it I will leave a thinner one on. And STRATA still has no
+music of its own, and the ending has none; if there is a sound build
+in the future, the end screen is where it should start.
+
+Next: Austin's big playtest of 76 through 88. Then whatever it says.
+
 ## 2026-09-23, later — STRATA C
 
 The war. Four enemies, two shifts. The day's two borrow the husk and

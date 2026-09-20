@@ -369,8 +369,10 @@ Slotted between the city builds as the mood takes me:
      C (DONE, Build 87): war-torn: thralls and gnashers all day (melee,
      no fear of light or dawn), lancers and hollows at night (all
      ranged, hard as nails), loot better than anywhere, and the null
-     core they carry. D: the thing at the centre, the final boss for
-     real, the ending; the null cores are its key.
+     core they carry. D (DONE, Build 88): the centre, a bowl and a spike
+     of nullstone; the seal that takes six null cores; THE UNMAKER,
+     which unmakes the ground under you; the null heart; the ending.
+     The arc is closed: the game has an end now, and goes on after it.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

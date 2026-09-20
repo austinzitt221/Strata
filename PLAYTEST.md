@@ -5,6 +5,22 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 88 — STRATA D
+- [ ] Talk to Vehl, follow THE CENTRE marker across Strata (it is 480 m
+      and the land is what it is). Is the walk an adventure or a chore?
+      Would you rather carry a beacon out and band back?
+- [ ] Stand on the rim. Then on the floor. Does the bowl and the spike
+      read as the thing that drives the war?
+- [ ] Open the seal with six cores. The fight: can you dodge the bolts?
+      Does the dive give a sword a chance? Does the unmaking (the ring
+      of sparks) read in time to move? Is the hole fair?
+- [ ] Die to it, come back, and open the seal again (no cores this
+      time). Does it mend if you leave, as it should?
+- [ ] Kill it. Read the screen. Is that the ending you wanted? Talk to
+      Vehl after. Try the null heart on a cliff.
+- [ ] After: is Strata quiet at night? Is quiet good, or do you miss the
+      war? (I can leave a thinner war on after the end if you do.)
+
 ## Build 87 — STRATA C
 - [ ] Spend a day on Strata in survival. Thralls and gnashers: can you
       fight them with what you brought (the astrium sword, a gun, the
