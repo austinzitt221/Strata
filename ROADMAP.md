@@ -333,9 +333,43 @@ Slotted between the city builds as the mood takes me:
      first version (the Earth's field in violet, nothing of ours on it).
      Still owed from this chapter: the **teleport bands** (Vehl's
      parting gift: fast travel to any beacon or spawn on any world).
-  5. THE ALIEN WORLD & THE END (next): its own biomes, materials, trees,
-     people and beasts; the thing at the centre; the final boss for
-     real; the ending.
+- **After the 2026-09-22 playtest** (Austin: 76 to 81, no bugs, a page
+  of notes). The alien planet is named **STRATA**: the game is named for
+  where it ends. Claude's order:
+  5. **THE BAND & THE FALL** (Build 82). The crash retold Austin's way:
+     the boss appears first and haunts the rocket, turns to the station,
+     raises its hands, a black hole that looks like one (a swirling disc
+     with a bright rim) takes the station and then the ship; Vehl
+     teleports in beside the hull; a second teleport sound; the alien
+     world's loading screen; you load in standing, in third person,
+     looking at an empty sky; the teleport effect, and the rocket
+     appears in the air and falls the way it already does. Vehl at the
+     wreck: "experimental teleport technology", and the **teleport
+     band**: with it in the pack, M marks every beacon and every rocket
+     on every world; click one, confirm, and a loading screen later you
+     are there. Beacons become fast-travel points anywhere.
+  6. **STATION TWO, PRE-BUILT** (Build 83). The site redone: a set layout
+     shown see-through, three alien builders standing outside it. The
+     first takes materials for a main section and it builds itself;
+     main sections first, in order, then the road on as before.
+  7. **STATION TWO, LIVED IN** (Build 84). After the main sections: the
+     first builder sells upgrades (benches, stoves and weapon benches;
+     a wired grid with lights; a penthouse of your own); the second
+     sells pre-built rooms that attach and takes any villager spawner
+     (village, city, alien) to put them in a room, where they live and
+     roam the built sections; the third sells pens and aquariums that
+     attach and takes animal spawners.
+  8. **STRATA, an arc.** A: its own generator, nothing of the Earth's in
+     it: wild elevation, shapes that read as another world, hard to
+     cross; several biomes, each with its own grounds and materials.
+     B: the plant that is not a tree: it bites when you mine it too
+     close; drill it, shoot it or stab it dead for that biome's wood
+     analog, sticks and planks; and a crafting table per planet (the
+     Earth's stays; the Moon's makes the mech and the moon tiers; the
+     alien table makes Strata's things). C: war-torn: enemies all day
+     (melee only) and worse at night (all ranged, hard as nails), and
+     loot better than anywhere. D: the thing at the centre, the final
+     boss for real, the ending.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
