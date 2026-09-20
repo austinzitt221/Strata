@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 83 — STATION TWO, PRE-BUILT
+- [ ] Land at the site with the translator. Talk to Kro, pay for the
+      hangar, watch it stand. Is the price right for that moment? Is the
+      moment good?
+- [ ] Walk the hatch down to the keel and the corridors out to the ring
+      and the quarters, in zero-G. Anything you can get stuck in?
+- [ ] Sef and Umma: does what they say make you want the next build?
+
 ## Build 82 — THE BAND & THE FALL
 - [ ] The crossing again (a new world, or a world where you have not
       crossed yet). Does it read as you described it: it appears, it

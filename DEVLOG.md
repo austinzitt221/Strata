@@ -2,6 +2,28 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 83 — STATION TWO, PRE-BUILT (2026-09-22)
+
+Austin's way: a set layout, paid for, built whole.
+
+- **Three on the pad.** Kro the builder, Sef the roomwright, Umma the
+  beastkeeper, floating outside the drawn station when you land, in
+  Vehl's tongue until you carry the translator.
+- **Kro builds the main sections** in order for their price: the hangar
+  (64 plating, 16 iron ingots), the east ring and the west quarters (48
+  plating, 8 lunite each), the beacon spire (32 plating, 12 selenite).
+  Pay, and it stands at once, whole: a plating shell with a floor, the
+  hangar's hatch down through its floor and the keel's top, corridors
+  cut through both walls into the ring and the quarters, the spire open
+  from the hangar's roof with a lunite beacon at its top, lunite lights
+  in the roofs. The wire outlines stay for what is not built yet; the
+  objective on the current section names its price.
+- **Sef and Umma** say what they are for (rooms for your people, pens
+  and tanks for your beasts) and that Kro comes first. Their trades
+  are the next build.
+- Vehl's words and the blueprint page say to pay the builders; the
+  hand-built frames and the four-fifths rule are gone.
+
 ## Build 82 — THE BAND & THE FALL (2026-09-22)
 
 Austin's retelling of the crash, and the teleport band.

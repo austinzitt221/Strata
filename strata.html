@@ -2523,10 +2523,10 @@ function makeStationGen(seed){
 // end, and along it the frames of what must be built. The station itself
 // is the player's edits: every frame is filled by hand, wall by wall
 const SITE_FRAMES = [
-  { key: 'hangar',   x: 0,   y: 12, z: 0,   w: 26, h: 16, d: 26, name: 'the hangar' },
-  { key: 'ring',     x: 22,  y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the east ring' },
-  { key: 'quarters', x: -22, y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the west quarters' },
-  { key: 'spire',    x: 0,   y: 33, z: 0,   w: 5,  h: 24, d: 5,  name: 'the beacon spire' },
+  { key: 'hangar',   x: 0,   y: 12, z: 0,   w: 26, h: 16, d: 26, name: 'the hangar',        cost: [{ mat: 'PLATING', n: 64 }, { item: 'ironingot', n: 16 }] },
+  { key: 'ring',     x: 22,  y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the east ring',     cost: [{ mat: 'PLATING', n: 48 }, { item: 'lunite', n: 8 }] },
+  { key: 'quarters', x: -22, y: 8,  z: 0,   w: 14, h: 10, d: 32, name: 'the west quarters', cost: [{ mat: 'PLATING', n: 48 }, { item: 'lunite', n: 8 }] },
+  { key: 'spire',    x: 0,   y: 33, z: 0,   w: 5,  h: 24, d: 5,  name: 'the beacon spire',  cost: [{ mat: 'PLATING', n: 32 }, { item: 'selenite', n: 12 }] },
 ];
 function makeSiteGen(seed){
   seed = seed >>> 0;
@@ -12157,6 +12157,9 @@ const VROLE = {
   x_food:   { name: 'provisioner',   coat: 0x4a6a2a, hat: 0x4a6a2a },
   x_charts: { name: 'chartkeeper',   coat: 0x2a3a6a, hat: 0x2a3a6a },
   x_relics: { name: 'relic dealer',  coat: 0x6a5a2a, hat: 0x6a5a2a },
+  x_builder:{ name: 'builder',       coat: 0x8a6a2a, hat: 0x8a6a2a },
+  x_roomer: { name: 'roomwright',    coat: 0x2a6a6a, hat: 0x2a6a6a },
+  x_keeper: { name: 'beastkeeper',   coat: 0x6a6a2a, hat: 0x6a6a2a },
 };
 const dropTexCache = new Map();
 function entMesh(type, ent){
@@ -13714,7 +13717,7 @@ const EXPEDITION_PAGES = [
   // 12 — the drill rig
   `RIG 7. Shaft to twenty-eight metres, then the tube. The lunite is in the wall like frost on a window, and under it, once, a purple grain the size of a thumbnail that the assay calls astrium. Bring a bigger drill. Bring a rope; ours is the only one.`,
   // 13 — the blueprint (STATION TWO, Build 80)
-  `STATION TWO. The keel is laid at the site past the Moon, with a pad at its end for the rocket. Four frames stand along it, and the station is what you fill them with: the hangar over the keel, the east ring, the west quarters, the beacon spire on top. A frame counts when four fifths of its shell is solid. Plating: two iron, one lunite, eight sheets. Build in the order the frames light.`,
+  `STATION TWO. The keel is laid at the site past the Moon, with a pad at its end for the rocket. Four sections stand drawn along it: the hangar over the keel, the east ring, the west quarters, the beacon spire on top. Kro builds them in that order for their price in plating and the Moon's stones; Sef and Umma draw rooms and pens for after. Plating: two iron, one lunite, eight sheets.`,
 ];
 const RIVER_NAMES = ['the Kell', 'the Marrow', 'the Fen Water', 'the Ash', 'the Long Burn', 'the Harrow', 'the Sedge', 'the Cold Water', 'the Dun', 'the Wend', 'the Sorrow', 'the Little Ouse'];
 function riverNameOf(ck){ return RIVER_NAMES[CORE.hashSeed(String(game.seed) + ':' + ck) % RIVER_NAMES.length]; }
@@ -31906,6 +31909,53 @@ const siteSys = {
   group: null, accT: 0, T: 1.2,
   stage(){ return (game.story && game.story.site) || 0; },
   frames(){ return game.gen && game.gen.frames ? game.gen.frames : CORE.SITE_FRAMES; },
+  // STATION TWO, PRE-BUILT (Build 83): three of Vehl's people wait on the
+  // pad. The first builds the main sections for their price; the other
+  // two (rooms for your people, pens for your animals) come after the
+  // main sections stand
+  POSTS: { builder: { x: -5, y: 1.2, z: -49 }, roomer: { x: 0, y: 1.2, z: -46 }, keeper: { x: 5, y: 1.2, z: -49 } },
+  cast(){
+    if (game.planet !== 'site') return;
+    for (const key in this.POSTS){
+      if (game.entities.some(e => e.type === 'alien' && e.cast === key)) continue;
+      const P = this.POSTS[key];
+      const e = spawnEntity('alien', P.x, P.y, P.z);
+      e.cast = key; e.home = P; e.friendly = true; e.noburn = true; e.role = 'x_' + key;
+    }
+  },
+  costText(F){ return F.cost.map(c => c.n + ' ' + (c.mat ? c.mat.toLowerCase() : c.item)).join(' + '); },
+  canPay(F){ return game.mode === 'creative' || F.cost.every(c => c.mat ? CORE.countMat(game.slots, CORE.MAT[c.mat]) >= c.n : CORE.countItem(game.slots, c.item) >= c.n); },
+  pay(F){ if (game.mode === 'creative') return; for (const c of F.cost){ if (c.mat) CORE.consumeMat(game.slots, CORE.MAT[c.mat], c.n); else CORE.consumeItem(game.slots, c.item, c.n); } },
+  // a section, whole: a plating shell, hollow, its floor, and the way in
+  // from the keel or the hangar
+  build(i){
+    const F = this.frames()[i]; if (!F) return false;
+    const M = CORE.MAT;
+    const EB = (op, x, y, z, w, h, d, mat) => { const e = CORE.makeEdit(op, 1, +x.toFixed(2), +y.toFixed(2), +z.toFixed(2), w, mat || 0, 0); e.sy = h; e.sz = d; e.noLod = 1; applyEdit(e); };
+    EB(1, F.x, F.y, F.z, F.w, F.h, F.d, M.PLATING);
+    EB(0, F.x, F.y, F.z, F.w - 2.4, F.h - 2.4, F.d - 2.4, 0);
+    if (F.key === 'hangar'){
+      EB(0, 0, F.y - F.h / 2 + 0.6, 0, 3.2, 3.2, 3.2, 0);            // the hatch in its floor, over the keel
+      EB(1, 0, F.y - F.h / 2 - 1, 0, 4.4, 2.2, 4.4, M.PLATING); EB(0, 0, F.y - F.h / 2 - 1, 0, 2.6, 2.6, 2.6, 0);   // the collar down to the keel
+      EB(0, 0, 2.2, 0, 2.6, 1.2, 2.6, 0);                            // and through the keel's top
+      for (const [lx, lz] of [[-9, -9], [9, -9], [-9, 9], [9, 9]]) EB(1, lx, F.y + F.h / 2 - 1.4, lz, 1.2, 0.3, 1.2, M.LUNITE);   // lights in the roof
+    } else if (F.key === 'ring' || F.key === 'quarters'){
+      const sx = F.key === 'ring' ? 1 : -1, jx = sx * 14;
+      EB(1, jx, F.y, 0, 4.4, 3.6, 3.6, M.PLATING); EB(0, jx, F.y, 0, 5.2, 2.4, 2.4, 0);   // the corridor from the hangar, cut through both walls
+      for (let k = -1; k <= 1; k++) EB(1, F.x, F.y + F.h / 2 - 1.4, F.z + k * 10, 1.2, 0.3, 1.2, M.LUNITE);
+    } else if (F.key === 'spire'){
+      EB(0, 0, F.y - F.h / 2 - 0.4, 0, 2.4, 3, 2.4, 0);              // up from the hangar's roof
+      EB(1, 0, F.y + F.h / 2 + 1.5, 0, 1.6, 3, 1.6, M.LUNITE);         // the beacon at its top
+    }
+    game.story = game.story || {};
+    game.story.site = Math.max(this.stage(), i + 1);
+    toast(F.name.toUpperCase() + ' stands');
+    AudioSys.sfx('craft');
+    if (game.story.site >= this.frames().length){ game.story.built = 1; toast('STATION TWO stands. Vehl will want to hear it.'); }
+    this.rebuild();
+    markSave();
+    return true;
+  },
   progress(F){
     const t = this.T / 2, hx = F.w / 2 - t, hy = F.h / 2 - t, hz = F.d / 2 - t;
     let solid = 0, n = 0;
@@ -31923,20 +31973,7 @@ const siteSys = {
     this.accT += dt;
     if (this.accT < 1.5) return;
     this.accT = 0;
-    const F = this.frames()[this.stage()];
-    if (!F) return;
-    const p = this.progress(F);
-    game.siteP = p;
-    if (p >= 0.8){
-      game.story = game.story || {};
-      game.story.site = this.stage() + 1;
-      game.siteP = 0;
-      toast(F.name.toUpperCase() + ' stands');
-      AudioSys.sfx('craft');
-      if (game.story.site >= this.frames().length){ game.story.built = 1; toast('STATION TWO stands. Vehl will want to hear it.'); }
-      this.rebuild();
-      markSave();
-    }
+    this.cast();
   },
   rebuild(){
     if (this.group){ game.scene.remove(this.group); this.group = null; }
@@ -31956,7 +31993,28 @@ const siteSys = {
   },
   objectives(out){
     const F = this.frames()[this.stage()];
-    if (F) out.push({ id: 'site_' + F.key, x: F.x, z: F.z, y: F.y + F.h / 2 + 2, label: F.name.toUpperCase() + ' · ' + Math.round((game.siteP || 0) * 100) + '%', rec: { name: 'Station Two' } });
+    if (F) out.push({ id: 'site_' + F.key, x: F.x, z: F.z, y: F.y + F.h / 2 + 2, label: F.name.toUpperCase() + ' · ' + this.costText(F), rec: { name: 'Station Two' } });
+    if (F) out.push({ id: 'site_builder', x: this.POSTS.builder.x, z: this.POSTS.builder.z, y: 4, label: 'THE BUILDER', rec: { name: 'Station Two' } });
+  },
+  // the builder's panel, on the trade screen
+  rows(list, T, line){
+    const cast = T.e.cast, st = this.stage(), FR = this.frames();
+    if (cast === 'builder'){
+      if (st >= FR.length){ line('Kro: It stands. When you want more of it, the upgrades are mine to sell. (Soon.)'); return; }
+      FR.forEach((F, i) => {
+        if (i < st){ line(F.name + ' · STANDS', '#6a6a76'); return; }
+        if (i > st){ line(F.name + ' · after ' + FR[i - 1].name, '#6a6a76'); return; }
+        const can = this.canPay(F);
+        const r = line('BUILD ' + F.name.toUpperCase() + ' · ' + this.costText(F), '#ffb44d');
+        const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = can ? '#8bff9e' : '#8a8494';
+        act.textContent = can ? 'PAY & BUILD' : 'not enough';
+        r.appendChild(act);
+        if (can) r.addEventListener('click', () => { this.pay(F); this.build(i); tradeSys.refresh(); });
+      });
+      return;
+    }
+    if (cast === 'roomer'){ line(st >= FR.length ? 'Sef: Rooms for your people, on the ring and the quarters. I am drawing them. (Soon.)' : 'Sef: Rooms for your people, once there is a station to put them on. Kro first.'); return; }
+    if (cast === 'keeper'){ line(st >= FR.length ? 'Umma: Pens and tanks for your beasts. I am drawing them. (Soon.)' : 'Umma: Beasts want walls first. Kro first.'); return; }
   },
 };
 
@@ -31973,6 +32031,9 @@ const stationOneSys = {
     food:   { name: 'Mim',   col: 0x4a6a2a, role: 'food' },
     charts: { name: 'Tehk',  col: 0x2a3a6a, role: 'charts' },
     relics: { name: 'Sova',  col: 0x6a5a2a, role: 'relics' },
+    builder:{ name: 'Kro',   col: 0x8a6a2a, role: 'builder' },     // the three at the site (Build 83)
+    roomer: { name: 'Sef',   col: 0x2a6a6a, role: 'roomer' },
+    keeper: { name: 'Umma',  col: 0x6a6a2a, role: 'keeper' },
   },
   accT: 0,
   tick(dt){
@@ -32050,6 +32111,9 @@ const stationOneSys = {
     food:   'Mim: You eat the dead things of your world. Try the fruit. It grew where the light does not reach.',
     charts: 'Tehk: Every world is a map that has not been drawn. I draw. I also buy.',
     relics: 'Sova: Fuel for the little ship. Metal from the sky islands. And the purple stone, if you find it, at any price you like to name.',
+    builder: 'Kro: The keel is laid. The rest is plating and the Moon\'s stones, in the order I say, and I build it while you watch.',
+    roomer: 'Sef: I draw rooms.',
+    keeper: 'Umma: I draw pens.',
   },
   STORY: [
     'Vehl: You made the crossing in that. Good. Then you can make another.',
@@ -32061,7 +32125,7 @@ const stationOneSys = {
   ],
   STORY3: [
     'Vehl: Then you have my word, and my word is this: between here and our world there must be a second station, and a second station is a build, not a gift. The keel is laid; the rest is yours.',
-    'Vehl: The site lies past the Moon. Your rocket knows the way now. Take the blueprint. Plating is two iron and one lunite for eight, at any station. Fill the frames.',
+    'Vehl: The site lies past the Moon. Your rocket knows the way now. Take the blueprint. Three of mine wait on the pad; Kro builds the main sections for their price. Plating is two iron and one lunite for eight, at any station.',
   ],
   STORY4: [
     'Vehl: Station Two stands. I did not think you would. One thing more: the ship that makes the crossing has a heart of astrium, eight grains. Bring them and the ship is yours.',
@@ -32113,7 +32177,7 @@ const stationOneSys = {
       if (game.planet === 'alien') return;
       if (st === 2 && !built){
         const done = (game.story && game.story.site) || 0;
-        line('STATION TWO: ' + done + ' of ' + CORE.SITE_FRAMES.length + ' frames stand · fly to the site from the Moon (R in the seat)', '#ffb44d');
+        line('STATION TWO: ' + done + ' of ' + CORE.SITE_FRAMES.length + ' sections stand · fly to the site from the Moon (R in the seat) and pay Kro', '#ffb44d');
         return;
       }
       if (st === 2 && built){
@@ -32137,6 +32201,7 @@ const stationOneSys = {
       return;
     }
     line(this.GREET[cast] || '');
+    if (cast === 'builder' || cast === 'roomer' || cast === 'keeper'){ siteSys.rows(list, T, line); return; }
     tradeSys.rows(list, T);
   },
   handOver(want, st){

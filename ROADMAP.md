@@ -348,7 +348,7 @@ Slotted between the city builds as the mood takes me:
      band**: with it in the pack, M marks every beacon and every rocket
      on every world; click one, confirm, and a loading screen later you
      are there. Beacons become fast-travel points anywhere.
-  6. **STATION TWO, PRE-BUILT** (Build 83). The site redone: a set layout
+  6. **STATION TWO, PRE-BUILT** (DONE, Build 83). The site redone: a set layout
      shown see-through, three alien builders standing outside it. The
      first takes materials for a main section and it builds itself;
      main sections first, in order, then the road on as before.

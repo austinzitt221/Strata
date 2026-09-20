@@ -1448,6 +1448,16 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-22, afternoon — STATION TWO, PRE-BUILT
+
+Austin was right about the station. Building it by hand made the
+player a bricklayer; paying Kro makes the player a patron, and the
+moment a section stands whole is better than any wall I laid. It was
+also cheaper to build: the frames were already boxes, so a section is
+the frame's shell with the way in cut through it. The two others on
+the pad are promises for the next build, and I would rather ship a
+promise that speaks than nothing on the pad.
+
 ## 2026-09-22, midday — the notes, and THE BAND & THE FALL
 
 Austin played 76 to 81 in one go and found no bugs, and then wrote the
