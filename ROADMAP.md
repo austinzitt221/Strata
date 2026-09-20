@@ -373,6 +373,34 @@ Slotted between the city builds as the mood takes me:
      of nullstone; the seal that takes six null cores; THE UNMAKER,
      which unmakes the ground under you; the null heart; the ending.
      The arc is closed: the game has an end now, and goes on after it.
+     (Build 89 fixed what the playtest of 76 to 88 found: the seal is
+     marked and explained, Station Two has an airlock and vacuum outside
+     its built sections, the tables craft as tables.)
+
+After the 2026-09-24 playtest (76 to 88): Austin's ideas, in the order I
+want to build them.
+  9. **The planet view** (map). A button on the map opens a second map:
+     stars, the sun behind, and the planets' sky-sprites laid out Earth,
+     Station One, the Moon, Station Two, Strata. Click one to open that
+     world's map (as far as you have it); the band teleports to any
+     beacon or rocket on any of them from there. The same view is the
+     rocket's destination picker: space in the seat opens it, click a
+     world, the rocket flies (R's cycling goes away).
+ 10. **Every planet in every sky.** The Earth, the Moon and Strata drawn
+     as sprites in every world's sky and through the rocket's window in
+     transit, sized by how far they are from where you stand (a small
+     Strata over the Earth; a small Earth over Strata). Stations are too
+     small to see.
+ 11. **STRATA E: wilder, and the ichor.** Terrain with sudden elevation
+     everywhere and stranger mountains than the teeth; a water analog,
+     green, that burns anyone swimming in it and carries boats and
+     hoverbikes fine, in erratic rivers found nowhere else.
+ 12. **STRATA F, G, H: structures.** Many. The common one is the ruined
+     alien village, what the Unmaker left of Vehl's people (the ones on
+     the stations are the ones who got out). Then loot structures with
+     their own bosses and endgame loot, to gear up for the centre. Then,
+     after the end, the villages rebuilt and lived in: aliens home, and
+     new things to do there, the way the Earth's cities have theirs.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,

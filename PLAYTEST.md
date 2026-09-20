@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 89 — the fixes
+- [ ] Go back to the centre. Is the seal obvious now? Open it (creative
+      needs no cores) and fight the thing: the notes from Build 88 still
+      stand.
+- [ ] Station Two: walk in from the pad through the airlock. Take the
+      suit off inside; step outside without it. Does the line make sense?
+- [ ] Craft the Moon's table and Strata's table from the creative menu.
+      Tables, not blasters.
+
 ## Build 88 — STRATA D
 - [ ] Talk to Vehl, follow THE CENTRE marker across Strata (it is 480 m
       and the land is what it is). Is the walk an adventure or a chore?

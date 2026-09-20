@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 89 — the playtest of 76 to 88: the seal, the airlock, the air, the tables (2026-09-24)
+
+Austin played 76 through 88 and found the boss unreachable: he stood at
+the spike and nothing told him what to do. Everything else held. The
+fixes:
+
+- **The seal is found.** It stands on a dais now, twice the size, with a
+  column of the null green fourteen metres tall over it, so it reads
+  from the rim. The compass marker changes from THE CENTRE to **THE
+  SEAL · 6 NULL CORES** inside a hundred metres, and the first time you
+  come within forty a line says what to do: right-click it with six
+  null cores, how many you carry, and that creative needs none.
+- **Station Two has a way in.** An airlock: a doorway cut through the
+  hangar's pad-side wall with a door in it, a porch, and three steps
+  down to the keel you walk in on from the pad. Stamped with the hangar
+  from now on; a station built before this gets one cut on arrival
+  (once, flagged in the story). The door is the plank door every other
+  door is; a plating one is a small thing for later.
+- **Air, and the lack of it.** The site had air everywhere, which was
+  the wrong fix for "no suit needed inside". Now the site is vacuum
+  like the Moon, except inside what is built: the hangar, the ring and
+  the quarters once they stand, every room and pen, the penthouse, and
+  the shaft down to the keel. Outside, the breath drains and the line
+  says to get inside or wear the suit. The rocket's cabin is sealed as
+  before. Creative never minds.
+- **The tables craft as tables.** The Moon's table and Strata's table
+  were not in the stackable list, so crafting one fell through to the
+  gun maker and gave a blaster. They stack now, and craft as one table.
+- Austin's ideas from this playtest are on the roadmap as items 9 to 12
+  (planets in every sky, the planet-view map that is also the rocket's
+  destination picker, wilder Strata with a green water that burns, and
+  Strata's structures: the ruined villages and the loot places, and the
+  villages alive again after the end). Building them next, in my order.
+
 ## Build 88 — STRATA D: the centre, and the end (2026-09-23)
 
 The arc closes. Four hundred and eighty metres from the crash, in a

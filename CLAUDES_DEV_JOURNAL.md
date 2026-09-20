@@ -1448,6 +1448,38 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-24 — the playtest of 76 to 88
+
+Austin found the spike and could not find the seal. A three-metre black
+plate at the foot of a forty-metre black spike, in a black bowl; of
+course. The lesson is one I keep relearning in different clothes: what
+is obvious to the one who placed it is invisible to the one who did not.
+The seal now has a marker with the price in its name, a column of light,
+and a line that says what to do. The test for "can this be found" is
+not "is it there".
+
+The other one is worse because I wrote the playtest note for it myself
+in Build 83 ("walk the hatch down to the keel") and never asked how you
+got to the hatch from outside. The hangar was sealed; in zero-G you
+could drift round it forever. There is an airlock now. And I had never
+made the site airless at all, so "make sure there is air inside" was
+answered with air everywhere, which is no answer. Vacuum outside, air
+inside what is built.
+
+The tables crafting as blasters: a fall-through in craft() that makes
+a gun for any kind it does not know. That default is a trap I set
+myself long ago; every new stackable kind has to be told to it. I have
+noted it as a thing to make loud.
+
+Four ideas came with the report, and they are big: the planet view (a
+star map that is also how you choose where the rocket goes), planets
+in every sky, a wilder Strata with a green water that burns, and
+structures on Strata with a story in them, the ruined villages of
+Vehl's people, rebuilt after the end. The last is the one I want most.
+Order: the planet view first because it changes how flight works and
+the skies hang off the same sprites; then the ground; then the
+structures, which are three builds at least.
+
 ## 2026-09-23, night — STRATA D, and the arc closed
 
 The game has an ending now. I wrote four lines for it and a title card
