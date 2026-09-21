@@ -2,6 +2,26 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 97 — BREEDING (2026-09-26)
+
+Austin's idea, and the first system since the farm about keeping
+something alive.
+
+- **The lure.** Hold plant food you grew (a tomato, wheat, a lettuce;
+  never meat) and the passive animals within nine metres come to you
+  and stop two metres off: grazers, sheep, monkeys, elk, hares, zebras.
+  Not the enemies, not a croc.
+- **Feeding.** Right-click one with the food in hand and it eats (one
+  taken from the stack, hearts over it for half a minute). It will not
+  eat twice. Feed another of its kind within four metres of it and they
+  come together: a baby of that kind appears between them, half size,
+  half health, and the parents rest five minutes before they will eat
+  again.
+- **Growing.** A baby grows to full size and health over four minutes.
+  It cannot be fed until it has. Its growing is saved with it (a new
+  field on the entity record) and comes back on load.
+- The lines say what happened each time, by the animal's name.
+
 ## Build 96 — the playtest of 89 to 95: the seal opens, the far ones farther, the burrower moves (2026-09-26)
 
 Austin played 89 to 95. Strata's ground is where he wants it. The

@@ -407,7 +407,7 @@ want to build them.
 After the 2026-09-26 playtest (89 to 95): fixed in Build 96 (the seal
 opens by right click; the far planets smaller and the flights showing
 the sprites; the burrower moved to Strata and rare). And:
- 13. **Animal breeding.** The passive animals (grazers, sheep, the
+ 13. **Animal breeding** (DONE, Build 97). The passive animals (grazers, sheep, the
      biomes' own) follow plant food held in the hand (what you grow,
      never meat); feed two of a kind and they come together and a baby
      of that kind appears; it grows, and can be bred in turn. Never the

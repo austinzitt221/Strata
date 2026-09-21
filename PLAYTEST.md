@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 97 — BREEDING
+- [ ] Grow tomatoes. Walk up to two sheep with one in hand: do they
+      come? Feed both. A lamb. Wait four minutes. Breed the lamb.
+- [ ] Try it with meat in hand (nothing should happen), with a croc
+      (nothing), with a lamb (refused).
+- [ ] Quit and reload with a lamb half grown: still a lamb, still
+      growing?
+
 ## Build 96 — the fixes
 - [ ] The seal: stand by it, right click. It opens. Then the fight, and
       the ending: the notes from Build 88 all still stand.

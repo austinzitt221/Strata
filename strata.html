@@ -24022,6 +24022,9 @@ function updateEntities(dt, now){
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
+    } else if (breedSys.passive(e) && breedSys.lure(e, TP, pd)){
+      // BREEDING (Build 97): it follows the food in your hand
+      const L2 = breedSys.lure(e, TP, pd); sx = L2[0]; sz = L2[1]; sp *= 0.9;
     } else if (kind === 'grazer' && e.fleeT > 0 && pd < 14){
       sx = e.x - TP.x; sz = e.z - TP.z; sp *= 1.8;
     } else if (VEH[e.type]){
@@ -25451,6 +25454,7 @@ function bindInput(){
       // THE SEAL (Build 96): a right click anywhere within four and a half metres of it opens it; it never reached talkTo before
       if (game.planet === 'alien'){ const sl = game.entities.find(q => q.type === 'seal' && Math.hypot(q.x - game.pos.x, q.z - game.pos.z) < 4.5); if (sl){ centreSys.open(sl); return; } }
       const vent = entityOnRay(3.6);
+      if (vent && breedSys.canFeed(vent)){ breedSys.feed(vent); return; }                    // BREEDING (Build 97)
       if (vent && (vent.type === 'villager' || vent.type === 'alien')){ talkTo(vent); return; }
       if (vent && vent.type === 'soldier' && vent.quarter){ baseSys.quarterTalk(vent); return; }
       if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
@@ -32890,7 +32894,8 @@ function buildSaveData(){
                  e.heading != null ? +(+e.heading).toFixed(2) : 0,
                  VEH[e.type] && e.bat ? e.bat : 0,
                  e.crewed && e.bkey ? e.bkey : 0,
-                 e.wrecked ? 1 : 0]),                      // a garrison's tank keeps its crew and its base
+                 e.wrecked ? 1 : 0,
+                 e.grow > 0 ? Math.round(e.grow) : 0]),    // a garrison's tank keeps its crew and its base; a baby its growing (Build 97)
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -33001,6 +33006,7 @@ function startWorldData(id, data){
     if (VEH[r[0]] && r[7]) e.bat = r[7];
     if (VEH[r[0]] && r[8]){ e.crewed = true; e.bkey = r[8]; }
     if (VEH[r[0]] && r[9]) e.wrecked = true;
+    if (r[10] > 0){ e.grow = r[10]; e.big = 0.45 + 0.55 * (1 - e.grow / breedSys.GROW); }
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
@@ -33267,6 +33273,79 @@ const endSys = {
     setTimeout(() => { if (game.ui === 'end'){ fin.classList.remove('hidden'); $('btnEndGo').classList.remove('hidden'); } }, 800 + els.length * 3200);
     game.story.credits = (game.story.credits || 0) + 1;
     AudioSys.sfx('teleport');
+  },
+};
+
+// ---------- BREEDING (Build 97) ----------
+// The passive animals (grazers, sheep, the biomes' own) follow plant food
+// held in the hand: what you grow, never meat. Right-click one with it
+// and it is fed (hearts, half a minute); two fed of a kind within four
+// metres come together and a baby of that kind appears between them,
+// half size, half health, growing to full over four minutes; the parents
+// rest five minutes before they can be fed again. Babies cannot be fed.
+// Growth is saved with the animal. Never the enemies
+const breedSys = {
+  PASSIVE: new Set(['grazer', 'sheep', 'monkey', 'croc_no', 'elk', 'hare', 'zebra']),
+  FOOD: new Set(['tomato', 'wheat', 'lettuce']),
+  GROW: 240, FED: 30, REST: 300,
+  accT: 0,
+  passive(e){ return !!e && this.PASSIVE.has(e.type) && !e.st2; },
+  holding(){ const it = selectedItem(); return !!(it && this.FOOD.has(it.kind) && (it.count == null || it.count > 0)); },
+  canFeed(e){ return this.passive(e) && this.holding(); },
+  feed(e){
+    if (!this.canFeed(e)) return false;
+    if (e.grow > 0){ toast('too young — it is still growing'); return false; }
+    if (e.bredT > 0){ toast('it is resting — ' + Math.ceil(e.bredT / 60) + ' min'); return false; }
+    if (e.fedT > 0){ toast('it has eaten; it wants another of its kind now'); return false; }
+    const it = selectedItem();
+    if (game.mode !== 'creative'){ it.count = (it.count || 1) - 1; if (it.count <= 0) game.slots[game.hotSel] = null; }
+    e.fedT = this.FED; e.fleeT = 0;
+    Particles.burst(e.x, e.y + 0.9, e.z, 0.4, [0xff7ab8, 0xffb3d6], 10, 1.4);
+    AudioSys.sfx('eat');
+    const name = (MENAGERIE_NAME[e.type] || e.type);
+    toast('the ' + name + ' eats — feed another ' + name + ' near it');
+    refreshHotbar(); markSave();
+    return true;
+  },
+  // the lure: toward whoever holds the food, from nine metres, to two
+  lure(e, TP, pd){
+    if (!this.passive(e) || e.fleeT > 0 || e.grow > 0 || !this.holding() || pd > 9 || pd < 2.2) return null;
+    return [TP.x - e.x, TP.z - e.z];
+  },
+  tick(dt){
+    this.accT += dt; if (this.accT < 0.5) return; const step = this.accT; this.accT = 0;
+    const fed = [];
+    for (const e of game.entities){
+      if (!this.passive(e)) continue;
+      if (e.bredT > 0) e.bredT = Math.max(0, e.bredT - step);
+      if (e.grow > 0){
+        e.grow = Math.max(0, e.grow - step);
+        e.big = e.grow > 0 ? 0.45 + 0.55 * (1 - e.grow / this.GROW) : undefined;
+        if (e.grow <= 0){ e.hp = Math.max(e.hp, ENT_DEF[e.type].hp); }
+      }
+      if (e.fedT > 0){
+        e.fedT = Math.max(0, e.fedT - step);
+        if (Math.random() < step * 1.4) Particles.burst(e.x, e.y + 0.9, e.z, 0.3, [0xff7ab8], 2, 1.0);
+        fed.push(e);
+      }
+    }
+    for (let i = 0; i < fed.length; i++) for (let j = i + 1; j < fed.length; j++){
+      const a = fed[i], b = fed[j];
+      if (a.type !== b.type || a.fedT <= 0 || b.fedT <= 0) continue;
+      if (Math.hypot(a.x - b.x, a.z - b.z) > 4) continue;
+      this.pair(a, b);
+    }
+  },
+  pair(a, b){
+    a.fedT = 0; b.fedT = 0; a.bredT = this.REST; b.bredT = this.REST;
+    const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = Math.max(a.y, b.y) + 0.3;
+    const c = spawnEntity(a.type, mx, my, mz);
+    c.grow = this.GROW; c.big = 0.45; c.hp = Math.max(4, Math.round(ENT_DEF[a.type].hp * 0.5));
+    Particles.burst(mx, my + 0.8, mz, 0.7, [0xff7ab8, 0xffffff, 0xffb3d6], 24, 2.2);
+    AudioSys.sfx('craft');
+    toast('a ' + (MENAGERIE_NAME[a.type] || a.type) + ' is born — four minutes to grow');
+    markSave();
+    return c;
   },
 };
 
@@ -36292,6 +36371,7 @@ function frameBody(now){
   ruinSys.tick(dt);
   vaultSys.tick(dt);
   villageLifeSys.tick(dt);
+  breedSys.tick(dt);
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -36618,7 +36698,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

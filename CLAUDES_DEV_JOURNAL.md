@@ -1448,6 +1448,21 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-26, later — BREEDING
+
+Small and whole. The lure is one branch before the flee; feeding is one
+line before the villagers on the right click; the pairing is a scan of
+the fed ones every half second; the baby is the same animal at half
+scale with a timer, and the timer rides in the save at the end of the
+entity row. `e.big` already scaled a mesh for the warlords, so a lamb
+was free.
+
+I did not make the click test honest this time: the camera does not
+follow the yaw until a frame renders, and headless frames are a second
+apart, so the suite calls what the click calls. After the seal I am
+wary of that, but the click's line here is one `if` in front of the
+villagers' `if`, which the suite does exercise.
+
 ## 2026-09-26 — the seal, twice
 
 Twice now the seal did not open for Austin, and the second time it was
