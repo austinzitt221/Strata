@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 92 — STRATA E
+- [ ] Walk a kilometre of Strata. Wild enough now? Too wild to cross?
+      (The band and a beacon are the answer if it is.)
+- [ ] Find the ichor. Step in. Then bring a boat (or a hoverbike) and
+      cross it; follow a river to where it ends. Does green water read
+      as water? Does it read as danger before it burns you?
+- [ ] Old Strata saves: the ground moved under everything. Is your
+      wreck, your beacons, anything you built, where it should be? (The
+      rocket is lifted out of new ground on load; nothing else is.)
+
 ## Build 91 — EVERY SKY
 - [ ] Find Strata in the Earth's night sky (a small violet disc, high,
       off the sun's arc). Then the Earth from Strata, with our Moon by

@@ -2,6 +2,38 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 92 — STRATA E: wilder, and the ichor (2026-09-24)
+
+Austin wanted Strata wilder, with sudden elevation everywhere, stranger
+mountains, and a water of its own that hurts. So:
+
+- **The faults.** The land is broken into blocks seventy metres across,
+  each lifted or dropped up to twenty-four metres against its
+  neighbours, the join softened over a metre and a half. Cliffs run in
+  broken lines everywhere; one column in ninety steps more than twelve
+  metres from the next, and the biggest step is near sixty. The
+  eight-metre strata are cut through them.
+- **The needles.** Where a slow ridged field peaks the land goes up
+  like a nail: ninety metres in the Glow and the Scar, a hundred and
+  fifty in the Teeth, on top of what was there. The land now reaches
+  two hundred and ten metres in a kilometre.
+- **The ichor.** Strata's water: green, and it burns. It runs in the
+  contour lines of a slow field, so its rivers wander as no water
+  would, start and end where they like, and cross the land every
+  couple of hundred metres, four to ten metres wide, two metres below
+  the land beside them and a metre and a half deep, stepping down with
+  the land (it falls where the land does, in pale green sheets). Its
+  bed and banks are black scarglass. Four columns in a hundred are
+  river. Swim in it and it burns like lava (six every four tenths of a
+  second; the magma heart drinks it, as it drinks lava); a boat or a
+  hoverbike crosses it, and the line says so the first time. Under it
+  the world goes green. The map paints it green. Nothing grows in it;
+  nothing spawns there; the centre keeps a hundred metres clear.
+- Under it: the water shaders (near and far) take an ichor uniform that
+  tints them green on Strata; Strata's generator now has a river, a
+  water height and a wet test like the Earth's, and a nominal sea four
+  hundred metres down so the water code runs.
+
 ## Build 91 — EVERY SKY: the planets from everywhere (2026-09-24)
 
 - **The far ones.** The Earth, the Moon and Strata hang in every sky

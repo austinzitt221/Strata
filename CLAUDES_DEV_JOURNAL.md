@@ -1448,6 +1448,35 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-24, night — STRATA E
+
+Rivers as contour lines. I had been dreading the ichor because the
+Earth's rivers are traced from sources downhill through a cell system
+that took a build of its own, and Strata's land now has cliffs every
+seventy metres that no traced river could cross. Then: a river is a
+line, a contour line of a slow noise field is a line that wanders
+without ever branching or ending, and its distance is the field's
+offset over the field's gradient. Five noise evaluations and no state.
+It steps down with the land in falls because the water sits two metres
+under the raw ground wherever it is, which the water code already
+knew how to draw. The gaps came from a second field: without them the
+lines were everywhere and it read as a wet world rather than a cut one.
+
+The faults are a Voronoi with a per-cell offset and a hard edge. I had
+softened the edge over four metres first and got notches instead of
+cliffs, because both sides fade to nothing at the border; the offset
+has to hold to the edge. A metre and a half of softening is enough for
+the mesher.
+
+The burn took an hour to find in the suite and was the creative
+loadout: every item, including the magma heart, which drinks burns.
+The test now empties the bag before it steps in.
+
+The land generator is the heaviest it has been: some thirty noise
+evaluations a column. The chunk grid caches columns, so it is fine in
+play, but I want to remember it when the structures come, because a
+structure placer that asks height() everywhere will feel it.
+
 ## 2026-09-24, evening — EVERY SKY
 
 A small build on the back of the last one: with the sprites shared, the

@@ -391,7 +391,7 @@ want to build them.
      transit, sized by how far they are from where you stand (a small
      Strata over the Earth; a small Earth over Strata). Stations are too
      small to see.
- 11. **STRATA E: wilder, and the ichor.** Terrain with sudden elevation
+ 11. **STRATA E: wilder, and the ichor** (DONE, Build 92). Terrain with sudden elevation
      everywhere and stranger mountains than the teeth; a water analog,
      green, that burns anyone swimming in it and carries boats and
      hoverbikes fine, in erratic rivers found nowhere else.
