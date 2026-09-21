@@ -306,8 +306,8 @@ body.pad{cursor:none;}
 
 <div id="mapscreen" class="screen hidden dim">
   <div class="panel">
-    <h2>MAP</h2>
-    <div class="sub" style="margin-bottom:8px;">surface survey — explored on foot · caves stay unmapped · M to close</div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px;"><h2 id="maptitle" style="margin:0; flex:1; text-align:left;">MAP</h2><button class="btn small" id="btnPlanetView">PLANET VIEW</button></div>
+    <div class="sub" id="mapsub" style="margin-bottom:8px;">surface survey — explored on foot · caves stay unmapped · M to close</div>
     <div style="display:flex; gap:10px; align-items:flex-start;">
     <div id="mapwrap">
       <canvas id="mapcanvas" width="640" height="640" style="image-rendering:pixelated; background:#0a0910; border:2px solid rgba(74,68,88,0.5);"></canvas>
@@ -9138,6 +9138,63 @@ const beaconSys = {
 // ---------- sky: sun & moon arcs, night stars, drifting 3D clouds ----------
 // the sun/moon positions read timeOfDay directly, so their height in the sky
 // IS the day/night progress bar
+// THE PLANET VIEW (Build 90): one sprite per world, drawn once, used by the
+// sky (as a texture) and by the map (as an image). 32 by 32, pixel art
+const planetSprite = (() => {
+  const cache = {};
+  const disc = (c, col) => { c.fillStyle = col; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill(); };
+  const clip = c => { c.globalCompositeOperation = 'destination-in'; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill(); c.globalCompositeOperation = 'source-over'; };
+  const DRAW = {
+    earth(c){
+      const rng = CORE.mulberry32(0xea47);
+      disc(c, '#2b64c8');
+      c.fillStyle = '#4c8a3c'; for (let i = 0; i < 9; i++) c.fillRect((3 + rng() * 24) | 0, (4 + rng() * 22) | 0, (2 + rng() * 6) | 0, (2 + rng() * 4) | 0);
+      c.fillStyle = '#a08a58'; for (let i = 0; i < 4; i++) c.fillRect((5 + rng() * 20) | 0, (6 + rng() * 18) | 0, 2, 2);
+      c.fillStyle = '#eef4ff'; c.fillRect(12, 1, 8, 2); c.fillRect(11, 29, 9, 2);
+      for (let i = 0; i < 10; i++) c.fillRect((2 + rng() * 26) | 0, (4 + rng() * 24) | 0, 3, 1);
+      clip(c);
+    },
+    moon(c){
+      disc(c, '#dde4f0');
+      c.fillStyle = '#b8c2d6'; c.fillRect(8, 10, 6, 4); c.fillRect(18, 18, 4, 6); c.fillRect(20, 6, 4, 4); c.fillRect(10, 22, 4, 2); c.fillRect(5, 17, 2, 2);
+      c.fillStyle = '#9aa4b8'; c.fillRect(9, 11, 2, 1); c.fillRect(19, 19, 1, 2); c.fillRect(21, 7, 1, 1);
+      clip(c);
+    },
+    alien(c){
+      disc(c, '#6a3aaa');
+      c.fillStyle = '#3a1a5a'; c.fillRect(2, 9, 28, 2); c.fillRect(3, 19, 26, 3); c.fillRect(6, 25, 20, 1);
+      c.fillStyle = '#b070ff'; c.fillRect(8, 5, 6, 1); c.fillRect(12, 14, 9, 1); c.fillRect(5, 23, 4, 1);
+      c.fillStyle = '#9affb0'; c.fillRect(15, 15, 2, 2);                                   // the centre, from orbit
+      clip(c);
+    },
+    station(c){
+      // STATION ONE: a grey ring with a hub, a warm light in it
+      c.strokeStyle = '#8a8a96'; c.lineWidth = 4; c.beginPath(); c.arc(16, 16, 11, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = '#5a5a66'; c.fillRect(15, 3, 2, 26); c.fillRect(3, 15, 26, 2);
+      c.fillStyle = '#b8b8c4'; c.beginPath(); c.arc(16, 16, 5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#ffd08a'; c.fillRect(15, 15, 2, 2);
+    },
+    site(c){
+      // STATION TWO: the keel, the hangar on it, the ring and the quarters, the spire
+      c.fillStyle = '#6a6a76'; c.fillRect(15, 2, 2, 28);
+      c.fillStyle = '#9a9aa6'; c.fillRect(10, 10, 12, 12);
+      c.fillStyle = '#7a7a86'; c.fillRect(3, 12, 7, 8); c.fillRect(22, 12, 7, 8);
+      c.fillStyle = '#9fe8ff'; c.fillRect(15, 3, 2, 3); c.fillRect(13, 13, 2, 2);
+    },
+    lost(c){
+      // what is left of it
+      c.fillStyle = '#4a4a56'; c.fillRect(6, 8, 6, 3); c.fillRect(18, 20, 5, 4); c.fillRect(14, 6, 3, 3); c.fillRect(9, 22, 3, 2); c.fillRect(22, 10, 2, 5);
+    },
+  };
+  return (kind) => {
+    if (cache[kind]) return cache[kind];
+    const cv = document.createElement('canvas'); cv.width = cv.height = 32;
+    const c = cv.getContext('2d');
+    (DRAW[kind] || DRAW.moon)(c);
+    cache[kind] = cv;
+    return cv;
+  };
+})();
 const skySys = {
   dome: null, sun: null, sunGlow: null, moon: null, stars: null,
   cloudGroup: null, clouds: [], cloudMat: null,
@@ -9164,26 +9221,12 @@ const skySys = {
     this.dome.add(this.sun); this.dome.add(this.moon);
     // LIFTOFF (Build 74): from the Moon, the Earth hangs in one place in the sky
     {
-      const cv = document.createElement('canvas'); cv.width = 32; cv.height = 32;
-      const c = cv.getContext('2d'), rng = CORE.mulberry32(0xea47);
-      c.fillStyle = '#2b64c8'; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#4c8a3c'; for (let i = 0; i < 9; i++) c.fillRect((3 + rng() * 24) | 0, (4 + rng() * 22) | 0, (2 + rng() * 6) | 0, (2 + rng() * 4) | 0);
-      c.fillStyle = '#a08a58'; for (let i = 0; i < 4; i++) c.fillRect((5 + rng() * 20) | 0, (6 + rng() * 18) | 0, 2, 2);
-      c.fillStyle = '#eef4ff'; c.fillRect(12, 1, 8, 2); c.fillRect(11, 29, 9, 2);
-      for (let i = 0; i < 10; i++) c.fillRect((2 + rng() * 26) | 0, (4 + rng() * 24) | 0, 3, 1);
-      c.globalCompositeOperation = 'destination-in'; c.beginPath(); c.arc(16, 16, 15.5, 0, Math.PI * 2); c.fill();
-      const tex = new THREE.CanvasTexture(cv); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
+      const tex = new THREE.CanvasTexture(planetSprite('earth')); tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
       this.earth = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
       this.earth.visible = false;
       this.dome.add(this.earth);
       // STATION TWO (Build 80): the alien world, a violet disc with dark bands, ahead of the site
-      const cv2 = document.createElement('canvas'); cv2.width = 32; cv2.height = 32;
-      const c2 = cv2.getContext('2d');
-      c2.fillStyle = '#6a3aaa'; c2.beginPath(); c2.arc(16, 16, 15.5, 0, Math.PI * 2); c2.fill();
-      c2.fillStyle = '#3a1a5a'; c2.fillRect(2, 9, 28, 2); c2.fillRect(3, 19, 26, 3); c2.fillRect(6, 25, 20, 1);
-      c2.fillStyle = '#b070ff'; c2.fillRect(8, 5, 6, 1); c2.fillRect(12, 14, 9, 1); c2.fillRect(5, 23, 4, 1);
-      c2.globalCompositeOperation = 'destination-in'; c2.beginPath(); c2.arc(16, 16, 15.5, 0, Math.PI * 2); c2.fill();
-      const tex2 = new THREE.CanvasTexture(cv2); tex2.magFilter = THREE.NearestFilter; tex2.minFilter = THREE.NearestFilter;
+      const tex2 = new THREE.CanvasTexture(planetSprite('alien')); tex2.magFilter = THREE.NearestFilter; tex2.minFilter = THREE.NearestFilter;
       this.alien = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex2, transparent: true, depthWrite: false }));
       this.alien.visible = false;
       this.dome.add(this.alien);
@@ -31262,7 +31305,7 @@ function refreshToolHUD(){
       el.innerHTML = '<div class="t1">' + V.name + (F ? ' · ' + (F.phase === 'climb' ? 'LIFTOFF' : F.phase === 'landing' ? 'COMING DOWN' : F.phase === 'crash' ? 'GOING DOWN' : 'THE CROSSING') : '') + '</div>' +
         '<div class="t2">fuel ' + Math.round(e.charge || 0) + '% · a launch burns half a tank' +
           (F && F.phase === 'transit' ? ' · ' + spaceSys.nameOf(F.from) + ' behind, ' + spaceSys.nameOf(F.to) + ' ahead · the mouse looks around' : '') + '</div>' +
-        '<div class="t2">' + (F ? 'hold on' : ok ? 'SPACE to launch for ' + spaceSys.nameOf(spaceSys.destOf()) + ' · R picks the other stop' : 'step out and right click it with JET FUEL') + '</div>' +
+        '<div class="t2">' + (F ? 'hold on' : ok ? 'SPACE opens the planet view · click a world and it flies' : 'step out and right click it with JET FUEL') + '</div>' +
         (F ? '' : '<div class="t2">right click to step out</div>');
       return;
     }
@@ -31655,12 +31698,12 @@ function markExplored(){
     if (dx * dx + dz * dz <= 10) ex.add((mcx + dx) + ',' + (mcz + dz));
   if (ex.size !== before) markSave();
 }
-function mapCellColor(cx, cz){
-  const cache = game.mapColCache || (game.mapColCache = new Map());
+function mapCellColor(cx, cz, MV){
+  const cache = MV ? MV.caches.col : (game.mapColCache || (game.mapColCache = new Map()));
   const key = cx + ',' + cz;
   let col = cache.get(key);
   if (col) return col;
-  const g = game.gen;
+  const g = MV ? MV.gen : game.gen;
   const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
   const h = g.height(x, z);
   let wyM = g.waterYAt ? g.waterYAt(x, z, h) : (g.wetAt ? (g.wetAt(x, z, h) ? g.seaLevel : null) : (g.seaLevel != null && h < g.seaLevel ? g.seaLevel : null));
@@ -31693,28 +31736,167 @@ function mapView(){ return game.mapView || (game.mapView = { ox: 0, oz: 0, zoom:
 const MAP_ZOOM_MIN = 0.5, MAP_ZOOM_MAX = 6;
 // canvas pixel <-> world metre, through the current view
 function mapToWorld(sx, sy){
-  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom;
-  return { x: game.pos.x + V.ox + (sx - cv.width / 2) / px * MAP_CELL, z: game.pos.z + V.oz + (sy - cv.height / 2) / px * MAP_CELL };
+  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom, MV = planetMap.ctx() || { px: game.pos.x, pz: game.pos.z };
+  return { x: MV.px + V.ox + (sx - cv.width / 2) / px * MAP_CELL, z: MV.pz + V.oz + (sy - cv.height / 2) / px * MAP_CELL };
 }
 function mapToScreen(x, z){
-  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom;
-  return { sx: cv.width / 2 + (x - game.pos.x - V.ox) / MAP_CELL * px, sy: cv.height / 2 + (z - game.pos.z - V.oz) / MAP_CELL * px };
+  const cv = $('mapcanvas'), V = mapView(), px = 5 * V.zoom, MV = planetMap.ctx() || { px: game.pos.x, pz: game.pos.z };
+  return { sx: cv.width / 2 + (x - MV.px - V.ox) / MAP_CELL * px, sy: cv.height / 2 + (z - MV.pz - V.oz) / MAP_CELL * px };
 }
+// THE PLANET VIEW (Build 90): the map of any world you have been to, and a
+// view of all of them. The map reads a context (the world, its generator,
+// what you explored of it, what stands on it) that is the live game for
+// the world you are on and the saved blob for any other. The planet view
+// lays the five out in a line, Earth to Strata; click one for its map.
+// From the rocket's seat, SPACE opens the same view and a click is the
+// destination: R's cycling is gone
+const planetMap = {
+  ORDER: ['earth', 'station', 'moon', 'site', 'alien'],
+  NAME: { earth: 'EARTH', station: 'STATION ONE', moon: 'THE MOON', site: 'STATION TWO', alien: 'STRATA' },
+  SIZE: { earth: 96, station: 44, moon: 64, site: 48, alien: 96 },
+  mode: 'surface', worldKey: null, launch: null, rects: [], caches: {},
+  world(){ return this.worldKey || game.planet; },
+  known(p){ return p === game.planet || !!(spaceSys.others && spaceSys.others[p]); },
+  cacheFor(p){
+    let C = this.caches[p];
+    if (!C){ C = { col: new Map(), rc: new Map(), rc2: new Map() }; this.caches[p] = C; }
+    return C;
+  },
+  // the context the map draws from
+  ctx(){
+    const p = this.world();
+    if (p === game.planet){
+      const C = this.cacheFor(p);
+      if (C.genRef !== game.gen){ C.genRef = game.gen; C.col.clear(); C.rc.clear(); C.rc2.clear(); }
+      return { live: true, planet: p, gen: game.gen, explored: game.explored || new Set(), px: game.pos.x, pz: game.pos.z, beacons: game.beacons || [],
+               rockets: game.entities.filter(e => e.type === 'rocket' || e.type === 'rocket2'), spires: game.spires || {}, zigs: game.zigs || {}, cities: game.cities || {},
+               bases: game.bases || {}, beds: game.beds || [], expedition: game.expedition, deathCache: game.deathCache, caches: C };
+    }
+    const B = spaceSys.others && spaceSys.others[p]; if (!B) return null;
+    const C = this.cacheFor(p);
+    if (!C.gen){ C.gen = CORE.makeGen(CORE.hashSeed(String(B.seed == null ? game.seedStr : B.seed)), p); }
+    const ex = B.explored || [];
+    if (!C.explored || C.exploredN !== ex.length){ C.explored = new Set(ex); C.exploredN = ex.length; }
+    return { live: false, planet: p, gen: C.gen, explored: C.explored, px: B.player && B.player.x != null ? B.player.x : 0, pz: B.player && B.player.z != null ? B.player.z : 0,
+             beacons: B.beacons || [], rockets: (B.entities || []).filter(r => r[0] === 'rocket' || r[0] === 'rocket2').map(r => ({ x: r[1], z: r[3] })),
+             spires: B.spires || {}, zigs: B.zigs || {}, cities: B.cities || {}, bases: B.bases || {}, beds: B.beds || [], expedition: B.expedition || null, deathCache: B.deathCache || null, caches: C };
+  },
+  // the header: title, the line under it, the button
+  header(){
+    const t = $('maptitle'), sub = $('mapsub'), b = $('btnPlanetView');
+    if (!t) return;
+    if (this.mode === 'planets'){
+      t.textContent = this.launch ? 'WHERE TO' : 'PLANET VIEW';
+      sub.textContent = this.launch ? 'click a world and the rocket flies · Esc stays on the pad' : 'click a world for its map · the band reaches every beacon and rocket on all of them';
+      b.textContent = this.launch ? 'STAY' : 'BACK TO ' + this.NAME[this.world()];
+    } else {
+      t.textContent = 'MAP · ' + this.NAME[this.world()] + (this.world() === game.planet ? '' : ' (as you left it)');
+      sub.textContent = 'surface survey — explored on foot · caves stay unmapped · M to close';
+      b.textContent = 'PLANET VIEW';
+    }
+    b.classList.remove('hidden');
+  },
+  toggle(){
+    if (this.launch){ closeOverlay(); return; }
+    this.mode = this.mode === 'planets' ? 'surface' : 'planets';
+    mapMenu.close(); this.header(); drawMap(); teleportSys.list();
+  },
+  // from the seat: the same view, and a click is the destination
+  open(e){
+    this.launch = e || null; this.mode = 'planets'; this.worldKey = null;
+    openMap({ keep: true });
+  },
+  why(p, e){
+    // why a world cannot be flown to from here
+    if (p === game.planet) return 'you are here';
+    const S = game.story || {};
+    if (p === 'site' && S.siteLost) return 'gone';
+    if (p === 'site' && !S.word) return 'no one has told you where it is';
+    if (p === 'alien' && !(e && VEH[e.type] && VEH[e.type].star)) return 'only the star rocket crosses';
+    return 'too far for one flight from here';
+  },
+  pick(p){
+    if (this.launch){
+      const e = this.launch;
+      const R = spaceSys.routes(e);
+      if (!R.includes(p)){ toast(this.NAME[p] + ': ' + this.why(p, e)); AudioSys.sfx('deny'); return false; }
+      this.launch = null; this.mode = 'surface';
+      closeOverlay();
+      spaceSys.dest = p;
+      return spaceSys.launch(e);
+    }
+    if (!this.known(p)){ toast('you have no map of ' + this.NAME[p] + ' yet'); AudioSys.sfx('deny'); return false; }
+    this.worldKey = p; this.mode = 'surface';
+    const V = mapView(); V.ox = 0; V.oz = 0;
+    mapMenu.close(); this.header(); drawMap(); teleportSys.list();
+    AudioSys.sfx('toggle');
+    return true;
+  },
+  click(sx, sy){
+    for (const r of this.rects) if (sx >= r.x0 && sx <= r.x1 && sy >= r.y0 && sy <= r.y1) return this.pick(r.p);
+    return false;
+  },
+  draw(){
+    const cv = $('mapcanvas'), c = cv.getContext('2d'), W = cv.width, H = cv.height;
+    c.fillStyle = '#05040a'; c.fillRect(0, 0, W, H);
+    // the stars, always the same ones
+    const rng = CORE.mulberry32(0x5147);
+    for (let i = 0; i < 260; i++){ const x = rng() * W, y = rng() * H, s = rng() < 0.85 ? 1 : 2; c.fillStyle = rng() < 0.5 ? '#eef2ff' : '#b8c4e0'; c.globalAlpha = 0.4 + rng() * 0.6; c.fillRect(x, y, s, s); }
+    c.globalAlpha = 1;
+    // the sun, behind everything, high and to the left
+    const sx0 = W * 0.16, sy0 = H * 0.16;
+    const g0 = c.createRadialGradient(sx0, sy0, 6, sx0, sy0, 120); g0.addColorStop(0, 'rgba(255,237,176,0.95)'); g0.addColorStop(0.25, 'rgba(255,220,140,0.35)'); g0.addColorStop(1, 'rgba(255,200,100,0)');
+    c.fillStyle = g0; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#ffedb0'; c.beginPath(); c.arc(sx0, sy0, 26, 0, Math.PI * 2); c.fill();
+    // the worlds in a line, the route drawn between them
+    const S = game.story || {}, e = this.launch, R = e ? spaceSys.routes(e) : null;
+    const xs = this.ORDER.map((p, i) => W * (0.12 + i * 0.19)), y = H * 0.56;
+    c.strokeStyle = 'rgba(160,150,190,0.35)'; c.lineWidth = 1; c.setLineDash([3, 5]);
+    c.beginPath(); c.moveTo(xs[0], y); for (let i = 1; i < xs.length; i++) c.lineTo(xs[i], y); c.stroke(); c.setLineDash([]);
+    this.rects = [];
+    c.imageSmoothingEnabled = false;
+    c.textAlign = 'center'; c.font = 'bold 12px monospace';
+    this.ORDER.forEach((p, i) => {
+      const x = xs[i], size = this.SIZE[p], known = this.known(p), here = p === game.planet;
+      const lost = p === 'site' && S.siteLost;
+      const kind = lost ? 'lost' : p;
+      const can = R ? R.includes(p) : known;
+      c.globalAlpha = can ? 1 : 0.38;
+      if (can && R){ c.strokeStyle = '#8bff9e'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, size / 2 + 10, 0, Math.PI * 2); c.stroke(); }
+      c.drawImage(planetSprite(kind), x - size / 2, y - size / 2, size, size);
+      c.globalAlpha = 1;
+      if (here){ c.fillStyle = '#ffd76a'; c.beginPath(); c.moveTo(x, y - size / 2 - 22); c.lineTo(x + 6, y - size / 2 - 32); c.lineTo(x - 6, y - size / 2 - 32); c.closePath(); c.fill(); }
+      c.fillStyle = can ? '#e8e0f8' : '#8a8494';
+      c.fillText(lost ? 'STATION TWO' : this.NAME[p], x, y + size / 2 + 22);
+      c.font = '10px monospace'; c.fillStyle = '#9a94a8';
+      c.fillText(R ? (can ? 'click to fly' : this.why(p, e)) : lost ? 'lost' : here ? 'you are here' : known ? 'mapped' : 'not yet', x, y + size / 2 + 36);
+      c.font = 'bold 12px monospace';
+      const hw = Math.max(size / 2 + 12, 42);
+      this.rects.push({ p, x0: x - hw, x1: x + hw, y0: y - size / 2 - 14, y1: y + size / 2 + 40 });
+    });
+    c.textAlign = 'start';
+    c.fillStyle = 'rgba(232,240,248,0.85)'; c.font = '11px monospace';
+    c.fillText(this.launch ? 'the ' + VEH[this.launch.type].name + ' · fuel ' + Math.round(this.launch.charge || 0) + '%' : 'five worlds · ' + this.ORDER.filter(p => this.known(p)).length + ' mapped', 10, H - 10);
+  },
+};
 function drawMap(){
+  if (planetMap.mode === 'planets'){ planetMap.draw(); return; }
+  const MV = planetMap.ctx();
+  if (!MV){ planetMap.worldKey = null; planetMap.mode = 'planets'; planetMap.header(); planetMap.draw(); return; }
   const cv = $('mapcanvas'), c = cv.getContext('2d');
   const V = mapView();
   const W = cv.width, H = cv.height, px = 5 * V.zoom;   // 5px per 16m cell at zoom 1 -> ~2km span
   const cell = Math.max(1, Math.ceil(px));
   c.fillStyle = '#0a0910'; c.fillRect(0, 0, W, H);
-  const pcx = (game.pos.x + V.ox) / MAP_CELL, pcz = (game.pos.z + V.oz) / MAP_CELL;
+  const pcx = (MV.px + V.ox) / MAP_CELL, pcz = (MV.pz + V.oz) / MAP_CELL;
   const toSX = cx => Math.round(W / 2 + (cx + 0.5 - pcx) * px);
   const toSY = cz => Math.round(H / 2 + (cz + 0.5 - pcz) * px);
   const half = Math.ceil(W / 2 / px) + 1;
-  for (const key of game.explored || []){
+  for (const key of MV.explored){
     const i = key.indexOf(',');
     const cx = +key.slice(0, i), cz = +key.slice(i + 1);
     if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
-    c.fillStyle = mapCellColor(cx, cz);
+    c.fillStyle = mapCellColor(cx, cz, MV);
     c.fillRect(toSX(cx) - (cell >> 1) - 1, toSY(cz) - (cell >> 1) - 1, cell, cell);
   }
   const mark = (x, z, col, s) => {
@@ -31731,18 +31913,18 @@ function drawMap(){
     if (V.zoom >= 2 && m.name){ c.font = '10px monospace'; c.fillStyle = col; c.fillText(m.name, sx + 5, sy + 3); }
   }
   // the rivers by name, once each, on the middle of their explored reach
-  if (game.gen && game.gen.riverAt){
-    const rc = game.mapRiverCache || (game.mapRiverCache = new Map());
+  if (MV.gen && MV.gen.riverAt){
+    const rc = MV.caches.rc;
     const groups = new Map();
-    for (const key of game.explored || []){
+    for (const key of MV.explored){
       const i = key.indexOf(',');
       const cx = +key.slice(0, i), cz = +key.slice(i + 1);
       if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
       let ck = rc.get(key);
       if (ck === undefined){
         const x = cx * MAP_CELL + MAP_CELL / 2, z = cz * MAP_CELL + MAP_CELL / 2;
-        const R = game.gen.riverAt(x, z);
-        ck = R && R.d < R.w * 1.1 + MAP_CELL * 0.5 && R.y > game.gen.seaLevel ? R.c : '';
+        const R = MV.gen.riverAt(x, z);
+        ck = R && R.d < R.w * 1.1 + MAP_CELL * 0.5 && R.y > MV.gen.seaLevel ? R.c : '';
         rc.set(key, ck);
       }
       if (!ck) continue;
@@ -31758,15 +31940,15 @@ function drawMap(){
     }
   }
   // the regions by name, once each, on the middle of their explored cells (Build 73)
-  if (game.gen && game.gen.regionAt){
-    const rc2 = game.mapRegionCache || (game.mapRegionCache = new Map());
+  if (MV.gen && MV.gen.regionAt){
+    const rc2 = MV.caches.rc2;
     const groups2 = new Map();
-    for (const key of game.explored || []){
+    for (const key of MV.explored){
       const i = key.indexOf(',');
       const cx = +key.slice(0, i), cz = +key.slice(i + 1);
       if (Math.abs(cx - pcx) > half || Math.abs(cz - pcz) > half) continue;
       let R = rc2.get(key);
-      if (R === undefined){ R = game.gen.regionAt(cx * MAP_CELL + MAP_CELL / 2, cz * MAP_CELL + MAP_CELL / 2); if (rc2.size > 60000) rc2.clear(); rc2.set(key, R); }
+      if (R === undefined){ R = MV.gen.regionAt(cx * MAP_CELL + MAP_CELL / 2, cz * MAP_CELL + MAP_CELL / 2); if (rc2.size > 60000) rc2.clear(); rc2.set(key, R); }
       let G = groups2.get(R.key); if (!G){ G = { R, x: 0, y: 0, n: 0 }; groups2.set(R.key, G); }
       G.x += toSX(cx); G.y += toSY(cz); G.n++;
     }
@@ -31789,7 +31971,7 @@ function drawMap(){
     if (txt){ c.font = '11px monospace'; c.fillText(txt, sx + s + 2, sy + 4); }
   };
   c.font = '11px monospace';
-  for (const o of objectiveSys.list()){
+  for (const o of MV.live ? objectiveSys.list() : []){
     const hid = ledgerSys.hidden(o.id);
     c.globalAlpha = hid ? 0.4 : 1;
     if (o.pin) dia(o.x, o.z, '#7dff9b', 6, o.p.name ? o.label : String(o.p.n));
@@ -31804,33 +31986,38 @@ function drawMap(){
       if (rocket){ c.fillStyle = '#e0c0ff'; c.beginPath(); c.moveTo(sx, sy - 7); c.lineTo(sx + 4, sy + 4); c.lineTo(sx, sy + 2); c.lineTo(sx - 4, sy + 4); c.closePath(); c.fill(); c.fillStyle = '#ffb060'; c.fillRect(sx - 1, sy + 4, 2, 3); }
       else { c.strokeStyle = '#b070ff'; c.lineWidth = 2; c.beginPath(); c.arc(sx, sy, 6, 0, Math.PI * 2); c.stroke(); c.fillStyle = '#e0c0ff'; c.fillRect(sx - 1.5, sy - 1.5, 3, 3); }
     };
-    for (const bcn of game.beacons || []) icon(bcn[0], bcn[2], false);
-    for (const e of game.entities) if (e.type === 'rocket' || e.type === 'rocket2') icon(e.x, e.z, true);
-  } else for (const bcn of game.beacons || []) mark(bcn[0], bcn[2], '#59c8d8', 7);
-  for (const k in (game.spires || {})) mark(game.spires[k].x, game.spires[k].z, '#f4f2f8', 7);
-  for (const k in (game.zigs || {})) if (game.zigs[k].stamped) mark(game.zigs[k].x, game.zigs[k].z, '#d9b85a', 7);
-  for (const k in (game.cities || {})) if (game.cities[k].stamped) mark(game.cities[k].x, game.cities[k].z, '#ffb44d', 9);
-  if (game.expedition){ for (const cp of game.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (game.expedition.deep) mark(game.expedition.shaft.x, game.expedition.shaft.z, '#8a1c1c', 8); }
-  for (const bk in (game.bases || {})){ const br = game.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
-  for (const bd of game.beds || []) mark(bd[0], bd[2], '#d84a63', 6);
-  if (game.deathCache) mark(game.deathCache.x, game.deathCache.z, '#f2f2f2', 6);
-  // player arrow
+    for (const bcn of MV.beacons) icon(bcn[0], bcn[2], false);
+    for (const e of MV.rockets) icon(e.x, e.z, true);
+  } else for (const bcn of MV.beacons) mark(bcn[0], bcn[2], '#59c8d8', 7);
+  for (const k in MV.spires) mark(MV.spires[k].x, MV.spires[k].z, '#f4f2f8', 7);
+  for (const k in MV.zigs) if (MV.zigs[k].stamped) mark(MV.zigs[k].x, MV.zigs[k].z, '#d9b85a', 7);
+  for (const k in MV.cities) if (MV.cities[k].stamped) mark(MV.cities[k].x, MV.cities[k].z, '#ffb44d', 9);
+  if (MV.expedition){ for (const cp of MV.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (MV.expedition.deep) mark(MV.expedition.shaft.x, MV.expedition.shaft.z, '#8a1c1c', 8); }
+  for (const bk in MV.bases){ const br = MV.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
+  for (const bd of MV.beds) mark(bd[0], bd[2], '#d84a63', 6);
+  if (MV.deathCache) mark(MV.deathCache.x, MV.deathCache.z, '#f2f2f2', 6);
+  // player arrow (on another world: where you last stood, as a ring)
+  if (!MV.live){ mark(MV.px, MV.pz, '#ffd76a', 8); }
+  else {
   c.save();
   c.translate(W / 2 - V.ox / MAP_CELL * px, H / 2 - V.oz / MAP_CELL * px);
   c.rotate(-game.yaw);
   c.fillStyle = '#ffd76a';
   c.beginPath(); c.moveTo(0, -8); c.lineTo(5, 6); c.lineTo(-5, 6); c.closePath(); c.fill();
   c.restore();
+  }
   c.fillStyle = 'rgba(232,240,248,0.85)';
   c.font = '14px monospace';
   c.fillText('N', W / 2 - 4, 18);
   c.fillText(V.zoom.toFixed(1) + 'x · ' + Math.round(W / px * MAP_CELL / 1000 * 10) / 10 + 'km across', W - 160, H - 10);
 }
-function openMap(){
+function openMap(opts){
   const V = mapView(); V.ox = 0; V.oz = 0;
+  if (!(opts && opts.keep)){ planetMap.mode = 'surface'; planetMap.worldKey = null; planetMap.launch = null; }
   mapMenu.close();
   wireMapInput();
-  game.ui = 'map'; show('mapscreen'); document.exitPointerLock(); drawMap();
+  game.ui = 'map'; show('mapscreen'); document.exitPointerLock();
+  planetMap.header(); drawMap();
   teleportSys.list();
 }
 // the left-click menu on the map: set a mark here, move one of yours here,
@@ -31863,7 +32050,7 @@ const mapMenu = {
     if (teleportSys.has()){
       // the band (Build 82): a click by a beacon or a rocket goes there
       const reach = 12 / (5 * V.zoom) * MAP_CELL;
-      const T = teleportSys.targets().filter(t => t.planet === game.planet && Math.hypot(t.x - w.x, t.z - w.z) < reach);
+      const T = teleportSys.targets().filter(t => t.planet === planetMap.world() && Math.hypot(t.x - w.x, t.z - w.z) < reach);
       for (const t of T){ const b = add('TELEPORT TO ' + teleportSys.label(t).toUpperCase(), () => teleportSys.go(t)); b.style.color = '#e0c0ff'; if (!first) first = b; }
     }
     if (near){
@@ -31897,10 +32084,12 @@ function wireMapInput(){
     return { sx: (e.clientX - r.left) * cv.width / r.width, sy: (e.clientY - r.top) * cv.height / r.height };
   };
   let pan = null, press = null;
+  $('btnPlanetView').addEventListener('click', () => { planetMap.toggle(); AudioSys.sfx('toggle'); });
   cv.addEventListener('mousedown', e => {
     if (game.ui !== 'map') return;
     e.preventDefault();
     const p = local(e);
+    if (planetMap.mode === 'planets'){ if (e.button === 0) press = p; return; }
     if (e.button === 2){ const V = mapView(); pan = { sx: p.sx, sy: p.sy, ox: V.ox, oz: V.oz, moved: false }; }
     else if (e.button === 0){ press = p; if (mapMenu.isOpen) mapMenu.close(); }
   });
@@ -31918,13 +32107,14 @@ function wireMapInput(){
     if (e.button === 0 && press){
       const p = local(e), q = press;
       press = null;
-      // a click on the canvas, not a drag: the menu
-      if (e.target === cv && Math.hypot(p.sx - q.sx, p.sy - q.sy) < 4) mapMenu.open(p.sx, p.sy);
+      // a click on the canvas, not a drag: the menu (or, in the planet view, a world)
+      if (e.target === cv && Math.hypot(p.sx - q.sx, p.sy - q.sy) < 4){ if (planetMap.mode === 'planets') planetMap.click(p.sx, p.sy); else mapMenu.open(p.sx, p.sy); }
     }
   });
   cv.addEventListener('wheel', e => {
     if (game.ui !== 'map') return;
     e.preventDefault();
+    if (planetMap.mode === 'planets') return;
     const p = local(e), V = mapView();
     const before = mapToWorld(p.sx, p.sy);
     V.zoom = Math.min(MAP_ZOOM_MAX, Math.max(MAP_ZOOM_MIN, V.zoom * (e.deltaY < 0 ? 1.25 : 0.8)));
@@ -33454,10 +33644,8 @@ const spaceSys = {
     vehicleCamera(e.x, e.y, e.z, e.heading || 0, dt, V.seat, null);
     if (!F){
       const k = game.keys;
-      if (k['Space'] && !this.spaceWas){ if (e.wrecked) this.repair(e); else this.launch(e); }
+      if (k['Space'] && !this.spaceWas){ if (e.wrecked) this.repair(e); else if (game.ui === 'none') planetMap.open(e); }   // Build 90: where to, from the planet view
       this.spaceWas = !!k['Space'];
-      if (k['KeyR'] && !this.rWas) this.cycleDest();
-      this.rWas = !!k['KeyR'];
     }
     game.carHud2T = (game.carHud2T || 0) + dt;
     if (game.carHud2T > 0.4){ game.carHud2T = 0; refreshToolHUD(); }
@@ -35724,7 +35912,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-24, later — THE PLANET VIEW
+
+Austin's star map. The part I liked building was the context: the map
+had always read the live game, so drawing another world meant either
+copying every `game.*` read or putting one object between the map and
+the world. One object. The live world fills it from `game`, the other
+worlds from their saved blobs, and a generator is made from the seed
+the first time a world is asked for. The caches that used to hang off
+`game` hang off the context per world, which fixed a bug I had not
+noticed: the colour cache never cleared between planets, so the Moon
+could have worn the Earth's colours if the same cell keys came up.
+
+Taking R out felt like a small loss and was not: the view shows the
+rocket's reach and says why a world is out of it, which R never did.
+
+The sprites are shared between the sky and the map now, which is the
+setup for the next build: every planet in every sky, sized by distance.
+
 ## 2026-09-24 — the playtest of 76 to 88
 
 Austin found the spike and could not find the seal. A three-metre black

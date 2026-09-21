@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 90 — THE PLANET VIEW: every map, and where the rocket goes (2026-09-24)
+
+- **The planet view.** A button on the map (PLANET VIEW) opens a second
+  map: a black sky of fixed stars, the sun high on the left, and the
+  five worlds in a line with the route dotted between them: the Earth,
+  Station One, the Moon, Station Two, Strata. Each is the same sprite
+  the sky uses (they share one drawing now), with its name and a word
+  under it: *you are here*, *mapped*, *not yet*; Station Two shows as
+  debris marked *lost* after the ambush. An arrow stands over where you
+  are. Click a world you have been to and its map opens, titled *(as
+  you left it)*: what you explored of it, its beacons and rockets, its
+  cities, bases, spires, camps, beds and cache, centred on where you
+  last stood (a ring instead of the arrow). The band's list beside the
+  map already reached every world; now the click on a beacon on
+  another world's map does too. BACK TO EARTH returns; Esc or M closes.
+- **Where the rocket goes.** SPACE in the seat no longer launches: it
+  opens the same view titled WHERE TO. Worlds the rocket can reach from
+  here wear a green ring and say *click to fly*; the others say why
+  not (*you are here*, *only the star rocket crosses*, *gone*, *too far
+  for one flight from here*). Click a reachable one and the map closes
+  and the rocket lifts. Esc stays on the pad. R's cycling is gone and
+  the seat's line says so.
+- Under it: the map draws from a context (world, generator, explored
+  cells, what stands) that is the live game for the world you are on
+  and the saved blob for any other, with the colour, river and region
+  caches kept per world. Another world's generator is built once from
+  the world's seed and kept.
+
 ## Build 89 — the playtest of 76 to 88: the seal, the airlock, the air, the tables (2026-09-24)
 
 Austin played 76 through 88 and found the boss unreachable: he stood at

@@ -379,7 +379,7 @@ Slotted between the city builds as the mood takes me:
 
 After the 2026-09-24 playtest (76 to 88): Austin's ideas, in the order I
 want to build them.
-  9. **The planet view** (map). A button on the map opens a second map:
+  9. **The planet view** (map) (DONE, Build 90). A button on the map opens a second map:
      stars, the sun behind, and the planets' sky-sprites laid out Earth,
      Station One, the Moon, Station Two, Strata. Click one to open that
      world's map (as far as you have it); the band teleports to any
