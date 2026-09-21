@@ -2,6 +2,38 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 94 — STRATA G: the vaults, and THE KEEPER (2026-09-25)
+
+Where Vehl's people kept what mattered, and the gearing-up for the
+centre.
+
+- **The vaults.** A mound of duskrock fifteen metres across and eleven
+  tall on levelled ground, its skin the country's own; inside, a hall
+  eighteen metres square and five and a half high, walled, floored and
+  roofed in veilstone, with four pillars and a plinth at its middle; a
+  tunnel in from one side at ground level. One cell in three (384 m)
+  tries, with the villages' rules and never within seventy metres of a
+  village or two hundred of the centre: about one to the square
+  kilometre. The map marks the ones you have found in gold, and in
+  brown once opened.
+- **THE KEEPER.** Wakes when you stand in the hall: a golem of
+  veilstone taller than the tomb's, a crown of black shards, one green
+  eye, a null core set in its chest. 900 hp. It walks at you and slams
+  for twenty-two up close, pounds the floor under you from a distance
+  (a real hole), and, when you keep off, fires a null bolt from its
+  chest every two and a half seconds with the night's wind-up and lock
+  (the core swells; sidestep). Leave the mound and it goes home and
+  mends six a second. There is no chance of another boss on Strata
+  while it is up.
+- **The loot.** When it dies a chest comes to the plinth: a **relic**
+  (new item: a veilstone tablet with a line of their writing; Sova pays
+  400; Vehl says keep them for when there is something to rebuild),
+  four to eight astrium, two or three null cores, three to six diamond,
+  four to eight aether ingots, two hundred and fifty to four hundred
+  coins, and half the time a stack of voidore. The vault is recorded
+  dead in Strata's save; the keeper does not come back.
+- Vehl has a line about the mounds.
+
 ## Build 93 — STRATA F: the ruined villages (2026-09-24)
 
 What the Unmaker left of Vehl's people, and the first of Strata's

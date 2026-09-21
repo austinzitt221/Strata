@@ -2650,6 +2650,54 @@ function makeStrataGen(seed){
     if (ruinCache.size > 4000) ruinCache.clear();
     ruinCache.set(key, R); return R;
   }
+  // STRATA G (Build 94): THE VAULTS. Where Vehl's people kept what
+  // mattered: a mound of duskrock fifteen metres across on a levelled
+  // ground, a hall inside it walled and floored in veilstone with four
+  // pillars and a plinth at its middle, a tunnel in from one side. Each
+  // is kept: THE KEEPER wakes when you stand in the hall, and the chest
+  // comes to the plinth when it dies. One cell in three tries (384 m),
+  // with the villages' rules, and never within two hundred of the centre
+  const VAULT_CELL = 384, sVa = hashInt(seed ^ 0x7a01), vaultCache = new Map();
+  function vaultAt(cx, cz){
+    const key = cx + ',' + cz; const hit = vaultCache.get(key); if (hit !== undefined) return hit;
+    let V = null;
+    const h0 = hashInt(sVa ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
+    if ((h0 & 255) < 86){
+      const rng = mulberry32(h0);
+      const x = cx * VAULT_CELL + 64 + rng() * (VAULT_CELL - 128), z = cz * VAULT_CELL + 64 + rng() * (VAULT_CELL - 128);
+      const b = biome(x, z), hb = rawHeight(x, z);
+      let ok = centreDist(x, z) > 200 && !(b === 1 && hb < 6 && fbm2(sB + 5, x * 0.03, z * 0.03, 2) > 0.5);
+      if (ok){ const RU = ruinAt(Math.floor(x / RUIN_CELL), Math.floor(z / RUIN_CELL)); if (RU && Math.hypot(RU.x - x, RU.z - z) < 70) ok = false; }
+      if (ok) for (const [dx, dz] of [[0, 0], [18, 0], [-18, 0], [0, 18], [0, -18]]){
+        if (riverGeo(x + dx, z + dz)){ ok = false; break; }
+        if (Math.abs(rawHeight(x + dx, z + dz) - hb) > 24){ ok = false; break; }
+      }
+      if (ok) V = { key, x, z, base: hb, r: 15, ea: rng() * Math.PI * 2, b };
+    }
+    if (vaultCache.size > 2000) vaultCache.clear();
+    vaultCache.set(key, V); return V;
+  }
+  function vaultNear(x, z){ const V = vaultAt(Math.floor(x / VAULT_CELL), Math.floor(z / VAULT_CELL)); return V && Math.hypot(x - V.x, z - V.z) < V.r + 18 ? V : null; }
+  function inHall(V, x, y, z){ return Math.abs(x - V.x) < 9 && Math.abs(z - V.z) < 9 && y > V.base - 0.5 && y < V.base + 6; }
+  // the pieces inside the mound: [d, kind] with 1 veilstone; the mound itself is the land's
+  function vaultSDF(x, y, z, V){
+    const px = x - V.x, pz = z - V.z, dy = y - V.base;
+    let d = 1e9;
+    for (const [sx, sz] of [[-5.5, -5.5], [5.5, -5.5], [-5.5, 5.5], [5.5, 5.5]]){
+      const pd = Math.max(Math.abs(px - sx) - 0.55, Math.abs(pz - sz) - 0.55, dy - 5.6, -0.2 - dy); if (pd < d) d = pd;
+    }
+    const pl = Math.max(Math.abs(px) - 1.1, Math.abs(pz) - 1.1, dy - 0.9, -0.3 - dy); if (pl < d) d = pl;
+    return d;
+  }
+  // the air inside: the hall, and the tunnel from the mound's edge
+  function vaultAir(x, y, z, V){
+    const px = x - V.x, pz = z - V.z, dy = y - V.base;
+    const hall = Math.max(Math.abs(px) - 9, Math.abs(pz) - 9, dy - 5.5, 0 - dy);
+    const c = Math.cos(V.ea), sn = Math.sin(V.ea);
+    const u = px * c + pz * sn, v = -px * sn + pz * c;
+    const tun = Math.max(8 - u, u - (V.r + 2), Math.abs(v) - 1.3, dy - 3, 0 - dy);
+    return Math.min(hall, tun);
+  }
   // a village's centre sits at least 56 m inside its cell and reaches 40, so the containing cell is the only one that can hold a point
   function ruinNear(x, z){ const R = ruinAt(Math.floor(x / RUIN_CELL), Math.floor(z / RUIN_CELL)); return R && Math.hypot(x - R.x, z - R.z) < R.r + 18 ? R : null; }
   // the pieces: 0 nothing, negative inside. Returns [d, kind] with kind 1 veilstone, 2 scarglass
@@ -2705,6 +2753,14 @@ function makeStrataGen(seed){
       if (rd < R.r) return R.base;
       const t = (rd - R.r) / 18, tt = t * t * (3 - 2 * t);
       return R.base * (1 - tt) + hn * tt;
+    }
+    const V = vaultNear(x, z);
+    if (V){
+      // the mound on its levelled ground, and the land over eighteen metres past it
+      const vd = Math.hypot(x - V.x, z - V.z);
+      if (vd < V.r) return V.base + Math.sqrt(Math.max(0, V.r * V.r - vd * vd)) * 0.75;
+      const t = (vd - V.r) / 18, tt = t * t * (3 - 2 * t);
+      return V.base * (1 - tt) + hn * tt;
     }
     return hn;
   }
@@ -2844,6 +2900,14 @@ function makeStrataGen(seed){
       const rs = ruinSDF(x, y, z, RU)[0]; if (rs < d) d = rs;
       return d;
     }
+    const VA = vaultNear(x, z);
+    if (VA && Math.hypot(x - VA.x, z - VA.z) < VA.r + 2){
+      // the mound: solid to its surface, the hall and the tunnel cut out of it, the pillars and the plinth in it
+      let d = y - h;
+      const air = vaultAir(x, y, z, VA); if (-air > d) d = -air;
+      const vs = vaultSDF(x, y, z, VA); if (vs < d) d = vs;
+      return d;
+    }
     let d = y - h - shape(x, y, z, h);
     const cv = caveCarve(x, y, z, h); if (cv > 0) d = Math.max(d, cv - 2.5);
     const sp = spireSDF(x, y, z); if (sp < d) d = sp;
@@ -2878,6 +2942,12 @@ function makeStrataGen(seed){
       return MAT.DUSKROCK;
     }
     if (y > h - 2.2){ const R = riverGeo(x, z); if (R && R.d < R.w * 1.4) return MAT.SCARGLASS; }   // the ichor's bed and banks: black glass
+    { const VA = vaultNear(x, z);                                                         // the vault (Build 94): veilstone inside, duskrock without
+      if (VA && Math.hypot(x - VA.x, z - VA.z) < VA.r + 2){
+        if (vaultSDF(x, y, z, VA) < 0.4) return MAT.VEILSTONE;
+        if (vaultAir(x, y, z, VA) < 0.9) return MAT.VEILSTONE;                            // the walls, floor and roof of the hall, a thick skin
+        return y > h - 1.2 ? (VA.b === 0 ? MAT.VMOSS : VA.b === 1 ? MAT.ASH : MAT.BONE) : MAT.DUSKROCK;
+      } }
     { const RU = ruinNear(x, z);                                                          // the village (Build 93): its pieces, and its paving
       if (RU && Math.hypot(x - RU.x, z - RU.z) < RU.r){
         const rs = ruinSDF(x, y, z, RU); if (rs[0] < 0.4) return rs[1] === 2 ? MAT.SCARGLASS : MAT.VEILSTONE;
@@ -2932,7 +3002,7 @@ function makeStrataGen(seed){
       const a = (hashInt(seed ^ (r * 131 + k)) / 4294967296) * Math.PI * 2;
       const x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
       if (biome(x, z) === 1) continue;
-      if (riverGeo(x, z) || ruinNear(x, z)) continue;
+      if (riverGeo(x, z) || ruinNear(x, z) || vaultNear(x, z)) continue;
       const h = height(x, z); let flat = true;
       for (const [dx, dz] of [[7, 0], [-7, 0], [0, 7], [0, -7]]) if (Math.abs(height(x + dx, z + dz) - h) > 1.2) flat = false;
       if (flat && sdf(x, h + 1, z) > 0.5 && sdf(x, h + 4, z) > 0.5 && spireSDF(x, h + 1, z) > 6) return { x, z };
@@ -2948,7 +3018,7 @@ function makeStrataGen(seed){
     if ((h0 & 255) >= [120, 55, 85][b]) return null;
     if (centreDist(x, z) < 95) return null;                                              // nothing grows at the centre
     { const R = riverGeo(x, z); if (R && R.d < R.w * 1.6) return null; }                 // nor in the ichor
-    if (ruinNear(x, z)) return null;                                                     // nor in the villages
+    if (ruinNear(x, z) || vaultNear(x, z)) return null;                                  // nor in the villages, nor on the vaults
     const hh = height(x, z);
     if (b === 1 && hh < 6 && fbm2(sB + 5, x * 0.03, z * 0.03, 2) > 0.5) return null;      // not in the blight
     let y = hh + 10; for (let i = 0; i < 80 && sdf(x, y, z) > 0; i++) y -= 0.25;      // down to the ground as it really is
@@ -2959,7 +3029,7 @@ function makeStrataGen(seed){
   const gen = { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt: nil, caves: true, caveFloorY: -90, seed, seaLevel: -400,   // no sea: the ichor is the water here, and it runs high
     ruinInCell: nil, wetAt, archAt: (x, z) => 14 + biome(x, z), lmAt: nil, riverAt, fallsNear: nil, waterYAt, ichor: true,
     caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
-    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL, centre: CENTRE, bowlFloor, ruinAt, ruinNear, RUIN_CELL };
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL, centre: CENTRE, bowlFloor, ruinAt, ruinNear, RUIN_CELL, vaultAt, vaultNear, VAULT_CELL, inHall };
   return gen;
 }
 function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : planet === 'alien' ? makeStrataGen(seed) : makeEarthGen(seed); }
@@ -3902,7 +3972,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'mtable', 'atable', '
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -8050,7 +8120,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -12731,6 +12801,7 @@ const ENT_DEF = {
   knocker:   { hp: 560, speed: 2.4, r: 1.2, h: 3.0, cap: 0, boss: 'THE KNOCKER' },
   // STRATA D (Build 88): the thing at the centre, and the seal on it
   unmaker:   { hp: 1500, speed: 4.5, r: 2.2, h: 4.4, cap: 0, boss: 'THE UNMAKER', fly: true, hover: 7 },
+  keeper:    { hp: 900, speed: 3.0, r: 1.1, h: 3.2, cap: 0, boss: 'THE KEEPER' },          // STRATA G (Build 94): what keeps a vault
   seal:      { hp: 1e9, speed: 0, r: 1.3, h: 1.4, cap: 0 },
 };
 // by archetype: what grazes by day, what hunts by night (Build 71)
@@ -13607,6 +13678,24 @@ function entMesh(type, ent){
       const leg = box(0.22, 0.75, 0.24, P.b, sx, 0.37, 0);
       legs.push(leg);
     }
+  } else if (type === 'keeper'){
+    // STRATA G (Build 94): a golem of veilstone, taller than the tomb's,
+    // a crown of black shards, one green eye, a null core set in its chest
+    const veil = 0x9a86b8, dark = 0x6a5a86, deep = 0x3a2a4a;
+    box(1.4, 1.4, 1.0, veil, 0, 1.8, 0);                     // chest
+    box(1.7, 0.32, 1.1, dark, 0, 2.55, 0);                   // shoulders
+    box(1.0, 0.8, 0.85, dark, 0, 0.85, 0);                   // hips
+    const core = box(0.34, 0.34, 0.2, 0x9affb0, 0, 1.75, -0.5); g.userData.core = core;
+    for (const [cx, cy] of [[-0.35, 1.5], [0.3, 2.1]]) box(0.08, 0.36, 1.02, deep, cx, cy, 0);   // the cracks
+    const head = box(0.8, 0.62, 0.7, veil, 0, 3.0, 0);
+    box(0.5, 0.1, 0.06, 0x9affb0, 0, 0.02, -0.36, head);     // the eye
+    for (let i = 0; i < 5; i++){ const a = -0.8 + i * 0.4; box(0.12, 0.5 + Math.abs(2 - i) * -0.1 + 0.2, 0.12, 0x14101c, Math.sin(a) * 0.32, 0.5, Math.cos(a) * 0.32 - 0.1, head); }   // the crown
+    for (const sx of [-1.05, 1.05]){
+      const arm = box(0.46, 1.6, 0.5, dark, sx, 1.7, 0);
+      box(0.56, 0.4, 0.58, deep, 0, -0.85, 0, arm);           // the fist
+      legs.push(arm);
+    }
+    for (const sx of [-0.34, 0.34]){ const leg = box(0.48, 0.9, 0.5, deep, sx, 0.45, 0); legs.push(leg); }
   } else if (type === 'guardian'){
     // a sandstone golem: square, heavy, a ruby slit for an eye
     const sand = 0xc9a86a, dark = 0x9a7d48, deep = 0x6e5730;
@@ -13921,6 +14010,7 @@ function killEntity(e, byPlayer){
       markSave();
     }
     else if (e.bossType === 'unmaker'){ centreSys.end(e); }
+    else if (e.bossType === 'keeper'){ vaultSys.slain(e); }
     else if (e.bossType === 'knocker'){
       const E = game.expedition;
       if (E) E.knockerDead = true;
@@ -16843,7 +16933,7 @@ const bossSys = {
     this.accT = 0;
     if (this.anyBoss()) return;
     if (zeroG()) return;
-    if (game.planet === 'alien') return;       // STRATA D (Build 88): Strata's one boss comes when the seal is opened, not by chance
+    if (game.planet === 'alien'){ vaultSys.check(); return; }   // STRATA D (Build 88): no chance bosses on Strata; the vaults' keepers wake when you stand in their halls (Build 94)
     if (game.planet === 'moon'){
       // THE DUST WYRM (Build 75): at night, out on the open maria, it comes
       // up under you; once it is dead it is a while before another smells you
@@ -16970,6 +17060,61 @@ const bossSys = {
       legs[li].rotation.x = winding ? -2.2 + (0.7 - e.poundT) * 0.6 : e.atkT > 1.2 ? -1.6 + (2.0 - e.atkT) * 3 : Math.sin(ud.phase + li * Math.PI) * (sp > 0 ? 0.3 : 0);
     e.mesh.scale.setScalar(e.flash > 0 ? 1.06 : 1);
   },
+  // THE KEEPER (STRATA G, Build 94): what keeps a vault. The tomb
+  // guardian's walk and slam and the floor-pound, and, because this is
+  // Strata, a null bolt from its chest every two and a half seconds when
+  // you keep your distance (the same wind-up, the same lock). It stays in
+  // its mound and mends there
+  KP_RG: { dmg: 18, rate: 2.5, keep: 0, range: 30, spread: 1.5, col: 0x9affb0 },
+  keeper(e, dt){
+    const def = ENT_DEF.keeper;
+    if (!e.home){ e.home = { x: e.x, z: e.z, g: e.y }; }
+    e.stateT = (e.stateT || 0) + dt;
+    e.atkT = Math.max(0, (e.atkT || 0) - dt);
+    e.poundT = Math.max(0, (e.poundT == null ? 6 : e.poundT) - dt);
+    const px = game.pos.x, py = game.pos.y, pz = game.pos.z;
+    const pd = Math.hypot(e.x - px, e.z - pz);
+    const hd = Math.hypot(px - e.home.x, pz - e.home.z);
+    let tx = px, tz = pz;
+    const home = hd > 26 || Math.abs(py - e.home.g) > 12 || game.ui !== 'none';
+    if (home){ tx = e.home.x; tz = e.home.z; e.hp = Math.min(def.hp, e.hp + 6 * dt); }
+    const dx = tx - e.x, dz = tz - e.z, L = Math.hypot(dx, dz) || 1;
+    const sp = e.atkT > 1.2 || e.charge ? 0 : def.speed;
+    let nx = e.x + dx / L * sp * dt, nz = e.z + dz / L * sp * dt;
+    const le = nearEdits([nx - 2, e.y - 3, nz - 2, nx + 2, e.y + 4, nz + 2]);
+    let gy = null;
+    for (let yy = e.y + 1.2; yy > e.y - 3; yy -= 0.25){ if (sdfWorld(nx, yy, nz, le) < 0.05){ gy = yy + 0.1; break; } }
+    const blocked = sdfWorld(nx, (gy != null ? gy : e.y) + 1.4, nz, le) < def.r * 0.8;
+    if (!blocked && L > 0.5 && sp > 0){ e.x = nx; e.z = nz; }
+    if (gy != null) e.y += (gy - e.y) * Math.min(1, 10 * dt); else e.y -= 6 * dt;
+    if (!home && pd < 2.9 && Math.abs(py - e.y) < 3 && e.atkT <= 0){
+      e.atkT = 1.9;
+      damagePlayer(22, (px - e.x) * 3.5, (pz - e.z) * 3.5);
+      AudioSys.sfx('boom');
+      Particles.burst(px, py + 0.6, pz, 0.5, [0x9a86b8, 0x3a2a4a], 12, 3);
+    } else if (!home && pd >= 2.9 && pd < 12 && e.poundT <= 0){
+      e.poundT = 8;
+      explode(px, py - 0.4, pz, 1.1, 14);
+    }
+    // the bolt, when you keep off
+    if (!home && pd > 4){
+      const RG = this.KP_RG;
+      e.aimT = (e.aimT || 0) + dt;
+      const wind = e.aimT > RG.rate - 0.6;
+      if (wind && !e.charge) e.aimLock = { x: px, y: py, z: pz };
+      e.charge = wind ? 1 : 0;
+      if (e.aimT > RG.rate){ e.aimT = 0; e.charge = 0; warSys.bolt(e, e.aimLock || { x: px, y: py, z: pz }, RG); e.aimLock = null; }
+    } else { e.charge = 0; e.aimT = 0; }
+    if (!e.mesh){ e.mesh = entMesh('keeper', e); game.scene.add(e.mesh); }
+    e.mesh.position.set(e.x, e.y, e.z);
+    if (L > 0.5) e.mesh.rotation.y = Math.atan2(-dx, -dz);
+    const ud = e.mesh.userData;
+    ud.phase = (ud.phase || 0) + dt * (sp > 0 ? 3.2 : 0);
+    for (let li = 0; li < (ud.legs || []).length; li++) ud.legs[li].rotation.x = Math.sin(ud.phase + (li % 2) * Math.PI) * (sp > 0 ? 0.5 : 0);
+    if (e.atkT > 1.2 && ud.legs) for (let li = 0; li < 2; li++) ud.legs[li].rotation.x = -1.6 + (1.9 - e.atkT) * 3;
+    if (ud.core) ud.core.scale.setScalar(e.charge ? 1.8 : 1);
+    e.mesh.scale.setScalar(e.flash > 0 ? 1.06 : 1);
+  },
   // THE UNMAKER (STRATA D, Build 88): the thing at the centre, loosed when
   // the seal takes six null cores. It hangs seven metres over you and
   // circles at sixteen, firing bolts on the beat with the same wind-up as
@@ -17084,6 +17229,7 @@ const bossSys = {
     else if (e.bossType === 'guardian'){ zigSys.guardian(e, dt); return; }
     else if (e.bossType === 'knocker'){ this.knocker(e, dt); return; }
     else if (e.bossType === 'unmaker'){ this.unmaker(e, dt); return; }
+    else if (e.bossType === 'keeper'){ this.keeper(e, dt); return; }
     // record the path for the trailing segments
     e.trail.unshift([e.x, e.y, e.z]);
     if (e.trail.length > 40) e.trail.pop();
@@ -29128,7 +29274,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -29358,6 +29504,12 @@ function itemIconURL(it){
     c.fillStyle = '#4a5058'; c.fillRect(4, 12, 3, 3); c.fillRect(9, 12, 3, 3); c.fillRect(3, 7, 10, 1);
     c.fillStyle = '#9fe8ff'; c.fillRect(7, 5, 2, 2);
     c.fillStyle = '#8a9098'; c.fillRect(2, 3, 1, 1); c.fillRect(13, 3, 1, 1);
+  } else if (it.kind === 'relic'){
+    // a relic: a veilstone tablet, a line of their writing across it, a chip out of one corner
+    c.fillStyle = '#9a86b8'; c.fillRect(3, 2, 10, 12); c.fillRect(2, 3, 12, 10);
+    c.fillStyle = '#5a4a72'; c.fillRect(5, 5, 6, 1); c.fillRect(5, 8, 4, 1); c.fillRect(10, 8, 1, 1); c.fillRect(5, 11, 6, 1);
+    c.fillStyle = '#b8a4d8'; c.fillRect(3, 2, 2, 1); c.fillRect(12, 12, 1, 2);
+    c.fillStyle = '#0a0810'; c.fillRect(11, 2, 3, 3); c.fillRect(12, 2, 2, 2);
   } else if (it.kind === 'nullcore'){
     // a null core: a dark knot with a green light in it that is not quite there
     c.fillStyle = '#1a1424'; c.fillRect(4, 4, 8, 8); c.fillRect(6, 2, 4, 2); c.fillRect(6, 12, 4, 2); c.fillRect(2, 6, 2, 4); c.fillRect(12, 6, 2, 4);
@@ -29992,6 +30144,7 @@ function itemLabel(it){
   if (it.kind === 'band') return 'teleport band';
   if (it.kind === 'voidore') return 'voidore';
   if (it.kind === 'nullcore') return 'null core';
+  if (it.kind === 'relic') return 'relic';
   if (it.kind === 'voidfruit') return 'voidfruit';
   if (it.kind === 'rocket') return (it.wrecked ? 'wrecked ' : '') + 'rocket';
   if (it.kind === 'rocket2') return (it.wrecked ? 'wrecked ' : '') + 'star rocket';
@@ -30396,7 +30549,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -31269,6 +31422,8 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + ' ×' + it.count + '</div><div class="t2">right click to eat (' + (it.kind === 'fish' ? '15' : '45') + ' hp) · cook it in a stove · sells at the fish market</div>';
   } else if (it.kind === 'mech'){
     html = '<div class="t1">mech suit</div><div class="t2">wear it in the chestplate slot — sealed like the space suit · a third of every blow shrugged off · digs faster, punches like a hammer, jumps higher · heavy on its feet</div>';
+  } else if (it.kind === 'relic'){
+    html = '<div class="t1">relic ×' + it.count + '</div><div class="t2">a tablet of veilstone out of a vault, a line of Vehl\'s people\'s writing on it · Sova pays 400 · Vehl says keep them: they will matter when there is something to rebuild</div>';
   } else if (it.kind === 'nullcore'){
     html = '<div class="t1">null core ×' + it.count + '</div><div class="t2">out of a lancer or a hollow: the thing that drives them, and it is not of Strata either · Sova pays well for one · Vehl wants them kept for the centre</div>';
   } else if (it.kind === 'voidore'){
@@ -31996,7 +32151,7 @@ const planetMap = {
       if (C.genRef !== game.gen){ C.genRef = game.gen; C.col.clear(); C.rc.clear(); C.rc2.clear(); }
       return { live: true, planet: p, gen: game.gen, explored: game.explored || new Set(), px: game.pos.x, pz: game.pos.z, beacons: game.beacons || [],
                rockets: game.entities.filter(e => e.type === 'rocket' || e.type === 'rocket2'), spires: game.spires || {}, zigs: game.zigs || {}, cities: game.cities || {},
-               bases: game.bases || {}, beds: game.beds || [], expedition: game.expedition, deathCache: game.deathCache, ruins: game.ruins || {}, caches: C };
+               bases: game.bases || {}, beds: game.beds || [], expedition: game.expedition, deathCache: game.deathCache, ruins: game.ruins || {}, vaults: game.vaults || {}, caches: C };
     }
     const B = spaceSys.others && spaceSys.others[p]; if (!B) return null;
     const C = this.cacheFor(p);
@@ -32005,7 +32160,7 @@ const planetMap = {
     if (!C.explored || C.exploredN !== ex.length){ C.explored = new Set(ex); C.exploredN = ex.length; }
     return { live: false, planet: p, gen: C.gen, explored: C.explored, px: B.player && B.player.x != null ? B.player.x : 0, pz: B.player && B.player.z != null ? B.player.z : 0,
              beacons: B.beacons || [], rockets: (B.entities || []).filter(r => r[0] === 'rocket' || r[0] === 'rocket2').map(r => ({ x: r[1], z: r[3] })),
-             spires: B.spires || {}, zigs: B.zigs || {}, cities: B.cities || {}, bases: B.bases || {}, beds: B.beds || [], expedition: B.expedition || null, deathCache: B.deathCache || null, ruins: B.ruins || {}, caches: C };
+             spires: B.spires || {}, zigs: B.zigs || {}, cities: B.cities || {}, bases: B.bases || {}, beds: B.beds || [], expedition: B.expedition || null, deathCache: B.deathCache || null, ruins: B.ruins || {}, vaults: B.vaults || {}, caches: C };
   },
   // the header: title, the line under it, the button
   header(){
@@ -32219,6 +32374,7 @@ function drawMap(){
   for (const k in MV.zigs) if (MV.zigs[k].stamped) mark(MV.zigs[k].x, MV.zigs[k].z, '#d9b85a', 7);
   for (const k in MV.cities) if (MV.cities[k].stamped) mark(MV.cities[k].x, MV.cities[k].z, '#ffb44d', 9);
   for (const k in MV.ruins) mark(MV.ruins[k].x, MV.ruins[k].z, '#b8a4d8', 8);                  // Build 93: the villages you have found
+  for (const k in MV.vaults) mark(MV.vaults[k].x, MV.vaults[k].z, MV.vaults[k].dead ? '#7a6a4a' : '#ffd75e', 9);   // Build 94: the vaults, gold until opened
   if (MV.expedition){ for (const cp of MV.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (MV.expedition.deep) mark(MV.expedition.shaft.x, MV.expedition.shaft.z, '#8a1c1c', 8); }
   for (const bk in MV.bases){ const br = MV.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
   for (const bd of MV.beds) mark(bd[0], bd[2], '#d84a63', 6);
@@ -32650,6 +32806,7 @@ function buildSaveData(){
     zigs: game.zigs || {},
     mbases: game.mbases || {},
     ruins: game.ruins || {},
+    vaults: game.vaults || {},
     wrecks: game.wrecks || {},
     cities: game.cities || {},
     bossKills: game.bossKills || {},
@@ -32725,6 +32882,7 @@ function startWorldData(id, data){
   game.zigs = data.zigs || {};
   game.mbases = data.mbases || {};
   game.ruins = data.ruins || {};
+  game.vaults = data.vaults || {};
   game.wrecks = data.wrecks || {};
   endFishing();
   game.cities = data.cities || {};
@@ -33060,6 +33218,62 @@ const endSys = {
     setTimeout(() => { if (game.ui === 'end'){ fin.classList.remove('hidden'); $('btnEndGo').classList.remove('hidden'); } }, 800 + els.length * 3200);
     game.story.credits = (game.story.credits || 0) + 1;
     AudioSys.sfx('teleport');
+  },
+};
+
+// ---------- STRATA G (Build 94): the vaults ----------
+// The mound and the hall are the generator's; this is the record of the
+// ones you have found (the map), the keeper's waking when you stand in a
+// hall, and the chest that comes to the plinth when it dies
+const vaultSys = {
+  accT: 0,
+  tick(dt){
+    if (game.planet !== 'alien' || !game.gen || !game.gen.vaultAt) return;
+    this.accT += dt; if (this.accT < 1) return; this.accT = 0;
+    const C = game.gen.VAULT_CELL, cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    game.vaults = game.vaults || {};
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const V = game.gen.vaultAt(cx + dx, cz + dz);
+      if (!V || game.vaults[V.key]) continue;
+      if (Math.hypot(V.x - game.pos.x, V.z - game.pos.z) > 60) continue;
+      game.vaults[V.key] = { x: Math.round(V.x), z: Math.round(V.z) };
+      toast('a vault of Vehl\'s people — a mound with a way in, and something keeps it');
+      AudioSys.sfx('toggle'); markSave();
+    }
+  },
+  here(){ const V = game.gen && game.gen.vaultNear ? game.gen.vaultNear(game.pos.x, game.pos.z) : null; return V && game.gen.inHall(V, game.pos.x, game.pos.y + 0.9, game.pos.z) ? V : null; },
+  check(){
+    const V = this.here(); if (!V) return;
+    game.vaults = game.vaults || {};
+    const rec = game.vaults[V.key] || (game.vaults[V.key] = { x: Math.round(V.x), z: Math.round(V.z) });
+    if (rec.dead || bossSys.anyBoss()) return;
+    const e = bossSys.spawn('keeper', V.x, V.base + 0.3, V.z - 3.6);                      // between the plinth and the wall, clear of the pillars
+    e.vaultKey = V.key; e.home = { x: V.x, z: V.z, g: V.base }; e.state = 'walk'; e.stateT = 0;
+    toast('THE KEEPER wakes'); AudioSys.sfx('boom');
+  },
+  slain(e){
+    const V = game.gen && game.gen.vaultAt ? game.gen.vaultNear(e.home ? e.home.x : e.x, e.home ? e.home.z : e.z) : null;
+    game.vaults = game.vaults || {};
+    game.bossKills = game.bossKills || {}; game.bossKills.keeper = (game.bossKills.keeper || 0) + 1;
+    if (V){
+      const rec = game.vaults[V.key] || (game.vaults[V.key] = { x: Math.round(V.x), z: Math.round(V.z) });
+      rec.dead = 1;
+      const rng = CORE.mulberry32((game.seed ^ (Math.round(V.x) * 6151 + Math.round(V.z) * 3079)) >>> 0);
+      const ch = pnodeSys.add('chest', V.x, V.base + 0.95, V.z, V.ea + Math.PI, { sc: 0.85 });
+      ch.inv = new Array(chestSlots(0.85)).fill(null);
+      let i = 0;
+      ch.inv[i++] = { kind: 'relic', count: 1 };
+      ch.inv[i++] = { kind: 'astrium', count: 4 + ((rng() * 5) | 0) };
+      ch.inv[i++] = { kind: 'nullcore', count: 2 + ((rng() * 2) | 0) };
+      ch.inv[i++] = { kind: 'diamond', count: 3 + ((rng() * 4) | 0) };
+      ch.inv[i++] = { kind: 'aetheringot', count: 4 + ((rng() * 5) | 0) };
+      ch.inv[i++] = { kind: 'coin', count: 250 + ((rng() * 151) | 0) };
+      if (rng() < 0.5) ch.inv[i++] = { kind: 'voidore', count: 12 + ((rng() * 9) | 0) };
+      teleportSys.fx(V.x, V.base + 1, V.z);
+    }
+    toast('THE KEEPER comes apart — the plinth holds what it kept: a RELIC, and the rest');
+    econSys.note('A VAULT OF STRATA IS OPEN', ['deed', 'boss'], null, true);
+    markSave();
   },
 };
 
@@ -33615,6 +33829,7 @@ const stationOneSys = {
     'Vehl: The ship can be raised. Iron from the ground, plating you know how to make, two grains of astrium: I saw you carry more. Then we find what is at the centre of this, and we end it.',
     'Vehl: They will come for us at every hour. The ones that walk by day you can outrun; the ones that come at night you cannot, so dig in or build a wall before dark. Keep the cores the tall ones carry. I will want them at the centre.',
     'Vehl: You will find where we lived. Rings of houses on the terraces, the stone the colour of the moss at dusk. Do not expect much of them. Take what is in them; it was ours, and we would rather you had it than the ones who walk there now.',
+    'Vehl: And the mounds. We kept what mattered under them, and set keepers over it, and the keepers are still there, doing the one thing they know. What is in a vault will arm you for the centre. Keep the tablets. When there is something to rebuild, I will want them.',
   ],
   // STRATA D (Build 88): after
   STORY7: [
@@ -33645,7 +33860,7 @@ const stationOneSys = {
     ];
     if (cast === 'relics') return [
       { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
-      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 },
+      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 }, { sell: { k: 'relic', n: 1 }, price: 400, rep: 0 },
     ];
     return [];
   },
@@ -35872,6 +36087,7 @@ function frameBody(now){
   alienSys.tick(dt);
   centreSys.tick(dt);
   ruinSys.tick(dt);
+  vaultSys.tick(dt);
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -36198,7 +36414,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

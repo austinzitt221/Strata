@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 94 — STRATA G
+- [ ] Find a mound (rarer than the villages; the map marks it gold once
+      you have been near). Go in. Fight the keeper in the hall: is the
+      hall big enough to fight in? Do the pillars help or get in the
+      way? Is the bolt-from-the-chest readable?
+- [ ] Open the chest. Is it worth a keeper? Sell a relic to Sova, or
+      keep it; Vehl says keep it.
+
 ## Build 93 — STRATA F
 - [ ] Find a village (they are everywhere; the map marks the ones you
       have found). Walk the plaza, look in the huts, open the chest.

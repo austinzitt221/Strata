@@ -397,7 +397,7 @@ want to build them.
      hoverbikes fine, in erratic rivers found nowhere else.
  12. **STRATA F, G, H: structures.** Many. The common one is the ruined
      alien village (F, DONE, Build 93), what the Unmaker left of Vehl's
-     people (the ones on the stations are the ones who got out). Then (G) loot structures with
+     people (the ones on the stations are the ones who got out). Then (G, DONE, Build 94: the vaults, THE KEEPER, the relic) loot structures with
      their own bosses and endgame loot, to gear up for the centre. Then,
      after the end, the villages rebuilt and lived in: aliens home, and
      new things to do there, the way the Earth's cities have theirs.

@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-25, later — STRATA G
+
+The vault is the village's trick turned inside out: where the village
+puts pieces on a terrace, the mound is solid to its dome and the hall
+is air cut out of it, with the pillars and plinth put back. Three
+distance functions and the mesher does the rest. The mound's skin is
+the country's ground, so from outside it is a hill with a hole in it.
+
+The keeper is the tomb guardian's brain with a bolt added, and its
+first spawn point was beside a pillar, inside the golem's own blocking
+radius, so it stood there for the whole test firing and never walked.
+The suite caught it by the numbers (it never closed, never slammed,
+never went home). Spawn points in a room with furniture want a metre
+of air around them.
+
+The relic is the hook for H: rebuilding a village should cost
+something the war made you earn.
+
 ## 2026-09-25 — STRATA F
 
 The villages are SDF, not stamps, and that was the decision that made
