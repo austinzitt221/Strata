@@ -2,6 +2,23 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 91 — EVERY SKY: the planets from everywhere (2026-09-24)
+
+- **The far ones.** The Earth, the Moon and Strata hang in every sky
+  that does not already show them large, as small discs of the same
+  sprites the map uses, sized by how many stops away they are along
+  the route (a stop away is large, four stops away is a fifth the
+  size): Strata small over the Earth, the Moon and Station One; the
+  Earth small over the site; the Earth and our Moon small over Strata.
+  Each keeps a fixed place in the sky, off the sun's arc. Where there
+  is a day they fade to a third by noon and are sharp at night; in the
+  airless skies they are always sharp. Stations are too small to see.
+- **Strata has no moon of its own.** It had ours, rising and setting;
+  it does not now. Ours hangs small beside the small Earth.
+- **In transit** the planets you are not flying between sit far off
+  along the same line, so the whole route reads from the window: from
+  Strata to the Moon, the Earth is out past the Moon.
+
 ## Build 90 — THE PLANET VIEW: every map, and where the rocket goes (2026-09-24)
 
 - **The planet view.** A button on the map (PLANET VIEW) opens a second

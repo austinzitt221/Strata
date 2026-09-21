@@ -1448,6 +1448,19 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-24, evening — EVERY SKY
+
+A small build on the back of the last one: with the sprites shared, the
+sky can hang any of them anywhere. The one thing I found while doing it
+is that Strata had been wearing the Earth's moon all along, rising and
+setting on the Earth's clock; I had never looked up there at night with
+that question in mind. Now it has none, and ours is a small grey square
+beside a small blue one.
+
+The scale by stops is a rule that reads, not a physics; nothing in the
+game says how far these worlds are from each other and I would rather
+it kept quiet about it.
+
 ## 2026-09-24, later — THE PLANET VIEW
 
 Austin's star map. The part I liked building was the context: the map

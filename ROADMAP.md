@@ -386,7 +386,7 @@ want to build them.
      beacon or rocket on any of them from there. The same view is the
      rocket's destination picker: space in the seat opens it, click a
      world, the rocket flies (R's cycling goes away).
- 10. **Every planet in every sky.** The Earth, the Moon and Strata drawn
+ 10. **Every planet in every sky** (DONE, Build 91). The Earth, the Moon and Strata drawn
      as sprites in every world's sky and through the rocket's window in
      transit, sized by how far they are from where you stand (a small
      Strata over the Earth; a small Earth over Strata). Stations are too

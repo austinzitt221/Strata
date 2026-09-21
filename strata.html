@@ -9230,6 +9230,16 @@ const skySys = {
       this.alien = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: tex2, transparent: true, depthWrite: false }));
       this.alien.visible = false;
       this.dome.add(this.alien);
+      // EVERY SKY (Build 91): the far ones. The Earth, the Moon and Strata as
+      // small discs in whichever sky does not already show them large,
+      // sized by how many stops away they are; faint by day where there is
+      // a day, sharp at night and in the airless skies
+      this.far = {};
+      for (const k of ['earth', 'moon', 'alien']){
+        const t = new THREE.CanvasTexture(planetSprite(k)); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
+        m.visible = false; this.dome.add(m); this.far[k] = m;
+      }
     }
     // stars: points on the upper dome
     const starPos = [];
@@ -9265,7 +9275,35 @@ const skySys = {
       this.clouds.push(g);
     }
   },
+  // where each far world hangs (a fixed direction, off the sun's arc), and
+  // how big: by stops along the route from where you stand
+  FAR_DIR: { earth: [0.62, 0.5, -0.52], moon: [0.5, 0.42, 0.66], alien: [-0.55, 0.45, 0.6] },
+  FAR_SCALE: [1, 0.8, 0.65, 0.5, 0.38],
+  farBodies(){
+    if (!this.far) return;
+    const P = game.planet || 'earth', idx = { earth: 0, station: 1, moon: 2, site: 3, alien: 4 };
+    // which are already in this sky, large: the Earth from the Moon and the station, the Moon from the Earth, the station and the site, Strata from the site
+    const shown = { earth: P === 'moon' || P === 'station', moon: P === 'earth' || P === 'station' || P === 'site', alien: P === 'site' };
+    const cam = game.camera.position;
+    const airless = P === 'moon' || P === 'station' || P === 'site';
+    const op = airless ? 1 : 0.3 + 0.7 * Math.max(0, 1 - game.dayF * 1.4);
+    for (const k in this.far){
+      const m = this.far[k];
+      const show = k !== P && !shown[k];
+      m.visible = show && op > 0.02;
+      if (!m.visible) continue;
+      const d = this.FAR_DIR[k], hops = Math.abs(idx[P] - idx[k]);
+      m.position.set(d[0], d[1], d[2]).normalize().multiplyScalar(340);
+      m.scale.setScalar(this.FAR_SCALE[Math.min(4, hops)]);
+      m.material.opacity = op;
+      m.lookAt(cam);
+    }
+  },
   update(dt){
+    this.updateCore(dt);
+    this.farBodies();
+  },
+  updateCore(dt){
     if (!this.dome) return;
     const cam = game.camera.position;
     this.dome.position.copy(cam);
@@ -9276,7 +9314,7 @@ const skySys = {
     this.sun.visible = sh > -0.18;
     this.sun.lookAt(cam);
     this.moon.position.copy(dir).multiplyScalar(-335);
-    this.moon.visible = sh < 0.18;
+    this.moon.visible = sh < 0.18 && game.planet !== 'alien';      // Build 91: Strata has no moon of its own; ours hangs small by the Earth
     this.moon.lookAt(cam);
     this.stars.material.opacity = Math.max(0, 1 - game.dayF * 1.8) * 0.9;
     if (game.planet === 'site'){
@@ -33830,6 +33868,21 @@ const spaceSys = {
     const from = mkBody(F.from), to = mkBody(F.to);
     from.position.set(0, 0, 0); to.position.set(0, 0, 1000);
     S.add(from, to);
+    // EVERY SKY (Build 91): the planets you are not flying between, far off
+    // along the same line, so the whole route reads from the window
+    const idx = { earth: 0, station: 1, moon: 2, site: 3, alien: 4 };
+    const far = [];
+    for (const k of ['earth', 'moon', 'alien']){
+      if (k === F.from || k === F.to) continue;
+      const t = new THREE.CanvasTexture(planetSprite(k)); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+      const along = (idx[k] - idx[F.from]) / ((idx[F.to] - idx[F.from]) || 1);           // where it sits on the route, from 0 (here) to 1 (there)
+      const side = far.length % 2 ? -1 : 1;
+      sp.position.set(side * (700 + Math.abs(along) * 300), 260 + far.length * 120, along * 1000 + (along > 1 ? 900 : along < 0 ? -900 : 0));
+      const size = k === 'moon' ? 90 : 220;
+      sp.scale.set(size, size, 1);
+      S.add(sp); far.push(sp);
+    }
     const pos = [];
     for (let i = 0; i < 1600; i++){ const a = Math.random() * Math.PI * 2, b = Math.acos(Math.random() * 2 - 1); pos.push(Math.cos(a) * Math.sin(b) * 4000, Math.cos(b) * 4000, Math.sin(a) * Math.sin(b) * 4000); }
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
@@ -33843,7 +33896,7 @@ const spaceSys = {
     ship.rotation.set(Math.PI / 2, 0, 0);       // nose along +z
     if (ship.userData.flame) ship.userData.flame.visible = true;
     S.add(ship);
-    this.scene = S; this.ship = ship; this.bodies = { from, to, stars, sunDisc };
+    this.scene = S; this.ship = ship; this.bodies = { from, to, stars, sunDisc, far };
     this.cam = new THREE.PerspectiveCamera(game.camera.fov, game.camera.aspect, 0.5, 20000);
     game.yaw = 0; game.pitch = 0.18;
     AudioSys.setHum(true, 0.6, 0.25);
@@ -33956,7 +34009,7 @@ const spaceSys = {
   },
   endTransit(){
     if (this.bodies){
-      for (const o of [this.bodies.from, this.bodies.to, this.bodies.stars, this.bodies.sunDisc]) o.traverse(q => {
+      for (const o of [this.bodies.from, this.bodies.to, this.bodies.stars, this.bodies.sunDisc].concat(this.bodies.far || [])) o.traverse(q => {
         if (q.geometry) q.geometry.dispose();
         if (q.material){ if (q.material.map) q.material.map.dispose(); q.material.dispose(); }
       });

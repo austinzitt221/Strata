@@ -5,6 +5,12 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 91 — EVERY SKY
+- [ ] Find Strata in the Earth's night sky (a small violet disc, high,
+      off the sun's arc). Then the Earth from Strata, with our Moon by
+      it. Big enough? Too big?
+- [ ] Fly Strata to the Moon and look for the Earth past it.
+
 ## Build 90 — THE PLANET VIEW
 - [ ] M, then PLANET VIEW. Click the Moon from Earth, Earth from Strata.
       Is the map of a world you are not on useful? Teleport from it.
