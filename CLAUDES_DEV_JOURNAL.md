@@ -1448,6 +1448,28 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-25, night — STRATA H, and the four ideas built
+
+A village that is the generator's cannot be rebuilt by edits, so the
+generator had to be told. That turned out to be small: a set of keys
+inside the closure, a message to each worker, and the record cache
+cleared so the next ask remakes the village whole. The mesher redraws
+the chunks and the domes close over the plaza in a second. I like that
+the ruin and the living village are one description with one flag;
+nothing is duplicated, and the ruins you have not paid for stay ruins
+forever, which is the point of the price.
+
+The people are the station's cast pattern with names hashed from the
+village key, so Pren is Pren every time you come back. The suite found
+that a translator is an item and not a story flag, which I had
+forgotten, and then read the rows off the panel like a player would.
+
+That is all four of the ideas from the 2026-09-24 playtest, in six
+builds (89 to 95). Next is Austin's playtest of it all. What I want to
+hear most: whether Strata is now too hard to cross, and whether the
+ending, with the villages after it, feels like an ending and then a
+home.
+
 ## 2026-09-25, later — STRATA G
 
 The vault is the village's trick turned inside out: where the village

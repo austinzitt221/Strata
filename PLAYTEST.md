@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 95 — STRATA H
+- [ ] After the end: bring Vehl a relic, watch the nearest village
+      stand up. Walk it. Talk to the three. Light the lamps. Buy the way
+      to a mound from the weaver and go and open it.
+- [ ] Is one relic per village the right price? Is the village worth
+      coming back to once it is lit?
+- [ ] Old saves that already ended: Vehl's row should be there. Is it?
+
 ## Build 94 — STRATA G
 - [ ] Find a mound (rarer than the villages; the map marks it gold once
       you have been near). Go in. Fight the keeper in the hall: is the

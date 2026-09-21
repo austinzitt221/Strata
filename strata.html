@@ -2618,6 +2618,10 @@ function makeStrataGen(seed){
   // where the chest is. Half the cells try, never in the blight, never
   // by the ichor, never within a hundred and fifty metres of the centre
   const RUIN_CELL = 224, sRn = hashInt(seed ^ 0x2e11), ruinCache = new Map();
+  // STRATA H (Build 95): the villages you have rebuilt, by key; the records
+  // are remade when the set changes, whole, with everything standing
+  const rebuilt = new Set();
+  function setRebuilt(keys){ rebuilt.clear(); for (const k of keys || []) rebuilt.add(k); ruinCache.clear(); }
   function ruinAt(cx, cz){
     const key = cx + ',' + cz; const hit = ruinCache.get(key); if (hit !== undefined) return hit;
     let R = null;
@@ -2644,7 +2648,7 @@ function makeStrataGen(seed){
         const cols = [];
         const nc = 2 + ((rng() * 3) | 0);
         for (let i = 0; i < nc; i++){ const a = rng() * Math.PI * 2, d = 3.5 + rng() * (rr - 6), o = rng() * Math.PI * 2, L = 3 + rng() * 2.5; const cxx = x + Math.cos(a) * d, czz = z + Math.sin(a) * d; cols.push({ x0: cxx - Math.cos(o) * L / 2, z0: czz - Math.sin(o) * L / 2, x1: cxx + Math.cos(o) * L / 2, z1: czz + Math.sin(o) * L / 2 }); }
-        R = { key, x, z, base: hb, r: rr + 6, huts, best, cols, ob: { h: 5 + rng() * 4, tilt: 0.05 + rng() * 0.2, cut: rng() * Math.PI * 2 }, b };
+        R = { key, x, z, base: hb, r: rr + 6, huts, best, cols, ob: { h: 5 + rng() * 4, tilt: 0.05 + rng() * 0.2, cut: rng() * Math.PI * 2 }, b, alive: rebuilt.has(key) };
       }
     }
     if (ruinCache.size > 4000) ruinCache.clear();
@@ -2709,7 +2713,15 @@ function makeStrataGen(seed){
       const px = x - H.x, pz = z - H.z, len = Math.hypot(px, dy, pz);
       if (len > H.R + 1.5) continue;
       let sh = Math.max(len - H.R, (H.R - 0.7) - len);
-      if (H.brk > 0.7){
+      if (R.alive){
+        // rebuilt (Build 95): whole, a door, and a window toward the sky
+        const c = Math.cos(H.dd), sn = Math.sin(H.dd);
+        const u = px * c + pz * sn, v = -px * sn + pz * c;
+        const slot = Math.max(Math.abs(u - H.R + 0.3) - 1.2, Math.abs(dy - 1.1) - 1.1, Math.abs(v) - 0.65);
+        sh = Math.max(sh, -slot);
+        const win = Math.max(Math.abs(-u - H.R + 0.3) - 1.2, Math.abs(dy - H.R * 0.55) - 0.4, Math.abs(v) - 0.4);
+        sh = Math.max(sh, -win);
+      } else if (H.brk > 0.7){
         sh = Math.max(sh, dy - (0.5 + noise2(sRn, (px + H.ns) * 0.9, (pz - H.ns) * 0.9) * 1.2));   // a stub, its top jagged
       } else {
         // broken open along a tilted plane: the more broken, the more is gone
@@ -2724,19 +2736,25 @@ function makeStrataGen(seed){
       }
       if (sh < d) d = sh;
     }
-    // the columns, lying where they fell
+    // the columns, lying where they fell (standing again, once rebuilt)
     for (const C of R.cols){
+      if (R.alive){
+        const mx = (C.x0 + C.x1) / 2, mz = (C.z0 + C.z1) / 2;
+        const cd = Math.max(Math.hypot(x - mx, z - mz) - 0.5, dy - 4.2, -0.2 - dy);
+        if (cd < d) d = cd;
+        continue;
+      }
       const ax = C.x0, az = C.z0, bx = C.x1 - ax, bz = C.z1 - az;
       const t = Math.max(0, Math.min(1, ((x - ax) * bx + (z - az) * bz) / (bx * bx + bz * bz)));
       const cd = Math.hypot(x - ax - bx * t, dy - 0.5, z - az - bz * t) - 0.5;
       if (cd < d) d = cd;
     }
-    // the obelisk, leaning, its top sheared off
+    // the obelisk, leaning, its top sheared off (straight and whole, once rebuilt)
     {
       const px = x - R.x, pz = z - R.z, O = R.ob;
-      const sx = px - dy * O.tilt;
-      let ob = Math.max(Math.abs(sx) - 0.6, Math.abs(pz) - 0.6, dy - O.h, -0.2 - dy);
-      ob = Math.max(ob, dy - O.h + (px * Math.cos(O.cut) + pz * Math.sin(O.cut)) * 0.8);
+      const sx = px - dy * (R.alive ? 0 : O.tilt);
+      let ob = Math.max(Math.abs(sx) - 0.6, Math.abs(pz) - 0.6, dy - O.h - (R.alive ? 1.5 : 0), -0.2 - dy);
+      if (!R.alive) ob = Math.max(ob, dy - O.h + (px * Math.cos(O.cut) + pz * Math.sin(O.cut)) * 0.8);
       if (ob < d){ d = ob; kind = 2; }
     }
     return [d, kind];
@@ -3029,7 +3047,7 @@ function makeStrataGen(seed){
   const gen = { height, heightRange, sdf, mat, makeLocal, treeAt, decorAt: nil, caves: true, caveFloorY: -90, seed, seaLevel: -400,   // no sea: the ichor is the water here, and it runs high
     ruinInCell: nil, wetAt, archAt: (x, z) => 14 + biome(x, z), lmAt: nil, riverAt, fallsNear: nil, waterYAt, ichor: true,
     caveInBox: no, floodedAt: no, chamberAt: nil, caveNetCell: null, villageAt: nil, fortAt: nil, wreckAt: nil, cityAt: nil,
-    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL, centre: CENTRE, bowlFloor, ruinAt, ruinNear, RUIN_CELL, vaultAt, vaultNear, VAULT_CELL, inHall };
+    skyInCell: nil, skyNear: nil, zigAt: nil, regionAt, spawn: findSpawn, planet: 'alien', biome, spireCell, SP_CELL, centre: CENTRE, bowlFloor, ruinAt, ruinNear, RUIN_CELL, setRebuilt, vaultAt, vaultNear, VAULT_CELL, inHall };
   return gen;
 }
 function makeGen(seed, planet){ return planet === 'moon' ? makeMoonGen(seed) : planet === 'station' ? makeStationGen(seed) : planet === 'site' ? makeSiteGen(seed) : planet === 'alien' ? makeStrataGen(seed) : makeEarthGen(seed); }
@@ -5515,6 +5533,7 @@ const meshPool = {
         'onmessage = (ev) => {\n' +
         '  const m = ev.data;\n' +
         '  if (m.t === "init"){ gen = CORE.makeGen(m.seed, m.planet); return; }\n' +
+        '  if (m.t === "rebuilt"){ if (gen.setRebuilt) gen.setRebuilt(m.keys); return; }\n' +
         '  if (m.t === "grid"){\n' +
         '    m.edits = CORE.deserializeEdits(m.edits || []);\n' +
         '    const g = CORE.skinGrid(m, gen);\n' +
@@ -5563,6 +5582,16 @@ const meshPool = {
     for (const w of this.workers) w.postMessage({ t: 'init', seed, planet: this.planet });
     this.gridQ = []; this.gridJobs.clear(); this.gridBusy = false;
     if (this.gridW) this.gridW.postMessage({ t: 'init', seed, planet: this.planet });
+    this.sendRebuilt();
+  },
+  // STRATA H (Build 95): the villages that stand again, to every generator there is
+  rebuiltKeys(){ return Object.keys((game.story && game.story.rebuilt) || {}); },
+  sendRebuilt(){
+    const keys = this.rebuiltKeys();
+    for (const w of this.workers) w.postMessage({ t: 'rebuilt', keys });
+    if (this.gridW) this.gridW.postMessage({ t: 'rebuilt', keys });
+    if (game.gen && game.gen.setRebuilt) game.gen.setRebuilt(keys);
+    if (this.gen && this.gen !== game.gen && this.gen.setRebuilt) this.gen.setRebuilt(keys);
   },
   // HORIZON: the far skin's grids run on a worker of their own, so a level
   // rebuild never queues behind the chunk backlog and never stalls it
@@ -5577,6 +5606,7 @@ const meshPool = {
       try {
         const w = new Worker(this.url);
         w.postMessage({ t: 'init', seed: this.seed, planet: this.planet || 'earth' });
+        w.postMessage({ t: 'rebuilt', keys: this.rebuiltKeys() });
         w.onmessage = (ev) => {
           const j = this.gridJobs.get(ev.data.id);
           this.gridJobs.delete(ev.data.id);
@@ -12848,6 +12878,9 @@ const VROLE = {
   x_relics: { name: 'relic dealer',  coat: 0x6a5a2a, hat: 0x6a5a2a },
   x_builder:{ name: 'builder',       coat: 0x8a6a2a, hat: 0x8a6a2a },
   x_roomer: { name: 'roomwright',    coat: 0x2a6a6a, hat: 0x2a6a6a },
+  x_elder:  { name: 'elder',         coat: 0x5a4a7a, hat: 0x5a4a7a },
+  x_trader: { name: 'trader',        coat: 0x4a6a5a, hat: 0x4a6a5a },
+  x_weaver: { name: 'weaver',        coat: 0x7a4a6a, hat: 0x7a4a6a },
   x_keeper: { name: 'beastkeeper',   coat: 0x6a6a2a, hat: 0x6a6a2a },
 };
 const dropTexCache = new Map();
@@ -32373,7 +32406,7 @@ function drawMap(){
   for (const k in MV.spires) mark(MV.spires[k].x, MV.spires[k].z, '#f4f2f8', 7);
   for (const k in MV.zigs) if (MV.zigs[k].stamped) mark(MV.zigs[k].x, MV.zigs[k].z, '#d9b85a', 7);
   for (const k in MV.cities) if (MV.cities[k].stamped) mark(MV.cities[k].x, MV.cities[k].z, '#ffb44d', 9);
-  for (const k in MV.ruins) mark(MV.ruins[k].x, MV.ruins[k].z, '#b8a4d8', 8);                  // Build 93: the villages you have found
+  for (const k in MV.ruins) mark(MV.ruins[k].x, MV.ruins[k].z, MV.ruins[k].alive ? '#f0e8ff' : '#b8a4d8', MV.ruins[k].alive ? 10 : 8);   // Build 93: the villages you have found (bright once alive again, Build 95)
   for (const k in MV.vaults) mark(MV.vaults[k].x, MV.vaults[k].z, MV.vaults[k].dead ? '#7a6a4a' : '#ffd75e', 9);   // Build 94: the vaults, gold until opened
   if (MV.expedition){ for (const cp of MV.expedition.camps) if (cp.found) mark(cp.x, cp.z, '#e8dcc0', 6); if (MV.expedition.deep) mark(MV.expedition.shaft.x, MV.expedition.shaft.z, '#8a1c1c', 8); }
   for (const bk in MV.bases){ const br = MV.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
@@ -33221,6 +33254,136 @@ const endSys = {
   },
 };
 
+// ---------- STRATA H (Build 95): the villages alive again ----------
+// After the end, a relic handed to Vehl rebuilds the nearest ruined
+// village: the generator remakes it whole (the workers are told), its
+// chunks are re-meshed, and its people come home: an elder, a trader and
+// a weaver, each with a name of their own, floating at their posts as
+// the station's do. The elder wants light (eight glowstalk for lamps
+// over every door, and astrium for it); the trader deals in what the
+// war left; the weaver sells the way to the nearest vault
+const villageLifeSys = {
+  accT: 0,
+  NAMES: ['Ashu', 'Veth', 'Orra', 'Kelm', 'Ysse', 'Tarn', 'Mira', 'Holt', 'Sene', 'Drav', 'Ulla', 'Pren', 'Ivo', 'Nesk'],
+  nameOf(key, i){ return this.NAMES[CORE.hashSeed(key + ':' + i) % this.NAMES.length]; },
+  isAlive(key){ return !!(game.story && game.story.rebuilt && game.story.rebuilt[key]); },
+  // the nearest ruined village, out to two cells
+  nearestRuin(){
+    if (game.planet !== 'alien' || !game.gen || !game.gen.ruinAt) return null;
+    const C = game.gen.RUIN_CELL, cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    let best = null;
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++){
+      const R = game.gen.ruinAt(cx + dx, cz + dz); if (!R || R.alive) continue;
+      const d = Math.hypot(R.x - game.pos.x, R.z - game.pos.z);
+      if (!best || d < best.d) best = { R, d };
+    }
+    return best;
+  },
+  vehlRow(line){
+    const N = this.nearestRuin(), have = CORE.countItem(game.slots, 'relic');
+    const built = Object.keys((game.story && game.story.rebuilt) || {}).length;
+    if (!N){ line('THE VILLAGES: none in ruins near here' + (built ? ' · ' + built + ' stand again' : ''), '#ffb44d'); return; }
+    const r = line('REBUILD THE VILLAGE ' + Math.round(N.d) + ' m off: a RELIC · you carry ' + have + (built ? ' · ' + built + ' stand again' : ''), '#ffb44d');
+    const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = have >= 1 ? '#8bff9e' : '#8a8494';
+    act.textContent = have >= 1 ? 'HAND OVER' : 'not yet';
+    r.appendChild(act);
+    if (have >= 1) r.addEventListener('click', () => this.rebuild(N.R));
+  },
+  rebuild(R){
+    if (game.mode !== 'creative' && CORE.countItem(game.slots, 'relic') < 1){ toast('it takes a relic'); return false; }
+    if (game.mode !== 'creative') CORE.consumeItem(game.slots, 'relic', 1);
+    game.story = game.story || {}; game.story.rebuilt = game.story.rebuilt || {}; game.story.rebuilt[R.key] = 1;
+    game.ruins = game.ruins || {};
+    game.ruins[R.key] = Object.assign(game.ruins[R.key] || { x: Math.round(R.x), z: Math.round(R.z), n: R.huts.length, day: game.day || 0 }, { alive: 1 });
+    meshPool.sendRebuilt();
+    const fake = CORE.makeEdit(0, 1, +R.x.toFixed(1), +(R.base + 6).toFixed(1), +R.z.toFixed(1), (R.r + 24) * 2, 0, 0); fake.sy = 40; fake.sz = (R.r + 24) * 2;
+    game.terrain.invalidate(fake);
+    teleportSys.fx(R.x, R.base + 1, R.z);
+    toast('Vehl takes the relic — the village stands again, and its people come home');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    tradeSys.refresh();
+    return true;
+  },
+  POSTS: ['elder', 'trader', 'weaver'],
+  tick(dt){
+    if (game.planet !== 'alien' || !game.gen || !game.gen.ruinAt || !(game.story && game.story.rebuilt)) return;
+    this.accT += dt; if (this.accT < 1.5) return; this.accT = 0;
+    const C = game.gen.RUIN_CELL, cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++){
+      const R = game.gen.ruinAt(cx + dx, cz + dz);
+      if (!R || !R.alive) continue;
+      if (Math.hypot(R.x - game.pos.x, R.z - game.pos.z) > 60) continue;
+      this.POSTS.forEach((cast, i) => {
+        if (game.entities.some(e => e.type === 'alien' && e.vkey === R.key && e.cast === cast)) return;
+        let P;
+        if (i === 0) P = { x: R.x + 2.6, y: R.base + 0.25, z: R.z + 2.6 };
+        else { const H = R.huts[Math.min(R.huts.length - 1, i)]; P = { x: H.x + Math.cos(H.dd) * (H.R + 1.6), y: R.base + 0.25, z: H.z + Math.sin(H.dd) * (H.R + 1.6) }; }
+        const e = spawnEntity('alien', P.x, P.y, P.z);
+        e.cast = cast; e.vkey = R.key; e.home = P; e.friendly = true; e.noburn = true; e.role = 'x_' + cast; e.sname = this.nameOf(R.key, i);
+      });
+    }
+  },
+  LAMPS: 8,
+  rows(list, T, line){
+    const e = T.e, cast = e.cast, R = game.gen.ruinNear ? game.gen.ruinNear(e.x, e.z) : null;
+    line((e.sname || '') + ': ' + (stationOneSys.GREET[cast] || ''));
+    if (cast === 'elder'){
+      const rec = (game.ruins && R && game.ruins[R.key]) || {};
+      line('The elder: We were ' + (R ? R.huts.length * 4 : 'many') + ' here before it came. It took the ones who stood and turned them, and the rest of us ran for the stations. You have seen what it made of them.');
+      if (rec.lit){ line('THE LAMPS: lit. Thank you.', '#8bff9e'); return; }
+      const have = CORE.countMat(game.slots, CORE.MAT.GLOWSTALK);
+      const r = line('THE LAMPS: bring ' + this.LAMPS + ' glowstalk · you carry ' + have + ' · a lamp over every door, and 2 astrium for it', '#ffb44d');
+      const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = have >= this.LAMPS ? '#8bff9e' : '#8a8494';
+      act.textContent = have >= this.LAMPS ? 'HAND OVER' : 'not yet';
+      r.appendChild(act);
+      if (have >= this.LAMPS && R) r.addEventListener('click', () => this.light(R));
+      return;
+    }
+    if (cast === 'weaver'){
+      const coins = CORE.countItem(game.slots, 'coin');
+      const r = line('THE WAY TO A VAULT: 120 coins · she marks the nearest mound you have not opened on your map', '#ffb44d');
+      const act = document.createElement('div'); act.style.marginLeft = 'auto'; act.style.color = coins >= 120 ? '#8bff9e' : '#8a8494';
+      act.textContent = coins >= 120 ? 'PAY' : 'not yet';
+      r.appendChild(act);
+      if (coins >= 120) r.addEventListener('click', () => this.wayToVault());
+    }
+    tradeSys.rows(list, T);
+  },
+  light(R){
+    if (game.mode !== 'creative' && CORE.countMat(game.slots, CORE.MAT.GLOWSTALK) < this.LAMPS){ toast('it takes ' + this.LAMPS + ' glowstalk'); return false; }
+    if (game.mode !== 'creative') CORE.consumeMat(game.slots, CORE.MAT.GLOWSTALK, this.LAMPS);
+    for (const H of R.huts){
+      const e = CORE.makeEdit(1, 1, +(H.x + Math.cos(H.dd) * (H.R - 0.2)).toFixed(2), +(R.base + 2.7).toFixed(2), +(H.z + Math.sin(H.dd) * (H.R - 0.2)).toFixed(2), 0.7, CORE.MAT.LUNITE, 0);
+      e.sy = 0.3; e.sz = 0.7; e.noLod = 1; applyEdit(e);
+    }
+    game.ruins = game.ruins || {}; game.ruins[R.key] = Object.assign(game.ruins[R.key] || { x: Math.round(R.x), z: Math.round(R.z) }, { lit: 1 });
+    addStackItem('astrium', 2);
+    toast('the elder takes the stalks — a lamp over every door · +2 astrium');
+    AudioSys.sfx('craft'); refreshHotbar(); markSave();
+    tradeSys.refresh();
+    return true;
+  },
+  wayToVault(){
+    if (game.mode !== 'creative' && CORE.countItem(game.slots, 'coin') < 120){ toast('120 coins'); return false; }
+    const C = game.gen.VAULT_CELL, cx = Math.floor(game.pos.x / C), cz = Math.floor(game.pos.z / C);
+    game.vaults = game.vaults || {};
+    let best = null;
+    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++){
+      const V = game.gen.vaultAt(cx + dx, cz + dz); if (!V) continue;
+      const rec = game.vaults[V.key]; if (rec && rec.dead) continue;
+      const d = Math.hypot(V.x - game.pos.x, V.z - game.pos.z);
+      if (!best || d < best.d) best = { V, d };
+    }
+    if (!best){ toast('the weaver: none left that I know of'); return false; }
+    if (game.mode !== 'creative') CORE.consumeItem(game.slots, 'coin', 120);
+    game.vaults[best.V.key] = game.vaults[best.V.key] || { x: Math.round(best.V.x), z: Math.round(best.V.z) };
+    toast('the weaver marks a mound ' + Math.round(best.d) + ' m off on your map (M)');
+    AudioSys.sfx('toggle'); refreshHotbar(); markSave();
+    tradeSys.refresh();
+    return true;
+  },
+};
+
 // ---------- STRATA G (Build 94): the vaults ----------
 // The mound and the hall are the generator's; this is the record of the
 // ones you have found (the map), the keeper's waking when you stand in a
@@ -33724,6 +33887,9 @@ const stationOneSys = {
     builder:{ name: 'Kro',   col: 0x8a6a2a, role: 'builder' },     // the three at the site (Build 83)
     roomer: { name: 'Sef',   col: 0x2a6a6a, role: 'roomer' },
     keeper: { name: 'Umma',  col: 0x6a6a2a, role: 'keeper' },
+    elder:  { name: 'the elder',  col: 0x5a4a7a, role: 'elder' },      // STRATA H (Build 95): the villages' own
+    trader: { name: 'the trader', col: 0x4a6a5a, role: 'trader' },
+    weaver: { name: 'the weaver', col: 0x7a4a6a, role: 'weaver' },
   },
   accT: 0,
   tick(dt){
@@ -33804,6 +33970,9 @@ const stationOneSys = {
     builder: 'Kro: The keel is laid. The rest is plating and the Moon\'s stones, in the order I say, and I build it while you watch.',
     roomer: 'Sef: I draw rooms, and I fill them.',
     keeper: 'Umma: I draw pens, and tanks for the wet ones.',
+    elder:  'You brought the stone back. Sit; there is nothing to run from now. We will want light, though: it is dark here after the war.',
+    trader: 'What the war left, and what the ground gives. Coin for it, or your ore.',
+    weaver: 'I weave what I see, and I walked far while we hid. I have seen where the mounds are.',
   },
   STORY: [
     'Vehl: You made the crossing in that. Good. Then you can make another.',
@@ -33837,6 +34006,7 @@ const stationOneSys = {
     'Vehl: They were mine, you know. All of them. It took them one at a time while we argued about what it was. The tall ones were the last to go, and they went angry.',
     'Vehl: The heart of it is in your pack. It unmakes; you saw. Use it as you like; it was never ours either.',
     'Vehl: There is a station to rebuild and a Moon full of stone and a world you came from with a sea in it. Go where you like. The band knows the way, and so do I.',
+    'Vehl: And the villages. Bring me a tablet out of a vault for each and I will raise it, and the ones who hid on the stations will come home to it. They will have things to ask of you. They always did.',
   ],
   offers(cast){
     if (cast === 'ores') return [
@@ -33858,6 +34028,13 @@ const stationOneSys = {
     if (cast === 'charts') return [
       { buy: { make: 'tmap' }, price: 30, rep: 0 }, { buy: { k: 'survey', n: 1 }, price: 40, rep: 0 }, { sell: { k: 'page', n: 1 }, price: 35, rep: 0 },
     ];
+    if (cast === 'trader') return [
+      { buy: { k: 'voidfruit', n: 3 }, price: 40, rep: 0 }, { buy: { k: 'nullcore', n: 1 }, price: 350, rep: 0 }, { buy: { k: 'astrium', n: 1 }, price: 520, rep: 0 },
+      { sell: { k: 'voidore', n: 4 }, price: 110, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 300, rep: 0 }, { sell: { k: 'voidfruit', n: 6 }, price: 50, rep: 0 },
+    ];
+    if (cast === 'weaver') return [
+      { buy: { k: 'voidfruit', n: 2 }, price: 30, rep: 0 }, { sell: { k: 'wispcore', n: 1 }, price: 60, rep: 0 },
+    ];
     if (cast === 'relics') return [
       { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
       { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 }, { sell: { k: 'relic', n: 1 }, price: 400, rep: 0 },
@@ -33877,6 +34054,7 @@ const stationOneSys = {
         // STRATA D (Build 88): the way to the centre, and what its seal takes
         const C = game.gen && game.gen.centre;
         if (C && !(game.story && game.story.ended)) line('THE CENTRE: ' + Math.round(Math.hypot(C.x - game.pos.x, C.z - game.pos.z)) + ' m off · its seal takes ' + centreSys.NEED + ' null cores · you carry ' + CORE.countItem(game.slots, 'nullcore'), '#ffb44d');
+        if (game.story && game.story.ended) villageLifeSys.vehlRow(line);                     // STRATA H (Build 95): the rebuilding
         return;
       }
       if (st === 2 && !built){
@@ -33904,6 +34082,7 @@ const stationOneSys = {
       }
       return;
     }
+    if (cast === 'elder' || cast === 'trader' || cast === 'weaver'){ villageLifeSys.rows(list, T, line); return; }   // STRATA H (Build 95)
     line(this.GREET[cast] || '');
     if (cast === 'builder' || cast === 'roomer' || cast === 'keeper'){ siteSys.rows(list, T, line); return; }
     tradeSys.rows(list, T);
@@ -36088,6 +36267,7 @@ function frameBody(now){
   centreSys.tick(dt);
   ruinSys.tick(dt);
   vaultSys.tick(dt);
+  villageLifeSys.tick(dt);
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -36414,7 +36594,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

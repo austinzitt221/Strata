@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 95 — STRATA H: the villages alive again (2026-09-25)
+
+The last of Austin's four, and the end of the STRATA arc's structures.
+
+- **The rebuilding.** After the end, Vehl's panel shows the nearest
+  ruined village and its price: one relic. Hand it over and the village
+  stands again: the generator remakes it whole (every dome closed, with
+  a door and a window; the obelisk straight and taller; the columns up
+  on their feet), the meshing workers are told which villages stand, its
+  chunks are re-meshed on the spot, and the band's light plays over the
+  plaza. The set of rebuilt villages lives in the story (it travels with
+  you and saves); the map draws a living village bright and large.
+- **The people.** Within sixty metres of a living village its three
+  come home and float at their posts as the station's cast does: an
+  elder on the plaza, a trader and a weaver before two of the houses,
+  each with a name of their own from a list of fourteen (Ashu, Veth,
+  Orra, Kelm, ...), the same name every time. Right-click them with the
+  translator.
+- **What there is to do.** The elder tells what happened here and wants
+  light: eight glowstalk, for a lunite lamp over every door (real, in
+  the edit list) and two astrium. The trader deals in what the war left
+  (voidfruit, null cores and astrium to buy; voidore, null cores and
+  voidfruit to sell). The weaver sells the way to the nearest mound you
+  have not opened for 120 coins: it goes on your map in gold.
+- Vehl has a line about it after the end.
+
 ## Build 94 — STRATA G: the vaults, and THE KEEPER (2026-09-25)
 
 Where Vehl's people kept what mattered, and the gearing-up for the

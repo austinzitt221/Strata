@@ -398,9 +398,11 @@ want to build them.
  12. **STRATA F, G, H: structures.** Many. The common one is the ruined
      alien village (F, DONE, Build 93), what the Unmaker left of Vehl's
      people (the ones on the stations are the ones who got out). Then (G, DONE, Build 94: the vaults, THE KEEPER, the relic) loot structures with
-     their own bosses and endgame loot, to gear up for the centre. Then,
-     after the end, the villages rebuilt and lived in: aliens home, and
-     new things to do there, the way the Earth's cities have theirs.
+     their own bosses and endgame loot, to gear up for the centre. Then
+     (H, DONE, Build 95), after the end, the villages rebuilt for a
+     relic each and lived in: an elder, a trader and a weaver home, with
+     the lamps to light, the war's leavings to trade, and the way to the
+     next vault to buy. All four of the 2026-09-24 ideas are built.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
