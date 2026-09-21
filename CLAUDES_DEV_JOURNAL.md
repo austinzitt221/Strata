@@ -1448,6 +1448,27 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-25 — STRATA F
+
+The villages are SDF, not stamps, and that was the decision that made
+the build small. A stamped village is a few hundred edits in the save
+and a rule for when to stamp it; a generated one is a cell hash, a
+list of huts, and a distance function the mesher already knows how to
+draw, and there can be a thousand of them for the price of none. The
+terrace is the same trick as the centre's bowl: height() answers the
+village before it asks the land. What I could not put in the generator
+is the chest, because a chest is a thing with an inventory, so that is
+the one stamp, set once and recorded.
+
+A hut is a sphere shell cut by a plane. The first plane cut every hut,
+including the one I meant to keep whole, because I had let the cut
+reach into the sphere at zero brokenness; the whole hut is the one
+with the chest, so it mattered. Whole at nought, half gone at
+seven-tenths, a stub past that.
+
+Next: G, the loot places with their own bosses, which I want to be the
+gearing-up for the centre; then H, the villages alive again.
+
 ## 2026-09-24, night — STRATA E
 
 Rivers as contour lines. I had been dreading the ichor because the

@@ -2,6 +2,35 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 93 — STRATA F: the ruined villages (2026-09-24)
+
+What the Unmaker left of Vehl's people, and the first of Strata's
+structures. They are the generator's, like the spires: nothing is
+stamped, nothing is saved but the record of which you have found.
+
+- **The villages.** A ring of five to nine domed huts of **veilstone**
+  (a new material: pale violet blocks in courses, the stone the colour
+  of the moss at dusk) round a paved plaza, an obelisk of scarglass
+  leaning at its middle with its top sheared off, two to four columns
+  lying where they fell, all on a terrace cut level into the land that
+  blends back into it over eighteen metres. Most domes are broken open
+  along a tilted plane, the more broken the more gone; some are stubs
+  with jagged tops; each has a door toward the plaza; one is whole.
+  Half the cells (224 m) try for one; they stand in every country but
+  never in the blight, never by the ichor, never on ground that climbs
+  more than twenty-six metres across them, never within a hundred and
+  fifty metres of the centre. About four to the square kilometre. No
+  maws grow in them.
+- **The chest.** In the whole hut, set once when you first come within
+  ninety metres: four to ten voidore, twenty to sixty coins, two to
+  four voidfruit, a null core six times in ten, an astrium one in
+  three. The line says what you found. The record goes in the save
+  (Strata's blob) and the map marks every village you have found in
+  veilstone's colour.
+- **The thralls keep to their homes.** By day, a spawn that lands in a
+  village is a pack of thralls, whatever the country.
+- Vehl has a line about them.
+
 ## Build 92 — STRATA E: wilder, and the ichor (2026-09-24)
 
 Austin wanted Strata wilder, with sudden elevation everywhere, stranger

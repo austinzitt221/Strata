@@ -5,6 +5,13 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 93 — STRATA F
+- [ ] Find a village (they are everywhere; the map marks the ones you
+      have found). Walk the plaza, look in the huts, open the chest.
+      Does it read as a place people lived? As a place the war went
+      through?
+- [ ] Thralls by day in a village: too many, or right?
+
 ## Build 92 — STRATA E
 - [ ] Walk a kilometre of Strata. Wild enough now? Too wild to cross?
       (The band and a beacon are the answer if it is.)
