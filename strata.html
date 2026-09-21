@@ -9562,7 +9562,7 @@ const skySys = {
   // where each far world hangs (a fixed direction, off the sun's arc), and
   // how big: by stops along the route from where you stand
   FAR_DIR: { earth: [0.62, 0.5, -0.52], moon: [0.5, 0.42, 0.66], alien: [-0.55, 0.45, 0.6] },
-  FAR_SCALE: [1, 0.8, 0.65, 0.5, 0.38],
+  FAR_SCALE: [1, 0.8, 0.65, 0.42, 0.24],
   farBodies(){
     if (!this.far) return;
     const P = game.planet || 'earth', idx = { earth: 0, station: 1, moon: 2, site: 3, alien: 4 };
@@ -16966,7 +16966,21 @@ const bossSys = {
     this.accT = 0;
     if (this.anyBoss()) return;
     if (zeroG()) return;
-    if (game.planet === 'alien'){ vaultSys.check(); return; }   // STRATA D (Build 88): no chance bosses on Strata; the vaults' keepers wake when you stand in their halls (Build 94)
+    if (game.planet === 'alien'){
+      vaultSys.check();
+      // THE BURROWER (Build 96): Strata's caverns are its home now. Far under
+      // the surface it can smell you, one tick in fifty, and never within
+      // five minutes of the last one; it does not come once the war is over
+      const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
+      if (depth > 25 && !(game.story && game.story.ended) && performance.now() - (this.burrowT || 0) > 300000 && Math.random() < 0.02){
+        this.burrowT = performance.now();
+        const a = Math.random() * Math.PI * 2;
+        this.spawn('burrower', game.pos.x + Math.cos(a) * 34, game.pos.y - 6, game.pos.z + Math.sin(a) * 34);
+        toast('something HUGE is moving through the stone…');
+        AudioSys.sfx('boom');
+      }
+      return;
+    }
     if (game.planet === 'moon'){
       // THE DUST WYRM (Build 75): at night, out on the open maria, it comes
       // up under you; once it is dead it is a while before another smells you
@@ -16980,9 +16994,9 @@ const bossSys = {
       }
       return;
     }
-    // THE BURROWER stalks the deep: far under the surface, it can smell you
+    // THE BURROWER (Build 96) has moved to Strata: it stalked the Earth's deep too often, too early
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
-    if (depth > 25 && Math.random() < 0.05){
+    if (false && depth > 25 && Math.random() < 0.05){
       const a = Math.random() * Math.PI * 2;
       const e = this.spawn('burrower',
         game.pos.x + Math.cos(a) * 34, game.pos.y - 6, game.pos.z + Math.sin(a) * 34);
@@ -25434,6 +25448,8 @@ function bindInput(){
           return;
         }
       }
+      // THE SEAL (Build 96): a right click anywhere within four and a half metres of it opens it; it never reached talkTo before
+      if (game.planet === 'alien'){ const sl = game.entities.find(q => q.type === 'seal' && Math.hypot(q.x - game.pos.x, q.z - game.pos.z) < 4.5); if (sl){ centreSys.open(sl); return; } }
       const vent = entityOnRay(3.6);
       if (vent && (vent.type === 'villager' || vent.type === 'alien')){ talkTo(vent); return; }
       if (vent && vent.type === 'soldier' && vent.quarter){ baseSys.quarterTalk(vent); return; }
@@ -34487,7 +34503,15 @@ const spaceSys = {
       g.userData.rad = 14;
       return g;
     };
-    const mkBody = (kind) => kind === 'station' ? mkStation() : kind === 'site' ? mkSite() : mk(kind, kind === 'earth' ? 70 : kind === 'alien' ? 62 : 19);
+    // Build 96: the planets you leave and reach are the sky's own sprites now (the stations keep their shapes)
+    const mkFlat = (kind) => {
+      const t = new THREE.CanvasTexture(planetSprite(kind)); t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false }));
+      const size = kind === 'earth' ? 150 : kind === 'alien' ? 136 : 42;
+      sp.scale.set(size, size, 1); sp.userData.rad = size / 2;
+      return sp;
+    };
+    const mkBody = (kind) => kind === 'station' ? mkStation() : kind === 'site' ? mkSite() : mkFlat(kind);
     const from = mkBody(F.from), to = mkBody(F.to);
     from.position.set(0, 0, 0); to.position.set(0, 0, 1000);
     S.add(from, to);
@@ -34502,7 +34526,7 @@ const spaceSys = {
       const along = (idx[k] - idx[F.from]) / ((idx[F.to] - idx[F.from]) || 1);           // where it sits on the route, from 0 (here) to 1 (there)
       const side = far.length % 2 ? -1 : 1;
       sp.position.set(side * (700 + Math.abs(along) * 300), 260 + far.length * 120, along * 1000 + (along > 1 ? 900 : along < 0 ? -900 : 0));
-      const size = k === 'moon' ? 90 : 220;
+      const size = k === 'moon' ? 44 : 110;                                        // Build 96: far, and it should look it
       sp.scale.set(size, size, 1);
       S.add(sp); far.push(sp);
     }

@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 96 — the playtest of 89 to 95: the seal opens, the far ones farther, the burrower moves (2026-09-26)
+
+Austin played 89 to 95. Strata's ground is where he wants it. The
+notes, and what shipped for them:
+
+- **The seal opens now.** It never could: a right click reached the
+  seal's code only through the villager-and-alien path, which the
+  seal is neither of. Now on Strata a right click anywhere within four
+  and a half metres of the seal opens it, whatever you are looking at
+  or holding. Creative needs no cores; survival needs six. The suite
+  clicks it the way a player does now, not through the function.
+- **The far ones smaller.** Four stops away (the Earth over Strata,
+  Strata over the Earth) is a quarter the size now, three stops a bit
+  smaller; a stop or two away unchanged. In transit the planets you are
+  not flying between are half what they were.
+- **The flights show the sprites.** Leaving and arriving, a planet is
+  the sky's own flat disc now (the Earth, the Moon, Strata), not a
+  textured ball: what you see from the ground is what you fly to. The
+  stations keep their shapes.
+- **The burrower has moved to Strata.** It stalked the Earth's caves
+  from twenty-five metres down at one tick in twenty, which felt like
+  every fifteen seconds in an early survival game. It does not come on
+  Earth at all now. Under Strata it is at home: one tick in fifty,
+  never within five minutes of the last, and not once the war is over.
+- On the roadmap: animal breeding (item 13).
+
 ## Build 95 — STRATA H: the villages alive again (2026-09-25)
 
 The last of Austin's four, and the end of the STRATA arc's structures.

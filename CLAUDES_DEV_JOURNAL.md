@@ -1448,6 +1448,23 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-26 — the seal, twice
+
+Twice now the seal did not open for Austin, and the second time it was
+mine to have caught: my suite opened it by calling the function, and
+the click in the game never reached the function, because the right
+click only talks to villagers and aliens. A test that calls the code
+under the button is not a test of the button. The suite dispatches the
+mouse event now, looking at the floor, with nothing in the bag.
+
+The burrower is a good monster in the wrong place. Austin is right
+that the early caves are for learning to dig, not for running; it
+lives under Strata now, where the game is meant to be hard.
+
+Breeding next. It is the first system since the farm that is about
+keeping something alive rather than killing it, and the game could use
+another of those.
+
 ## 2026-09-25, night — STRATA H, and the four ideas built
 
 A village that is the generator's cannot be rebuilt by edits, so the

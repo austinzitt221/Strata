@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 96 — the fixes
+- [ ] The seal: stand by it, right click. It opens. Then the fight, and
+      the ending: the notes from Build 88 all still stand.
+- [ ] The far planets: small enough now? Fly Earth to the Moon and look
+      back: the flat Earth, the flat Strata far off.
+- [ ] Cave on Earth in survival: no burrower. Cave on Strata: one,
+      eventually.
+
 ## Build 95 — STRATA H
 - [ ] After the end: bring Vehl a relic, watch the nearest village
       stand up. Walk it. Talk to the three. Light the lamps. Buy the way

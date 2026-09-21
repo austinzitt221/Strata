@@ -404,6 +404,15 @@ want to build them.
      the lamps to light, the war's leavings to trade, and the way to the
      next vault to buy. All four of the 2026-09-24 ideas are built.
 
+After the 2026-09-26 playtest (89 to 95): fixed in Build 96 (the seal
+opens by right click; the far planets smaller and the flights showing
+the sprites; the burrower moved to Strata and rare). And:
+ 13. **Animal breeding.** The passive animals (grazers, sheep, the
+     biomes' own) follow plant food held in the hand (what you grow,
+     never meat); feed two of a kind and they come together and a baby
+     of that kind appears; it grows, and can be bred in turn. Never the
+     enemies.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.
