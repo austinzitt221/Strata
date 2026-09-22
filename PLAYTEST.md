@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 104 — THE SOUND OF STRATA
+- [ ] Land on Strata with the sound up. Walk to an ichor river, dive
+      in, climb out, climb a spire. Is the hiss readable as the ichor?
+      Is the wind's note pleasant or grating after ten minutes?
+- [ ] Stand among the maws: do the creaks feel like them?
+- [ ] Walk into the centre: does the silence land? Does the music
+      come back on the way out?
+- [ ] The two tracks: too much, too little, or right?
+
 ## Build 103 — PETS
 - [ ] Breed two sheep, feed the lamb three times while it is small. Do
       you get a name and a follower? Does it keep up on foot, and in a

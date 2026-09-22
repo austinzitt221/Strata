@@ -2,6 +2,34 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 104 — THE SOUND OF STRATA (2026-09-30)
+
+Roadmap item 19, mine. Every world played the Earth's surface tunes
+over the same quiet. Strata now sounds like itself.
+
+- **The ichor's hiss.** Filtered noise, up the nearer the ichor: the
+  ground is probed in two rings (five and fourteen metres) for surface
+  ichor within nine metres of your height; under it, the hiss is all
+  there is.
+- **A wind with a note in it.** Noise through a narrow band whose
+  centre wanders an eight-note phrygian scale on G, a step or two
+  every five to eleven seconds, with a faint sine an octave under it.
+  On the surface it is there; the higher you stand over the ground the
+  more of it; underground, none.
+- **The maws creak.** Every maw within twenty-four metres adds a
+  chance of a creak (a groan down, a squeak back, a dry click half
+  the time), louder the nearer the nearest, roughly one a twenty
+  seconds a maw.
+- **Nothing at the centre.** Thirty metres outside the rim the hush
+  begins, and inside it it is total: the hiss, the wind, the maws and
+  the music all fade to nothing. The bowl is the one silent place in
+  the game.
+- **Two tracks of its own.** VEIL (52 bpm, a drone under two triangle
+  voices a hair apart, phrygian) and STALK (84 bpm, whole-tone square
+  pulses that rest when they like). They hand over like the Earth's,
+  and the cave and the boss still take precedence.
+- Leaving Strata fades every voice out; nothing of it plays elsewhere.
+
 ## Build 103 — PETS: one of your own (2026-09-30)
 
 Roadmap item 18, mine. Breeding (Build 97) made babies; nothing made

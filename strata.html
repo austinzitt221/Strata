@@ -8496,6 +8496,92 @@ const AudioSys = {
     }
   },
   setAmbience(f){ if (this.ctx) this.ambGain.gain.setTargetAtTime(f * 0.05, this.ctx.currentTime, 0.5); },
+  // ---------- THE SOUND OF STRATA (Build 104) ----------
+  // Every world had the Earth's sound. Strata has its own: the ichor's
+  // hiss (filtered noise, louder the nearer the ichor, all of it under
+  // it), a wind with a note in it (noise through a narrow band that
+  // wanders a phrygian scale, with a faint sine under it), the maws
+  // creaking now and then when they stand near, and nothing at all at
+  // the centre: every voice, the music too, fades to silence in the bowl
+  strataState: { on: 0, hiss: 0, wind: 0, maws: 0, hush: 0, note: 0 },
+  STRATA_NOTES: [98, 104, 117, 131, 147, 156, 175, 196],
+  strataInit(){
+    if (this.strataNodes || !this.ctx) return;
+    const c = this.ctx;
+    const hiss = c.createBufferSource(); hiss.buffer = this.noiseBuf; hiss.loop = true; hiss.playbackRate.value = 0.9;
+    const hf = c.createBiquadFilter(); hf.type = 'bandpass'; hf.frequency.value = 2600; hf.Q.value = 0.5;
+    const hg = c.createGain(); hg.gain.value = 0;
+    hiss.connect(hf); hf.connect(hg); hg.connect(this.master); hiss.start();
+    const wind = c.createBufferSource(); wind.buffer = this.noiseBuf; wind.loop = true; wind.playbackRate.value = 0.5;
+    const wf = c.createBiquadFilter(); wf.type = 'bandpass'; wf.frequency.value = 131; wf.Q.value = 9;
+    const wg = c.createGain(); wg.gain.value = 0;
+    wind.connect(wf); wf.connect(wg); wg.connect(this.master); wind.start(0, Math.random() * 0.5);
+    const tone = c.createOscillator(); tone.type = 'sine'; tone.frequency.value = 65.5;
+    const tg = c.createGain(); tg.gain.value = 0;
+    tone.connect(tg); tg.connect(this.master); tone.start();
+    this.strataNodes = { hg, wf, wg, tone, tg, noteAt: 0 };
+  },
+  // a maw's creak: a groan down and a squeak back, dry
+  creak(near){
+    const g = 0.05 * near;
+    this.sweep({ from: 150 + Math.random() * 60, to: 60, dur: 0.4, type: 'triangle', gain: g });
+    this.sweep({ from: 62, to: 118, dur: 0.55, type: 'sawtooth', gain: g * 0.45, delay: 0.32 });
+    if (Math.random() < 0.5) this.noise({ dur: 0.18, from: 900, to: 300, gain: g * 0.4, delay: 0.1 });
+  },
+  strata(step){
+    const S = this.strataState;
+    const on = game.planet === 'alien' && game.gen && game.gen.ichor && !game.photo;
+    if (!on){
+      if (S.on && this.strataNodes){ const t = this.ctx.currentTime, N = this.strataNodes; N.hg.gain.setTargetAtTime(0, t, 0.5); N.wg.gain.setTargetAtTime(0, t, 0.5); N.tg.gain.setTargetAtTime(0, t, 0.5); }
+      S.on = 0; S.hiss = S.wind = S.maws = S.hush = 0; this.hush = 0;
+      return S;
+    }
+    const g = game.gen, p = game.pos;
+    // the centre: silence that starts thirty metres outside the rim and is total inside it
+    const C = g.centre, cd = C ? Math.hypot(p.x - C.x, p.z - C.z) : 1e9;
+    const hush = C ? Math.max(0, Math.min(1, (C.r + 30 - cd) / 30)) : 0;
+    // the ichor: under it, everything; near it, by distance, out to eighteen metres
+    let hiss = 0;
+    if (game.underwater) hiss = 1;
+    else if (g.waterYAt){
+      for (let i = 0; i < 12; i++){
+        const r = i < 6 ? 5 : 14, a = i * 1.047;
+        const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+        const wy = g.waterYAt(x, z);
+        if (wy == null) continue;
+        if (wy > g.height(x, z) - 0.2 && Math.abs(wy - p.y) < 9) hiss = Math.max(hiss, 1 - (r + Math.abs(wy - p.y) * 0.6) / 20);
+      }
+      if (hiss === 0){ const wy = g.waterYAt(p.x, p.z); if (wy != null && wy > g.height(p.x, p.z) - 0.2 && Math.abs(wy - p.y) < 9) hiss = 1; }
+    }
+    // the wind: on the surface, more the higher you stand over the ground, none underground
+    const depth = g.height(p.x, p.z) - p.y;
+    const wind = depth > 3 ? 0 : Math.min(1, 0.35 + Math.max(0, -depth) / 14);
+    // the maws: how many stand within twenty-four metres, and how near the nearest
+    let maws = 0, nearest = 1e9;
+    for (const v of treeSys.visible.values()){
+      const t = v.t; if (!t || (t.type !== 'maw' && t.type !== 'ashmaw' && t.type !== 'bonemaw')) continue;
+      const d = Math.hypot(t.x - p.x, t.z - p.z);
+      if (d < 24){ maws++; nearest = Math.min(nearest, d); }
+    }
+    S.on = 1; S.hiss = +hiss.toFixed(2); S.wind = +wind.toFixed(2); S.maws = maws; S.hush = +hush.toFixed(2);
+    this.hush = hush;
+    if (!this.ctx) return S;
+    this.strataInit();
+    const N = this.strataNodes, t = this.ctx.currentTime, q = 1 - hush;
+    N.hg.gain.setTargetAtTime(0.035 * hiss * q, t, 0.6);
+    N.wg.gain.setTargetAtTime(0.06 * wind * q, t, 0.8);
+    N.tg.gain.setTargetAtTime(0.012 * wind * q, t, 0.8);
+    if (t > N.noteAt){
+      // the note in the wind wanders the scale, a step or two at a time
+      N.noteAt = t + 5 + Math.random() * 6;
+      S.note = Math.max(0, Math.min(this.STRATA_NOTES.length - 1, S.note + ((Math.random() * 3) | 0) - 1));
+      const f = this.STRATA_NOTES[S.note];
+      N.wf.frequency.setTargetAtTime(f, t, 2.5); N.tone.frequency.setTargetAtTime(f / 2, t, 2.5);
+    }
+    if (maws && q > 0 && Math.random() < step * 0.05 * Math.min(4, maws)) this.creak(q * Math.max(0.3, 1 - nearest / 30));
+    if (this.musicGain && hush > 0){ this.musicGain.gain.setTargetAtTime((game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9 * q, t, 0.8); }
+    return S;
+  },
   // ---------- procedural music: tracks that hand over ----------
   // Every context (surface, cave, boss) has tracks in different styles and
   // tempos. One plays for a couple of minutes, fades, a breath of silence,
@@ -8503,7 +8589,7 @@ const AudioSys = {
   // at once. (Playtest: "several tracks that switch as one ends".)
   musicGain: null, musicNext: 0, musicStep: 0, musicMode: 'off', musicWalk: 3,
   track: null, trackUntil: 0, trackGap: 0,
-  TRACKS: { surface: ['dawnlight', 'roam', 'highroad', 'dusk'], cave: ['deep', 'drip'], boss: ['pulse'] },
+  TRACKS: { surface: ['dawnlight', 'roam', 'highroad', 'dusk'], cave: ['deep', 'drip'], boss: ['pulse'], strata: ['veil', 'stalk'] },   // Build 104: Strata's own
   SCALES: { pent: [0, 2, 4, 7, 9, 12, 14, 16], dorian: [0, 2, 3, 5, 7, 9, 10, 12], mixo: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], phryg: [0, 1, 3, 5, 7, 8, 10, 12] },
   hz(root, semis){ return root * Math.pow(2, semis / 12); },
   pickTrack(ctx, prev){
@@ -8570,6 +8656,24 @@ const AudioSys = {
         if (Math.random() < 0.5) this.note(this.hz(r, sc[walk(sc.length)]), at, 0.5, 0.025, 'sine');
         return 0.9 + Math.random() * 1.2;
       }
+      case 'veil': {                                  // STRATA (Build 104): 52 bpm, a drone and two voices a hair apart, phrygian
+        const sc = S.phryg, r = 110, beat = 60 / 52;
+        if (st % 8 === 0) this.note(r / 2, at, beat * 7, 0.05, 'sine');
+        if (Math.random() < 0.7){
+          const f = this.hz(r, sc[walk(sc.length)]);
+          this.note(f, at, beat * 2.4, 0.03, 'triangle');
+          this.note(f * 1.012, at + 0.06, beat * 2.2, 0.018, 'triangle');
+          if (st % 6 === 4) this.note(f * 4, at + beat * 0.5, beat * 0.5, 0.012, 'sine');
+        }
+        return beat;
+      }
+      case 'stalk': {                                 // STRATA (Build 104): 84 bpm, whole-tone pulses that rest when they like
+        const sc = [0, 2, 4, 6, 8, 10, 12], r = 131, beat = 60 / 84;
+        if (st % 4 === 0) this.note(r / 2, at, beat * 1.6, 0.04, 'sine');
+        if (Math.random() < 0.75) this.note(this.hz(r, sc[walk(sc.length)]), at, beat * 0.5, 0.028, 'square');
+        if (st % 16 === 14) this.note(this.hz(r * 2, sc[(st / 16 | 0) % sc.length]), at, beat * 1.2, 0.02, 'triangle');
+        return beat / 2;
+      }
       case 'pulse': {                                 // the boss: a driving pulse, a minor arpeggio
         const BOS = [220, 262, 294, 330, 392, 440];
         this.note(110, at, 0.16, 0.07, 'square');
@@ -8591,7 +8695,7 @@ const AudioSys = {
   music(mode){
     if (!this.ctx) return;
     this.ensureMusic();
-    const vol = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9;
+    const vol = (game.opts.music == null ? 45 : game.opts.music) / 100 * 0.9 * (1 - (this.hush || 0));   // Build 104: the centre hushes it
     if (mode === 'off' || vol <= 0){ this.musicMode = mode; return; }
     const t = this.ctx.currentTime;
     if (mode !== this.musicMode){
@@ -37116,7 +37220,8 @@ function frameBody(now){
     game.navT = 0;
     const depth = game.gen.height(game.pos.x, game.pos.z) - game.pos.y;
     AudioSys.setAmbience(Math.min(1, Math.max(0, (depth - 3) / 10)));
-    AudioSys.music(game.bossNear ? 'boss' : depth > 14 ? 'cave' : 'surface');
+    AudioSys.strata(0.2);                                                                     // THE SOUND OF STRATA (Build 104)
+    AudioSys.music(game.bossNear ? 'boss' : depth > 14 ? 'cave' : game.planet === 'alien' ? 'strata' : 'surface');
     if (depth < 3 && !game.photo) markExplored();   // surveying happens on the surface
     // drone batteries charge near a powered circuit with watts to spare
     // (cars charge on a pad now, or from the battery in their slot)

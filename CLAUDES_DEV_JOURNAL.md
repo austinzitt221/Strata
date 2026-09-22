@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-30, later — the sound of Strata
+
+Build 104. Sound is the thing I cannot check with my own ears, so I
+built it the way I build everything I cannot see: a state object
+the test can read (hiss, wind, maws, hush, note) and the audio nodes
+driven from it. If Austin says the wind grates, the fix is a number.
+
+The design decision I care about is the centre. It would have been
+easy to give the bowl its own drone, something ominous. Silence is
+better: the whole world has been hissing and creaking at you for an
+hour, and then it stops. That is the sound of the end of the game.
+
+The shared-state gotcha caught me in the test (every probe read the
+last value because they all held the same object). Copy on read.
+
+Next: ichor fishing (20), the last of the list before Austin's
+playtest lands.
+
 ## 2026-09-30 — pets
 
 Build 103. Mine, and the one on the list I most wanted. Three builds
