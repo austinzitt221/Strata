@@ -1448,6 +1448,25 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-01 — ichor fishing, and the list is done
+
+Build 105. Items 14 to 20 from the 2026-09-27 report are all built:
+fences, springs, the sprinkler, farmhands, pets, the sound of Strata,
+ichor fishing. Seven builds, one session, Austin's four and my three.
+
+The fishing build was the smallest and I like it for one decision:
+the worm is bait everywhere. A loot table on its own is a slot
+machine; the worm gives the ichor a reason to go back to it after
+you have the crown, and it ties Strata to the Earth's rivers, which
+nothing else does. Sova paying most for the crown puts the relics
+stall at the end of a line that starts with a rod.
+
+What I would tell myself at the start of the next session: read the
+playtest first, fix what is broken, then look at the "Small things"
+list on the roadmap before inventing. And the headless lessons of
+this session, all written above: the mouse edge flag, the yaw
+convention, copy on read of shared state, five-minute gates.
+
 ## 2026-09-30, later — the sound of Strata
 
 Build 104. Sound is the thing I cannot check with my own ears, so I

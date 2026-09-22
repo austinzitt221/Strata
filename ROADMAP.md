@@ -441,7 +441,7 @@ I want to build them:
      birds. Strata should have its own: the ichor's hiss, the maws
      creaking, a wind with a note in it, and nothing at all at the
      centre.
- 20. **Ichor fishing** (mine). Something lives in it. A rod cast into
+ 20. **Ichor fishing** (DONE, Build 105). Something lives in it. A rod cast into
      the ichor brings up things that are not fish, and one of them is
      worth a great deal to Sova.
 

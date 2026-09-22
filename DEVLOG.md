@@ -2,6 +2,28 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 105 — ICHOR FISHING: things that are not fish (2026-10-01)
+
+Roadmap item 20, mine, and the last of the list from Austin's
+2026-09-27 report. Something lives in the ichor.
+
+- **A cast into the ichor** (any rod, on Strata) floats a pale green
+  bobber and waits five to fourteen seconds. What bites is never a
+  fish: an ICHOR WORM (55%), fat and pale and not dead; a VEIL LANTERN
+  (30%), a bladder of violet light still lit; THE DROWNED CROWN (10%),
+  gold and older than the villages; and one time in twenty a NULL
+  CORE that fell in once.
+- **Sova buys them.** Four worms for 30, a lantern for 120, the crown
+  for 1500, the most Sova pays for anything, and the station's relics
+  stall is the only place that wants it.
+- **Bait.** An ichor worm in the pack goes on the hook at any cast,
+  on any world, and halves the wait. So the ichor's worms are worth
+  carrying home to the Earth's rivers.
+- The rod's tooltip says what bites here; the three have icons and
+  words; creative has them.
+- Not done, on purpose: eating any of it. The worm would have been
+  funny for a moment and then a wiki entry.
+
 ## Build 104 — THE SOUND OF STRATA (2026-09-30)
 
 Roadmap item 19, mine. Every world played the Earth's surface tunes

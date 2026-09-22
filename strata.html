@@ -4000,7 +4000,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springs
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore', 'relic',
-  'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
+  'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'ichorworm', 'veillamp', 'ichorcrown', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
@@ -29092,17 +29092,31 @@ function tryAction(dt, now){
         if (sdfWorld(x, y, z, nearEdits([x - 1, y - 1, z - 1, x + 1, y + 1, z + 1])) < 0) break;
       }
       if (!hit){ toast('cast it onto water'); return; }
+      // ICHOR FISHING (Build 105): a worm out of the ichor on the hook halves the wait, anywhere
+      const bait = game.slots.find(q => q && q.kind === 'ichorworm' && q.count > 0);
+      if (bait && game.mode !== 'creative'){ bait.count--; if (bait.count <= 0) game.slots[game.slots.indexOf(bait)] = null; refreshHotbar(); }
+      const ichor = !!(game.gen && game.gen.ichor);
       const bob = new THREE.Group();
-      const top = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color: 0xe04848 }));
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color: ichor ? 0x9affb0 : 0xe04848 }));
       const bot = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshBasicMaterial({ color: 0xf7f2e8 }));
       top.position.y = 0.05; bot.position.y = -0.06;
       bob.add(top, bot);
       bob.position.set(hit[0], hit[1], hit[2]);
       game.scene.add(bob);
-      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
-                       px: game.pos.x, pz: game.pos.z };
-      toast('cast — watch the bobber, click when it bites');
+      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (ichor ? 5 + Math.random() * 9 : (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1)) * (bait ? 0.5 : 1), bit: false, bitT: 0, mesh: bob,
+                       px: game.pos.x, pz: game.pos.z, ichor, bait: !!bait };
+      toast(ichor ? 'cast into the ichor — something down there is looking at it' : 'cast — watch the bobber, click when it bites' + (bait ? ' · the worm is on the hook' : ''));
       AudioSys.sfx('toggle');
+    } else if (F.bit && F.ichor){
+      // ICHOR FISHING (Build 105): things that are not fish
+      const roll = Math.random();
+      const kind = roll < 0.05 ? 'nullcore' : roll < 0.15 ? 'ichorcrown' : roll < 0.45 ? 'veillamp' : 'ichorworm';
+      giveItem({ kind, count: 1 }, 1);
+      toast(kind === 'ichorworm' ? 'out of the ichor: a worm, fat and pale' : kind === 'veillamp' ? 'out of the ichor: a veil lantern, still lit' : kind === 'ichorcrown' ? 'out of the ichor: A CROWN. Sova will want to see this' : 'out of the ichor: a null core. Something fell in here once', kind === 'ichorcrown' ? 1 : 0);
+      AudioSys.sfx('craft');
+      Particles.burst(F.x, F.y + 0.2, F.z, 0.5, [0x9affb0, 0x1a1424, 0xd8ffe0], 12, 1.4);
+      endFishing();
+      refreshHotbar(); refreshToolHUD();
     } else if (F.bit){
       const deep = game.gen.seaLevel != null && game.gen.height(F.x, F.z) < game.gen.seaLevel - 9;
       const RR = game.gen.riverAt && game.gen.riverAt(F.x, F.z);
@@ -29711,7 +29725,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -29932,6 +29946,21 @@ function itemIconURL(it){
     c.fillStyle = cc[0]; c.fillRect(3, 6, 8, 4); c.fillRect(2, 7, 1, 2);
     c.fillStyle = cc[1]; c.fillRect(11, 5, 3, 2); c.fillRect(11, 9, 3, 2); c.fillRect(12, 7, 2, 2); c.fillRect(6, 5, 3, 1);
     c.fillStyle = '#101216'; c.fillRect(4, 7, 1, 1);
+  } else if (it.kind === 'ichorworm'){
+    c.fillStyle = '#d8d0c8'; c.fillRect(2, 8, 12, 3); c.fillRect(1, 7, 3, 3); c.fillRect(12, 9, 3, 3);
+    c.fillStyle = '#b0a8a0'; c.fillRect(5, 8, 1, 3); c.fillRect(8, 8, 1, 3); c.fillRect(11, 9, 1, 2);
+    c.fillStyle = '#9affb0'; c.fillRect(2, 11, 2, 1); c.fillRect(13, 12, 2, 1);
+    c.fillStyle = '#1a1424'; c.fillRect(2, 8, 1, 1);
+  } else if (it.kind === 'veillamp'){
+    c.fillStyle = '#3a2a4a'; c.fillRect(7, 1, 2, 3);
+    c.fillStyle = '#c8a0ff'; c.fillRect(4, 4, 8, 8); c.fillRect(3, 6, 10, 4);
+    c.fillStyle = '#f0e0ff'; c.fillRect(6, 6, 3, 3);
+    c.fillStyle = '#9affb0'; c.fillRect(5, 12, 6, 1); c.fillRect(7, 13, 2, 2);
+  } else if (it.kind === 'ichorcrown'){
+    c.fillStyle = '#d8c060'; c.fillRect(2, 8, 12, 5); for (const x of [2, 5, 8, 11]) c.fillRect(x, 4, 2, 4); c.fillRect(7, 3, 2, 2);
+    c.fillStyle = '#a89040'; c.fillRect(2, 12, 12, 1);
+    c.fillStyle = '#9affb0'; c.fillRect(3, 9, 1, 1); c.fillRect(7, 9, 2, 2); c.fillRect(12, 9, 1, 1);
+    c.fillStyle = '#5a3a8a'; c.fillRect(7, 4, 2, 1);
   } else if (it.kind === 'rod'){
     c.fillStyle = '#8a6237'; for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
     c.fillStyle = '#d9d9e0'; c.fillRect(13, 2, 1, 8);
@@ -30593,6 +30622,9 @@ function itemLabel(it){
   if (it.kind === 'tomato' || it.kind === 'wheat' || it.kind === 'lettuce' || it.kind === 'flour' || it.kind === 'bread' || it.kind === 'burger' || it.kind === 'spaghetti' || it.kind === 'salad') return it.kind;
   if (it.kind === 'nightcap') return 'nightcap soup';
   if (it.kind === 'rod') return 'fishing rod';
+  if (it.kind === 'ichorworm') return 'ichor worm';
+  if (it.kind === 'veillamp') return 'veil lantern';
+  if (it.kind === 'ichorcrown') return 'the drowned crown';
   if (it.kind === 'divehelm') return 'diving helmet';
   if (it.kind === 'spacesuit') return 'space suit';
   if (it.kind === 'mech') return 'mech suit';
@@ -31022,6 +31054,7 @@ function catalogEntries(){
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
   out.push({ kind: 'peat', count: 32 }); out.push({ kind: 'amber', count: 8 }); out.push({ kind: 'cocoa', count: 8 });
   for (const f of ['perch', 'trout', 'catfish', 'carp', 'snapper', 'eel', 'cod', 'grayling', 'pike']) out.push({ kind: 'fish', fish: f, count: 8 });
+  for (const k of ['ichorworm', 'veillamp', 'ichorcrown']) out.push({ kind: k, count: 4 });   // ICHOR FISHING (Build 105)
   out.push({ kind: 'coral', count: 16 }); out.push({ kind: 'kelp', count: 16 });
   return out;
 }
@@ -31870,7 +31903,14 @@ function itemInfoHTML(it, tool){
     const F = game.fishing;
     html = '<div class="t1">fishing rod' + (F ? (F.bit ? ' · BITE!' : ' · cast') : '') + '</div><div class="t2">' +
       (F ? (F.bit ? 'CLICK NOW to reel it in' : 'waiting for a bite… click to reel in early')
-         : 'aim at water and left click to cast · every region has its own fish · the grocer buys them') + '</div>';
+         : game.gen && game.gen.ichor ? 'aim at the ichor and left click to cast · what bites here is not fish · Sova buys it, and one thing dearly'
+         : 'aim at water and left click to cast · every region has its own fish · the grocer buys them' + (game.slots.some(q => q && q.kind === 'ichorworm') ? ' · an ichor worm on the hook halves the wait' : '')) + '</div>';
+  } else if (it.kind === 'ichorworm'){
+    html = '<div class="t1">ichor worm ×' + it.count + '</div><div class="t2">fat, pale, and not dead: it lives in the ichor. Bait: with one in the pack any cast bites in half the time, and uses it. Sova pays 30 for four</div>';
+  } else if (it.kind === 'veillamp'){
+    html = '<div class="t1">veil lantern ×' + it.count + '</div><div class="t2">a bladder of something that glows violet, fished out of the ichor and still lit. Sova pays 120</div>';
+  } else if (it.kind === 'ichorcrown'){
+    html = '<div class="t1">THE DROWNED CROWN</div><div class="t2">gold, and older than the villages: whoever wore it went into the ichor wearing it. Sova pays 1500 and would pay more. Vehl, shown it, says nothing at all</div>';
   } else if (it.kind === 'grabber'){
     html = '<div class="t1">grabber gun</div><div class="t2">hold right click on any living thing: animals in a moment, enemies over a few seconds, bosses over a long and dangerous while, villagers only at ' + crewSys.HIRE_REP + ' goodwill \u00b7 it comes back out the same one that went in</div>';
   } else if (it.kind === 'spawner'){
@@ -34798,7 +34838,7 @@ const stationOneSys = {
     ];
     if (cast === 'relics') return [
       { buy: { k: 'jetfuel', n: 2 }, price: 40, rep: 0 }, { buy: { k: 'aetheringot', n: 2 }, price: 200, rep: 0 }, { buy: { k: 'lunite', n: 4 }, price: 400, rep: 10 },
-      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 }, { sell: { k: 'relic', n: 1 }, price: 400, rep: 0 },
+      { buy: { k: 'astrium', n: 1 }, price: 700, rep: 25 }, { sell: { k: 'idol', n: 1 }, price: 900, rep: 0 }, { sell: { k: 'ichorworm', n: 4 }, price: 30, rep: 0 }, { sell: { k: 'veillamp', n: 1 }, price: 120, rep: 0 }, { sell: { k: 'ichorcrown', n: 1 }, price: 1500, rep: 0 }, { sell: { k: 'voidore', n: 4 }, price: 90, rep: 0 }, { sell: { k: 'nullcore', n: 1 }, price: 260, rep: 0 }, { sell: { k: 'relic', n: 1 }, price: 400, rep: 0 },
     ];
     return [];
   },

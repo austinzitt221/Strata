@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 105 — ICHOR FISHING
+- [ ] Cast into an ichor river. Is the wait right? Fish until you have
+      one of each: does the crown feel like a find when it comes?
+- [ ] Take the crown to Sova on the station. Is 1500 the right number
+      for it? Would you rather it did something?
+- [ ] Bring worms home and fish the Earth with them. Is the halved wait
+      worth the trip?
+
 ## Build 104 — THE SOUND OF STRATA
 - [ ] Land on Strata with the sound up. Walk to an ichor river, dive
       in, climb out, climb a spire. Is the hiss readable as the ichor?
