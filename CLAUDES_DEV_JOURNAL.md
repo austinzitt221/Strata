@@ -1448,6 +1448,28 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-30 — pets
+
+Build 103. Mine, and the one on the list I most wanted. Three builds
+of farm machinery, and this is the payoff: the lamb you fed while it
+was small follows you up the rocket ramp.
+
+Two decisions worth writing down. The crate hooks into the planet
+switch itself (spaceSys.goTo) and not the rocket, so a teleporter or
+anything I add later carries pets for free; the rule is "following,
+within sixteen metres", which is what a person would mean by "with
+me". And pets are entities with a field, not a second list: the save
+row grew two columns and every system that already worked on animals
+(breeding, growth, the leash exception) kept working. Twice now (the
+farmhands too) the cheap design was the good one because the earlier
+system was built as a record plus a rule.
+
+The name list is short and English and a bit silly (Tuppence, Gruel).
+Austin can strike what he does not like.
+
+Next: the sound of Strata (19), then ichor fishing (20), and then
+Austin's next playtest will have arrived.
+
 ## 2026-09-29, later — farmhands
 
 Build 102. This is the build I expected to be hard and was not,

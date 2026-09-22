@@ -14035,6 +14035,7 @@ function spawnEntity(type, x, y, z){
   return e;
 }
 function killEntity(e, byPlayer){
+  if (e.pet){ toast(e.pet.name + ' is dead.'); }                                          // PETS (Build 103)
   if (e.type === 'soldier') baseSys.onDeath(e, byPlayer);
   if (e.bossType && byPlayer && ENT_DEF[e.bossType]){ econSys.note(ENT_DEF[e.bossType].boss + ' IS SLAIN', ['deed', 'boss'], null, true); econSys.move('arms', 0.03); }
   if (e.bountyTag && byPlayer) missionSys.bountyKilled(e);
@@ -24107,7 +24108,7 @@ function updateEntities(dt, now){
     if (e.ride){ if (!e.ride.veh || !game.entities.includes(e.ride.veh)) e.ride = null; else { if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); } continue; } }
     // city folk are bound to their city (citySys reaps them past 220m);
     // cars never despawn (they're yours); everything else: the 70m leash
-    if (!VEH[e.type] && !e.crew && pd > (e.ckey || e.collector || e.bkey ? 180 : 70)){
+    if (!VEH[e.type] && !e.crew && !e.pet && pd > (e.ckey || e.collector || e.bkey ? 180 : 70)){
       if (e.mesh){ game.scene.remove(e.mesh); }
       game.entities.splice(i, 1);
       continue;
@@ -24135,7 +24136,7 @@ function updateEntities(dt, now){
     }
     // steering
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
-    let sx = 0, sz = 0, sp = def.speed;
+    let sx = 0, sz = 0, sp = def.speed, petSt = null;
     if (e.type === 'angel'){ spireSys.angel(e, dt, now, pd); continue; }
     if (e.type === 'soldier'){
       const tg = baseSys.soldierSteer(e, dt, pd, now);
@@ -24255,6 +24256,9 @@ function updateEntities(dt, now){
         sx = e.tx - e.x; sz = e.tz - e.z;
         if (Math.hypot(sx, sz) < 0.6){ sx = 0; sz = 0; }
       }
+    } else if (e.pet && (petSt = petSys.steer(e, dt, pd))){
+      // PETS (Build 103): at your heel
+      sx = petSt[0]; sz = petSt[1]; sp = petSt[2];
     } else if (breedSys.passive(e) && breedSys.lure(e, TP, pd)){
       // BREEDING (Build 97): it follows the food in your hand
       const L2 = breedSys.lure(e, TP, pd); sx = L2[0]; sz = L2[1]; sp *= 0.9;
@@ -25701,6 +25705,7 @@ function bindInput(){
       if (game.planet === 'alien'){ const sl = game.entities.find(q => q.type === 'seal' && Math.hypot(q.x - game.pos.x, q.z - game.pos.z) < 4.5); if (sl){ centreSys.open(sl); return; } }
       const vent = entityOnRay(3.6);
       if (vent && breedSys.canFeed(vent)){ breedSys.feed(vent); return; }                    // BREEDING (Build 97)
+      if (vent && vent.pet){ petSys.click(vent); return; }                                  // PETS (Build 103)
       if (vent && (vent.type === 'villager' || vent.type === 'alien')){ talkTo(vent); return; }
       if (vent && vent.type === 'soldier' && vent.quarter){ baseSys.quarterTalk(vent); return; }
       if (vent && vent.type === 'cab'){ if (vent.called){ phoneSys.ride(vent); return; } toast('the cab is taken — get your own wheels'); return; }
@@ -32746,6 +32751,12 @@ function drawMap(){
   for (const bk in MV.bases){ const br = MV.bases[bk]; if (br.stamped) mark(br.x, br.z, br.taken ? '#5fe08a' : '#8a9a4a', 9); }
   for (const bd of MV.beds) mark(bd[0], bd[2], '#d84a63', 6);
   if (MV.deathCache) mark(MV.deathCache.x, MV.deathCache.z, '#f2f2f2', 6);
+  // PETS (Build 103): yours, as pink dots with their names
+  if (MV.live) for (const e of petSys.all()){
+    mark(e.x, e.z, '#ff7ab8', 6);
+    const sx = W / 2 + (e.x / MAP_CELL - pcx) * px, sy = H / 2 + (e.z / MAP_CELL - pcz) * px;
+    if (sx > 4 && sx < W - 40 && sy > 12 && sy < H - 4){ c.fillStyle = '#ffb3d6'; c.font = '10px monospace'; c.fillText(e.pet.name, sx + 5, sy - 4); }
+  }
   // player arrow (on another world: where you last stood, as a ring)
   if (!MV.live){ mark(MV.px, MV.pz, '#ffd76a', 8); }
   else {
@@ -33211,7 +33222,8 @@ function buildSaveData(){
                  VEH[e.type] && e.bat ? e.bat : 0,
                  e.crewed && e.bkey ? e.bkey : 0,
                  e.wrecked ? 1 : 0,
-                 e.grow > 0 ? Math.round(e.grow) : 0]),    // a garrison's tank keeps its crew and its base; a baby its growing (Build 97)
+                 e.grow > 0 ? Math.round(e.grow) : 0,
+                 e.pet || 0, e.fedBaby || 0]),                // PETS (Build 103): whose it is, and how far a baby is from being someone's    // a garrison's tank keeps its crew and its base; a baby its growing (Build 97)
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -33326,6 +33338,8 @@ function startWorldData(id, data){
     if (VEH[r[0]] && r[8]){ e.crewed = true; e.bkey = r[8]; }
     if (VEH[r[0]] && r[9]) e.wrecked = true;
     if (r[10] > 0){ e.grow = r[10]; e.big = 0.45 + 0.55 * (1 - e.grow / breedSys.GROW); }
+    if (r[11]) e.pet = r[11];
+    if (r[12]) e.fedBaby = r[12];
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
@@ -33751,7 +33765,7 @@ const breedSys = {
   canFeed(e){ return this.passive(e) && this.holding(); },
   feed(e){
     if (!this.canFeed(e)) return false;
-    if (e.grow > 0){ toast('too young — it is still growing'); return false; }
+    if (e.grow > 0) return e.pet ? (toast('it is still growing'), false) : petSys.feedBaby(e);   // PETS (Build 103): three meals and it is yours
     if (e.bredT > 0){ toast('it is resting — ' + Math.ceil(e.bredT / 60) + ' min'); return false; }
     if (e.fedT > 0){ toast('it has eaten; it wants another of its kind now'); return false; }
     const it = selectedItem();
@@ -33803,6 +33817,97 @@ const breedSys = {
     toast('a ' + (MENAGERIE_NAME[a.type] || a.type) + ' is born — a minute and a half to grow');
     markSave();
     return c;
+  },
+};
+
+// ---------- PETS (Build 103) ----------
+// A baby you feed three times as it grows is yours. It gets a name, it
+// follows you (right click it to make it stay, and again to call it), it
+// never despawns, it shows on the map, and when you leave a world it rides
+// in a crate and comes out beside you where you land. A grazer of your own
+// on the Moon.
+const PET_NAMES = ['Biscuit', 'Moss', 'Pebble', 'Juniper', 'Rook', 'Clover', 'Tansy', 'Bramble', 'Fig', 'Sorrel', 'Nettle', 'Piper',
+                   'Wren', 'Hazel', 'Otter', 'Puddle', 'Turnip', 'Comet', 'Ember', 'Dusty', 'Marbles', 'Tuppence', 'Gruel', 'Nimbus'];
+const petSys = {
+  FEEDS: 3,
+  all(){ return game.entities.filter(e => e.pet); },
+  kindName(e){ return MENAGERIE_NAME[e.type] || e.type; },
+  // a growing baby, fed: the third meal makes it yours
+  feedBaby(e){
+    const it = selectedItem();
+    if (game.mode !== 'creative'){ it.count = (it.count || 1) - 1; if (it.count <= 0) game.slots[game.hotSel] = null; }
+    e.fedBaby = (e.fedBaby || 0) + 1;
+    Particles.burst(e.x, e.y + 0.9, e.z, 0.4, [0xff7ab8, 0xffb3d6], 10, 1.4);
+    AudioSys.sfx('eat');
+    if (e.fedBaby >= this.FEEDS) this.adopt(e);
+    else toast('the young ' + this.kindName(e) + ' eats — ' + e.fedBaby + ' of ' + this.FEEDS + ' and it is yours');
+    refreshHotbar(); markSave();
+    return true;
+  },
+  adopt(e){
+    const used = new Set(this.all().map(p => p.pet.name));
+    const pool = PET_NAMES.filter(n => !used.has(n));
+    const name = (pool.length ? pool : PET_NAMES)[(Math.random() * (pool.length ? pool : PET_NAMES).length) | 0];
+    e.pet = { name, mode: 'follow' };
+    e.fleeT = 0;
+    Particles.burst(e.x, e.y + 0.9, e.z, 0.8, [0xff7ab8, 0xffffff, 0xffd76a], 30, 2.4);
+    AudioSys.sfx('craft');
+    toast(name.toUpperCase() + ' is yours — it follows you now · right click it to make it stay', 1);
+    markSave();
+  },
+  // right click: stay, or follow again
+  click(e){
+    const P = e.pet;
+    P.mode = P.mode === 'follow' ? 'stay' : 'follow';
+    if (P.mode === 'stay'){ P.at = [+e.x.toFixed(1), +e.z.toFixed(1)]; }
+    toast(P.name + (P.mode === 'stay' ? ' stays here' : ' comes with you'));
+    AudioSys.sfx('select'); markSave();
+  },
+  // how it walks: after you when following, and never far; null hands it back to its own wandering
+  steer(e, dt, pd){
+    const P = e.pet;
+    e.fleeT = 0;                                              // it does not fear you
+    if (e.hp < ENT_DEF[e.type].hp && e.flash <= 0) e.hp = Math.min(ENT_DEF[e.type].hp, e.hp + dt * 0.3);
+    if (P.mode !== 'follow' || game.driving) return null;
+    if (pd > 70 || (pd > 14 && (e.lostT = (e.lostT || 0) + dt) > 12)){
+      e.lostT = 0;
+      e.x = game.pos.x + 1.2; e.z = game.pos.z + 1.2;
+      const gy = Math.max(game.gen.height(e.x, e.z), CORE.BEDROCK_Y + 1);
+      e.y = Math.abs(game.pos.y - gy) < 12 ? game.pos.y + 0.2 : gy + 0.7;
+      e.vx = e.vy = e.vz = 0;
+      Particles.burst(e.x, e.y + 0.6, e.z, 0.5, [0xff7ab8], 8, 1.2);
+      return [0, 0, 0];
+    }
+    if (pd <= 14) e.lostT = 0;
+    if (pd < 3.0){
+      if (e.mesh) e.mesh.rotation.y = Math.atan2(-(game.pos.x - e.x), -(game.pos.z - e.z));
+      return [0, 0, 0];
+    }
+    return [game.pos.x - e.x, game.pos.z - e.z, ENT_DEF[e.type].speed * (pd > 9 ? 2.4 : 1.5)];
+  },
+  // leaving a world: the pets beside you go in the crate; landing: out they come
+  crate(){
+    const out = [];
+    for (let i = game.entities.length - 1; i >= 0; i--){
+      const e = game.entities[i];
+      if (!e.pet || e.pet.mode !== 'follow' || Math.hypot(e.x - game.pos.x, e.z - game.pos.z) > 16) continue;
+      out.push({ type: e.type, hp: e.hp, pet: e.pet, grow: e.grow || 0 });
+      if (e.mesh) game.scene.remove(e.mesh);
+      game.entities.splice(i, 1);
+    }
+    return out;
+  },
+  uncrate(list){
+    if (!list || !list.length) return;
+    const names = [];
+    list.forEach((P, i) => {
+      const a = i * 1.3 + 0.7, x = game.pos.x + Math.cos(a) * 2.2, z = game.pos.z + Math.sin(a) * 2.2;
+      const c = spawnEntity(P.type, x, game.pos.y + 0.4, z);
+      c.pet = P.pet; c.hp = P.hp; c.fleeT = 0;
+      if (P.grow > 0){ c.grow = P.grow; c.big = 0.45 + 0.55 * (1 - c.grow / breedSys.GROW); }
+      names.push(P.pet.name);
+    });
+    setTimeout(() => toast(names.join(', ') + (names.length > 1 ? ' are' : ' is') + ' out of the crate'), 1200);
   },
 };
 
@@ -35206,6 +35311,7 @@ const spaceSys = {
   // other comes up (or is born), you at `land` (y null: on the ground)
   goTo(to, land, opts){
     opts = opts || {};
+    const crate = petSys.crate();                         // PETS (Build 103): the ones at your heel come too
     const live = buildSaveData();
     delete live.others;
     const prev = this.others[to] || null;
@@ -35219,6 +35325,7 @@ const spaceSys = {
     this.dest = null;
     this.teardown();
     startWorldData(game.worldId, next);
+    petSys.uncrate(crate);
   },
   arrive(F, crash){
     if (crash){
@@ -37157,7 +37264,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

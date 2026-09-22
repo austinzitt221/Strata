@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 103 — PETS: one of your own (2026-09-30)
+
+Roadmap item 18, mine. Breeding (Build 97) made babies; nothing made
+them anyone's.
+
+- **Three meals.** Feed a growing baby (any plant food, the same as
+  breeding) three times before it is grown and it is yours: it gets a
+  name from a list of two dozen (Biscuit, Moss, Pebble, Juniper...),
+  never one another pet of yours already has, and it follows you.
+- **Follow and stay.** Right click a pet to make it stay; right click
+  again and it comes. Following, it keeps to your heel, trots when
+  you get ahead, and if you lose it (seventy metres, or twelve
+  seconds out of sight past fourteen) it turns up beside you. It does
+  not fear you, and it mends slowly. Food in the hand still breeds it
+  as any of its kind; the toggle is for empty hands or anything else.
+- **Never despawns.** The seventy-metre leash that reaps animals
+  leaves pets alone, staying or following. A pet that dies says so.
+- **The map** shows every pet of yours as a pink dot with its name.
+- **The crate.** Leave a world by any means (the rocket, a teleporter)
+  and every pet following within sixteen metres goes with you, and
+  comes out of the crate beside you where you land, still growing if
+  it was. Nothing of it stays in the world you left. A grazer of your
+  own on the Moon.
+- Saved on the entity row: the pet record and how many meals a baby
+  has had so far, so a half-adopted lamb keeps its count.
+
 ## Build 102 — FARMHANDS: the crew works the plots (2026-09-29)
 
 Roadmap item 17, Austin's. The crew already carried what you gave

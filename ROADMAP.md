@@ -434,7 +434,7 @@ I want to build them:
      a watering can and waters what is dry as they pass; seeds, and they
      plant the empty rows; a hoe, and they harvest what is ripe into
      their own pack (or onto the ground when it is full).
- 18. **Pets** (mine). A baby you feed three times as it grows is yours:
+ 18. **Pets** (DONE, Build 103). A baby you feed three times as it grows is yours:
      it gets a name, follows you, shows on the map, and rides the
      rocket in a crate. A grazer of your own on the Moon.
  19. **The sound of Strata** (mine). Every world has the Earth's

@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 103 — PETS
+- [ ] Breed two sheep, feed the lamb three times while it is small. Do
+      you get a name and a follower? Does it keep up on foot, and in a
+      car (it should reappear when you stop)?
+- [ ] Tell it to stay, walk a few hundred metres, come back: still
+      there? Look for it on the map.
+- [ ] Take it in the rocket to the Moon. Does it come out of the
+      crate beside you? Is a sheep on the Moon as good as I think it is?
+- [ ] Any name you would add to the list, or one you would strike?
+
 ## Build 102 — FARMHANDS
 - [ ] Give a crew member a can, a hoe and some seeds, post them at
       the farm ("stay" or "roam" among the plots). Walk away for a few
