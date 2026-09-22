@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 98 — the fixes
+- [ ] Strata: walk and fly. Is the stutter gone?
+- [ ] A city, up close: no ghost walls now? If you still see one, how
+      far is it, and did you come to the city from another world?
+- [ ] Quit mid-fight with the Unmaker; load; the seal is open and one
+      Unmaker comes.
+- [ ] Breed sheep: a lamb grows in a minute and a half.
+
 ## Build 97 — BREEDING
 - [ ] Grow tomatoes. Walk up to two sheep with one in hand: do they
       come? Feed both. A lamb. Wait four minutes. Breed the lamb.

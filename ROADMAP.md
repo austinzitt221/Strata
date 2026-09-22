@@ -413,6 +413,38 @@ the sprites; the burrower moved to Strata and rare). And:
      of that kind appears; it grows, and can be bred in turn. Never the
      enemies.
 
+After the 2026-09-27 playtest (96 and 97): fixed in Build 98 (Strata's
+stutter, a boss frozen after a reload, the crops in creative, the
+cities' ghost LOD, breeding at a minute and a half). And, in the order
+I want to build them:
+ 14. **Fences and gates.** A fence piece that joins to its neighbours
+     and a gate that opens like a door; a wall the animals cannot cross
+     or jump, and you can. Pens at last.
+ 15. **Springs.** Water you can place: dig one with a SPRING STONE (a
+     crafted item set in the ground) and it wells up into a source that
+     never runs dry, for the can to fill from; a LAVA SPRING and an
+     ICHOR SPRING the same way, from their own stones. (Austin asked for
+     a way to make water; a bucket is the boring answer.)
+ 16. **The sprinkler.** A tesla coil for crops: powered, and fed water
+     (a can set in it, or a tube from a spring or any water), it sprays
+     every plant in a wide ring on a beat, with the animation to match.
+     With a spring, a tube, a generator and a crafter, a farm runs
+     itself.
+ 17. **Farmhands.** A villager of yours with the goodwill for it takes
+     a watering can and waters what is dry as they pass; seeds, and they
+     plant the empty rows; a hoe, and they harvest what is ripe into
+     their own pack (or onto the ground when it is full).
+ 18. **Pets** (mine). A baby you feed three times as it grows is yours:
+     it gets a name, follows you, shows on the map, and rides the
+     rocket in a crate. A grazer of your own on the Moon.
+ 19. **The sound of Strata** (mine). Every world has the Earth's
+     birds. Strata should have its own: the ichor's hiss, the maws
+     creaking, a wind with a note in it, and nothing at all at the
+     centre.
+ 20. **Ichor fishing** (mine). Something lives in it. A rod cast into
+     the ichor brings up things that are not fish, and one of them is
+     worth a great deal to Sova.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.

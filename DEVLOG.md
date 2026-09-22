@@ -2,6 +2,38 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 98 — the playtest of 96 and 97: the stutter, the frozen boss, the ghost city (2026-09-27)
+
+Austin played the boss (it spawns; it looks right) and settled into a
+survival game. The notes, and what shipped:
+
+- **Strata's stutter.** The tree systems ask the generator for two
+  thousand cells at a time whenever you cross an eleven-metre cell, and
+  Strata's answer for a cell marched the SDF down to the real ground
+  every time: seven tenths of a second, on the main thread, every cell
+  you crossed. A cell's answer is remembered now (and forgotten when a
+  village is rebuilt). The second ask of the same cells is free.
+- **A boss frozen after a reload.** A boss was saved like any animal and
+  came back as a plain entity with no boss brain, standing where it
+  was. Bosses are never saved now; the seal and the vaults re-summon
+  theirs (the seal stays open, the vault's keeper is still there until
+  it dies).
+- **The crops in creative.** Tomatoes, wheat and lettuce are in the
+  creative catalog, for the animals.
+- **The ghost city.** The far skin and the LOD rings were drawing over
+  the real city, flat walls without doors or windows, and staying. I
+  could not make it happen headless (the cover mask read as it should
+  at every city I stood in, on every build back to 88), so the fix is a
+  rule rather than a patch: nothing of the skin or the rings draws
+  within twenty-four metres of you, ever. The real chunks within
+  forty-eight are always fully meshed, so there is nothing for them to
+  cover there. If the ghost was farther off than that, tell me where.
+- **Breeding at a minute and a half.** Growing and resting were four
+  minutes and five; both are ninety seconds.
+- On the roadmap: fences and gates, springs (water you can make), the
+  sprinkler, farmhands, and three of mine: pets, the sound of Strata,
+  and fishing the ichor.
+
 ## Build 97 — BREEDING (2026-09-26)
 
 Austin's idea, and the first system since the farm about keeping

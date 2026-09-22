@@ -2621,7 +2621,7 @@ function makeStrataGen(seed){
   // STRATA H (Build 95): the villages you have rebuilt, by key; the records
   // are remade when the set changes, whole, with everything standing
   const rebuilt = new Set();
-  function setRebuilt(keys){ rebuilt.clear(); for (const k of keys || []) rebuilt.add(k); ruinCache.clear(); }
+  function setRebuilt(keys){ rebuilt.clear(); for (const k of keys || []) rebuilt.add(k); ruinCache.clear(); if (typeof treeCache !== 'undefined') treeCache.clear(); }
   function ruinAt(cx, cz){
     const key = cx + ',' + cz; const hit = ruinCache.get(key); if (hit !== undefined) return hit;
     let R = null;
@@ -3028,8 +3028,17 @@ function makeStrataGen(seed){
     return { x: 0, z: 0 };
   }
   // the maws (Build 86): the plants that are not trees, one per cell where the dice say, on the real surface
-  const sT = hashInt(seed ^ 0x7ee5);
+  const sT = hashInt(seed ^ 0x7ee5), treeCache = new Map();
+  // Build 98: a cell's answer is kept. The tree systems ask two thousand
+  // cells at a time whenever you cross one, and each ask marched the SDF
+  // down to the ground: that was Strata's stutter
   function treeAt(cx, cz){
+    const key = cx + ',' + cz; const hit = treeCache.get(key); if (hit !== undefined) return hit;
+    const t = treeAtRaw(cx, cz);
+    if (treeCache.size > 20000) treeCache.clear();
+    treeCache.set(key, t); return t;
+  }
+  function treeAtRaw(cx, cz){
     const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
     const x = cx * TREE_CELL + (hashInt(h0 ^ 1) / 4294967296) * TREE_CELL, z = cz * TREE_CELL + (hashInt(h0 ^ 2) / 4294967296) * TREE_CELL;
     const b = biome(x, z);
@@ -30578,6 +30587,7 @@ function catalogEntries(){
   out.push({ kind: 'jetpack', fuel: 100 });
   out.push({ kind: 'grapple' });
   out.push({ kind: 'khammer' }); out.push({ kind: 'nullheart' }); out.push({ kind: 'nullcore', count: 6 });
+  out.push({ kind: 'tomato', count: 16 }); out.push({ kind: 'wheat', count: 16 }); out.push({ kind: 'lettuce', count: 16 });   // Build 98: the crops themselves, for the animals
   out.push({ kind: 'coin', count: 500 });
   out.push(CORE.makeGun());
   for (let gi = 0; gi < CORE.GUNS.length; gi++) out.push(CORE.makeFirearm(gi));
@@ -32886,7 +32896,7 @@ function buildSaveData(){
     removedTrees: [...(game.removedTreeSet || [])],
     removedDecor: [...(game.decorRemovedSet || [])],
     placedDecor: game.decorPlaced || [],
-    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && e.type !== 'alien' && !e.st2 && !e.bountyTag && !e.racer && !e.mailRaid && !e.posse && !e.convoy)
+    entities: game.entities.filter(e => e.type !== 'villager' && e.type !== 'cab' && e.type !== 'alien' && !e.st2 && !e.bountyTag && !e.racer && !e.mailRaid && !e.posse && !e.convoy && !e.bossType)   // Build 98: a boss saved came back frozen; the seal and the vaults re-summon
       .map(e => e.type === 'drop'
         ? ['drop', +e.x.toFixed(2), +e.y.toFixed(2), +e.z.toFixed(2), 1, 0, 0, e.item, Math.round(e.ttl || 0)]
         : [e.type, e.x, e.y, e.z, e.hp,
@@ -33287,7 +33297,7 @@ const endSys = {
 const breedSys = {
   PASSIVE: new Set(['grazer', 'sheep', 'monkey', 'croc_no', 'elk', 'hare', 'zebra']),
   FOOD: new Set(['tomato', 'wheat', 'lettuce']),
-  GROW: 240, FED: 30, REST: 300,
+  GROW: 90, FED: 30, REST: 90,      // Build 98: a minute and a half to grow, and to rest (Austin found four too long)
   accT: 0,
   passive(e){ return !!e && this.PASSIVE.has(e.type) && !e.st2; },
   holding(){ const it = selectedItem(); return !!(it && this.FOOD.has(it.kind) && (it.count == null || it.count > 0)); },
@@ -33343,7 +33353,7 @@ const breedSys = {
     c.grow = this.GROW; c.big = 0.45; c.hp = Math.max(4, Math.round(ENT_DEF[a.type].hp * 0.5));
     Particles.burst(mx, my + 0.8, mz, 0.7, [0xff7ab8, 0xffffff, 0xffb3d6], 24, 2.2);
     AudioSys.sfx('craft');
-    toast('a ' + (MENAGERIE_NAME[a.type] || a.type) + ' is born — four minutes to grow');
+    toast('a ' + (MENAGERIE_NAME[a.type] || a.type) + ' is born — a minute and a half to grow');
     markSave();
     return c;
   },
@@ -35110,6 +35120,7 @@ const SKIN_FRAG = TERRAIN_FRAG
     'uniform sampler2D uMatTex; uniform vec2 uMatOrigin; uniform float uMatSpan;\nuniform vec4 uHole;\nvarying vec4 vShadowCoord;')
   .replace('void main(){',
     'void main(){\n' +
+    '  if (distance(vPos.xz, uPlayerPos.xz) < 24.0) discard;\n' +
     '  if (vPos.x > uHole.x && vPos.x < uHole.z && vPos.z > uHole.y && vPos.z < uHole.w) discard;\n' +
     '  if (uMaskOn > 0.5){\n' +
     '    vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
@@ -35641,7 +35652,8 @@ const lodTerrain = {
       .replace('void main(){',
         'void main(){\n' +
         '  if (vCut > 0.999) discard;\n' +
-        '  if (uFeatNear > 0.0 && distance(vPos.xz, uPlayerPos.xz) < uFeatNear) discard;\n');
+        '  if (uFeatNear > 0.0 && distance(vPos.xz, uPlayerPos.xz) < uFeatNear) discard;\n' +
+        '  if (distance(vPos.xz, uPlayerPos.xz) < 24.0) discard;\n');
     const lodVert = TERRAIN_VERT
       .replace('uniform mat4 uShadowMatrix;',
         'uniform mat4 uShadowMatrix;\nuniform float uSink;\n' +

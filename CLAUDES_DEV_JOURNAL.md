@@ -1448,6 +1448,25 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-27 — the stutter, and a ghost I could not catch
+
+The stutter was mine from Build 86: the maws' `treeAt` marched the SDF
+to the ground per cell with no cache, and the tree refresh asks two
+thousand cells. I measured it before touching anything this time: 0.35
+ms a cell on Strata against nothing on Earth, times two thousand. A
+Map fixed it. The lesson is the one from the journal's standing notes:
+anything the generator answers per cell needs a cache, because the
+callers never ask once.
+
+The ghost city I chased for two hours with probes and screenshots on
+five builds and never saw. The cover mask read 255 under every city I
+stood in. My first probe put me under the city's slab (cities stand on
+one), and what I took for a ghost ceiling was the slab's underside; a
+good hour went there. In the end I wrote the rule I should have had
+from the start: the skin and the rings never draw within twenty-four
+metres of the player. Whatever the mask does, that is true. If Austin
+still sees it, the question is the distance.
+
 ## 2026-09-26, later — BREEDING
 
 Small and whole. The lure is one branch before the flee; feeding is one
