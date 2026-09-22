@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 99 — FENCES AND GATES
+- [ ] Craft fences, build a pen round two sheep, breed them in it. Do
+      the pieces snap the way you expect? Is the quarter-turn on scroll
+      enough?
+- [ ] Open the gate with food in hand and lead them out; shut it behind
+      them. Take a piece back.
+- [ ] Try to get a sheep over a fence with a slope, a jump, a shove.
+
 ## Build 98 — the fixes
 - [ ] Strata: walk and fly. Is the stutter gone?
 - [ ] A city, up close: no ghost walls now? If you still see one, how

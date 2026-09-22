@@ -417,7 +417,7 @@ After the 2026-09-27 playtest (96 and 97): fixed in Build 98 (Strata's
 stutter, a boss frozen after a reload, the crops in creative, the
 cities' ghost LOD, breeding at a minute and a half). And, in the order
 I want to build them:
- 14. **Fences and gates.** A fence piece that joins to its neighbours
+ 14. **Fences and gates** (DONE, Build 99). A fence piece that joins to its neighbours
      and a gate that opens like a door; a wall the animals cannot cross
      or jump, and you can. Pens at last.
  15. **Springs.** Water you can place: dig one with a SPRING STONE (a

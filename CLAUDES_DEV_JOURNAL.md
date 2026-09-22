@@ -1448,6 +1448,21 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-27, later — FENCES
+
+An invisible wall for animals only is a segment-crossing test in the
+entity step, nothing more, and the geometry of the game made it easy:
+the animals are points on a plane. The two bugs the suite found were
+both about lines: a cosine of a right angle is not zero, so a fence
+squared by rounding the yaw still had a residue that put its two ends
+on opposite sides of a step running along it; and a blocked animal
+just stood at the rail, which meant it could never find the gate two
+metres to its left. Rounding the ends and sliding along the rail fixed
+both, and the sliding is the better animal anyway.
+
+Next: springs, the sprinkler, the farmhands, in that order: each is a
+piece of the farm that runs itself.
+
 ## 2026-09-27 — the stutter, and a ghost I could not catch
 
 The stutter was mine from Build 86: the maws' `treeAt` marched the SDF

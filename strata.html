@@ -3995,7 +3995,7 @@ function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'gate', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
+const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
@@ -4360,6 +4360,8 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'sigil', yields: 1, station: true,
     costs: [{ item: 'diamond', n: 4 }, { mat: MAT.OBSIDIAN, n: 12 }, { mat: MAT.CRYSTAL, n: 6 }] });
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
+  RECIPES.push({ kind: 'fence', yields: 4, station: true, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });        // FENCES (Build 99)
+  RECIPES.push({ kind: 'fencegate', yields: 1, station: true, costs: [{ item: 'stick', n: 4 }, { mat: MAT.PLANKS, n: 2 }] });
   // THE BREACH (Build 33): the gate, a portcullis sized to any opening; the mender, a battery-fed repair gun
   RECIPES.push({ kind: 'gate', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'stick', n: 4 }] });
   RECIPES.push({ kind: 'mender', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'wire', n: 4 }, { item: 'rubyingot', n: 1 }] });
@@ -7031,6 +7033,7 @@ function buildScene(){
   farTreeSys.init(scene);
   decorSys.init(scene);
   doorSys.init(scene);
+  fenceSys.init(scene);
   tableSys.init(scene);
   placePreview.init(scene);
   playerBody.init(scene);
@@ -8159,7 +8162,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -12438,7 +12441,7 @@ function chestSlots(sc){
   const s = sc || 1;
   return s <= 0.65 ? 8 : s <= 0.85 ? 16 : s <= 1.1 ? 24 : s <= 1.4 ? 36 : s <= 1.7 ? 48 : 64;
 }
-const PLACE_ROT_KINDS = ['torch', 'bulb', 'table', 'beacon', 'bed', 'stove', 'decor', 'pnode'];
+const PLACE_ROT_KINDS = ['torch', 'bulb', 'table', 'beacon', 'bed', 'stove', 'decor', 'pnode', 'fence', 'fencegate'];
 
 const placePreview = {
   root: null, vkey: null, ropeT: 0, ropeLen: 2, lastHit: null,
@@ -24157,6 +24160,14 @@ function updateEntities(dt, now){
     e.vy -= (game.planet === 'moon' ? MOON_G : zeroG() ? 0 : 22) * dt;
     const ox = e.x;
     const oz = e.z;
+    // FENCES (Build 99): the passive animals stop at a fence, whatever they were doing
+    if (game.fences && game.fences.length && breedSys.passive(e) && fenceSys.blocks(e.x, e.z, e.x + e.vx * dt, e.z + e.vz * dt, e.y)){
+      // stopped: slide along the rail if one axis is free (that is how it finds the gate)
+      if (!fenceSys.blocks(e.x, e.z, e.x + e.vx * dt, e.z, e.y)) e.vz = 0;
+      else if (!fenceSys.blocks(e.x, e.z, e.x, e.z + e.vz * dt, e.y)) e.vx = 0;
+      else { e.vx = 0; e.vz = 0; }
+      if (e.vy > 0) e.vy = 0;
+    }
     e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
     // sphere-vs-SDF collide
     const box = [e.x - 1.2, e.y - 1.2, e.z - 1.2, e.x + 1.2, e.y + def.h + 1.2, e.z + 1.2];
@@ -24787,6 +24798,7 @@ const netSys = {
     game.torches = (d.torches || []).map(t => [t[0], t[1], t[2]]);
     game.beacons = (d.beacons || []).map(b => [b[0], b[1], b[2]]);
     game.beds = (d.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
+  game.fences = (d.fences || []).map(f => ({ x: f[0], y: f[1], z: f[2], yaw: f[3], gate: f[4] ? 1 : 0, open: f[5] ? 1 : 0 }));
   game.doors = (d.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
   game.stoves = (d.stoves || []).map(r => ({ x: r[0], y: r[1], z: r[2], yaw: r[3] || 0,
     in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0, id: r[9] }));
@@ -25524,6 +25536,11 @@ function bindInput(){
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
         return;
+      }
+      const fp = fenceSys.onRay(3.2);                                             // FENCES (Build 99)
+      if (fp){
+        if (fp.gate && !game.keys['KeyC']){ fenceSys.toggle(fp); return; }
+        if (!selectedItem() || game.keys['KeyC']){ fenceSys.remove(fp); addStackItem(fp.gate ? 'fencegate' : 'fence', 1); toast('+1 ' + (fp.gate ? 'fence gate' : 'fence')); AudioSys.sfx('break'); refreshHotbar(); return; }
       }
       const door = doorSys.onRay(3.5);
       if (door){
@@ -27005,6 +27022,7 @@ function activeTool(){
   if (it.kind === 'gate') return { kind: 'door', gate: 1, tier: 0, item: it };
   if (it.kind === 'mender') return { kind: 'mender', tier: 0, item: it };
   if (it.kind === 'table' || it.kind === 'mtable' || it.kind === 'atable') return { kind: 'table', tier: 0, item: it };
+  if (it.kind === 'fence' || it.kind === 'fencegate') return { kind: it.kind, tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
@@ -28780,11 +28798,19 @@ function tryAction(dt, now){
     }
     return;
   }
-  if (tool.kind === 'table' || tool.kind === 'beacon' || tool.kind === 'bed' || tool.kind === 'stove'){
+  if (tool.kind === 'table' || tool.kind === 'beacon' || tool.kind === 'bed' || tool.kind === 'stove' || tool.kind === 'fence' || tool.kind === 'fencegate'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       const hit = surfaceHit();
       if (!hit){ toast('no ground in reach'); return; }
+      if (tool.kind === 'fence' || tool.kind === 'fencegate'){
+        // FENCES (Build 99): snapped to the metre, squared to the world, two metres along the way you face (scroll turns it)
+        if (!fenceSys.add(hit[0], hit[1], hit[2], (game.tool.pYaw || 0) + game.yaw, tool.kind === 'fencegate')){ toast('a fence stands there already'); AudioSys.sfx('deny'); return; }
+        if (game.mode !== 'creative') tool.item.count--;
+        if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+        AudioSys.sfx('place'); refreshHotbar(); refreshToolHUD();
+        return;
+      }
       if (game.mode !== 'creative') tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
       const pY = game.tool.pYaw || 0;
@@ -29336,7 +29362,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -30081,6 +30107,11 @@ function itemIconURL(it){
     c.fillStyle = '#59c8d8'; c.fillRect(7, 4, 2, 8);           // pillar
     c.fillStyle = '#9fe8ff'; c.fillRect(6, 1, 4, 4);           // gem
     c.fillStyle = '#ffffff'; c.fillRect(7, 2, 1, 1);
+  } else if (it.kind === 'fence' || it.kind === 'fencegate'){
+    // FENCES (Build 99): two posts and two rails; the gate has a brace across it
+    c.fillStyle = '#8a6237'; c.fillRect(2, 3, 2, 11); c.fillRect(12, 3, 2, 11);
+    c.fillStyle = '#b08d55'; c.fillRect(2, 6, 12, 2); c.fillRect(2, 10, 12, 2);
+    if (it.kind === 'fencegate'){ c.fillStyle = '#6b4a26'; for (let i = 0; i < 8; i++) c.fillRect(4 + i, 12 - i, 1, 1); c.fillStyle = '#d8c485'; c.fillRect(11, 8, 1, 1); }
   } else if (it.kind === 'door'){
     c.fillStyle = '#8a6237'; c.fillRect(4, 2, 8, 12);
     c.fillStyle = '#6b4a26'; c.fillRect(4, 2, 8, 1); c.fillRect(4, 7, 8, 1);
@@ -30305,6 +30336,8 @@ function itemLabel(it){
   if (it.kind === 'bore') return 'bore';
   if (it.kind === 'lathe') return 'lathe';
   if (it.kind === 'door') return 'door';
+  if (it.kind === 'fence') return 'fence';
+  if (it.kind === 'fencegate') return 'fence gate';
   if (it.kind === 'table') return 'crafting table';
   if (it.kind === 'mtable') return "the Moon's table";
   if (it.kind === 'atable') return "Strata's table";
@@ -30526,7 +30559,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spike
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
-const CAT_SPECIAL  = ['door', 'gate', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -30612,7 +30645,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -31571,6 +31604,8 @@ function itemInfoHTML(it, tool){
            itemLabel({ kind: G.ammo }) + ' ' + ammoN + (G.perShot > 1 ? ' (uses ' + G.perShot + ')' : '') + '</div>';
   } else if (it.kind === 'sword'){
     html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
+  } else if (it.kind === 'fence' || it.kind === 'fencegate'){
+    html = '<div class="t1">' + (it.kind === 'fence' ? 'fence' : 'fence gate') + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'fence' ? 'two metres of rail the animals cannot cross or jump, and you walk through · snaps to the metre and to a right angle (scroll turns it) · right-click it empty-handed to take it back' : 'a fence piece that opens: right-click it · C and right-click to take it back') + '</div>';
   } else if (it.kind === 'door'){
     const dw = game.tool.doorSize || 1.2;
     html = '<div class="t1">door ×' + it.count + '</div>' +
@@ -32883,6 +32918,7 @@ function buildSaveData(){
     stoves: game.stoves.map(st => [st.x, st.y, st.z, st.yaw || 0, st.in, st.fuel, st.out, st.burn, st.prog, st.id]),
     bulbs: game.bulbs,
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2, d.gate ? 1 : 0, d.broken ? 1 : 0, d.hp == null ? -1 : d.hp]),
+    fences: (game.fences || []).map(f => [f.x, f.y, f.z, f.yaw, f.gate ? 1 : 0, f.open ? 1 : 0]),
     tables: game.tables,
     ropes: game.ropes || [],
     rails: game.rails || [],
@@ -32987,6 +33023,7 @@ function startWorldData(id, data){
   game.bulbs = (data.bulbs || []).map(b => [b[0], b[1], b[2], b[3] == null ? 0 : b[3], b[4] == null ? 1 : b[4], b[5] == null ? 0 : b[5], b[6]]);
   game.activeStove = null;
   game.breath = 100; game.underwater = false;
+  game.fences = (data.fences || []).map(f => ({ x: f[0], y: f[1], z: f[2], yaw: f[3], gate: f[4] ? 1 : 0, open: f[5] ? 1 : 0 }));
   game.doors = (data.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
@@ -33064,6 +33101,7 @@ function startWorldData(id, data){
   stoveSys.rebuild();
   bulbSys.rebuild();
   doorSys.rebuild();
+  fenceSys.rebuild();
   tableSys.rebuild();
   treeSys.refresh();
   farTreeSys.refresh();
@@ -33284,6 +33322,79 @@ const endSys = {
     game.story.credits = (game.story.credits || 0) + 1;
     AudioSys.sfx('teleport');
   },
+};
+
+// ---------- FENCES (Build 99) ----------
+// A fence piece is two metres of rail on two posts, snapped to the metre
+// and squared to the world. Animals (the passive ones) cannot cross or
+// jump it; you walk through it. A gate is a piece that opens on a right
+// click. Right-click a piece empty-handed to take it back (C and right
+// click for a gate). Saved with the world
+const fenceSys = {
+  group: null, mats: null,
+  init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
+  snapYaw(yaw){ return Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); },
+  ends(f){ const c = Math.round(Math.cos(f.yaw)), sn = Math.round(Math.sin(f.yaw)); return [f.x - c, f.z - sn, f.x + c, f.z + sn]; },   // squared, so no residue of a cosine sits on the line
+  add(x, y, z, yaw, gate){
+    yaw = this.snapYaw(yaw);
+    const along = Math.abs(Math.cos(yaw)) > 0.5 ? 'x' : 'z';
+    const fx = along === 'x' ? Math.round(x / 2) * 2 : Math.round(x), fz = along === 'z' ? Math.round(z / 2) * 2 : Math.round(z);
+    if (game.fences.some(f => Math.abs(f.x - fx) < 0.1 && Math.abs(f.z - fz) < 0.1 && Math.abs(f.y - y) < 2.5)) return null;
+    const f = { x: fx, y: +y.toFixed(2), z: fz, yaw: +yaw.toFixed(4), gate: gate ? 1 : 0, open: 0 };
+    game.fences.push(f); this.rebuild(); markSave();
+    return f;
+  },
+  remove(f){ const i = game.fences.indexOf(f); if (i >= 0){ game.fences.splice(i, 1); this.rebuild(); markSave(); } },
+  // does a step from a to b (at height y) cross a closed piece?
+  blocks(ax, az, bx, bz, y){
+    const F = game.fences; if (!F || !F.length) return false;
+    for (const f of F){
+      if (f.open || Math.abs(f.y - y) > 2.6 || Math.abs(f.x - bx) > 3 || Math.abs(f.z - bz) > 3) continue;
+      const [x0, z0, x1, z1] = this.ends(f);
+      const d1 = (x1 - x0) * (az - z0) - (z1 - z0) * (ax - x0), d2 = (x1 - x0) * (bz - z0) - (z1 - z0) * (bx - x0);
+      const d3 = (bx - ax) * (z0 - az) - (bz - az) * (x0 - ax), d4 = (bx - ax) * (z1 - az) - (bz - az) * (x1 - ax);
+      // the step crosses the rail (a step that starts or ends on the line counts; one that runs along it does not)
+      if (d1 * d2 <= 1e-9 && d3 * d4 < -1e-9) return true;
+    }
+    return false;
+  },
+  onRay(maxDist){
+    maxDist += game.camBack || 0;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let best = null, bestT = maxDist;
+    for (const f of game.fences){
+      const vx = f.x - o.x, vy = f.y + 0.6 - o.y, vz = f.z - o.z;
+      const tt = vx * dir.x + vy * dir.y + vz * dir.z;
+      if (tt < 0 || tt > bestT) continue;
+      const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
+      if (Math.abs(py) < 0.9 && Math.hypot(px, pz) < 1.2){ best = f; bestT = tt; }
+    }
+    return best;
+  },
+  model(f){
+    if (!this.mats) this.mats = { post: pixMat(PROP_TEX.woodEnd, 0x8a6237), rail: pixMat(PROP_TEX.planksV, null, 2, 1) };
+    const g = new THREE.Group();
+    const post = (x) => { const p = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.1, 0.16), this.mats.post); p.position.set(x, 0.55, 0); g.add(p); return p; };
+    post(-1); post(1);
+    if (f.gate){
+      const leaf = new THREE.Group(); leaf.position.set(-1, 0, 0);
+      for (const ry of [0.42, 0.86]){ const r = new THREE.Mesh(new THREE.BoxGeometry(1.84, 0.1, 0.08), this.mats.rail); r.position.set(0.92, ry, 0); leaf.add(r); }
+      const br = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.08, 0.06), this.mats.rail); br.position.set(0.92, 0.64, 0.02); br.rotation.z = 0.24; leaf.add(br);
+      const lp = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), this.mats.post); lp.position.set(1.84, 0.62, 0); leaf.add(lp);
+      leaf.rotation.y = f.open ? -Math.PI / 2 : 0;
+      g.add(leaf); g.userData.leaf = leaf;
+    } else {
+      for (const ry of [0.42, 0.86]){ const r = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.08), this.mats.rail); r.position.set(0, ry, 0); g.add(r); }
+    }
+    return g;
+  },
+  rebuild(){
+    if (!this.group) return;
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
+    for (const f of game.fences){ const g = this.model(f); g.position.set(f.x, f.y, f.z); g.rotation.y = -f.yaw; this.group.add(g); }
+  },
+  toggle(f){ f.open = f.open ? 0 : 1; this.rebuild(); AudioSys.sfx('toggle'); markSave(); },
 };
 
 // ---------- BREEDING (Build 97) ----------
@@ -36710,7 +36821,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

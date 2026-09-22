@@ -2,6 +2,27 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 99 — FENCES AND GATES (2026-09-27)
+
+Pens at last (Austin's item 14).
+
+- **The fence.** Two metres of rail on two posts, crafted four at a
+  time from two sticks and two planks at a table. It places on the
+  ground where you point, snapped to the metre across and to two
+  metres along, squared to the world (scroll turns it a quarter). The
+  passive animals cannot cross it or jump it, whatever they are doing
+  (a step across a rail is refused, and a blocked animal slides along
+  the rail instead, which is how it finds the gate); you walk through
+  it. Right-click a piece empty-handed to take it back.
+- **The gate.** A fence piece that swings open on a right click and
+  shut on another; open, the animals pass. C and right-click to take it
+  back. Four sticks and two planks.
+- Fences are saved with the world and come back on load, gates as you
+  left them. Both are in the creative catalog under SPECIAL.
+- Under it: a fence is a segment; an animal's step is a segment; a
+  crossing test on the two (with the rail ends squared so no cosine
+  residue lands on the line) is the whole barrier.
+
 ## Build 98 — the playtest of 96 and 97: the stutter, the frozen boss, the ghost city (2026-09-27)
 
 Austin played the boss (it spawns; it looks right) and settled into a
