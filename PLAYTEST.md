@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 101 — THE SPRINKLER
+- [ ] Craft a sprinkler and an intake. Set the sprinkler among the
+      plots, wire it to a crank or a generator, pour a can in. Does it
+      spray at once when a plot is dry, and stop when they are all wet?
+- [ ] Stand an intake in a spring (or the river), tube it to the
+      sprinkler, and leave for a while. Does the tank stay up? Quit and
+      reload: still fed?
+- [ ] Is twelve metres a good ring, and six seconds a good beat? Is
+      the spray readable from across the farm, and does the rainbow
+      show at noon?
+- [ ] Try to tube a hopper into the sprinkler, or the intake into a
+      chest: the messages should say what goes where.
+
 ## Build 100 — SPRINGS
 - [ ] Craft a spring stone, set it by the farm, fill the can at it a
       few times. Dig beside it, build over it, quit and reload: still

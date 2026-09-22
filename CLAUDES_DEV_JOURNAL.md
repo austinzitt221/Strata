@@ -1448,6 +1448,30 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-29 — the sprinkler, and the farm closes its loop
+
+Build 101. Austin asked for it exactly as it shipped: powered, a
+tank, a wide ring, an animation, refilled by a tube from real water.
+What I liked about building it was how little new machinery it took.
+The intake is a pnode that does nothing but stand in water; the tube
+system already moved a thing a beat from one node to another, so
+water became a thing tubes move. The circuit builder already knew
+consumers with an idle and a working load. The plots already had a
+water count. The sprinkler is ninety lines that join those.
+
+The rainbow was mine. Six particles at one angle, a band over many.
+It costs nothing and it is the only reason to stand and watch the
+thing work, which is the point of an automatic farm: you built it,
+now look at it.
+
+Testing note for next time: the tube tool's click path needs the
+mouse edge flag set by hand in a headless run, or the action loop
+sees no click at all. I lost a run to that. The screenshot yaw too:
+π looks toward +z. Written down now.
+
+Next in my order: farmhands (17), then pets (18), which will want the
+breeding baby records from Build 97.
+
 ## 2026-09-28 — SPRINGS, and the hundredth build
 
 A spring is nine cells that say "source" forever. The flow already

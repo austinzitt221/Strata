@@ -2,6 +2,36 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 101 — THE SPRINKLER: the farm waters itself (2026-09-29)
+
+Roadmap item 16, Austin's, and the last piece of a farm that runs
+without you.
+
+- **The sprinkler.** Five iron, three wire and a tube at a station.
+  A pnode on the circuit like a charger: 4 W idle, 25 W spraying. It
+  holds a tank of twelve; right click it with a full can and the can
+  pours in. While it has power and water and any plot within twelve
+  metres is dry, the head spins and drops fly, and every six seconds
+  of that a burst wets every dry plot in the ring and costs one unit.
+  With every plot wet it idles and the tank holds. Right click it
+  with nothing to hear its state.
+- **The water intake.** Two iron and two tubes, no station. A strainer
+  on a pipe: stand it in water (a pond, a river, a spring) and tube it
+  to a sprinkler. Each tube beat (two seconds) moves one unit while
+  the tank is short. A spring, an intake, a tube, a sprinkler and a
+  crank you wind now and then: the farm is automatic.
+- **Tubes learnt one rule.** An intake feeds a sprinkler and nothing
+  else, and nothing but an intake feeds a sprinkler. Hoppers still
+  feed what they fed.
+- **A rainbow.** My own touch: in sunlight with no rain, a faint arc of
+  colour hangs in the spray. A sprinkler without one is a pipe.
+- **Tank and spin persist**: the tank count saves with the node; the
+  spin does not matter.
+- Known: the spray is particles, so it is a fountain of squares, not a
+  sheet; and the ring is a circle in the plan view, so a plot five
+  metres up a hill (more than five metres above the head) is out of
+  it on purpose.
+
 ## Build 100 — SPRINGS: water you can make (2026-09-28)
 
 Austin wanted a way to make water for the farm; a bucket was the

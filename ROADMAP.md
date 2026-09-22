@@ -425,7 +425,7 @@ I want to build them:
      never runs dry, for the can to fill from; a LAVA SPRING and an
      ICHOR SPRING the same way, from their own stones. (Austin asked for
      a way to make water; a bucket is the boring answer.)
- 16. **The sprinkler.** A tesla coil for crops: powered, and fed water
+ 16. **The sprinkler** (DONE, Build 101). A tesla coil for crops: powered, and fed water
      (a can set in it, or a tube from a spring or any water), it sprays
      every plant in a wide ring on a beat, with the animation to match.
      With a spring, a tube, a generator and a crafter, a farm runs

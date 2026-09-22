@@ -3998,7 +3998,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
@@ -4242,6 +4242,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'battery', tier: 2, station: true, costs: [{ item: 'rubyingot', n: 6 }, { item: 'diamond', n: 2 }, { item: 'coal', n: 8 }] });
   RECIPES.push({ kind: 'charger', yields: 1, station: true, costs: [{ item: 'ironingot', n: 10 }, { item: 'rubyingot', n: 4 }, { mat: MAT.PLANKS, n: 6 }] });
   RECIPES.push({ kind: 'gen2', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 8 }, { item: 'ironingot', n: 8 }] });
+  RECIPES.push({ kind: 'sprinkler', yields: 1, station: true, costs: [{ item: 'ironingot', n: 5 }, { item: 'wire', n: 3 }, { item: 'tube', n: 1 }] });
+  RECIPES.push({ kind: 'intake', yields: 1, costs: [{ item: 'ironingot', n: 2 }, { item: 'tube', n: 2 }] });
   RECIPES.push({ kind: 'tesla', yields: 1, station: true, costs: [{ item: 'rubyingot', n: 4 }, { mat: MAT.CRYSTAL, n: 6 }, { item: 'ironingot', n: 4 }] });
   RECIPES.push({ kind: 'bulb', yields: 2, costs: [{ mat: MAT.GLOWSHROOM, n: 4 }, { item: 'ironingot', n: 1 }] });
   RECIPES.push({ kind: 'table', yields: 1, costs: [{ mat: MAT.WOOD, n: 8 }] });
@@ -10439,6 +10441,28 @@ const pnodeSys = {
       const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.07, 0.16, 8), M.dark); nozzle.rotation.x = Math.PI / 2; nozzle.position.set(-0.1, 0.55, -0.74);
       const pilot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0xff8830 })); pilot.position.set(-0.1, 0.55, -0.83);
       g.add(base, tank, pipe, nozzle, pilot); g.userData.pilot = pilot;
+    } else if (t === 'sprinkler'){
+      // THE SPRINKLER (Build 101): a steel post with a spinning two-arm head,
+      // a glass tank strapped to its side that shows how much water is left
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.5), M.dark); foot.position.y = 0.06;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 1.2, 8), M.steel); post.position.y = 0.72;
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 10), new THREE.MeshBasicMaterial({ color: 0x8fa6b6, transparent: true, opacity: 0.45 })); tank.position.set(0.28, 0.55, 0);
+      const water = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.66, 10), new THREE.MeshBasicMaterial({ color: 0x3a7ad0 })); water.position.set(0.28, 0.22, 0);
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.1), M.copper); strap.position.set(0.14, 0.55, 0);
+      const head = new THREE.Group(); head.position.y = 1.32;
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.12, 8), M.copper);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.05, 0.05), M.steel);
+      const nozA = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.06), M.dark); nozA.position.set(0.33, 0.05, 0);
+      const nozB = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, 0.06), M.dark); nozB.position.set(-0.33, 0.05, 0);
+      head.add(hub, arm, nozA, nozB);
+      g.add(foot, post, tank, water, strap, head); g.userData.head = head; g.userData.gauge = water;
+    } else if (t === 'intake'){
+      // THE INTAKE (Build 101): a pipe elbow standing in the water with a strainer at its foot
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.22, 0.44), M.dark); foot.position.y = 0.11;
+      const grate = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.04, 0.34), M.steel); grate.position.y = 0.23;
+      const riser = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.7, 8), M.steel); riser.position.y = 0.55;
+      const elbow = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), M.copper); elbow.position.y = 0.9;
+      g.add(foot, grate, riser, elbow);
     } else if (t === 'tent'){
       // a canvas A-frame on a ridge pole, open at the front (-z)
       const cloth = new THREE.MeshBasicMaterial({ color: 0xb8a27a }), inner = new THREE.MeshBasicMaterial({ color: 0x8a7a58 });
@@ -10671,7 +10695,7 @@ const pnodeSys = {
       if (n.t === 'staple')
         return [n.x + (n.nx || 0) * 0.09, n.y + (n.ny == null ? 1 : n.ny) * 0.09, n.z + (n.nz || 0) * 0.09];
       const dy = { lever: 0.6, crank: 1.0, wheel: 1.95, gen: 1.1, meter: 1.42,
-                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5, flamejet: 0.55 }[n.t] || 1;
+                   elev: 0.35, acrank: 1.55, tesla: 2.0, gen2: 1.5, hopper: 1.2, crafter: 1.3, charger: 1.15, chest: 0.9, pad: 0.45, turret: 0.5, flamejet: 0.55, sprinkler: 1.0, intake: 0.9 }[n.t] || 1;
       return [n.x, n.y + dy * (n.t === 'chest' ? (n.sc || 1) : 1), n.z];
     }
     if (k === 'r'){
@@ -10794,6 +10818,12 @@ const pnodeSys = {
       }
       if (n.t === 'claymore' && ud.eye) ud.eye.material.color.setHex((performance.now() % 1400) < 100 ? 0xff9999 : 0xff3333);
       if (n.t === 'flamejet' && ud.pilot) ud.pilot.material.color.setHex(n.firing ? 0xffdd66 : (powerSys.jetMap && powerSys.jetMap.get(n.id) > 0 ? 0xff8830 : 0x442211));
+      if (n.t === 'sprinkler' && ud.head){
+        if (n.spraying) n.spin = (n.spin || 0) + dt * 4;
+        ud.head.rotation.y = n.spin || 0;
+        const f = Math.max(0.03, Math.min(1, (n.tank || 0) / farmSys.TANK));
+        ud.gauge.scale.y = f; ud.gauge.position.y = 0.22 + 0.33 * (f - 1);
+      }
       if (n.t === 'trench' && ud.oil) ud.oil.material.color.setHex(n.lit ? 0x3a2410 : n.spent ? 0x2a2a2e : 0x14141c);
       if (n.t === 'spikes') it.g.scale.y = n.broken ? 0.3 : 1;
       if (n.broken && (n.t === 'gen' || n.t === 'gen2' || n.t === 'turret' || n.t === 'flamejet') && Math.random() < dt * 0.7 && Math.hypot(n.x - game.pos.x, n.z - game.pos.z) < 80)
@@ -11070,6 +11100,7 @@ const powerSys = {
           else if (n.t === 'turret'){ if (!n.broken){ c.d += n.aim ? 30 : 4; c.turrets.push(n); } }
           else if (n.t === 'flamejet'){ if (!n.broken){ c.d += n.firing ? 20 : 2; (c.jets = c.jets || []).push(n); } }
           else if (n.t === 'charger'){ if (this.chargerWants(n)) c.d += 40; (c.chargers = c.chargers || []).push(n); }
+          else if (n.t === 'sprinkler'){ c.d += n.spraying ? 25 : 4; (c.sprinklers = c.sprinklers || []).push(n); }
           else if (n.t === 'tesla') c.teslas.push(n);
           else if (n.t === 'meter') c.meters.push(id);
         } else if (id[0] === 'b'){
@@ -11121,6 +11152,7 @@ const powerSys = {
     this.activeSrc.clear(); this.surplus = []; this.hotTeslas = [];
     this.gridSites = [];
     this.chargerMap = this.chargerMap || new Map(); this.chargerMap.clear();
+    this.sprinklerMap = this.sprinklerMap || new Map(); this.sprinklerMap.clear();
     this.railWatts = new Map();
     for (const c of comps.values()){
       const ratio = c.d > 0 ? Math.min(1, c.w / c.d) : (c.w > 0 ? 1 : 0);
@@ -11143,6 +11175,8 @@ const powerSys = {
       for (const n of c.turrets) this.turretMap.set(n.id, c.w > 0 ? ratio : 0);
       this.jetMap = this.jetMap || new Map();
       for (const n of (c.jets || [])) this.jetMap.set(n.id, c.w > 0 ? ratio : 0);
+      this.sprinklerMap = this.sprinklerMap || new Map();
+      for (const n of (c.sprinklers || [])) this.sprinklerMap.set(n.id, c.w > 0 ? ratio : 0);
       for (const n of c.crafters){
         this.crafterMap.set(n.id, c.w > 0 ? ratio : 0);
         if (c.w > 0 && this.crafterWants(n)) this.crafterBusy.add(n.id);
@@ -11303,6 +11337,7 @@ const powerSys = {
       else if (n.t === 'charger') this.chargerTick(n, dt);
       else if (n.t === 'turret') this.turretTick(n, dt);
       else if (n.t === 'flamejet') palisadeSys.jetTick(n, dt, this.jetMap ? (this.jetMap.get(n.id) || 0) : 0);
+      else if (n.t === 'sprinkler') farmSys.sprinklerTick(n, dt, this.sprinklerMap ? (this.sprinklerMap.get(n.id) || 0) : 0);
     }
     game.onElev = onElev;
     this.tubeT = (this.tubeT || 0) + dt;
@@ -11417,6 +11452,12 @@ const powerSys = {
   tubeTick(){
     for (const tb of game.tubes || []){
       const na = this.tubeNode(tb.a), nb = this.tubeNode(tb.b);
+      // WATER (Build 101): an intake standing in water fills its sprinkler a unit a beat
+      if ((na && na.t === 'intake') || (nb && nb.t === 'intake')){
+        const inn = na && na.t === 'intake' ? na : nb, spr = inn === na ? nb : na;
+        if (spr && spr.t === 'sprinkler' && (spr.tank || 0) < farmSys.TANK && farmSys.intakeWet(inn)){ spr.tank = (spr.tank || 0) + 1; markSave(); }
+        continue;
+      }
       let src = null, dstId = null;
       if (na && na.t === 'hopper'){ src = na; dstId = tb.b; }
       else if (nb && nb.t === 'hopper'){ src = nb; dstId = tb.a; }
@@ -12706,6 +12747,10 @@ function rebuildSolidProps(){
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.7, z: n.z, hx: 1.2, hy: 0.7, hz: 0.9 });
     else if (n.t === 'flamejet')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.4, z: n.z, hx: 0.35, hy: 0.4, hz: 0.35 });
+    else if (n.t === 'sprinkler')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.6, z: n.z, hx: 0.22, hy: 0.6, hz: 0.22 });
+    else if (n.t === 'intake')
+      props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.45, z: n.z, hx: 0.22, hy: 0.45, hz: 0.22 });
     else if (n.t === 'station')
       props.push({ t: 'box', yaw: n.yaw || 0, x: n.x, y: n.y + 0.65, z: n.z, hx: 0.8, hy: 0.65, hz: 0.6 });
     else if (n.t === 'pad')
@@ -22211,6 +22256,52 @@ const FARM_TIP = {
 };
 const farmSys = {
   GROW: 75, WATER: 3,
+  // THE SPRINKLER (Build 101): a tank of twelve, a ring of twelve metres,
+  // a burst every six seconds of spraying; every dry plot in the ring is
+  // wet after a burst. Fed by a can poured in, or a tube from an intake
+  TANK: 12, SPRAY_R: 12, SPRAY_EVERY: 6,
+  intakeWet(n){ return inWater(n.x, n.y + 0.25, n.z) || inWater(n.x, n.y - 0.3, n.z) || inWater(n.x, n.y + 0.8, n.z); },
+  dryNear(n){ return this.plots().filter(p => p.water < this.WATER && Math.abs(p.y - n.y) < 5 && Math.hypot(p.x - n.x, p.z - n.z) < this.SPRAY_R); },
+  sprinklerTick(n, dt, pw){
+    n.spraying = 0;
+    if (pw <= 0 || (n.tank || 0) <= 0){ n.sprayT = 0; return; }
+    const dry = this.dryNear(n);
+    if (!dry.length){ n.sprayT = 0; return; }
+    n.spraying = 1;
+    n.sprayT = (n.sprayT || 0) + dt * pw;
+    const near = Math.hypot(n.x - game.pos.x, n.z - game.pos.z) < 90;
+    if (near){
+      // the spray: drops flung from the two nozzles, falling across the ring
+      const a = n.spin || 0;
+      for (const sgn of [1, -1]){
+        if (Math.random() > dt * 24) continue;
+        const r = 1 + Math.random() * (this.SPRAY_R - 2);
+        Particles.burst(n.x + Math.cos(a) * sgn * r * 0.35, n.y + 1.4 + r * 0.12, n.z - Math.sin(a) * sgn * r * 0.35, 0.18, [0x6ab4ff, 0xa8d8ff, 0xe8f4ff], 2, 2.6);
+      }
+      // a rainbow in the spray when the sun is out (my own touch: a sprinkler without one is a pipe)
+      if (game.dayF > 0.5 && weatherSys.kind !== 'rain' && Math.random() < dt * 3){
+        const RB = [0xff4444, 0xff9a2e, 0xffe94a, 0x5ad35a, 0x4a8cff, 0x9a5aff];
+        const th = Math.random() * Math.PI;
+        for (let i = 0; i < 6; i++){ const rr = 2.2 + i * 0.16; Particles.burst(n.x + Math.cos(th) * rr, n.y + 0.4 + Math.sin(th) * rr * 0.9, n.z + 1.6, 0.02, [RB[i]], 1, 0.05); }
+      }
+    }
+    if (n.sprayT >= this.SPRAY_EVERY){
+      n.sprayT = 0; n.tank--;
+      for (const p of dry){ p.water = this.WATER; if (near) Particles.burst(p.x, p.y + 0.3, p.z, 0.9, [0x6ab4ff, 0xa8d8ff], 5, 1.2); }
+      pnodeSys.rebuild(); markSave();
+    }
+  },
+  sprinklerClick(n, it){
+    if (it && it.kind === 'can' && it.water > 0){
+      const room = this.TANK - (n.tank || 0);
+      if (room <= 0){ toast('the tank is full'); AudioSys.sfx('deny'); return; }
+      const put = Math.min(room, it.water); it.water -= put; n.tank = (n.tank || 0) + put;
+      toast('poured ' + put + ' in — tank ' + n.tank + ' of ' + this.TANK); AudioSys.sfx('place'); refreshHotbar(); markSave(); return;
+    }
+    const live = powerSys.sprinklerMap && powerSys.sprinklerMap.get(n.id) > 0;
+    const dry = this.dryNear(n).length;
+    toast('sprinkler · tank ' + (n.tank || 0) + ' of ' + this.TANK + ' · ' + (!live ? 'no power — wire it to a circuit' : (n.tank || 0) <= 0 ? 'dry — pour a can in, or tube it to an intake standing in water' : dry ? 'watering ' + dry + ' plot' + (dry === 1 ? '' : 's') : 'every plot in ' + this.SPRAY_R + ' m is wet'));
+  },
   plots(){ return (game.pnodes || []).filter(n => n.t === 'plot'); },
   mul(kind){
     let m = 1;
@@ -25450,6 +25541,8 @@ function bindInput(){
         if (pn.t === 'statue'){ toast((pn.text || '').replace(/\n/g, ' \u00b7 ')); return; }
         if (pn.t === 'gtable'){ casinoSys.open(pn); return; }
         if (pn.t === 'plot'){ farmSys.plotClick(pn, selectedItem()); return; }
+        if (pn.t === 'sprinkler'){ farmSys.sprinklerClick(pn, selectedItem()); return; }
+        if (pn.t === 'intake'){ toast(farmSys.intakeWet(pn) ? 'drawing water — tube it to a sprinkler' : 'dry: an intake stands in water (a spring will do)'); return; }
         if (pn.t === 'board'){
           const rec = game.villages[pn.vkey];
           if (rec) boardSys.open(rec);
@@ -27023,7 +27116,7 @@ function activeTool(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -29146,10 +29239,11 @@ function tryAction(dt, now){
       if (!t){ toast('aim at a terminal'); return; }
       const nodeOf = id => id[0] === 'n' ? pnodeSys.byId(+id.slice(1)) : null;
       const isHop = id => { const n = nodeOf(id); return !!(n && n.t === 'hopper'); };
+      const isT = (id, k) => { const n = nodeOf(id); return !!(n && n.t === k); };
       const tubeOk = id => isHop(id) || id[0] === 's' ||
-        (nodeOf(id) && ['crafter', 'chest', 'gen', 'gen2'].includes(nodeOf(id).t));
+        (nodeOf(id) && ['crafter', 'chest', 'gen', 'gen2', 'sprinkler', 'intake'].includes(nodeOf(id).t));
       if (game.tubePending == null){
-        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators'); return; }
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators, and a water intake to a sprinkler'); return; }
         game.tubePending = t.id;
         AudioSys.sfx('toggle');
         toast('tube started — click the machine it feeds');
@@ -29157,8 +29251,13 @@ function tryAction(dt, now){
         game.tubePending = null;
         toast('tube cancelled');
       } else {
-        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators'); return; }
-        if (!isHop(game.tubePending) && !isHop(t.id)){ toast('one end must be a hopper'); return; }
+        if (!tubeOk(t.id)){ toast('tubes connect hoppers to stoves, crafters, chests and generators, and a water intake to a sprinkler'); return; }
+        // WATER (Build 101): an intake feeds a sprinkler and nothing else; nothing else feeds a sprinkler
+        const wet = isT(game.tubePending, 'intake') || isT(t.id, 'intake') || isT(game.tubePending, 'sprinkler') || isT(t.id, 'sprinkler');
+        if (wet){
+          const pair = (isT(game.tubePending, 'intake') && isT(t.id, 'sprinkler')) || (isT(game.tubePending, 'sprinkler') && isT(t.id, 'intake'));
+          if (!pair){ toast('a water intake feeds a sprinkler: one of each'); return; }
+        } else if (!isHop(game.tubePending) && !isHop(t.id)){ toast('one end must be a hopper'); return; }
         game.tubes = game.tubes || [];
         const dup = game.tubes.some(w => (w.a === game.tubePending && w.b === t.id) ||
                                          (w.b === game.tubePending && w.a === t.id));
@@ -29380,7 +29479,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -29734,6 +29833,17 @@ function itemIconURL(it){
     c.fillStyle = '#3a3f46'; c.fillRect(2, 6, 6, 6); c.fillRect(8, 8, 3, 2);
     c.fillStyle = '#9aa0ab'; c.fillRect(3, 7, 4, 4);
     c.fillStyle = '#ff8830'; c.fillRect(11, 7, 3, 4); c.fillStyle = '#ffdd66'; c.fillRect(12, 8, 2, 2);
+  } else if (it.kind === 'sprinkler'){
+    c.fillStyle = '#9aa0ab'; c.fillRect(7, 5, 2, 9); c.fillRect(4, 4, 8, 1);
+    c.fillStyle = '#b5793a'; c.fillRect(6, 3, 4, 2);
+    c.fillStyle = '#3a7ad0'; c.fillRect(10, 8, 3, 5);
+    c.fillStyle = '#a8d8ff'; c.fillRect(1, 6, 1, 1); c.fillRect(2, 8, 1, 1); c.fillRect(13, 5, 1, 1); c.fillRect(14, 7, 1, 1); c.fillRect(3, 4, 1, 1);
+    c.fillStyle = '#2c2c31'; c.fillRect(5, 14, 6, 1);
+  } else if (it.kind === 'intake'){
+    c.fillStyle = '#3a7ad0'; c.fillRect(1, 10, 14, 5);
+    c.fillStyle = '#9aa0ab'; c.fillRect(7, 3, 2, 9);
+    c.fillStyle = '#b5793a'; c.fillRect(6, 2, 4, 3);
+    c.fillStyle = '#2c2c31'; c.fillRect(5, 11, 6, 3);
   } else if (it.kind === 'page'){
     c.fillStyle = '#e8dcc0'; c.fillRect(3, 1, 10, 14);
     c.fillStyle = '#5a4a3a'; for (let i = 0; i < 5; i++) c.fillRect(5, 3 + i * 2.4, i === 4 ? 4 : 6, 1);
@@ -30344,6 +30454,8 @@ function itemLabel(it){
   if (it.kind === 'page') return it.page === 10 ? 'a page in an older hand' : 'journal page ' + (it.page || 1);
   if (it.kind === 'trench') return 'oil trench';
   if (it.kind === 'flamejet') return 'flame jet';
+  if (it.kind === 'sprinkler') return 'sprinkler';
+  if (it.kind === 'intake') return 'water intake';
   if (it.kind === 'survey') return 'the survey';
   if (it.kind === 'tent') return 'tent';
   if (it.kind === 'spikes') return 'one-way spikes';
@@ -30585,7 +30697,7 @@ const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
-                      'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
+                      'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery', 'sprinkler', 'intake'];
 const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
@@ -30660,7 +30772,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'gate', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -31587,6 +31699,10 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">oil trench</div><div class="t2">a 3 m tray of oil. Right click it to strike it alight: it burns for half a minute, and an enemy that so much as crosses it burns until it dies. One use; the tray goes with the fire</div>';
   } else if (it.kind === 'flamejet'){
     html = '<div class="t1">flame jet</div><div class="t2">a wall nozzle on the grid (2 W idle, 20 W firing) that throws a fan of fire five metres out its front at any enemy that comes near — never at you, your crew or an animal</div>';
+  } else if (it.kind === 'sprinkler'){
+    html = '<div class="t1">sprinkler</div><div class="t2">a spinning head on the grid (4 W idle, 25 W spraying) that wets every plot within twelve metres, a burst every six seconds while any of them is dry. Holds twelve cans\' worth: right click it with a full can to pour, or tube it to a water intake and it never runs dry</div>';
+  } else if (it.kind === 'intake'){
+    html = '<div class="t1">water intake</div><div class="t2">a strainer on a pipe: set it in water (a pond, a river, a spring you made) and tube it to a sprinkler. One unit of water a beat, for ever</div>';
   } else if (it.kind === 'page'){
     html = '<div class="t1">journal page ' + (it.page || 1) + '</div><div class="t2">a page torn from a surveyor\'s journal — right click to read it</div>';
   } else if (it.kind === 'survey'){
