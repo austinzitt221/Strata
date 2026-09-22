@@ -430,7 +430,7 @@ I want to build them:
      every plant in a wide ring on a beat, with the animation to match.
      With a spring, a tube, a generator and a crafter, a farm runs
      itself.
- 17. **Farmhands.** A villager of yours with the goodwill for it takes
+ 17. **Farmhands** (DONE, Build 102). A villager of yours with the goodwill for it takes
      a watering can and waters what is dry as they pass; seeds, and they
      plant the empty rows; a hoe, and they harvest what is ripe into
      their own pack (or onto the ground when it is full).

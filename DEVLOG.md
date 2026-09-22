@@ -2,6 +2,33 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 102 — FARMHANDS: the crew works the plots (2026-09-29)
+
+Roadmap item 17, Austin's. The crew already carried what you gave
+them and did what the tool implied; the farm tools now imply things.
+
+- **The can.** A crew member with a watering can in hand or in the
+  pack waters any plot whose water has run out, as they pass while
+  following you (within fourteen metres of them) or on their rounds
+  when posted (the post's radius plus eight, sixteen at least). One
+  splash a plot, as for you.
+- **The refill.** When the can is empty and a plot is dry they walk
+  to water: a spring you made first, else any pond or river within
+  thirty metres and six metres of their height, fill, and come back.
+  No water in reach: they say so once and stay put.
+- **Seeds.** Any seed stack on them goes into empty plots, one seed a
+  plot, the crop the seed says.
+- **The hoe.** Ripe plots are reaped into their pack, harvest and two
+  seeds as for you; a full pack drops it on the plot. Ripe comes
+  first, then the nearest dry or empty plot.
+- Hand them a can, a hoe or seeds and they say so; the tool is drawn
+  in their hands (a green can, a hoe). A hand with all three and a
+  spring in the yard runs the farm on their own; with a sprinkler
+  (Build 101) they only sow and reap.
+- The farm pass gives way to a fight, a quarry, a build, and to
+  catching up with you. A posted hand that finds nothing to do
+  wanders the post as before.
+
 ## Build 101 — THE SPRINKLER: the farm waters itself (2026-09-29)
 
 Roadmap item 16, Austin's, and the last piece of a farm that runs

@@ -13650,6 +13650,8 @@ function entMesh(type, ent){
       else if (t.kind === 'disp') box(0.16, 0.16, 0.44, 0x8a7a5a, 0.34, 0.8, -0.22);
       else if (t.kind === 'sword') box(0.06, 0.9, 0.1, 0xd8dde4, 0.34, 1.0, -0.15);
       else if (t.kind === 'fw') box(0.1, 0.12, 0.62, 0x2c2c31, 0.34, 0.86, -0.3);
+      else if (t.kind === 'can') box(0.24, 0.22, 0.2, 0x5a8a3a, 0.36, 0.56, -0.1);       // FARMHANDS (Build 102)
+      else if (t.kind === 'hoe') box(0.05, 1.0, 0.05, 0x8a6a3a, 0.34, 0.86, -0.12);
     }
     if (ent && ent.crew && ent.crew.arm){
       // and wear what you gave them, in the tier's colour
@@ -15649,6 +15651,15 @@ const crewSys = {
       thanks: ['I\'ll keep it safe.', 'in the pack it goes.', 'ta.'],
       done: ['that\'s the hole dug.', 'done. my arms know it.', 'quarry\'s finished.'],
       lost: ['there you are.', 'nearly lost you.', 'keep up, you said. ha.'],
+      // FARMHANDS (Build 102)
+      can: ['I\'ll keep them wet.', 'a can. right. the plots, then.', 'my mother had one like it.'],
+      hoe: ['I\'ll bring in what\'s ripe.', 'a hoe. I know the work.', 'harvest is mine, then.'],
+      seed: ['I\'ll put them in the empty rows.', 'seeds. good. bare earth is a waste.', 'they\'ll be in the ground by dark.'],
+      water: ['there, drink up.', 'dry as bone, that one.', 'a drop for the roots.'],
+      plant: ['in you go.', 'one more row.', 'that\'ll come up.'],
+      reap: ['ripe. in the pack.', 'a good one.', 'that\'s the harvest.'],
+      fill: ['can\'s full again.', 'cold, that.', 'right, back to it.'],
+      dry: ['no water anywhere near here for the can.', 'the can\'s empty and there\'s nothing to fill it at.', 'I need water closer than this.'],
     }[what];
     if (L) toast(this.nameOf(e) + ': "' + L[(Math.random() * L.length) | 0] + '"');
   },
@@ -15752,6 +15763,7 @@ const crewSys = {
   // their hands changed: a job that needs what is gone stops
   onHands(e){
     const C = e.crew;
+    C.farm = null;
     if (C.mode === 'quarry' && !this.has(C, 'drill')){ C.mode = 'stay'; C.job = null; }
     if (C.mode === 'build' && !this.has(C, 'disp')) C.mode = 'stay';
     C.tasks = [];
@@ -15767,10 +15779,117 @@ const crewSys = {
       if (!C.arm[slot]){ C.arm[slot] = it; this.remesh(e); this.say(e, 'armor'); return true; }
     }
     if (!this.bagAdd(C, it)) return false;
-    if (!C.tool && (it.kind === 'drill' || it.kind === 'disp' || this.isWeapon(it))) this.equip(e, this.isWeapon(it) ? 'weapon' : it.kind);
+    if (!C.tool && (it.kind === 'drill' || it.kind === 'disp' || it.kind === 'can' || it.kind === 'hoe' || this.isWeapon(it))) this.equip(e, this.isWeapon(it) ? 'weapon' : it.kind);
     if (C.job && C.job.kind === 'build' && C.mode !== 'build' && this.has(C, 'disp') && this.matOf(C)) C.mode = 'build';   // out of material mid-build: this resumes it
-    this.say(e, it.kind === 'torch' ? 'torches' : ['drill', 'disp', 'mat', 'sword', 'fw'].includes(it.kind) ? it.kind : 'thanks');
+    C.farm = null;
+    this.say(e, it.kind === 'torch' ? 'torches' : ['drill', 'disp', 'mat', 'sword', 'fw', 'can', 'hoe'].includes(it.kind) ? it.kind : this.isSeed(it) ? 'seed' : 'thanks');
     return true;
+  },
+  // ---- FARMHANDS (Build 102) ----
+  // A crew member with a can waters what is dry as they pass, with seeds
+  // plants the empty plots, with a hoe reaps what is ripe into their pack
+  // (or onto the ground when it is full). They fill the can at the nearest
+  // water they know of: a spring you made, or any pond or river within
+  // thirty metres. Ripe first, then the rest by distance.
+  FARM_R: 16,
+  isSeed(it){ return !!(it && it.count > 0 && Object.values(FARM_CROPS).some(c => c.seed === it.kind)); },
+  canOf(C){ if (C.tool && C.tool.kind === 'can') return C.tool; return (C.bag || []).find(s => s && s.kind === 'can') || null; },
+  seedOf(C){ if (this.isSeed(C.tool)) return C.tool; return (C.bag || []).find(s => this.isSeed(s)) || null; },
+  farmJob(e){
+    const C = e.crew;
+    const can = this.canOf(C), seed = this.seedOf(C), hoe = this.has(C, 'hoe');
+    if (!can && !seed && !hoe) return null;
+    const post = C.mode === 'follow' || !C.home ? { x: e.x, z: e.z } : C.home;
+    const R = C.mode === 'follow' ? 14 : Math.max(this.FARM_R, (C.r || 3) + 8);
+    let best = null, bd = 1e9;
+    for (const p of farmSys.plots()){
+      if (Math.abs(p.y - e.y) > 8 || Math.hypot(p.x - post.x, p.z - post.z) > R) continue;
+      let kind = null, pri = 0;
+      if (hoe && p.crop && (p.stage || 0) >= 3) kind = 'reap';
+      else if (can && (p.water || 0) <= 0){ kind = can.water > 0 ? 'water' : 'fill'; pri = 1; }
+      else if (seed && !p.crop){ kind = 'plant'; pri = 1; }
+      if (!kind) continue;
+      const d = Math.hypot(p.x - e.x, p.z - e.z) + pri * 6;
+      if (d < bd){ bd = d; best = { p, kind }; }
+    }
+    return best;
+  },
+  // the nearest water to them: a spring first, else any water within thirty metres
+  farmWater(e){
+    let best = null, bd = 40;
+    for (const sp of game.springs || []){
+      if (sp.kind !== 'springstone') continue;
+      const d = Math.hypot(sp.x + 0.5 - e.x, sp.z + 0.5 - e.z);
+      if (d < bd && Math.abs(sp.y - e.y) < 10){ bd = d; best = { x: sp.x + 0.5, z: sp.z + 0.5 }; }
+    }
+    if (best) return best;
+    bd = 30;
+    for (let dx = -30; dx <= 30; dx += 3) for (let dz = -30; dz <= 30; dz += 3){
+      const d = Math.hypot(dx, dz);
+      if (d >= bd) continue;
+      const x = e.x + dx, z = e.z + dz;
+      const wt = waterTopAt(x, z, e.y);
+      if (wt != null && Math.abs(wt - e.y) < 6 && inWater(x, wt - 0.3, z)){ bd = d; best = { x, z }; }
+    }
+    return best;
+  },
+  farmStep(e, dt, pd){
+    const C = e.crew;
+    if (!C.farm || (e.farmT = (e.farmT || 0) + dt) > 3){ e.farmT = 0; C.farm = this.farmJob(e); }
+    const J = C.farm;
+    if (!J) return null;
+    if (J.kind === 'fill'){
+      if (!J.wat) J.wat = this.farmWater(e);
+      if (!J.wat){ C.farm = null; if (!e.saidDry){ e.saidDry = 1; if (pd < 40) this.say(e, 'dry'); } return null; }
+      const d = Math.hypot(J.wat.x - e.x, J.wat.z - e.z);
+      if (d > 2.6) return [J.wat.x - e.x, J.wat.z - e.z, 3.2];
+      if (e.mesh) e.mesh.rotation.y = Math.atan2(-(J.wat.x - e.x), -(J.wat.z - e.z));
+      e.workT = (e.workT || 0) - dt;
+      if (e.workT > 0) return [0, 0, 0];
+      e.workT = 1.2;
+      const can = this.canOf(C);
+      if (can){ can.water = 6; this.equip(e, 'can'); }
+      e.saidDry = 0; C.farm = null;
+      if (pd < 30 && Math.random() < 0.5) this.say(e, 'fill');
+      return [0, 0, 0];
+    }
+    const p = J.p;
+    if (!game.pnodes.includes(p)){ C.farm = null; return null; }
+    const d = Math.hypot(p.x - e.x, p.z - e.z);
+    if (d > 2.2) return [p.x - e.x, p.z - e.z, 3.2];
+    if (e.mesh) e.mesh.rotation.y = Math.atan2(-(p.x - e.x), -(p.z - e.z));
+    e.workT = (e.workT || 0) - dt;
+    if (e.workT > 0) return [0, 0, 0];
+    e.workT = 1.0;
+    let did = false;
+    if (J.kind === 'water'){
+      const can = this.canOf(C);
+      if (can && can.water > 0 && (p.water || 0) <= 0){
+        this.equip(e, 'can'); can.water--; p.water = farmSys.WATER; did = true;
+        Particles.burst(p.x, p.y + 0.4, p.z, 0.8, [0x6ab4ff, 0xa8d8ff], 6, 1.2);
+      }
+    } else if (J.kind === 'plant'){
+      const sd = this.seedOf(C);
+      if (sd && !p.crop){
+        p.crop = Object.keys(FARM_CROPS).find(c => FARM_CROPS[c].seed === sd.kind); p.stage = 0; p.gt = 0;
+        sd.count--; if (sd.count <= 0){ if (C.tool === sd) C.tool = null; else this.bagDrop(C, sd); }
+        did = true;
+      }
+    } else if (J.kind === 'reap'){
+      if (p.crop && (p.stage || 0) >= 3){
+        this.equip(e, 'hoe');
+        const Cr = FARM_CROPS[p.crop];
+        for (const it of [{ kind: p.crop, count: Cr.n }, { kind: Cr.seed, count: 2 }]) if (!this.bagAdd(C, it)) dropItem(it, { x: p.x, y: p.y + 0.8, z: p.z });
+        p.crop = null; p.stage = 0; p.gt = 0; C.reaped = (C.reaped || 0) + 1; did = true;
+      }
+    }
+    C.farm = null;
+    if (did){
+      pnodeSys.rebuild(); markSave();
+      if (game.activeCrew === e) this.refresh();
+      if (pd < 30 && Math.random() < 0.3) this.say(e, J.kind);
+    }
+    return [0, 0, 0];
   },
   // torches in their pack get planted as they follow you through the dark:
   // one wherever no light reaches, on the ground under their feet
@@ -16178,6 +16297,8 @@ const crewSys = {
         if (d < 14) return [t.x - e.x, t.z - e.z, 4.6];
         C.tasks.shift();
       }
+      // FARMHANDS (Build 102): what is dry, empty or ripe near you gets seen to as they pass
+      if (pd < 24){ const fs = this.farmStep(e, dt, pd); if (fs) return fs; }
       // torches in their pack get planted as they follow you through the dark
       if ((e.torchT = (e.torchT || 0) + dt) > 0.6){ e.torchT = 0; this.plantTorch(e); }
       // lost you: catch up by any means
@@ -16197,6 +16318,8 @@ const crewSys = {
       }
       return [game.pos.x - e.x, game.pos.z - e.z, pd > 14 ? 6.8 : 5.0];
     }
+    // FARMHANDS (Build 102): a posted hand works the plots round the post
+    if (!alarm){ const fs = this.farmStep(e, dt, pd); if (fs) return fs; }
     // stay / roam: wander the post -- or the bell, while it calls
     const H = alarm || C.home || { x: e.x, z: e.z }, R = alarm ? 4 : C.mode === 'stay' ? 1.5 : (C.r || 12);
     if (alarm && Math.hypot(H.x - e.x, H.z - e.z) > 6) return [H.x - e.x, H.z - e.z, 5.0];

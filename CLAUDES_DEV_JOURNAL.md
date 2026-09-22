@@ -1448,6 +1448,25 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-29, later — farmhands
+
+Build 102. This is the build I expected to be hard and was not,
+because the crew was designed right in Build 24: a record with a tool
+and a bag, a steer function that returns where to walk, and a rule
+that what they hold decides what they do. Farmhands are a job finder
+(ripe first, then nearest), a walk, and a one-second act. The refill
+trip was the only new idea: a spring is known by name, other water
+by a thirty-metre sweep of the water table, and if there is none
+they say so once instead of walking off to look.
+
+I watched the test log and liked the order it chose on its own: reap
+the lettuce, plant the seed they were given, plant the seeds the
+lettuce gave back, water with the last splash, walk to the spring,
+come back and water the other. Nobody wrote that sequence.
+
+Next: pets (18). The breeding records already know which baby was fed
+by whom; a name and a follow are the rest.
+
 ## 2026-09-29 — the sprinkler, and the farm closes its loop
 
 Build 101. Austin asked for it exactly as it shipped: powered, a

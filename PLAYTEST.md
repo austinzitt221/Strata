@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 102 — FARMHANDS
+- [ ] Give a crew member a can, a hoe and some seeds, post them at
+      the farm ("stay" or "roam" among the plots). Walk away for a few
+      minutes: planted, watered, reaped?
+- [ ] Take the spring away (or post them at a farm with no water
+      near). Do they say the can is dry, once, and stop?
+- [ ] Bring a following hand with a can past a dry plot: do they stop
+      to water it and catch up after?
+- [ ] Open their pack after a harvest: is the crop there, and the
+      seeds? Was anything dropped on the plot with a full pack?
+
 ## Build 101 — THE SPRINKLER
 - [ ] Craft a sprinkler and an intake. Set the sprinkler among the
       plots, wire it to a crank or a generator, pour a can in. Does it
