@@ -3995,7 +3995,7 @@ function makeTorches(count){ return { kind:'torch', count }; }
 function makeDoors(count){ return { kind:'door', count }; }
 function makeTables(count){ return { kind:'table', count }; }
 function makeSticks(count){ return { kind:'stick', count }; }
-const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
+const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet',
@@ -4362,6 +4362,10 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'door', yields: 1, station: true, costs: [{ item: 'stick', n: 6 }] });
   RECIPES.push({ kind: 'fence', yields: 4, station: true, costs: [{ item: 'stick', n: 2 }, { mat: MAT.PLANKS, n: 2 }] });        // FENCES (Build 99)
   RECIPES.push({ kind: 'fencegate', yields: 1, station: true, costs: [{ item: 'stick', n: 4 }, { mat: MAT.PLANKS, n: 2 }] });
+  // SPRINGS (Build 100): stones that well up where you set them
+  RECIPES.push({ kind: 'springstone', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.MUD, n: 4 }] });
+  RECIPES.push({ kind: 'lavastone', yields: 1, station: true, costs: [{ mat: MAT.BASALT, n: 8 }, { item: 'coal', n: 4 }] });
+  RECIPES.push({ kind: 'ichorstone', yields: 1, station: true, costs: [{ mat: MAT.SCARGLASS, n: 6 }, { item: 'voidore', n: 2 }], world: 'alien' });
   // THE BREACH (Build 33): the gate, a portcullis sized to any opening; the mender, a battery-fed repair gun
   RECIPES.push({ kind: 'gate', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'stick', n: 4 }] });
   RECIPES.push({ kind: 'mender', station: true, costs: [{ item: 'ironingot', n: 6 }, { item: 'wire', n: 4 }, { item: 'rubyingot', n: 1 }] });
@@ -6373,6 +6377,7 @@ const waterSys = {
   // what an untouched cell holds: rock, still water, or air
   staticLevel(gx, gy, gz){
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (springSys.isSrc(gx, gy, gz)) return W_SRC;                       // SPRINGS (Build 100)
     if (g.sdf(x, gy, z) < 0) return W_SOLID;
     if (g.seaLevel != null){
       const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
@@ -6386,6 +6391,7 @@ const waterSys = {
   // rock is rock, original water is a source
   editedLevel(gx, gy, gz, le){
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+    if (springSys.isSrc(gx, gy, gz)) return W_SRC;                       // SPRINGS (Build 100)
     if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
     if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
     if (g.seaLevel != null){
@@ -6407,6 +6413,7 @@ const waterSys = {
     return a;
   },
   hasWater(key){
+    if (springSys.chunkSet.has(key)) return true;                         // SPRINGS (Build 100)
     const [cx, cy, cz] = key.split(',').map(Number);
     const g = game.gen;
     const W = game.terrain ? game.terrain.waterInfo(cx, cz) : null;
@@ -8162,7 +8169,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -24799,6 +24806,8 @@ const netSys = {
     game.beacons = (d.beacons || []).map(b => [b[0], b[1], b[2]]);
     game.beds = (d.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
   game.fences = (d.fences || []).map(f => ({ x: f[0], y: f[1], z: f[2], yaw: f[3], gate: f[4] ? 1 : 0, open: f[5] ? 1 : 0 }));
+  game.springs = (d.springs || []).map(sp => ({ kind: sp.kind, x: sp.x, y: sp.y, z: sp.z }));
+  springSys.rebuild();
   game.doors = (d.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
   game.stoves = (d.stoves || []).map(r => ({ x: r[0], y: r[1], z: r[2], yaw: r[3] || 0,
     in: r[4] || null, fuel: r[5] || null, out: r[6] || null, burn: r[7] || 0, prog: r[8] || 0, id: r[9] }));
@@ -27023,6 +27032,7 @@ function activeTool(){
   if (it.kind === 'mender') return { kind: 'mender', tier: 0, item: it };
   if (it.kind === 'table' || it.kind === 'mtable' || it.kind === 'atable') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'fence' || it.kind === 'fencegate') return { kind: it.kind, tier: 0, item: it };
+  if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone') return { kind: 'spring', tier: 0, item: it };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
@@ -28798,11 +28808,19 @@ function tryAction(dt, now){
     }
     return;
   }
-  if (tool.kind === 'table' || tool.kind === 'beacon' || tool.kind === 'bed' || tool.kind === 'stove' || tool.kind === 'fence' || tool.kind === 'fencegate'){
+  if (tool.kind === 'table' || tool.kind === 'beacon' || tool.kind === 'bed' || tool.kind === 'stove' || tool.kind === 'fence' || tool.kind === 'fencegate' || tool.kind === 'spring'){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       const hit = surfaceHit();
       if (!hit){ toast('no ground in reach'); return; }
+      if (tool.kind === 'spring'){
+        // SPRINGS (Build 100)
+        if (!springSys.add(tool.item.kind, hit[0], hit[1], hit[2])) return;
+        if (game.mode !== 'creative') tool.item.count--;
+        if (tool.item.count <= 0) game.slots[game.hotSel] = null;
+        AudioSys.sfx('place'); refreshHotbar(); refreshToolHUD();
+        return;
+      }
       if (tool.kind === 'fence' || tool.kind === 'fencegate'){
         // FENCES (Build 99): snapped to the metre, squared to the world, two metres along the way you face (scroll turns it)
         if (!fenceSys.add(hit[0], hit[1], hit[2], (game.tool.pYaw || 0) + game.yaw, tool.kind === 'fencegate')){ toast('a fence stands there already'); AudioSys.sfx('deny'); return; }
@@ -29362,7 +29380,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -30107,6 +30125,12 @@ function itemIconURL(it){
     c.fillStyle = '#59c8d8'; c.fillRect(7, 4, 2, 8);           // pillar
     c.fillStyle = '#9fe8ff'; c.fillRect(6, 1, 4, 4);           // gem
     c.fillStyle = '#ffffff'; c.fillRect(7, 2, 1, 1);
+  } else if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone'){
+    // SPRINGS (Build 100): a round stone with a wet crack in it, in the water's colour
+    const wet = it.kind === 'lavastone' ? '#ff7a26' : it.kind === 'ichorstone' ? '#5ad86a' : '#4aa3e8';
+    c.fillStyle = it.kind === 'lavastone' ? '#3c3f45' : it.kind === 'ichorstone' ? '#141018' : '#7d7d84'; c.beginPath(); c.arc(8, 8.5, 6.5, 0, Math.PI * 2); c.fill();
+    c.fillStyle = wet; c.fillRect(7, 3, 2, 7); c.fillRect(6, 9, 4, 2); c.fillRect(5, 11, 6, 1);
+    c.fillStyle = '#ffffff'; c.fillRect(7, 4, 1, 2);
   } else if (it.kind === 'fence' || it.kind === 'fencegate'){
     // FENCES (Build 99): two posts and two rails; the gate has a brace across it
     c.fillStyle = '#8a6237'; c.fillRect(2, 3, 2, 11); c.fillRect(12, 3, 2, 11);
@@ -30337,6 +30361,9 @@ function itemLabel(it){
   if (it.kind === 'lathe') return 'lathe';
   if (it.kind === 'door') return 'door';
   if (it.kind === 'fence') return 'fence';
+  if (it.kind === 'springstone') return 'spring stone';
+  if (it.kind === 'lavastone') return 'lava stone';
+  if (it.kind === 'ichorstone') return 'ichor stone';
   if (it.kind === 'fencegate') return 'fence gate';
   if (it.kind === 'table') return 'crafting table';
   if (it.kind === 'mtable') return "the Moon's table";
@@ -30559,7 +30586,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spike
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery'];
-const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -30645,7 +30672,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'springstone', count: 4 }); out.push({ kind: 'lavastone', count: 4 }); out.push({ kind: 'ichorstone', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -31604,6 +31631,9 @@ function itemInfoHTML(it, tool){
            itemLabel({ kind: G.ammo }) + ' ' + ammoN + (G.perShot > 1 ? ' (uses ' + G.perShot + ')' : '') + '</div>';
   } else if (it.kind === 'sword'){
     html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
+  } else if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone'){
+    const nm = it.kind === 'springstone' ? 'spring stone' : it.kind === 'lavastone' ? 'lava stone' : 'ichor stone';
+    html = '<div class="t1">' + nm + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'springstone' ? 'set it in the ground and water wells up: a basin three metres across that never runs dry · fill the can at it · not on an airless world' : it.kind === 'lavastone' ? 'set it in the ground and lava wells up: a pool a metre and a half across, and it burns' : 'set it in the ground of Strata and ichor wells up: a basin that never runs dry · nowhere but Strata') + '</div>';
   } else if (it.kind === 'fence' || it.kind === 'fencegate'){
     html = '<div class="t1">' + (it.kind === 'fence' ? 'fence' : 'fence gate') + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'fence' ? 'two metres of rail the animals cannot cross or jump, and you walk through · snaps to the metre and to a right angle (scroll turns it) · right-click it empty-handed to take it back' : 'a fence piece that opens: right-click it · C and right-click to take it back') + '</div>';
   } else if (it.kind === 'door'){
@@ -32919,6 +32949,7 @@ function buildSaveData(){
     bulbs: game.bulbs,
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2, d.gate ? 1 : 0, d.broken ? 1 : 0, d.hp == null ? -1 : d.hp]),
     fences: (game.fences || []).map(f => [f.x, f.y, f.z, f.yaw, f.gate ? 1 : 0, f.open ? 1 : 0]),
+    springs: game.springs || [],
     tables: game.tables,
     ropes: game.ropes || [],
     rails: game.rails || [],
@@ -33024,6 +33055,8 @@ function startWorldData(id, data){
   game.activeStove = null;
   game.breath = 100; game.underwater = false;
   game.fences = (data.fences || []).map(f => ({ x: f[0], y: f[1], z: f[2], yaw: f[3], gate: f[4] ? 1 : 0, open: f[5] ? 1 : 0 }));
+  game.springs = (data.springs || []).map(sp => ({ kind: sp.kind, x: sp.x, y: sp.y, z: sp.z }));
+  springSys.rebuild();
   game.doors = (data.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
   game.ropes = (data.ropes || []).map(r => [r[0], r[1], r[2], r[3]]);
@@ -33102,6 +33135,7 @@ function startWorldData(id, data){
   bulbSys.rebuild();
   doorSys.rebuild();
   fenceSys.rebuild();
+  springSys.wakeAll();                                                    // SPRINGS (Build 100): the sources stand again (after the terrain is up)
   tableSys.rebuild();
   treeSys.refresh();
   farTreeSys.refresh();
@@ -33322,6 +33356,69 @@ const endSys = {
     game.story.credits = (game.story.credits || 0) + 1;
     AudioSys.sfx('teleport');
   },
+};
+
+// ---------- SPRINGS (Build 100) ----------
+// Water you can make. A spring stone set in the ground carves a basin
+// three metres across and a metre deep and puts nine sources at its
+// bottom, which the flow keeps full forever: the can fills at it, and
+// it never runs dry. The sources are part of the world's standing water
+// (the static truth the flow reads), so an edit beside them or a reload
+// never loses them; the basin is an ordinary edit. An ichor stone does
+// the same on Strata only (the water is green there). A lava stone
+// raises a pool of lava instead, an edit, and it burns. None of it on
+// an airless world
+const springSys = {
+  cellSet: new Set(), chunkSet: new Set(),
+  rebuild(){
+    this.cellSet.clear(); this.chunkSet.clear();
+    for (const sp of game.springs || []){
+      if (sp.kind === 'lavastone') continue;
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++){
+        const gx = sp.x + dx, gz = sp.z + dz;
+        this.cellSet.add(gx + ',' + sp.y + ',' + gz);
+        this.chunkSet.add(CK(Math.floor(gx / 8), Math.floor(sp.y / 8), Math.floor(gz / 8)));
+      }
+    }
+  },
+  isSrc(gx, gy, gz){ return this.cellSet.size > 0 && this.cellSet.has(gx + ',' + gy + ',' + gz); },
+  // the flow's chunks with a spring in them, made real and set running
+  wake(sp){
+    if (!game.terrain || sp.kind === 'lavastone') return;
+    const keys = new Set();
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) keys.add(waterSys.keyOf(sp.x + dx, sp.y, sp.z + dz));
+    for (const key of keys){ waterSys.materialize(key, true); waterSys.active.add(key); waterSys.dirtyMesh.add(key); }
+  },
+  add(kind, x, y, z){
+    if (airless()){ toast('no air here: it would boil off'); AudioSys.sfx('deny'); return null; }
+    if (kind === 'ichorstone' && game.planet !== 'alien'){ toast('ichor keeps nowhere but Strata'); AudioSys.sfx('deny'); return null; }
+    if (kind !== 'lavastone' && (!game.gen || game.gen.seaLevel == null)){ toast('water will not hold here'); AudioSys.sfx('deny'); return null; }
+    game.springs = game.springs || [];
+    const gx = Math.floor(x), gz = Math.floor(z);
+    if (kind === 'lavastone'){
+      const e = CORE.makeEdit(1, 0, +x.toFixed(2), +(y - 0.45).toFixed(2), +z.toFixed(2), 1.6, CORE.MAT.LAVA, 0);
+      applyEdit(e);
+      game.springs.push({ kind, x: gx, y: Math.round(y - 0.45), z: gz });
+      toast('lava wells up — mind your feet');
+      Particles.burst(x, y + 0.3, z, 0.8, [0xff7a26, 0xffb347], 20, 3);
+      markSave();
+      return true;
+    }
+    if (game.springs.some(sp => Math.abs(sp.x - gx) < 3 && Math.abs(sp.z - gz) < 3 && Math.abs(sp.y - y) < 3)){ toast('a spring is here already'); AudioSys.sfx('deny'); return null; }
+    // the basin: three metres across, a metre and a quarter deep, its floor a cell boundary
+    const gy = Math.round(y - 0.75);
+    const cut = CORE.makeEdit(0, 1, gx + 0.5, gy + 0.55, gz + 0.5, 3.0, 0, 0); cut.sy = 1.9; cut.sz = 3.0; cut.noLod = 1;
+    applyEdit(cut);
+    const sp = { kind, x: gx, y: gy, z: gz };
+    game.springs.push(sp);
+    this.rebuild();
+    this.wake(sp);
+    toast(kind === 'ichorstone' ? 'ichor wells up' : 'water wells up — fill the can here');
+    Particles.burst(x, y + 0.3, z, 0.8, kind === 'ichorstone' ? [0x5ad86a, 0xa8ffb0] : [0x4aa3e8, 0xd8f6ff], 20, 3);
+    markSave();
+    return sp;
+  },
+  wakeAll(){ this.rebuild(); for (const sp of game.springs || []) this.wake(sp); },
 };
 
 // ---------- FENCES (Build 99) ----------
@@ -36821,7 +36918,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

@@ -1448,6 +1448,26 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-09-28 — SPRINGS, and the hundredth build
+
+A spring is nine cells that say "source" forever. The flow already
+knew what a source was (the sea, a lake, a river), so the whole trick
+was to make the springs part of the static truth the flow reads, and
+not just cells written into a chunk: written cells are lost when an
+edit beside them makes the chunk re-read the world. Then a reload is
+just the same truth read again. The carve is an edit like any other.
+
+The one wrinkle was order: the sources have to be woken after the
+terrain exists, and the world loader loads the water before it builds
+the scene. Two lines moved.
+
+A hundred builds. The first one was a flat plane of rock and a sphere
+that cut it. I keep the standing note that says every new stackable
+kind has to be told to craft(), and I keep the newer one that says a
+test of a button must press the button. What I would tell the me of
+Build 1: cache what the generator answers, and never trust a test you
+did not watch fail first.
+
 ## 2026-09-27, later — FENCES
 
 An invisible wall for animals only is a segment-crossing test in the

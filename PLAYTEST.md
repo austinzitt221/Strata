@@ -5,6 +5,13 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 100 — SPRINGS
+- [ ] Craft a spring stone, set it by the farm, fill the can at it a
+      few times. Dig beside it, build over it, quit and reload: still
+      full?
+- [ ] A lava stone somewhere safe. Then somewhere not.
+- [ ] Is twelve rock and four mud the right price for infinite water?
+
 ## Build 99 — FENCES AND GATES
 - [ ] Craft fences, build a pen round two sheep, breed them in it. Do
       the pieces snap the way you expect? Is the quarter-turn on scroll

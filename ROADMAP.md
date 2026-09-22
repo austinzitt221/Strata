@@ -420,7 +420,7 @@ I want to build them:
  14. **Fences and gates** (DONE, Build 99). A fence piece that joins to its neighbours
      and a gate that opens like a door; a wall the animals cannot cross
      or jump, and you can. Pens at last.
- 15. **Springs.** Water you can place: dig one with a SPRING STONE (a
+ 15. **Springs** (DONE, Build 100). Water you can place: dig one with a SPRING STONE (a
      crafted item set in the ground) and it wells up into a source that
      never runs dry, for the can to fill from; a LAVA SPRING and an
      ICHOR SPRING the same way, from their own stones. (Austin asked for

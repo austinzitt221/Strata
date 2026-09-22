@@ -2,6 +2,27 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 100 — SPRINGS: water you can make (2026-09-28)
+
+Austin wanted a way to make water for the farm; a bucket was the
+obvious answer and not the one I wanted.
+
+- **The spring stone.** Twelve rock and four mud at a table. Set it in
+  the ground where you point and water wells up: a basin three metres
+  across and a metre and a quarter deep is carved (an ordinary edit)
+  with nine sources at its floor, and the flow keeps it full forever.
+  Fill the can at it. The sources are part of the world's standing
+  water, the static truth the flow reads, so an edit beside the basin
+  or a reload never loses them; they are saved with the world and set
+  running again when it loads. Not on an airless world (it would boil
+  off), and not where water will not hold.
+- **The ichor stone.** Six scarglass and two voidore at Strata's table.
+  The same, and only on Strata, where the water is green.
+- **The lava stone.** Eight basalt and four coal. Set it in the ground
+  and a pool of lava a metre and a half across wells up (an edit), and
+  it burns. Anywhere, air or none.
+- All three are in the creative catalog under SPECIAL.
+
 ## Build 99 — FENCES AND GATES (2026-09-27)
 
 Pens at last (Austin's item 14).
