@@ -453,7 +453,7 @@ in the order I want to build them:
      the preview snaps its end to the end of the piece beside it, and
      from that snapped joint the scroll wheel turns it freely, so two
      pieces meet at any angle and stay joined. (Austin.)
- 22. **Hoed ground is ground.** The hoe does not lay a flat patch on
+ 22. **Hoed ground is ground** (DONE, Build 108). The hoe does not lay a flat patch on
      the ground; it turns the ground you point at into tilled earth
      (a material, painted on the existing shape) and the crops grow
      out of it wherever the surface is, each stalk at its own height.

@@ -1448,6 +1448,28 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-03 — hoed ground
+
+Build 108. The paint op has been in the engine since the wrench and
+this is the first time gameplay used it for itself: the hoe is a
+paintbrush. I like that a farm is now the same kind of thing as a
+carved cave, an entry in the edit list, and that the wrench can move
+or delete it like anything else.
+
+The wet/dry swap mutates an edit in place. That is the first time
+the game changes an edit after the fact outside the wrench, and it
+made me check that invalidate re-meshes from the edit's box alone: it
+does. Worth remembering for the liquids build, which will want the
+same thing (a placed liquid that changes level is an edit that
+changes, not a new one).
+
+The crop-on-the-drill question I put in the playtest is real and I
+do not have the answer: a plot under a hole is nonsense, and the
+tidy fix (the drill deletes the plot record) is a rule I would rather
+Austin choose.
+
+Next: the liquids (23). Thinking first, as promised.
+
 ## 2026-10-02, later — fence building
 
 Build 107. Austin described the mechanic exactly (preview, snap the

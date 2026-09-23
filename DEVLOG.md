@@ -2,6 +2,36 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 108 — HOED GROUND: the ground is the plot (2026-10-03)
+
+Roadmap item 22, Austin's. A plot was a flat bed laid on top of the
+ground. Now the hoe turns the ground.
+
+- **Two materials.** TILLED EARTH and WET TILLED EARTH (54 and 55;
+  dark turned earth in rows, and the same gone dark with water). The
+  hoe paints the ground you point at with a paint edit two metres
+  square and three metres tall, so a slope takes it, and the plot
+  record stays what it was (crop, stage, water). No new geometry: a
+  hillside is a hillside with rows on it.
+- **The crops stand on the surface.** Each of the four stands finds
+  the ground under it by a bisection of the field, so on a flank the
+  four stems sit at four heights. The drawn bed and the drawn wet
+  overlay are gone.
+- **Water darkens the earth.** Every two seconds each plot's paint is
+  swapped to the wet material while it has water and back when it
+  runs out: a change to the edit in place and a re-mesh of the chunks
+  it touches, not a new edit each time.
+- The hoe takes grass, dry grass, leaf litter, mud and peat (and
+  tilled earth again). Rock refuses.
+- **Old worlds.** Plots from before this build have no paint; on load
+  each gets its ground painted, wet or dry as it stands.
+- Known: the far skin and the LOD rings colour tilled earth from the
+  material table, which is right, but they do not follow the wet/dry
+  swap until their next rebuild; from a distance a plot may read dry
+  for a while. And a plot painted on a two-metre grid where the
+  ground drops more than a metre and a half within the square stays
+  tilled only down to the paint's reach.
+
 ## Build 107 — FENCE BUILDING: the ghost and the joint (2026-10-02)
 
 Roadmap item 21, Austin's.

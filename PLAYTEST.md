@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 108 — HOED GROUND
+- [ ] Hoe a hillside and plant it. Do the crops sit on the ground at
+      every height? Does the earth go dark when you water it and light
+      when it dries?
+- [ ] Load a world with an old farm: are the plots there, tilled, and
+      still growing?
+- [ ] Mine a plot with the drill, or place over it: what should happen
+      to the crop? (Right now the record stays and the crop floats
+      or is buried; tell me what you would want.)
+- [ ] Try the hoe on mud and on peat, and on rock.
+
 ## Build 107 — FENCE BUILDING
 - [ ] Build a pen with the ghost: does it join where you expect, and
       does the wheel turn it the way you want at the corners? Is

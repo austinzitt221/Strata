@@ -718,9 +718,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               ASH:41, BONE:42, SCARGLASS:43, CORRUPT:44, VOIDORE:45,
               GLOWSTALK:46, GLOWPLANK:47, ASHSTALK:48, ASHPLANK:49, BONESTALK:50, BONEPLANK:51,
               NULLSTONE:52,     // STRATA D (Build 88): the spike at the centre, and the plate it stands on
-              VEILSTONE:53 };   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 53;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone'];
+              VEILSTONE:53,
+              TILLED:54, TILLEDWET:55 };   // HOED GROUND (Build 108): the ground itself, turned; dry and wet   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 55;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone','tilled earth','wet tilled earth'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD, MAT.GLOWSTALK, MAT.ASHSTALK, MAT.BONESTALK];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS,
@@ -5163,6 +5164,17 @@ function makeTileDrawers(){
       ctx.fillStyle = '#5a4a72'; ctx.fillRect(0, 5, 16, 1); ctx.fillRect(0, 11, 16, 1);
       ctx.fillRect(4, 0, 1, 5); ctx.fillRect(11, 6, 1, 5); ctx.fillRect(7, 12, 1, 4);
       ctx.fillStyle = '#b8a4d8'; ctx.fillRect(1, 1, 2, 1); ctx.fillRect(12, 7, 2, 1); ctx.fillRect(8, 13, 3, 1);
+    },
+    [CORE.MAT.TILLED](ctx, rng){
+      // HOED GROUND (Build 108): dark turned earth in rows
+      speckle(ctx, rng, '#4a3322', '#3e2a1c', '#5a4030', 0.3, 0.2);
+      for (const y of [1, 6, 11]){ ctx.fillStyle = '#2e1e14'; ctx.fillRect(0, y, 16, 2); ctx.fillStyle = '#6a5038'; ctx.fillRect(0, y + 3, 16, 1); }
+      for (let i = 0; i < 6; i++){ ctx.fillStyle = '#7a6448'; ctx.fillRect((rng() * 16) | 0, (rng() * 16) | 0, 1, 1); }
+    },
+    [CORE.MAT.TILLEDWET](ctx, rng){
+      speckle(ctx, rng, '#33221a', '#2a1a12', '#3d2a20', 0.3, 0.2);
+      for (const y of [1, 6, 11]){ ctx.fillStyle = '#1e120c'; ctx.fillRect(0, y, 16, 2); ctx.fillStyle = '#4a3628'; ctx.fillRect(0, y + 3, 16, 1); }
+      for (let i = 0; i < 4; i++){ ctx.fillStyle = '#5a4838'; ctx.fillRect((rng() * 16) | 0, (rng() * 16) | 0, 1, 1); }
     },
     [CORE.MAT.NULLSTONE](ctx, rng){
       // black, and a green that is not quite there
@@ -10501,20 +10513,25 @@ const pnodeSys = {
         for (let i = 0; i < 4; i++){ const ch = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 8), i % 2 ? M.chip : M.steel); ch.position.set(0.6, 0.94 + i * 0.03, -0.3); g.add(ch); }
       }
     } else if (t === 'plot'){
-      // tilled ground: a dark square with furrows; the crop grows in four stands
-      if (!M.soil) M.soil = new THREE.MeshBasicMaterial({ color: 0x4a3322 });
-      if (!M.furrow) M.furrow = new THREE.MeshBasicMaterial({ color: 0x33221a });
-      const bed = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.14, 2.0), M.soil); bed.position.y = 0.07; g.add(bed);
-      for (const z of [-0.6, 0, 0.6]){ const f = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.04, 0.16), M.furrow); f.position.set(0, 0.15, z); g.add(f); }
+      // HOED GROUND (Build 108): the ground is the plot (painted tilled by the
+      // hoe); only the crop is drawn, four stands each on the surface under it
       if (n.crop){
         const C = FARM_CROPS[n.crop], st = n.stage || 0, h = 0.15 + st * C.h;
         const leaf = new THREE.MeshBasicMaterial({ color: C.leaf }), fruit = new THREE.MeshBasicMaterial({ color: C.fruit });
+        const le = nearEdits([n.x - 2, n.y - 3, n.z - 2, n.x + 2, n.y + 3, n.z + 2]);
+        const groundY = (x, z) => {
+          let lo = n.y - 2.5, hi = n.y + 2.5;
+          if (sdfWorld(x, hi, z, le) < 0) return hi;
+          if (sdfWorld(x, lo, z, le) > 0) return lo;
+          for (let i = 0; i < 14; i++){ const m = (lo + hi) / 2; if (sdfWorld(x, m, z, le) > 0) hi = m; else lo = m; }
+          return (lo + hi) / 2;
+        };
         for (const [x, z] of [[-0.55, -0.55], [0.55, -0.55], [-0.55, 0.55], [0.55, 0.55]]){
-          const stem = new THREE.Mesh(new THREE.BoxGeometry(0.16 + st * 0.05, h, 0.16 + st * 0.05), leaf); stem.position.set(x, 0.14 + h / 2, z); g.add(stem);
-          if (st >= 2){ const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.34), st >= 3 ? fruit : leaf); top.position.set(x, 0.14 + h + 0.08, z); g.add(top); }
+          const gy = groundY(n.x + x, n.z + z) - n.y - 0.06;
+          const stem = new THREE.Mesh(new THREE.BoxGeometry(0.16 + st * 0.05, h, 0.16 + st * 0.05), leaf); stem.position.set(x, gy + h / 2, z); g.add(stem);
+          if (st >= 2){ const top = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 0.34), st >= 3 ? fruit : leaf); top.position.set(x, gy + h + 0.08, z); g.add(top); }
         }
       }
-      if (n.water > 0){ const wet = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.02, 2.0), new THREE.MeshBasicMaterial({ color: 0x2a1a12 })); wet.position.y = 0.145; g.add(wet); }
     } else if (t === 'statue'){
       // a figure in marble on a plinth, one fist up (the plaque is text: rebuild)
       if (!M.marble) M.marble = pixMat(PixTex.make('statueMarble', (c, w, h, rng) => { pxSpeckle(c, rng, '#d8d6cf', '#c4c2ba', '#e9e7e0', 24); c.fillStyle = '#b9b7ae'; c.fillRect(0, 7, 16, 1); c.fillRect(9, 0, 1, 7); }));
@@ -22495,6 +22512,35 @@ const FARM_TIP = {
 };
 const farmSys = {
   GROW: 75, WATER: 3,
+  // HOED GROUND (Build 108): a plot is not a patch laid on the ground; the
+  // hoe paints the ground itself tilled (a paint edit, two metres square and
+  // three tall, so a slope takes it), the crops stand on the surface wherever
+  // it is, and water shows as the earth going dark: the paint swaps between
+  // the dry and the wet material as the plot's water comes and goes
+  TILL_OK: new Set([CORE.MAT.GRASS, CORE.MAT.DRYGRASS, CORE.MAT.LEAFLITTER, CORE.MAT.MUD, CORE.MAT.PEAT, CORE.MAT.TILLED, CORE.MAT.TILLEDWET]),
+  paintOf(n){
+    for (let i = game.edits.length - 1; i >= 0; i--){
+      const e = game.edits[i];
+      if (e.op === 2 && (e.mat === CORE.MAT.TILLED || e.mat === CORE.MAT.TILLEDWET) && Math.abs(e.x - n.x) < 0.01 && Math.abs(e.z - n.z) < 0.01 && Math.abs(e.y - n.y) < 0.6) return e;
+    }
+    return null;
+  },
+  till(n){
+    if (!n || this.paintOf(n)) return;
+    const ed = CORE.makeEdit(2, 1, n.x, n.y, n.z, 2.0, n.water > 0 ? CORE.MAT.TILLEDWET : CORE.MAT.TILLED, 0); ed.sy = 3.0;
+    applyEdit(ed);
+  },
+  wet(n, on){
+    const ed = this.paintOf(n); if (!ed) return;
+    const want = on ? CORE.MAT.TILLEDWET : CORE.MAT.TILLED;
+    if (ed.mat === want) return;
+    ed.mat = want; game.terrain.invalidate(ed); markSave();
+  },
+  // plots from before Build 108 had a bed and no paint: give them the ground
+  migrate(){
+    if (netSys.guest) return;
+    for (const n of this.plots()) this.till(n);
+  },
   // THE SPRINKLER (Build 101): a tank of twelve, a ring of twelve metres,
   // a burst every six seconds of spraying; every dry plot in the ring is
   // wet after a burst. Fed by a can poured in, or a tube from an intake
@@ -22565,10 +22611,12 @@ const farmSys = {
     if (it.kind === 'hoe'){
       const h = surfaceHit(); if (!h){ toast('aim at the ground'); return true; }
       const m = groundMatNear({ x: h[0], y: h[1], z: h[2] }, 0.8);
-      if (m !== CORE.MAT.GRASS && m !== CORE.MAT.DRYGRASS && m !== CORE.MAT.LEAFLITTER){ toast('a plot wants grass'); AudioSys.sfx('deny'); return true; }
+      if (!this.TILL_OK.has(m)){ toast('a plot wants earth: grass, mud or peat'); AudioSys.sfx('deny'); return true; }
       const x = Math.round(h[0] / 2) * 2, z = Math.round(h[2] / 2) * 2, y = +h[1].toFixed(2);
       if (this.plots().some(n => Math.hypot(n.x - x, n.z - z) < 1.9)){ toast('tilled already'); return true; }
-      propBatchBegin(); try { pnodeSys.add('plot', x, y, z, 0, { crop: null, stage: 0, water: 0, gt: 0 }); } finally { propBatchEnd(); }
+      let n = null;
+      propBatchBegin(); try { n = pnodeSys.add('plot', x, y, z, 0, { crop: null, stage: 0, water: 0, gt: 0 }); } finally { propBatchEnd(); }
+      this.till(n);                                                                   // HOED GROUND (Build 108): the ground itself is turned
       toast('a plot — seeds go in, water keeps it'); AudioSys.sfx('place'); markSave();
       return true;
     }
@@ -22628,6 +22676,7 @@ const farmSys = {
       n.gt = (n.gt || 0) + step;
       if (n.gt >= this.GROW){ n.gt = 0; n.stage = (n.stage || 0) + 1; n.water = Math.max(0, n.water - 1); dirty = true; }
     }
+    for (const n of this.plots()) this.wet(n, (n.water || 0) > 0);   // Build 108: the earth darkens and dries
     if (dirty){ pnodeSys.rebuild(); markSave(); }
   },
 };
@@ -33578,7 +33627,8 @@ function startWorldData(id, data){
   bulbSys.rebuild();
   doorSys.rebuild();
   fenceSys.rebuild();
-  springSys.wakeAll();                                                    // SPRINGS (Build 100): the sources stand again (after the terrain is up)
+  springSys.wakeAll();
+  farmSys.migrate();                                                      // HOED GROUND (Build 108): old plots get their ground                                                    // SPRINGS (Build 100): the sources stand again (after the terrain is up)
   tableSys.rebuild();
   treeSys.refresh();
   farTreeSys.refresh();
