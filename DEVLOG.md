@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 106 — the fixes from the 2026-10-01 playtest (2026-10-02)
+
+Austin played 99 to 105: everything new works. Four things he saw:
+
+- **The hole under you in flight.** Build 98's near cut (the far skin
+  and the LOD rings discard within 24 m of the player, so a ghost city
+  never covers a real doorway) measured that distance on the ground
+  plane. Flying high and fast, the real chunks below are not meshed
+  yet and the skin was cut out under you: a disc of nothing that
+  followed you. The cut is a sphere now: on the ground it is the same
+  24 m; twenty-five metres up it does nothing.
+- **Bodies.** Every walking thing near you now keeps out of every
+  other: pairs that overlap (their radii, scaled by growth) are pushed
+  apart on the ground plane by half the overlap each, and two on one
+  spot are parted along a fixed angle so a crowd fans out. Vehicles,
+  drops, bosses, riders and the one in your arms sit it out. Six husks
+  are six husks; two sheep are two.
+- **Fences held nothing.** The Build 99 rule tested each step against
+  each rail as a segment crossing, strictly. A step through the joint
+  between two pieces was on neither segment, and a step that ended
+  exactly on the line then began on it. The sheep in my own sim walked
+  out at a joint in three seconds. Rails are thin walls now: after an
+  animal has moved and the ground has pushed it, every closed piece
+  near it pushes it back out to a margin on the side it came from,
+  with the rails extended a little past their ends so the joints hold.
+  And an animal held by a rail never does the stuck-at-a-wall hop
+  (that was the "jumping"). 900 frames of a lured sheep against a pen
+  from three sides: inside; the gate still lets it out.
+- **Farmhands reaped the moment a plot turned.** They were standing
+  over it from watering, and reaped in the same second it ripened, so
+  it never looked ripe. A plot now counts the seconds it has stood
+  ripe and a hand waits twenty of them. (The rule was already "ripe
+  only": stage 3, the same stage you harvest at.)
+
 ## Build 105 — ICHOR FISHING: things that are not fish (2026-10-01)
 
 Roadmap item 20, mine, and the last of the list from Austin's

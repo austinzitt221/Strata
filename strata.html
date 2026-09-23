@@ -15896,7 +15896,7 @@ const crewSys = {
   // (or onto the ground when it is full). They fill the can at the nearest
   // water they know of: a spring you made, or any pond or river within
   // thirty metres. Ripe first, then the rest by distance.
-  FARM_R: 16,
+  FARM_R: 16, RIPE_WAIT: 20,
   isSeed(it){ return !!(it && it.count > 0 && Object.values(FARM_CROPS).some(c => c.seed === it.kind)); },
   canOf(C){ if (C.tool && C.tool.kind === 'can') return C.tool; return (C.bag || []).find(s => s && s.kind === 'can') || null; },
   seedOf(C){ if (this.isSeed(C.tool)) return C.tool; return (C.bag || []).find(s => this.isSeed(s)) || null; },
@@ -15910,7 +15910,7 @@ const crewSys = {
     for (const p of farmSys.plots()){
       if (Math.abs(p.y - e.y) > 8 || Math.hypot(p.x - post.x, p.z - post.z) > R) continue;
       let kind = null, pri = 0;
-      if (hoe && p.crop && (p.stage || 0) >= 3) kind = 'reap';
+      if (hoe && p.crop && (p.stage || 0) >= 3 && (p.ripeT || 0) >= this.RIPE_WAIT) kind = 'reap';   // Build 106: ripe, and seen to be ripe
       else if (can && (p.water || 0) <= 0){ kind = can.water > 0 ? 'water' : 'fill'; pri = 1; }
       else if (seed && !p.crop){ kind = 'plant'; pri = 1; }
       if (!kind) continue;
@@ -15981,7 +15981,7 @@ const crewSys = {
         did = true;
       }
     } else if (J.kind === 'reap'){
-      if (p.crop && (p.stage || 0) >= 3){
+      if (p.crop && (p.stage || 0) >= 3 && (p.ripeT || 0) >= this.RIPE_WAIT){
         this.equip(e, 'hoe');
         const Cr = FARM_CROPS[p.crop];
         for (const it of [{ kind: p.crop, count: Cr.n }, { kind: Cr.seed, count: 2 }]) if (!this.bagAdd(C, it)) dropItem(it, { x: p.x, y: p.y + 0.8, z: p.z });
@@ -22612,6 +22612,7 @@ const farmSys = {
     let dirty = false;
     for (const n of this.plots()){
       if (rain && n.water < this.WATER){ n.water = this.WATER; dirty = true; }
+      if (n.crop && (n.stage || 0) >= 3) n.ripeT = (n.ripeT || 0) + step; else n.ripeT = 0;   // FARMHANDS II (Build 106): how long it has stood ripe
       if (!n.crop || (n.stage || 0) >= 3 || n.water <= 0) continue;
       n.gt = (n.gt || 0) + step;
       if (n.gt >= this.GROW){ n.gt = 0; n.stage = (n.stage || 0) + 1; n.water = Math.max(0, n.water - 1); dirty = true; }
@@ -24489,14 +24490,6 @@ function updateEntities(dt, now){
     e.vy -= (game.planet === 'moon' ? MOON_G : zeroG() ? 0 : 22) * dt;
     const ox = e.x;
     const oz = e.z;
-    // FENCES (Build 99): the passive animals stop at a fence, whatever they were doing
-    if (game.fences && game.fences.length && breedSys.passive(e) && fenceSys.blocks(e.x, e.z, e.x + e.vx * dt, e.z + e.vz * dt, e.y)){
-      // stopped: slide along the rail if one axis is free (that is how it finds the gate)
-      if (!fenceSys.blocks(e.x, e.z, e.x + e.vx * dt, e.z, e.y)) e.vz = 0;
-      else if (!fenceSys.blocks(e.x, e.z, e.x, e.z + e.vz * dt, e.y)) e.vx = 0;
-      else { e.vx = 0; e.vz = 0; }
-      if (e.vy > 0) e.vy = 0;
-    }
     e.x += e.vx * dt; e.y += e.vy * dt; e.z += e.vz * dt;
     // sphere-vs-SDF collide
     const box = [e.x - 1.2, e.y - 1.2, e.z - 1.2, e.x + 1.2, e.y + def.h + 1.2, e.z + 1.2];
@@ -24515,8 +24508,10 @@ function updateEntities(dt, now){
         if (g[1] > 0.5){ grounded = true; if (e.vy < 0) e.vy = 0; }
       }
     }
+    // FENCES II (Build 106): the passive animals are held by the rails, and never hop at one
+    const fenced = game.fences && game.fences.length && breedSys.passive(e) && fenceSys.keepOut(e, ox, oz);
     // hop when stuck against a wall
-    if (grounded && sl > 1 && Math.hypot(e.x - ox, e.z - oz) < sp * dt * 0.25) e.vy = 6.5;
+    if (grounded && !fenced && sl > 1 && Math.hypot(e.x - ox, e.z - oz) < sp * dt * 0.25) e.vy = 6.5;
     if (e.y < CORE.BEDROCK_Y + 0.3){ e.y = CORE.BEDROCK_Y + 0.3; e.vy = 0; }
     // mesh
     if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
@@ -24541,6 +24536,43 @@ function updateEntities(dt, now){
         ud.hpbar.fg.position.x = -(1 - f) * 0.45;
         ud.hpbar.fg.material.color.setHex(f > 0.5 ? 0x5fe08a : f > 0.25 ? 0xffb44d : 0xe05050);
       }
+    }
+  }
+  separateEntities();
+}
+// BODIES (Build 106): the walking things keep out of each other. Every pair
+// near you that overlaps (their radii, scaled by growth) is pushed apart
+// by half the overlap each, on the ground plane; two on the same spot are
+// parted along a fixed angle so a crowd fans out instead of jittering.
+// Vehicles, drops, bosses, riders and the one in your arms sit this out;
+// a fenced animal is not pushed through its rail. (Austin: six husks in
+// one husk, two sheep in one sheep, a crew member lost inside another.)
+function separateEntities(){
+  const L = [];
+  for (const e of game.entities){
+    if (VEH[e.type] || e.type === 'drop' || e.bossType || e.ride || e.st2 || e === game.carried || e === game.driving) continue;
+    const def = ENT_DEF[e.type]; if (!def || def.fly) continue;
+    if (Math.abs(e.x - game.pos.x) > 90 || Math.abs(e.z - game.pos.z) > 90) continue;
+    L.push(e);
+  }
+  for (let i = 0; i < L.length; i++){
+    const a = L[i], ra = (ENT_DEF[a.type].r || 0.4) * (a.big || 1);
+    for (let j = i + 1; j < L.length; j++){
+      const b = L[j];
+      if (Math.abs(a.y - b.y) > 1.6) continue;
+      const rb = (ENT_DEF[b.type].r || 0.4) * (b.big || 1), min = ra + rb;
+      let dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+      if (d >= min) continue;
+      if (d < 1e-3){ const ang = (i * 2.399 + j * 0.7) % 6.2832; dx = Math.cos(ang) * 1e-3; dz = Math.sin(ang) * 1e-3; d = 1e-3; }
+      const push = (min - d) * 0.5; dx /= d; dz /= d;
+      const ax0 = a.x, az0 = a.z, bx0 = b.x, bz0 = b.z;
+      a.x -= dx * push; a.z -= dz * push; b.x += dx * push; b.z += dz * push;
+      if (game.fences && game.fences.length){
+        if (breedSys.passive(a)) fenceSys.keepOut(a, ax0, az0);
+        if (breedSys.passive(b)) fenceSys.keepOut(b, bx0, bz0);
+      }
+      if (a.mesh) a.mesh.position.set(a.x, a.y, a.z);
+      if (b.mesh) b.mesh.position.set(b.x, b.y, b.z);
     }
   }
 }
@@ -33839,6 +33871,35 @@ const fenceSys = {
     return f;
   },
   remove(f){ const i = game.fences.indexOf(f); if (i >= 0){ game.fences.splice(i, 1); this.rebuild(); markSave(); } },
+  // FENCES II (Build 106): a rail is a thin wall. After an animal has moved
+  // (and the ground has pushed it), every closed piece near it pushes it
+  // back out to a margin on the side it came from -- a crossing is undone,
+  // a graze is stopped, and the rails are extended a little past their
+  // ends so the joints hold. (The step test of Build 99 let a step through
+  // a joint pass, and one that ended on the line: Austin's sheep walked out.)
+  MARGIN: 0.34,
+  keepOut(e, ox, oz){
+    const F = game.fences; if (!F || !F.length) return false;
+    let held = false;
+    for (const f of F){
+      if (f.open || Math.abs(f.y - e.y) > 2.6 || Math.abs(f.x - e.x) > 2.5 || Math.abs(f.z - e.z) > 2.5) continue;
+      const [x0, z0, x1, z1] = this.ends(f);
+      const dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz) || 1, ux = dx / L, uz = dz / L, nx = -uz, nz = ux;
+      // along the rail, with a little past each end; across it, signed
+      const t = (e.x - x0) * ux + (e.z - z0) * uz;
+      if (t < -this.MARGIN || t > L + this.MARGIN) continue;
+      const d = (e.x - x0) * nx + (e.z - z0) * nz;
+      if (Math.abs(d) >= this.MARGIN) continue;
+      const dPrev = (ox - x0) * nx + (oz - z0) * nz;
+      const side = dPrev !== 0 ? Math.sign(dPrev) : (d !== 0 ? Math.sign(d) : 1);
+      e.x += (side * this.MARGIN - d) * nx; e.z += (side * this.MARGIN - d) * nz;
+      const vn = e.vx * nx + e.vz * nz;
+      if (Math.sign(vn) === -side){ e.vx -= vn * nx; e.vz -= vn * nz; }
+      if (e.vy > 0) e.vy = 0;
+      held = true;
+    }
+    return held;
+  },
   // does a step from a to b (at height y) cross a closed piece?
   blocks(ax, az, bx, bz, y){
     const F = game.fences; if (!F || !F.length) return false;
@@ -35818,7 +35879,7 @@ const SKIN_FRAG = TERRAIN_FRAG
     'uniform sampler2D uMatTex; uniform vec2 uMatOrigin; uniform float uMatSpan;\nuniform vec4 uHole;\nvarying vec4 vShadowCoord;')
   .replace('void main(){',
     'void main(){\n' +
-    '  if (distance(vPos.xz, uPlayerPos.xz) < 24.0) discard;\n' +
+    '  if (distance(vPos, uPlayerPos) < 24.0) discard;\n' +
     '  if (vPos.x > uHole.x && vPos.x < uHole.z && vPos.z > uHole.y && vPos.z < uHole.w) discard;\n' +
     '  if (uMaskOn > 0.5){\n' +
     '    vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
@@ -36351,7 +36412,7 @@ const lodTerrain = {
         'void main(){\n' +
         '  if (vCut > 0.999) discard;\n' +
         '  if (uFeatNear > 0.0 && distance(vPos.xz, uPlayerPos.xz) < uFeatNear) discard;\n' +
-        '  if (distance(vPos.xz, uPlayerPos.xz) < 24.0) discard;\n');
+        '  if (distance(vPos, uPlayerPos) < 24.0) discard;\n');
     const lodVert = TERRAIN_VERT
       .replace('uniform mat4 uShadowMatrix;',
         'uniform mat4 uShadowMatrix;\nuniform float uSink;\n' +

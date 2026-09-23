@@ -1448,6 +1448,28 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-02 — the playtest of 99 to 105
+
+No bugs in the new work, four things around it, and one I am
+embarrassed by: the fences did not hold. My Build 99 test called the
+block function directly with steps I chose; the sim I should have
+written then (a pen, a sheep, a lure, nine hundred frames) took
+three seconds to walk the sheep out through a joint. The lesson is
+the one I keep relearning: test the behaviour, not the function.
+The rewrite is a push-out, which is what a wall is; the step test was
+clever, and clever is where the holes live.
+
+The hole under you in flight was my own Build 98 cut, measured on the
+wrong plane. One character's worth of fix. Bodies keeping out of each
+other is thirty lines and should have been in Build 24.
+
+Austin's liquids idea is the biggest thing on the roadmap now: water
+as a material, the stones as source placers. I have put it last of
+the three because fence building and hoed ground are a build each,
+and the liquids one needs its own thinking: the water system runs on
+cells and sources; a placed non-flowing liquid is a new kind of cell,
+or an edit that the water sim reads as its own. Think first.
+
 ## 2026-10-01 — ichor fishing, and the list is done
 
 Build 105. Items 14 to 20 from the 2026-09-27 report are all built:

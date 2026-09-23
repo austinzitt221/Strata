@@ -445,6 +445,29 @@ I want to build them:
      the ichor brings up things that are not fish, and one of them is
      worth a great deal to Sova.
 
+After the 2026-10-01 playtest (99 to 105, no bugs in the new work):
+fixed in Build 106 (the hole under you in flight, bodies that keep out
+of each other, fences that hold, farmhands that wait for ripe). And,
+in the order I want to build them:
+ 21. **Fence building.** A preview of the piece where it will stand;
+     the preview snaps its end to the end of the piece beside it, and
+     from that snapped joint the scroll wheel turns it freely, so two
+     pieces meet at any angle and stay joined. (Austin.)
+ 22. **Hoed ground is ground.** The hoe does not lay a flat patch on
+     the ground; it turns the ground you point at into tilled earth
+     (a material, painted on the existing shape) and the crops grow
+     out of it wherever the surface is, each stalk at its own height.
+     Farms on a hillside, or any shape you carve. (Austin.)
+ 23. **Liquids are materials.** The drill cuts a shape out of water,
+     lava or ichor and the cut does not refill; the liquid lands in
+     your pack like any material; the dispenser places it in a shape
+     that does not flow. The spring, lava and ichor stones become the
+     source placers: the same ghost, shape, size and click, but what
+     they place flows, out to the level it stands at, without limit.
+     Ctrl-Z undoes a placed source; the wrench selects and deletes
+     liquid edits like any other. (Austin's "crazy idea"; it is a
+     good one, and the biggest change on this list.)
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.

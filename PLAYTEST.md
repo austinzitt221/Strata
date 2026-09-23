@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 106 — the fixes
+- [ ] Fly high and fast: is the disc under you gone?
+- [ ] Walk into a crowd: husks at night, a flock you are luring, your
+      two crew following. Nobody inside anybody?
+- [ ] The pen again: lure a sheep at the rails from every side and at
+      the corners. Any way out but the gate?
+- [ ] A farmhand with a hoe by a ripening plot: do you see it ripe
+      before it is taken?
+
 ## Build 105 — ICHOR FISHING
 - [ ] Cast into an ichor river. Is the wait right? Fish until you have
       one of each: does the crown feel like a find when it comes?
