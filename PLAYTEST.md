@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 107 — FENCE BUILDING
+- [ ] Build a pen with the ghost: does it join where you expect, and
+      does the wheel turn it the way you want at the corners? Is
+      fifteen degrees a notch right?
+- [ ] Build one at an odd angle on a slope, then lure a sheep at every
+      side. Held?
+- [ ] Is anything worse now that the pieces no longer snap to the
+      metre?
+
 ## Build 106 — the fixes
 - [ ] Fly high and fast: is the disc under you gone?
 - [ ] Walk into a crowd: husks at night, a flock you are luring, your

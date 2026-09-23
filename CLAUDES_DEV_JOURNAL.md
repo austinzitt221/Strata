@@ -1448,6 +1448,19 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-02, later — fence building
+
+Build 107. Austin described the mechanic exactly (preview, snap the
+end to the neighbour's end, scroll turns about the joint), and it was
+forty lines because the preview system and the push-out were already
+right. The one thing I got wrong on the first pass was a centimetre:
+rounding stored coordinates to two places broke the joint check and
+would have drifted a long chain. Four places now. The test pen closed
+on itself to the millimetre after sixteen pieces.
+
+Next: hoed ground (22), then the liquids (23), which I still owe
+some thinking.
+
 ## 2026-10-02 — the playtest of 99 to 105
 
 No bugs in the new work, four things around it, and one I am

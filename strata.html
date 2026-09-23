@@ -12636,6 +12636,8 @@ const placePreview = {
       g = doorSys.model(+p[1], +p[2], p[0] === 'gate');
     } else if (kind === 'decor'){
       g = decorSys.model(vkey.split('|')[1]);
+    } else if (kind === 'fence' || kind === 'fencegate'){
+      g = fenceSys.model({ gate: kind === 'fencegate', open: 0 });   // FENCE BUILDING (Build 107)
     }
     if (g) this.root.add(this.ghostify(g));
     this.vkey = vkey;
@@ -12666,6 +12668,15 @@ const placePreview = {
       if (game.tool.pYaw)
         this.root.quaternion.multiply(new THREE.Quaternion()
           .setFromAxisAngle(new THREE.Vector3(0, 1, 0), game.tool.pYaw));
+      return;
+    }
+    if (tool && (tool.kind === 'fence' || tool.kind === 'fencegate') && game.ui === 'none' && isLocked() && !game.photo){
+      // FENCE BUILDING (Build 107): the piece where it will stand, joined or free
+      const hit = surfaceHit();
+      if (!hit){ this.hide(); return; }
+      const P = fenceSys.plan(hit);
+      this.showAt(tool.kind, tool.kind, P.x, P.y, P.z, -P.yaw);
+      this.fenceJoined = !!P.joint;
       return;
     }
     const on = tool && this.KINDS.includes(tool.kind) &&
@@ -26021,7 +26032,8 @@ function bindInput(){
       toast('chest ' + CHEST_SCALES[ci].toFixed(1) + 'm — ' + chestSlots(CHEST_SCALES[ci]) + ' slots');
     } else if (PLACE_ROT_KINDS.includes(tool.kind)){
       game.tool.pYaw = ((game.tool.pYaw || 0) + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
-      toast('facing ' + Math.round(game.tool.pYaw * 180 / Math.PI) + '\u00b0');
+      if (tool.kind === 'fence' || tool.kind === 'fencegate') toast('turned ' + Math.round(game.tool.pYaw * 180 / Math.PI) + '\u00b0' + (placePreview.fenceJoined ? ' about the joint' : ''));
+      else toast('facing ' + Math.round(game.tool.pYaw * 180 / Math.PI) + '\u00b0');
     } else if (game.tool.scrollMode > 0 && (tool.kind === 'drill' || tool.kind === 'disp' || tool.kind === 'wrench')){
       // rotate mode (middle click cycles resize → yaw → pitch → roll).
       // Rotation works with grid snap on: the lattice itself stays
@@ -29193,8 +29205,10 @@ function tryAction(dt, now){
         return;
       }
       if (tool.kind === 'fence' || tool.kind === 'fencegate'){
-        // FENCES (Build 99): snapped to the metre, squared to the world, two metres along the way you face (scroll turns it)
-        if (!fenceSys.add(hit[0], hit[1], hit[2], (game.tool.pYaw || 0) + game.yaw, tool.kind === 'fencegate')){ toast('a fence stands there already'); AudioSys.sfx('deny'); return; }
+        // FENCE BUILDING (Build 107): where the ghost stood -- joined to the rail end beside it, or free
+        const P = fenceSys.plan(hit);
+        if (!fenceSys.add(P.x, P.y, P.z, P.yaw, tool.kind === 'fencegate')){ toast('a fence stands there already'); AudioSys.sfx('deny'); return; }
+        if (P.joint && game.tool.pYaw) toast('joined at ' + Math.round(((game.tool.pYaw * 180 / Math.PI) % 360 + 360) % 360) + '\u00b0');
         if (game.mode !== 'creative') tool.item.count--;
         if (tool.item.count <= 0) game.slots[game.hotSel] = null;
         AudioSys.sfx('place'); refreshHotbar(); refreshToolHUD();
@@ -32055,7 +32069,7 @@ function itemInfoHTML(it, tool){
     const nm = it.kind === 'springstone' ? 'spring stone' : it.kind === 'lavastone' ? 'lava stone' : 'ichor stone';
     html = '<div class="t1">' + nm + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'springstone' ? 'set it in the ground and water wells up: a basin three metres across that never runs dry · fill the can at it · not on an airless world' : it.kind === 'lavastone' ? 'set it in the ground and lava wells up: a pool a metre and a half across, and it burns' : 'set it in the ground of Strata and ichor wells up: a basin that never runs dry · nowhere but Strata') + '</div>';
   } else if (it.kind === 'fence' || it.kind === 'fencegate'){
-    html = '<div class="t1">' + (it.kind === 'fence' ? 'fence' : 'fence gate') + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'fence' ? 'two metres of rail the animals cannot cross or jump, and you walk through · snaps to the metre and to a right angle (scroll turns it) · right-click it empty-handed to take it back' : 'a fence piece that opens: right-click it · C and right-click to take it back') + '</div>';
+    html = '<div class="t1">' + (it.kind === 'fence' ? 'fence' : 'fence gate') + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'fence' ? 'two metres of rail the animals cannot cross or jump, and you walk through · the ghost shows where it stands: aim near the end of a rail and it joins on, straight; scroll turns it about the joint, any angle · right-click it empty-handed to take it back' : 'a fence piece that opens: right-click it · C and right-click to take it back') + '</div>';
   } else if (it.kind === 'door'){
     const dw = game.tool.doorSize || 1.2;
     html = '<div class="t1">door ×' + it.count + '</div>' +
@@ -33860,12 +33874,37 @@ const fenceSys = {
   group: null, mats: null,
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
   snapYaw(yaw){ return Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2); },
-  ends(f){ const c = Math.round(Math.cos(f.yaw)), sn = Math.round(Math.sin(f.yaw)); return [f.x - c, f.z - sn, f.x + c, f.z + sn]; },   // squared, so no residue of a cosine sits on the line
+  ends(f){ const c = Math.cos(f.yaw), sn = Math.sin(f.yaw); return [f.x - c, f.z - sn, f.x + c, f.z + sn]; },   // FENCE BUILDING (Build 107): any angle
+  // FENCE BUILDING (Build 107): where the piece in your hand would stand.
+  // The nearest rail end within a metre and a half of your aim is a joint:
+  // the new piece hangs off it, straight on from its neighbour, and the
+  // scroll wheel turns it about that joint (15 degrees a notch). No joint
+  // near: it stands where you aim, along the way you face, and the wheel
+  // turns it about its middle.
+  SNAP: 1.6,
+  plan(hit){
+    const pY = game.tool.pYaw || 0;
+    let J = null, bd = this.SNAP;
+    for (const f of game.fences){
+      if (Math.abs(f.y - hit[1]) > 3 || Math.abs(f.x - hit[0]) > 4 || Math.abs(f.z - hit[2]) > 4) continue;
+      const E = this.ends(f);
+      for (const [ex, ez, sgn] of [[E[0], E[1], -1], [E[2], E[3], 1]]){
+        const d = Math.hypot(ex - hit[0], ez - hit[2]);
+        if (d < bd){ bd = d; J = { x: ex, z: ez, f, sgn }; }
+      }
+    }
+    if (J){
+      const yaw = J.f.yaw + (J.sgn > 0 ? 0 : Math.PI) + pY;
+      return { x: J.x + Math.cos(yaw), y: hit[1], z: J.z + Math.sin(yaw), yaw, joint: J };
+    }
+    const yaw = Math.round(game.yaw / (Math.PI / 12)) * (Math.PI / 12) + pY;
+    return { x: hit[0], y: hit[1], z: hit[2], yaw, joint: null };
+  },
   add(x, y, z, yaw, gate){
-    yaw = this.snapYaw(yaw);
-    const along = Math.abs(Math.cos(yaw)) > 0.5 ? 'x' : 'z';
-    const fx = along === 'x' ? Math.round(x / 2) * 2 : Math.round(x), fz = along === 'z' ? Math.round(z / 2) * 2 : Math.round(z);
-    if (game.fences.some(f => Math.abs(f.x - fx) < 0.1 && Math.abs(f.z - fz) < 0.1 && Math.abs(f.y - y) < 2.5)) return null;
+    // FENCE BUILDING (Build 107): exact where the plan put it; only the same piece twice is refused
+    yaw = ((yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const fx = +x.toFixed(4), fz = +z.toFixed(4);   // four places: a chain of joints must not drift
+    if (game.fences.some(f => Math.abs(f.x - fx) < 0.3 && Math.abs(f.z - fz) < 0.3 && Math.abs(f.y - y) < 2.5 && Math.abs(Math.sin(f.yaw - yaw)) < 0.1)) return null;
     const f = { x: fx, y: +y.toFixed(2), z: fz, yaw: +yaw.toFixed(4), gate: gate ? 1 : 0, open: 0 };
     game.fences.push(f); this.rebuild(); markSave();
     return f;

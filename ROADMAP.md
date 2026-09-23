@@ -449,7 +449,7 @@ After the 2026-10-01 playtest (99 to 105, no bugs in the new work):
 fixed in Build 106 (the hole under you in flight, bodies that keep out
 of each other, fences that hold, farmhands that wait for ripe). And,
 in the order I want to build them:
- 21. **Fence building.** A preview of the piece where it will stand;
+ 21. **Fence building** (DONE, Build 107). A preview of the piece where it will stand;
      the preview snaps its end to the end of the piece beside it, and
      from that snapped joint the scroll wheel turns it freely, so two
      pieces meet at any angle and stay joined. (Austin.)

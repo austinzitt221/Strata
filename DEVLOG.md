@@ -2,6 +2,30 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 107 — FENCE BUILDING: the ghost and the joint (2026-10-02)
+
+Roadmap item 21, Austin's.
+
+- **The ghost.** A fence or gate in hand shows a translucent piece
+  where it will stand, through the same preview the tables and beds
+  use.
+- **The joint.** Aim within a metre and a half of the end of a rail
+  and the new piece hangs off that end, straight on from its
+  neighbour. The scroll wheel turns it about the joint, fifteen
+  degrees a notch, so two pieces meet at any angle and stay joined
+  to the millimetre (coordinates keep four places now; a chain of
+  sixteen closes on itself). The wheel's toast says "about the joint"
+  while it is one.
+- **Free.** No rail end near: the piece stands where you aim, along
+  the way you face to the nearest fifteen degrees, and the wheel turns
+  it about its middle. The metre grid and the right-angle snap of
+  Build 99 are gone; a fence at thirty degrees is a fence.
+- Rails are exact segments at any angle for the push-out of Build
+  106; a pen built at thirty degrees held a lured sheep for 900 frames
+  from three sides.
+- Old fences load as they were: their yaws are right angles and their
+  centres whole metres, which the new rules accept.
+
 ## Build 106 — the fixes from the 2026-10-01 playtest (2026-10-02)
 
 Austin played 99 to 105: everything new works. Four things he saw:
