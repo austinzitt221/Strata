@@ -1448,6 +1448,36 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-04 — liquids
+
+Build 109, and I thought first, as I said I would; the thinking paid
+for itself twice in one session.
+
+The first patch put a placed source's id into the water's distance
+array, because it was already there. That would have let the world's
+own rivers flood without limit, since every source became distance
+zero. The lineage lives in its own map now, and the world's water
+keeps its thirty-two cells. Reusing a field for a second meaning is
+the kind of saving that costs a week later.
+
+The second: the cellular rules alone cannot fill a lake from one cube.
+Sources are born only on a supported floor, so water pouring into a
+basin runs out along the bottom and never rises. The fill is its own
+thing, a flood to level, lowest cell first, and the water rules run
+beside it. Pouring down and rising is what the eye expects, and it
+is also what "fill my lake to this level" means.
+
+The test caught two of my own traps: a test channel broke through the
+side of its table and flooded the valley (which is the feature
+working), and that flood then starved every later fill (which was a
+bug: fills share the tick now, newest first). And profiling the fill
+found the old water mesh rebuilding every empty chunk on every pass
+since the water build. The frame budget is better than it was before
+this build.
+
+Austin's four ideas from the 2026-10-01 playtest are all built. Next,
+whatever the playtest says; then the small things.
+
 ## 2026-10-03 — hoed ground
 
 Build 108. The paint op has been in the engine since the wrench and

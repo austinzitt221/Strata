@@ -458,7 +458,7 @@ in the order I want to build them:
      (a material, painted on the existing shape) and the crops grow
      out of it wherever the surface is, each stalk at its own height.
      Farms on a hillside, or any shape you carve. (Austin.)
- 23. **Liquids are materials.** The drill cuts a shape out of water,
+ 23. **Liquids are materials** (DONE, Build 109; lava places but does not flow). The drill cuts a shape out of water,
      lava or ichor and the cut does not refill; the liquid lands in
      your pack like any material; the dispenser places it in a shape
      that does not flow. The spring, lava and ichor stones become the

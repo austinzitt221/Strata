@@ -5,6 +5,21 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 109 — LIQUIDS
+- [ ] From the shore, drill a cube out of the sea. Does it hold? Is
+      the water in your pack? Dive in and look at the cube of air from
+      inside the sea.
+- [ ] Put that water back with the dispenser as a shape in the air: a
+      floating cube, a wall of water. Swim in it. Build a waterfall that
+      does not fall.
+- [ ] Dig a lake, then drop one spring stone at the level you want.
+      Does it fill to that level, into every corner? Dig a channel off
+      it and watch it go.
+- [ ] Put a spring stone on a hilltop, watch the valley, then Ctrl-Z.
+      Does it all drain, and is the stone back?
+- [ ] Does the game hold its frame rate while a big fill runs?
+- [ ] Lava does not flow yet. Do you want it to?
+
 ## Build 108 — HOED GROUND
 - [ ] Hoe a hillside and plant it. Do the crops sit on the ground at
       every height? Does the earth go dark when you water it and light

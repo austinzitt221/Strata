@@ -2,6 +2,64 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 109 — LIQUIDS: water is a material (2026-10-04)
+
+Roadmap item 23, Austin's "crazy idea", and the biggest change on the
+list. Water and ichor are materials now, and the three stones are
+source placers.
+
+- **Two materials,** WATER and ICHOR (56 and 57), for the pack, the
+  dispenser and the ghost. Lava was a material already.
+- **The drill cuts liquid.** From dry land the drill takes exactly its
+  shape: the water in it and the rock in it, one undo for both. The
+  water lands in the pack by the metre cell, and the cut holds: no
+  liquid enters it again. It is a cell kind of its own (DRY), so a cube
+  cut out of a lake is a cube of air in the lake. From under water the
+  drill mines rock as it always did, and the hole fills; a swimmer
+  should not leave air pockets behind every cut.
+- **The dispenser places liquid.** Water or ichor from the pack goes
+  down in the shape you choose, one metre cell per unit, and it never
+  moves (a cell kind of its own, HELD): a cube of water standing in the
+  air stays a cube. It fills a can, drowns you, and holds a boat. Rock
+  placed into it displaces it.
+- **The stones place sources.** The spring stone and the ichor stone
+  are dispensers now: the ghost, right click for the shape, scroll for
+  the size (ruby steps), one click. What they lay flows by its own
+  rule: it fills every open cell connected to it at or below the top
+  of the shape, lowest first, so it pours down into every gap and rises
+  to its level. Dig your lake, drop one cube of water at the level you
+  want, and the lake fills to that level. There is no range: put one on
+  a mountain and the valley below floods to that height. The fill goes
+  on as far as the ground lets it, pausing more than 400 m from you and
+  going on when you come back. Digging a channel off a placed lake lets
+  it go on into the channel.
+- **Undo and the wrench.** Every source cell a stone makes carries its
+  stone's id, so Ctrl-Z (or the wrench's delete) takes back exactly
+  that water, however far it went, and hands the stone back. The world's
+  own water keeps its old rules: a river cut open still runs out after
+  thirty-two cells. The wrench refunds liquid edits properly: the
+  stone, the held cells, or the cut's water taken back.
+- **The lava stone** places lava in the shape you choose, as the
+  dispenser does. Lava does not flow; that would be a lava sim, and I
+  have not built one.
+- **Rules kept.** Water will not keep on Strata (it is ichor or
+  nothing), ichor nowhere else, and nothing on an airless world. The
+  terrain never sees a liquid edit: the SDF, the meshing, the far skin
+  and the LOD rings all skip them, so water is only ever water.
+- **Frames.** A fill costs a millisecond or so a tick; the water's own
+  mesh rebuild was the real cost, so it is now nearest-first under a
+  3 ms budget a frame, and a chunk with no water in it is built once
+  instead of every pass (a waste older than this build). Several fills
+  share the tick, newest first, so a flooding valley cannot starve the
+  pond you just dug.
+- Saved: the edits carry their liquid columns; the water cells carry
+  the lineage; a fill still going saves its frontier and resumes.
+- Old springs (Build 100 basins) stay as they were.
+- Known: the far skin and LOD rings do not draw placed water past the
+  near water mesh range; a flooded valley reads as land from far off
+  until you come near. The wrench's move and resize do not re-flow a
+  liquid edit.
+
 ## Build 108 — HOED GROUND: the ground is the plot (2026-10-03)
 
 Roadmap item 22, Austin's. A plot was a flat bed laid on top of the

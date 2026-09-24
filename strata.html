@@ -719,9 +719,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               GLOWSTALK:46, GLOWPLANK:47, ASHSTALK:48, ASHPLANK:49, BONESTALK:50, BONEPLANK:51,
               NULLSTONE:52,     // STRATA D (Build 88): the spike at the centre, and the plate it stands on
               VEILSTONE:53,
-              TILLED:54, TILLEDWET:55 };   // HOED GROUND (Build 108): the ground itself, turned; dry and wet   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 55;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone','tilled earth','wet tilled earth'];
+              TILLED:54, TILLEDWET:55,
+              WATER:56, ICHOR:57 };      // LIQUIDS (Build 109): water and ichor as materials in the pack   // HOED GROUND (Build 108): the ground itself, turned; dry and wet   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 57;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone','tilled earth','wet tilled earth','water','ichor'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD, MAT.GLOWSTALK, MAT.ASHSTALK, MAT.BONESTALK];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS,
@@ -3264,7 +3265,7 @@ function evalRaw(px, py, pz, edits, n, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
   for (let i = 0; i < n; i++){
     const e = edits[i];
-    if (e.op === 2 || e.op === 5) continue;
+    if (e.op === 2 || e.op === 5 || e.liq) continue;
     const b = editAABB(e);
     if (px < Math.floor(b[0] / VOX) * VOX - 1e-7 || px > Math.ceil(b[3] / VOX) * VOX + 1e-7 ||
         py < Math.floor(b[1] / VOX) * VOX - 1e-7 || py > Math.ceil(b[4] / VOX) * VOX + 1e-7 ||
@@ -3293,7 +3294,7 @@ function evalSDF(px, py, pz, edits, gen){
   let d = (gen || FLAT_GEN).sdf(px, py, pz);
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    if (e.op === 2) continue;              // paint: material only, no geometry
+    if (e.op === 2 || e.liq) continue;     // paint: material only, no geometry; a liquid edit is water's, not rock's
     if (e.op === 5){ d = smoothAt(d, px, py, pz, e, edits, i, gen); continue; }
     const s = shapeSDF(px, py, pz, e);
     d = applyOp(d, e, s);
@@ -3319,7 +3320,7 @@ function materialAt(px, py, pz, edits, gen){
     // <= 0: boundary samples count as solid (SOLID = d <= 0), so a snapped
     // placement must claim its own faces or they'd fall through to the
     // generator's material (grass specks in placed obsidian)
-    if ((e.op === 1 || e.op === 2 || e.op === 3) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
+    if (!e.liq && (e.op === 1 || e.op === 2 || e.op === 3) && shapeSDF(px, py, pz, e) <= 0){ m = e.mat || MAT.ROCK; _matEdit = e; }
   }
   // the generator's material only where no edit claimed the point: in a
   // city most crossings sit on a placed face (Build 43)
@@ -3596,7 +3597,7 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
   if (SC === 1) for (let i = 0; i < edits.length; i++) if (edits[i].op === 5){ raw = MS_RAW; raw.set(field); break; }
   for (let i = 0; i < edits.length; i++){
     const e = edits[i];
-    if (e.op === 2) continue;              // paint: material only
+    if (e.op === 2 || e.liq) continue;     // paint: material only
     if (e.op === 5 && !raw) continue;      // coarse rings skip the sander
     const b = editAABB(e);
     const x0 = Math.max(-1, Math.floor(b[0] / VOX) - gx0), x1 = Math.min(N, Math.ceil(b[3] / VOX) - gx0);
@@ -3698,7 +3699,7 @@ function meshChunk(cx, cy, cz, allEdits, gen, LSC){
     // corners exact plane intersections. Terrain keeps the numeric gradient.
     let g = null, bestS = 0.035;
     for (let ei = 0; ei < le.length; ei++){
-      if (le[ei].op === 2 || le[ei].op >= 3) continue;   // blends have no face: numeric gradient
+      if (le[ei].op === 2 || le[ei].op >= 3 || le[ei].liq) continue;   // blends have no face: numeric gradient
       const s = Math.abs(shapeSDF(px, py, pz, le[ei]));
       if (s < bestS){ bestS = s; g = editNormal(le[ei], px, py, pz, axis); }
     }
@@ -4630,7 +4631,7 @@ function heightGrid(J, gen){
         if (L) for (let q = 0; q < L.length; q++){
           const e = L[q];
           const p = editProfile(e, x, z);
-          if (!p) continue;
+          if (!p || e.liq) continue;
           if (e.op === 1 || e.op === 3){ if (p[1] > hh){ hh = p[1]; mm = e.mat; } }
           else if (e.op === 0 || e.op === 4){ if (p[1] > hh - 0.05 && p[0] < hh){ hh = p[0]; mm = 0; } }
           else if (e.op === 2){ if (hh >= p[0] - 0.3 && hh <= p[1] + 0.3) mm = e.mat; }
@@ -4798,6 +4799,7 @@ function serializeEdits(edits){
       while (row.length < 15) row.push(0);
       row.push(e.w);
     }
+    if (e.liq){ while (row.length < 16) row.push(0); row.push(e.liq, e.lid || 0); }   // LIQUIDS (Build 109)
     a[i] = row;
   }
   return a;
@@ -4816,6 +4818,7 @@ function deserializeEdits(arr){
       if (r[13]) e.noLod = 1;
       if (r[14]) e.k = r[14];
       if (r[15]) e.w = r[15];
+      if (r[16]){ e.liq = r[16]; if (r[17]) e.lid = r[17]; }
     }
     out[i] = e;
   }
@@ -4885,7 +4888,7 @@ function hashSeed(str){
 
 return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
-  MAT, NMAT, MAT_NAME, LOG_MATS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
+  MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
@@ -5175,6 +5178,16 @@ function makeTileDrawers(){
       speckle(ctx, rng, '#33221a', '#2a1a12', '#3d2a20', 0.3, 0.2);
       for (const y of [1, 6, 11]){ ctx.fillStyle = '#1e120c'; ctx.fillRect(0, y, 16, 2); ctx.fillStyle = '#4a3628'; ctx.fillRect(0, y + 3, 16, 1); }
       for (let i = 0; i < 4; i++){ ctx.fillStyle = '#5a4838'; ctx.fillRect((rng() * 16) | 0, (rng() * 16) | 0, 1, 1); }
+    },
+    [CORE.MAT.WATER](ctx, rng){
+      // LIQUIDS (Build 109): the pack's water, and the ghost's
+      speckle(ctx, rng, '#2f6fb8', '#285f9e', '#3a80cc', 0.3, 0.2);
+      for (const y of [3, 9, 14]){ ctx.fillStyle = '#7fb8f0'; ctx.fillRect(1, y, 5, 1); ctx.fillRect(9, y - 1, 5, 1); }
+    },
+    [CORE.MAT.ICHOR](ctx, rng){
+      speckle(ctx, rng, '#3aa84a', '#2e8a3c', '#4cc45a', 0.3, 0.2);
+      for (const y of [3, 9, 14]){ ctx.fillStyle = '#b0ffb8'; ctx.fillRect(1, y, 5, 1); ctx.fillRect(9, y - 1, 5, 1); }
+      ctx.fillStyle = '#1a1424'; ctx.fillRect(6, 6, 1, 1); ctx.fillRect(12, 12, 1, 1);
     },
     [CORE.MAT.NULLSTONE](ctx, rng){
       // black, and a green that is not quite there
@@ -6359,7 +6372,8 @@ function inWater(x, y, z){
   const wa = waterSys.cells.get(waterSys.keyOf(gx, gy, gz));
   if (wa){
     const v = wa[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
-    if (v === W_SOLID || v === 0) return false;
+    if (v === W_SOLID || v === 0 || v === W_DRY) return false;
+    if (v === W_HELD) return y < gy + 0.5;
     if (v === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > gy - 0.5 + 1) return y < wy; }
     return y < gy - 0.5 + v / 8;
   }
@@ -6379,13 +6393,17 @@ function inWater(x, y, z){
 // cell spreads sideways one level lower per metre; two sources beside a
 // supported cell make a third; unsupported flow drains away. Cells the
 // flow reaches in untouched chunks materialize on demand. 8 Hz.
-const W_SOLID = 255, W_SRC = 8, W_REACH = 32;   // cells of travel a flood gets from a true source
+const W_SOLID = 255, W_SRC = 8, W_REACH = 32;
+// LIQUIDS (Build 109): two more kinds of cell. HELD is a full cell of placed
+// liquid that never flows and feeds nothing; DRY is a cell a drill cut out of
+// a liquid that no liquid may enter again. Both come from liquid edits.
+const W_HELD = 253, W_DRY = 254;   // cells of travel a flood gets from a true source
 const waterSys = {
-  cells: new Map(), dist: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(),
-  accT: 0, maintT: 0, MAX_ACTIVE: 48,
+  cells: new Map(), dist: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(), lin: new Map(), floods: [], parkT: 0, empty: new Set(),
+  accT: 0, maintT: 0, MAX_ACTIVE: 48, MESH_MS: 3,
   idx(i, j, k){ return (j * 8 + k) * 8 + i; },
   keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
-  reset(){ this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set();
+  reset(){ this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set(); this.lin = new Map(); this.floods = []; this.parkT = 0; this.empty = new Set();
     for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
     this.meshes = new Map(); },
   // what an untouched cell holds: rock, still water, or air
@@ -6407,6 +6425,7 @@ const waterSys = {
     const g = game.gen, x = gx + 0.5, z = gz + 0.5;
     if (springSys.isSrc(gx, gy, gz)) return W_SRC;                       // SPRINGS (Build 100)
     if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
+    const lq = this.liqAt(gx, gy, gz, le); if (lq != null) return lq;       // LIQUIDS (Build 109)
     if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
     if (g.seaLevel != null){
       const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
@@ -6435,7 +6454,7 @@ const waterSys = {
     if (W && W.maxWy != null && W.maxWy > top) top = W.maxWy;
     if (cy * 8 - 0.5 > top + 0.5 && cy * 8 > -6) return false;
     const a = this.cells.get(key) || this.statArr(key);
-    for (let q = 0; q < 512; q++) if (a[q] >= 1 && a[q] <= 8) return true;
+    for (let q = 0; q < 512; q++) if ((a[q] >= 1 && a[q] <= 8) || a[q] === W_HELD) return true;
     return false;
   },
   // a chunk the flow has reached: its cells, with the edits applied
@@ -6443,13 +6462,25 @@ const waterSys = {
     const [cx, cy, cz] = key.split(',').map(Number);
     const le = nearEdits([cx * 8 - 1, cy * 8 - 1.5, cz * 8 - 1, cx * 8 + 9, cy * 8 + 8.5, cz * 8 + 9]);
     const old = keep ? this.cells.get(key) : null;
-    const a = new Uint8Array(512);
+    const hasLiq = le.some(e => e.liq);
+    const a = new Uint8Array(512), oldL = keep ? this.lin.get(key) : null;
+    let L = oldL || null;
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
-      const q = this.idx(i, j, k);
-      const v = le.length ? this.editedLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k, le) : this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+      const q = this.idx(i, j, k), gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
+      const v = le.length ? this.editedLevel(gx, gy, gz, le) : this.staticLevel(gx, gy, gz);
+      // LIQUIDS (Build 109): a liquid edit says what its cells are, over any water already there
+      const lq = hasLiq && v !== W_SOLID ? this.liqAt(gx, gy, gz, le) : null;
+      if (lq != null){
+        a[q] = lq;
+        if (lq === W_SRC){ if (!L) L = new Uint8Array(512); L[q] = this.liqLid(gx, gy, gz, le); }
+        else if (L) L[q] = 0;
+        continue;
+      }
       // an edit under running water: rock is rock, but water already there stays
-      a[q] = (old && v !== W_SOLID && old[q] !== W_SOLID && old[q] !== 0) ? old[q] : v;
+      a[q] = (old && v !== W_SOLID && this.isW(old[q])) ? old[q] : v;
+      if (L && a[q] !== W_SRC) L[q] = 0;
     }
+    if (L) this.lin.set(key, L);
     // how far each cell's water has travelled from a true source: the sea,
     // a lake, a river are 0; flow counts up and stops at W_REACH
     const oldD = keep ? this.dist.get(key) : null;
@@ -6478,11 +6509,143 @@ const waterSys = {
     return a[this.idx(gx - cx * 8, gy - cy * 8, gz - cz * 8)];
   },
   isW(v){ return v >= 1 && v <= 8; },
+  linOf(gx, gy, gz){ const L = this.lin.get(this.keyOf(gx, gy, gz)); return L ? L[this.idx(gx & 7, gy & 7, gz & 7)] : 0; },
+  // ---- THE FILL (Build 109) ----
+  // A placed source fills every open cell connected to it at or below its
+  // own top, lowest first: it pours down, spreads, and rises to its level.
+  // No range: it goes on until the ground stops it, pausing more than
+  // FLOOD_R metres from you and going on when you come back. The cells are
+  // sources of its lineage, so taking the stone back drains exactly them.
+  FLOOD_R: 400, FLOOD_STEP: 1200, FLOOD_MAT: 2, FLOOD_MS: 3,
+  floodOf(lid){ return this.floods.find(F => F.lid === lid) || null; },
+  floodNew(lid, L){ let F = this.floodOf(lid); if (!F){ F = { lid, L, b: [], lo: 1e9, park: [], n: 0 }; this.floods.push(F); } return F; },
+  fpush(F, x, y, z){
+    if (y > F.L || y <= CORE.BEDROCK_Y + 1 || y < CORE.CY_MIN * 8 || y >= CORE.CY_MAX * 8) return;
+    const i = y - CORE.CY_MIN * 8;
+    (F.b[i] || (F.b[i] = [])).push(x, z);
+    if (i < F.lo) F.lo = i;
+  },
+  floodExpand(F, x, y, z){
+    this.fpush(F, x, y - 1, z); this.fpush(F, x + 1, y, z); this.fpush(F, x - 1, y, z);
+    this.fpush(F, x, y, z + 1); this.fpush(F, x, y, z - 1); this.fpush(F, x, y + 1, z);
+  },
+  floodPending(F){ for (let i = F.lo; i < F.b.length; i++) if (F.b[i] && F.b[i].length) return true; return F.park.length > 0; },
+  floodTick(dt){
+    if (!this.floods.length) return;
+    let mats = this.FLOOD_MAT;
+    const px = game.pos.x, pz = game.pos.z, R = this.FLOOD_R, t0 = performance.now();
+    // every fill still going gets its share of the tick, the newest first
+    // (a flood of the valley must not starve the pond you just dug)
+    const live = this.floods.filter(F => F.lo < F.b.length).reverse();
+    const share = Math.max(64, Math.ceil(this.FLOOD_STEP / Math.max(1, live.length))), msShare = this.FLOOD_MS / Math.max(1, live.length);
+    for (let fi = 0; fi < live.length; fi++){
+      const F = live[fi], tF = performance.now();
+      if (tF - t0 > this.FLOOD_MS) break;
+      let budget = share;
+      while (budget > 0){
+        if ((budget & 31) === 0 && performance.now() - tF > msShare){ budget = 0; break; }   // the frame comes first
+        while (F.lo < F.b.length && !(F.b[F.lo] && F.b[F.lo].length)) F.lo++;
+        if (F.lo >= F.b.length){ F.lo = 1e9; break; }
+        const arr = F.b[F.lo];
+        const z = arr.pop(), x = arr.pop(), y = F.lo + CORE.CY_MIN * 8;
+        budget--;
+        if (Math.abs(x - px) > R || Math.abs(z - pz) > R){ F.park.push(x, y, z); continue; }
+        const key = this.keyOf(x, y, z);
+        let a = this.cells.get(key);
+        if (!a){ if (mats <= 0){ arr.push(x, z); budget = 0; break; } mats--; a = this.materialize(key); }
+        const q = this.idx(x & 7, y & 7, z & 7), v = a[q];
+        if (!(v === 0 || (v >= 1 && v <= 7))) continue;          // rock, a source already, held or a dry cut: not here
+        a[q] = W_SRC;
+        const d = this.dist.get(key); if (d) d[q] = 0;
+        let Ln = this.lin.get(key); if (!Ln){ Ln = new Uint8Array(512); this.lin.set(key, Ln); } Ln[q] = F.lid;
+        F.n++;
+        this.active.add(key); this.dirtyMesh.add(key);
+        this.floodExpand(F, x, y, z);
+      }
+    }
+    // the parked edge comes back when you do
+    this.parkT += dt;
+    if (this.parkT > 2){
+      this.parkT = 0;
+      for (const F of this.floods){
+        if (!F.park.length) continue;
+        const keep = [];
+        for (let i = 0; i < F.park.length; i += 3){
+          const x = F.park[i], y = F.park[i + 1], z = F.park[i + 2];
+          if (Math.abs(x - px) > R * 0.95 || Math.abs(z - pz) > R * 0.95) keep.push(x, y, z); else this.fpush(F, x, y, z);
+        }
+        F.park = keep;
+      }
+    }
+  },
+  // an edit opened ground beside a placed lake: its edge goes on filling
+  reseed(B){
+    if (!this.floods.length) return;
+    const x0 = Math.floor(B[0]) - 1, x1 = Math.ceil(B[3]) + 1, y0 = Math.floor(B[1]) - 1, y1 = Math.ceil(B[4]) + 1, z0 = Math.floor(B[2]) - 1, z1 = Math.ceil(B[5]) + 1;
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 40000) return;
+    for (let gy = y0; gy <= y1; gy++) for (let gz = z0; gz <= z1; gz++) for (let gx = x0; gx <= x1; gx++){
+      const key = this.keyOf(gx, gy, gz), a = this.cells.get(key); if (!a) continue;
+      if (a[this.idx(gx & 7, gy & 7, gz & 7)] !== W_SRC) continue;
+      const l = this.linOf(gx, gy, gz); if (!l) continue;
+      const F = this.floodOf(l); if (F) this.floodExpand(F, gx, gy, gz);
+    }
+  },
+  saveFloods(){
+    return this.floods.map(F => {
+      const q = [];
+      for (let i = 0; i < F.b.length && q.length < 90000; i++){ const arr = F.b[i]; if (!arr) continue; const y = i + CORE.CY_MIN * 8; for (let k = 0; k + 1 < arr.length && q.length < 90000; k += 2) q.push(arr[k], y, arr[k + 1]); }
+      for (let i = 0; i + 2 < F.park.length && q.length < 120000; i++) q.push(F.park[i]);
+      return [F.lid, F.L, F.n, q];
+    });
+  },
+  loadFloods(rows){
+    this.floods = [];
+    for (const [lid, L, n, q] of rows || []){
+      const F = this.floodNew(lid, L); F.n = n || 0;
+      for (let i = 0; i + 2 < (q || []).length; i += 3) this.fpush(F, q[i], q[i + 1], q[i + 2]);
+    }
+  },
+  isWet(v){ return (v >= 1 && v <= 8) || v === W_HELD; },              // water to stand in, to draw, to fill a can from
+  lvl(v){ return v === W_HELD ? 1 : v / 8; },
+  // LIQUIDS (Build 109): what the liquid edits say a cell is, the last one wins; null when none reaches it
+  liqAt(gx, gy, gz, le){
+    let out = null;
+    for (let i = 0; i < le.length; i++){
+      const e = le[i]; if (!e.liq) continue;
+      if (CORE.shapeSDF(gx + 0.5, gy, gz + 0.5, e) > 0) continue;
+      out = e.op === 0 ? W_DRY : e.liq === 2 ? W_SRC : W_HELD;
+    }
+    return out;
+  },
+  liqLid(gx, gy, gz, le){
+    let lid = 0;
+    for (let i = 0; i < le.length; i++){ const e = le[i]; if (!e.liq || e.op !== 1 || e.liq !== 2) continue; if (CORE.shapeSDF(gx + 0.5, gy, gz + 0.5, e) <= 0) lid = e.lid || 0; }
+    return lid;
+  },
   // an edit landed: any chunk it touches that holds (or borders) water becomes cells
   onEdit(e){
     const g = game.gen;
     if (!g || g.seaLevel == null || !game.running) return;
     const B = CORE.editAABB(e);
+    if (e.liq){
+      // LIQUIDS (Build 109): a liquid edit is a water event wherever it is
+      const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
+      const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
+      const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
+      if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 4000) return;
+      for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) this.materialize(CK(cx, cy, cz), true);
+      if (e.op === 1 && e.liq === 2 && e.lid){
+        // its own cells, and its level: the top of them
+        const own = []; let top = -1e9;
+        for (let gy = Math.floor(B[1]); gy <= Math.ceil(B[4]); gy++) for (let gz = Math.floor(B[2]); gz <= Math.ceil(B[5]); gz++) for (let gx = Math.floor(B[0]); gx <= Math.ceil(B[3]); gx++){
+          const a = this.cells.get(this.keyOf(gx, gy, gz)); if (!a) continue;
+          if (a[this.idx(gx & 7, gy & 7, gz & 7)] !== W_SRC || this.linOf(gx, gy, gz) !== e.lid) continue;
+          own.push([gx, gy, gz]); if (gy > top) top = gy;
+        }
+        if (own.length){ const F = this.floodNew(e.lid, top); for (const c of own) this.floodExpand(F, c[0], c[1], c[2]); }
+      }
+      return;
+    }
     if (B[1] > 95 && B[1] > -6) return;                         // above every water there is
     const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
     const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
@@ -6491,7 +6654,9 @@ const waterSys = {
     // dry land, above every water table under this footprint (the sea, or a river)
     let top = g.seaLevel;
     for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){ const W = game.terrain.waterInfo(cx, cz); if (W.maxWy != null && W.maxWy > top) top = W.maxWy; }
-    if (B[1] > top + 1 && B[1] > -6) return;
+    let anyCells = false;
+    for (let cy = c0y; cy <= c1y && !anyCells; cy++) for (let cz = c0z; cz <= c1z && !anyCells; cz++) for (let cx = c0x; cx <= c1x; cx++) if (this.cells.has(CK(cx, cy, cz))){ anyCells = true; break; }
+    if (B[1] > top + 1 && B[1] > -6 && !anyCells) return;        // Build 109: placed water lives above any water table
     const keys = [];
     let wet = false;
     for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
@@ -6501,12 +6666,30 @@ const waterSys = {
     }
     if (!wet) return;
     for (const key of keys) this.materialize(key, true);
+    this.reseed(B);                                              // Build 109
+  },
+  // LIQUIDS (Build 109): a liquid edit is gone (undo, the wrench): its cells
+  // go back to what the world and the other edits say, and a placed source
+  // takes every source of its lineage with it, so the lake it made drains
+  onLiqRemoved(e){
+    if (e.op === 1 && e.liq === 2 && e.lid){
+      this.floods = this.floods.filter(F => F.lid !== e.lid);
+      for (const [key, Ln] of this.lin){
+        const a = this.cells.get(key), d = this.dist.get(key); if (!a) continue;
+        let hit = false;
+        for (let q = 0; q < 512; q++) if (Ln[q] === e.lid){ Ln[q] = 0; if (a[q] === W_SRC){ a[q] = 0; if (d) d[q] = 255; hit = true; } }
+        if (hit){ this.active.add(key); this.dirtyMesh.add(key); }
+      }
+    }
+    this.onEdit(e);
   },
   tick(dt){
     if (!game.running || !game.gen || game.gen.seaLevel == null) return;
     this.accT += dt;
     if (this.accT >= 0.12){
+      const st = this.accT;
       this.accT = 0;
+      this.floodTick(st);                                        // Build 109
       if (this.active.size) this.step();
     }
     this.maintT += dt;
@@ -6523,20 +6706,20 @@ const waterSys = {
       const [cx, cy, cz] = key.split(',').map(Number);
       for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
         const q = this.idx(i, j, k), v = a[q];
-        if (v === W_SOLID || v === W_SRC) continue;
+        if (v === W_SOLID || v === W_SRC || v === W_HELD || v === W_DRY) continue;   // held and dry cells never change (Build 109)
         const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
         if (gy <= CORE.BEDROCK_Y + 1) continue;
         const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
-        let nv = 0, srcN = 0, nd = 255;
-        if (this.isW(above)){ nv = 7; nd = this.dv(gx, gy + 1, gz) + 1; }
+        let nv = 0, srcN = 0, nd = 255, lin = 255;
+        if (this.isW(above)){ nv = 7; nd = this.dv(gx, gy + 1, gz) + 1; if (above === W_SRC) lin = Math.min(lin, this.linOf(gx, gy + 1, gz)); }
         for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
           const nn = this.lv(gx + dx, gy, gz + dz);
           if (!this.isW(nn)) continue;
-          if (nn === W_SRC) srcN++;
+          if (nn === W_SRC){ srcN++; lin = Math.min(lin, this.linOf(gx + dx, gy, gz + dz)); }
           // a neighbour spreads sideways when it is a source or stands on
-          // something (falling water only falls)
+          // something (falling water only falls; held and dry cells are floor)
           const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
-          if (nb === W_SOLID || nb === W_SRC){
+          if (nb === W_SOLID || nb === W_SRC || nb === W_HELD || nb === W_DRY){
             if (nn - 1 > nv || (nn - 1 === nv && nv > 0)) nd = Math.min(nd, this.dv(gx + dx, gy, gz + dz) + 1);
             nv = Math.max(nv, nn - 1);
           }
@@ -6550,15 +6733,17 @@ const waterSys = {
         // under a lake is the lake); or a full cell beside a source (the
         // lake's level creeps along every floor it can reach). Falling water
         // never breeds sources, and a born source keeps its distance
-        const supported = below === W_SOLID || below === W_SRC;
+        const supported = below === W_SOLID || below === W_SRC || below === W_HELD || below === W_DRY;
         if (nv > 0 && supported && (srcN >= 2 || (nv >= 7 && (above === W_SRC || srcN >= 1)))) nv = W_SRC;
-        if (nv !== v) writes.push(key, q, nv, gx, gy, gz, nv > 0 ? Math.min(254, nd) : 255);
+        // a born source carries its parents' lineage: the world's (0) if any parent is the world's
+        if (nv !== v) writes.push(key, q, nv, gx, gy, gz, nv > 0 ? Math.min(254, nd) : 255, nv === W_SRC && lin !== 255 ? lin : 0);
       }
     }
-    for (let w = 0; w < writes.length; w += 7){
+    for (let w = 0; w < writes.length; w += 8){
       const key = writes[w], q = writes[w + 1], nv = writes[w + 2];
       this.cells.get(key)[q] = nv;
       const dd = this.dist.get(key); if (dd) dd[q] = writes[w + 6];
+      { let Ln = this.lin.get(key); if (writes[w + 7]){ if (!Ln){ Ln = new Uint8Array(512); this.lin.set(key, Ln); } Ln[q] = writes[w + 7]; } else if (Ln) Ln[q] = 0; }
       next.add(key); this.dirtyMesh.add(key);
       // a change on a chunk face wakes the neighbour (and grows it cells if water is arriving)
       const gx = writes[w + 3], gy = writes[w + 4], gz = writes[w + 5];
@@ -6593,12 +6778,23 @@ const waterSys = {
         if (ch && ch.done && !ch.water) game.terrain.remeshWater(ch, cx, cy, cz);
       }
     }
+    // Build 109: a lake dirties many chunks at once; they are rebuilt a few a
+    // frame (nearest first), the rest wait, so a fill never costs a frame
+    const want = [];
     for (const key of this.cells.keys()){
+      if ((this.meshes.has(key) || this.empty.has(key)) && !this.dirtyMesh.has(key)) continue;   // an empty chunk is built once, not every pass
       const [cx, cy, cz] = key.split(',').map(Number);
-      if (Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z) > R) continue;
-      if (!this.meshes.has(key) || this.dirtyMesh.has(key)) this.buildMesh(key);
+      const d = Math.hypot(cx * 8 + 4 - game.pos.x, cz * 8 + 4 - game.pos.z);
+      if (d > R) continue;
+      want.push([d, key]);
     }
-    this.dirtyMesh.clear();
+    if (want.length > 1) want.sort((a, b) => a[0] - b[0]);
+    const t0 = performance.now(), left = new Set();
+    for (let i = 0; i < want.length; i++){
+      if (i > 0 && performance.now() - t0 > this.MESH_MS){ for (let k = i; k < want.length; k++) left.add(want[k][1]); break; }
+      this.buildMesh(want[i][1]);
+    }
+    this.dirtyMesh = left;
   },
   buildMesh(key){
     const old = this.meshes.get(key);
@@ -6624,13 +6820,13 @@ const waterSys = {
       dep.push(1, 1, 1, 1, 1, 1);
       for (let q = 0; q < 6; q++) flow.push(0, 0);
     };
-    const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isW(v) ? gy - 0.5 + v / 8 : null; };
+    const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isWet(v) ? gy - 0.5 + this.lvl(v) : null; };
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
       const v = a[this.idx(i, j, k)];
-      if (!this.isW(v)) continue;
+      if (!this.isWet(v)) continue;
       const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
       const bottom = gy - 0.5;
-      let top = bottom + v / 8, fx = 0, fz = 0;
+      let top = bottom + this.lvl(v), fx = 0, fz = 0;
       if (v === W_SRC && game.gen.waterYAt && !this.isW(this.lv(gx, gy + 1, gz))){
         const wyc = game.gen.waterYAt(gx + 0.5, gz + 0.5);
         if (wyc != null && wyc > game.gen.seaLevel + 1e-6){
@@ -6639,24 +6835,25 @@ const waterSys = {
           if (R){ const f = Math.max(0, 1 - R.d / (R.w * 1.1)); fx = R.tx * f; fz = R.tz * f; }
         }
       }
-      if (!this.isW(this.lv(gx, gy + 1, gz))){
+      if (!this.isWet(this.lv(gx, gy + 1, gz))){
         let d = 0.5;
-        for (let q = 1; q < 9; q++){ if (this.isW(this.lv(gx, gy - q, gz))) d += 1; else break; }
+        for (let q = 1; q < 9; q++){ if (this.isWet(this.lv(gx, gy - q, gz))) d += 1; else break; }
         quadH(gx, gz, gx + 1, gz + 1, top, d, fx, fz);
       }
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
         const nn = this.lv(gx + dx, gy, gz + dz);
         if (nn === W_SOLID) continue;
-        const nt = this.isW(nn) ? gy - 0.5 + nn / 8 : bottom;
+        const nt = this.isWet(nn) ? gy - 0.5 + this.lvl(nn) : bottom;
         if (nt >= top - 0.01) continue;
         const xa = dx === 1 ? gx + 1 : gx, xb = dx === -1 ? gx : dx === 1 ? gx + 1 : gx + 1;
         const za = dz === 1 ? gz + 1 : gz, zb = dz === -1 ? gz : dz === 1 ? gz + 1 : gz + 1;
         if (dx !== 0) quadV(xa, gz, xa, gz + 1, nt, top);
         else quadV(gx, za, gx + 1, za, nt, top);
       }
-      if (this.lv(gx, gy - 1, gz) === 0) quadH(gx, gz, gx + 1, gz + 1, bottom, 0.5);
+      { const bl = this.lv(gx, gy - 1, gz); if (bl === 0 || bl === W_DRY) quadH(gx, gz, gx + 1, gz + 1, bottom, 0.5); }
     }
-    if (!pos.length) return;
+    if (!pos.length){ this.empty.add(key); return; }
+    this.empty.delete(key);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
@@ -6675,20 +6872,24 @@ const waterSys = {
       let v = a[0], c = 0;
       for (let q = 0; q < 512; q++){ if (a[q] === v) c++; else { r.push(v, c); v = a[q]; c = 1; } }
       r.push(v, c);
-      out.push([key, r]);
+      // the sources' lineage (Build 109), run-length too; all zero is left out
+      const Ln = this.lin.get(key); const l = [];
+      if (Ln){ let lv2 = Ln[0], lc = 0, any = false; for (let q = 0; q < 512; q++){ const x = Ln[q]; if (x) any = true; if (x === lv2) lc++; else { l.push(lv2, lc); lv2 = x; lc = 1; } } l.push(lv2, lc); if (any) out.push([key, r, l]); else out.push([key, r]); }
+      else out.push([key, r]);
     }
     return out;
   },
   load(rows){
     this.reset();
-    for (const [key, r] of rows || []){
+    for (const [key, r, l] of rows || []){
       const a = new Uint8Array(512);
       let q = 0;
       for (let t = 0; t + 1 < r.length; t += 2){ for (let c = 0; c < r[t + 1] && q < 512; c++) a[q++] = r[t]; }
       this.cells.set(key, a);
-      // saved flow has no distance; give it a little room and let it settle
+      // saved flow has no distance; give it a little room and let it settle. Sources keep their lineage (Build 109)
       const d = new Uint8Array(512);
       for (let q2 = 0; q2 < 512; q2++) d[q2] = a[q2] === W_SRC ? 0 : (this.isW(a[q2]) ? W_REACH - 6 : 255);
+      if (l){ const Ln = new Uint8Array(512); let q3 = 0; for (let t = 0; t + 1 < l.length; t += 2){ for (let c = 0; c < l[t + 1] && q3 < 512; c++) Ln[q3++] = l[t]; } this.lin.set(key, Ln); }
       this.dist.set(key, d);
       this.active.add(key); this.dirtyMesh.add(key);
     }
@@ -7072,7 +7273,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e, 0x4a2a6a, 0x8a5aaa, 0x2a2426, 0x5a4e50, 0xb8b0a0, 0xd8d0c0, 0x0a0810, 0x9a86b8];
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e, 0x4a2a6a, 0x8a5aaa, 0x2a2426, 0x5a4e50, 0xb8b0a0, 0xd8d0c0, 0x0a0810, 0x9a86b8, 0x4a3322, 0x33221a, 0x3a80cc, 0x4cc45a];   // tilled, wet tilled, water, ichor (Builds 108/109)
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -12953,12 +13154,12 @@ function waterTopAt(x, z, y){
       continue;
     }
     const v = a[waterSys.idx(gx - Math.floor(gx / 8) * 8, gy - Math.floor(gy / 8) * 8, gz - Math.floor(gz / 8) * 8)];
-    if (!waterSys.isW(v)) continue;
+    if (!waterSys.isWet(v)) continue;
     let t = gy;
-    while (waterSys.isW(waterSys.lv(gx, t + 1, gz))) t++;
+    while (waterSys.isWet(waterSys.lv(gx, t + 1, gz))) t++;
     const tv = waterSys.lv(gx, t, gz);
     if (tv === W_SRC && g.waterYAt){ const wy = g.waterYAt(x, z); if (wy != null && wy > t - 0.5 + 1 && wy < t + 1.5) return wy; }
-    return t - 0.5 + tv / 8;
+    return t - 0.5 + waterSys.lvl(tv);
   }
   return null;
 }
@@ -18314,7 +18515,7 @@ const siegeSys = {
           rec.repairT = 0;
           const dmg = rec.damage.shift();
           const idx = game.edits.findIndex(e => e.op === 0 && e.shape === 0 && Math.abs(e.x - dmg.x) < 0.05 && Math.abs(e.y - dmg.y) < 0.05 && Math.abs(e.z - dmg.z) < 0.05 && e.size === dmg.size);
-          if (idx >= 0){ const e = game.edits.splice(idx, 1)[0]; game.terrain.invalidate(e); wrenchSys.validate && wrenchSys.validate(); }
+          if (idx >= 0){ const e = game.edits.splice(idx, 1)[0]; game.terrain.invalidate(e); if (e.liq) waterSys.onLiqRemoved(e); wrenchSys.validate && wrenchSys.validate(); }
           if (!rec.damage.length && pd < span + 200) toast(rec.name + ' has rebuilt its walls');
           markSave();
         }
@@ -27450,7 +27651,9 @@ function activeTool(){
   if (it.kind === 'mender') return { kind: 'mender', tier: 0, item: it };
   if (it.kind === 'table' || it.kind === 'mtable' || it.kind === 'atable') return { kind: 'table', tier: 0, item: it };
   if (it.kind === 'fence' || it.kind === 'fencegate') return { kind: it.kind, tier: 0, item: it };
-  if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone') return { kind: 'spring', tier: 0, item: it };
+  // LIQUIDS (Build 109): a stone is a dispenser of a source: the drill's ghost, shape and sizes, and what it lays flows
+  if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone')
+    return { kind: 'disp', tier: 2, mat: it.kind === 'lavastone' ? CORE.MAT.LAVA : it.kind === 'ichorstone' ? CORE.MAT.ICHOR : CORE.MAT.WATER, count: it.count, item: it, spring: it.kind };
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
@@ -28364,7 +28567,8 @@ const wrenchSys = {
       const e = game.edits[idx];
       if (!e) continue;
       const prefix = game.edits.slice(0, idx);
-      if (e.op === 1 && game.mode !== 'creative'){
+      if (e.liq){ if (game.mode !== 'creative') liqRefund(e, back); }           // LIQUIDS (Build 109)
+      else if (e.op === 1 && game.mode !== 'creative'){
         const cost = CORE.placeCost(prefix, e, game.gen);
         if (cost > 0){
           CORE.addMat(game.slots, e.mat, cost);
@@ -28381,6 +28585,7 @@ const wrenchSys = {
       }
       game.edits.splice(idx, 1);
       game.terrain.invalidate(e);
+      if (e.liq) waterSys.onLiqRemoved(e);                                  // LIQUIDS (Build 109)
     }
     const parts = [];
     for (const n in back) parts.push('+' + back[n] + ' ' + n + ' back');
@@ -28738,7 +28943,102 @@ function doPlaceM(tool, p, shape, eff){
   for (const xf of X) doPlace(tool, p, shape, eff, gp, xf);
   crewSys.onPlace(p, shape, eff);
 }
+// ---------- LIQUIDS (Build 109) ----------
+// Water and ichor are materials. The drill, its ghost in a liquid, cuts the
+// shape out of it: the cut holds (no liquid enters it again) and the liquid
+// lands in the pack by volume. The dispenser lays a liquid from the pack in
+// a shape that never flows. The spring, lava and ichor stones are dispensers
+// of sources: what they lay flows by the water's own rules, out to its level
+// without limit, and Ctrl-Z or the wrench drains everything it made.
+function isLiquidMat(m){ return m === CORE.MAT.WATER || m === CORE.MAT.ICHOR; }
+function liquidAt(p){ return inWater(p.x, p.y, p.z) ? (game.gen && game.gen.ichor ? CORE.MAT.ICHOR : CORE.MAT.WATER) : 0; }
+function liquidCells(e, want){
+  // metre cells the shape covers that are liquid (want 'wet') or open air (want 'air')
+  let n = 0;
+  const B = CORE.editAABB(e), le = nearEdits([B[0] - 1, B[1] - 1, B[2] - 1, B[3] + 1, B[4] + 1, B[5] + 1]);
+  for (let gy = Math.floor(B[1]); gy <= Math.ceil(B[4]); gy++) for (let gz = Math.floor(B[2]); gz <= Math.ceil(B[5]); gz++) for (let gx = Math.floor(B[0]); gx <= Math.ceil(B[3]); gx++){
+    const x = gx + 0.5, z = gz + 0.5;
+    if (CORE.shapeSDF(x, gy, z, e) > 0) continue;
+    if (want === 'wet'){ if (inWater(x, gy, z)) n++; }
+    else if (CORE.evalSDF(x, gy, z, le, game.gen) > 0 && !inWater(x, gy, z)) n++;
+  }
+  return n;
+}
+function camDry(){ const c = game.camera.position; return !inWater(c.x, c.y, c.z); }
+// the drill from dry land cuts the liquid in its shape (from under water it mines as it always did)
+function liquidInShape(tool, p, shape, eff){
+  if (tool.smooth || tool.bore || !camDry()) return 0;
+  const e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  return liquidCells(e, 'wet');
+}
+function doLiquidCut(tool, p, shape, eff, group, mir){
+  let e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
+  e.liq = 1;
+  const units = liquidCells(e, 'wet');
+  if (!units) return 0;
+  let mat = game.gen && game.gen.ichor ? CORE.MAT.ICHOR : CORE.MAT.WATER;
+  applyEdit(e);
+  const got = {}; got[mat] = units;
+  game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
+  if (game.undoStack.length > 64) game.undoStack.shift();
+  const added = CORE.addMat(game.slots, mat, units);
+  toast((added ? '+' : 'inventory full — lost ') + units + ' ' + CORE.MAT_NAME[mat] + ' · the cut holds');
+  AudioSys.sfx('place');
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[mat], 0xffffff], Math.min(30, 6 + units / 4), 1.6);
+  refreshHotbar(); refreshToolHUD();
+  return units;
+}
+// the wrench deletes a liquid edit: a source gives its stone back, held
+// liquid its cells, and a cut takes back the liquid it gave
+function liqRefund(e, back){
+  if (e.op === 1 && e.liq === 2){
+    const k = e.mat === CORE.MAT.ICHOR ? 'ichorstone' : 'springstone';
+    addStackItem(k, 1); back[itemLabel({ kind: k })] = (back[itemLabel({ kind: k })] || 0) + 1; return;
+  }
+  const want = e.op === 1 ? W_HELD : W_DRY, B = CORE.editAABB(e);
+  let n = 0;
+  for (let gy = Math.floor(B[1]); gy <= Math.ceil(B[4]); gy++) for (let gz = Math.floor(B[2]); gz <= Math.ceil(B[5]); gz++) for (let gx = Math.floor(B[0]); gx <= Math.ceil(B[3]); gx++)
+    if (CORE.shapeSDF(gx + 0.5, gy, gz + 0.5, e) <= 0 && waterSys.lv(gx, gy, gz) === want) n++;
+  if (!n) return;
+  if (e.op === 1){ CORE.addMat(game.slots, e.mat, n); back[CORE.MAT_NAME[e.mat]] = (back[CORE.MAT_NAME[e.mat]] || 0) + n; }
+  else { const m = game.gen && game.gen.ichor ? CORE.MAT.ICHOR : CORE.MAT.WATER; CORE.consumeMat(game.slots, m, Math.min(CORE.countMat(game.slots, m), n)); }
+}
+function doLiquidPlace(tool, p, shape, eff, group, mir){
+  const src = !!tool.spring, mat = tool.mat;
+  if (airless()){ toast('no air here: it would boil off'); AudioSys.sfx('deny'); return; }
+  if (mat === CORE.MAT.ICHOR && game.planet !== 'alien'){ toast('ichor keeps nowhere but Strata'); AudioSys.sfx('deny'); return; }
+  if (mat === CORE.MAT.WATER && game.planet === 'alien'){ toast('water will not keep here: it is ichor or nothing'); AudioSys.sfx('deny'); return; }
+  if (!game.gen || game.gen.seaLevel == null){ toast('liquid will not hold here'); AudioSys.sfx('deny'); return; }
+  let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, mat, editRot(shape)));
+  if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
+  e.liq = src ? 2 : 1;
+  const units = liquidCells(e, 'air');
+  if (!units){ toast('nothing to fill there'); return; }
+  let cost = 0;
+  if (src){
+    e.lid = game.liqSeq = ((game.liqSeq || 0) % 250) + 1;
+    if (game.mode !== 'creative'){ tool.item.count--; if (tool.item.count <= 0) game.slots[game.hotSel] = null; }
+  } else {
+    cost = units;
+    if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, mat, cost)){
+      toast('need ' + cost + ' ' + CORE.MAT_NAME[mat] + ' — have ' + CORE.countMat(game.slots, mat));
+      game.orbFlash = performance.now(); AudioSys.sfx('deny'); return;
+    }
+  }
+  applyEdit(e);
+  game.undoStack.push({ edit: e, type: 'place', mat, cost: game.mode === 'creative' ? 0 : cost, group, stone: src && game.mode !== 'creative' ? tool.spring : null });
+  if (game.undoStack.length > 64) game.undoStack.shift();
+  toast(src ? CORE.MAT_NAME[mat] + ' wells up — it will find its level' : '-' + cost + ' ' + CORE.MAT_NAME[mat] + ' · it holds its shape');
+  AudioSys.sfx('place');
+  Particles.burst(p.x, p.y, p.z, eff * 0.5, [MAT_COLOR[mat], 0xffffff], Math.min(30, 6 + units / 4), 1.6);
+  refreshHotbar(); refreshToolHUD();
+}
 function doMine(tool, p, shape, eff, group, mir){
+  if (!tool.smooth && camDry()){                                                           // LIQUIDS (Build 109): the water in the shape first, one undo with the rock
+    const g2 = group || ('lq' + (game.lqGroup = (game.lqGroup || 0) + 1));
+    if (doLiquidCut(tool, p, shape, eff, g2, mir)) group = g2;
+  }
   let e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
   if (tool.smooth) e.k = +(eff * 0.5).toFixed(2);
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
@@ -28815,6 +29115,17 @@ function doMine(tool, p, shape, eff, group, mir){
   refreshHotbar(); refreshToolHUD();
 }
 function doPlace(tool, p, shape, eff, group, mir){
+  if (tool.spring && tool.mat === CORE.MAT.LAVA){                                         // LIQUIDS (Build 109): the lava stone lays lava, the ground's own
+    if (airless()){ toast('no air here'); AudioSys.sfx('deny'); return; }
+    let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, CORE.MAT.LAVA, editRot(shape)));
+    if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
+    if (CORE.placeCost(game.edits, e, game.gen) === 0) return;
+    if (game.mode !== 'creative'){ tool.item.count--; if (tool.item.count <= 0) game.slots[game.hotSel] = null; }
+    applyEdit(e); game.undoStack.push({ edit: e, type: 'place', mat: CORE.MAT.LAVA, cost: 0, group, stone: game.mode !== 'creative' ? 'lavastone' : null });
+    toast('lava wells up — mind your feet'); AudioSys.sfx('place'); Particles.burst(p.x, p.y, p.z, eff * 0.5, [0xff7a26, 0xffb347], 20, 2.5);
+    refreshHotbar(); refreshToolHUD(); return;
+  }
+  if (tool.spring || isLiquidMat(tool.mat)) return doLiquidPlace(tool, p, shape, eff, group, mir);
   const paint = false;   // dispenser paint moved to the wrench
   let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
@@ -28890,6 +29201,7 @@ function undoEdit(){
 function undoOne(){
   const e = game.edits.pop();
   game.terrain.invalidate(e);
+  if (e.liq) waterSys.onLiqRemoved(e);                                    // LIQUIDS (Build 109)
   if (netSys.on && !netSys.applying) netSys.send({ t: 'undo', e: CORE.serializeEdits([e])[0] });
   const rec = game.undoStack.length && game.undoStack[game.undoStack.length - 1].edit === e
     ? game.undoStack.pop() : null;
@@ -28907,6 +29219,7 @@ function undoOne(){
       }
     } else if (rec.type === 'place' || rec.type === 'paint'){
       CORE.addMat(game.slots, rec.mat, rec.cost);
+      if (rec.stone) addStackItem(rec.stone, 1);                             // LIQUIDS (Build 109): the stone comes back
     }
   }
   return rec;
@@ -29699,7 +30012,11 @@ function tryAction(dt, now){
     if (!game.mouseL){ game.act.t = 0; AudioSys.setHum(false, 0, 0); return; }
     if (brushSys.get()){ AudioSys.setHum(false, 0, 0); if (edge) brushSys.fire(tool, p, eff); return; }
     const plan = actionPlan(tool, p, shape, eff);
-    if (plan.dur < 0){ AudioSys.setHum(false, 0, 0); return; }   // nothing to mine here
+    if (plan.dur < 0){                                             // nothing to mine here -- but water, from dry land (Build 109)
+      AudioSys.setHum(false, 0, 0);
+      if ((edge || now - game.lastAction > 250) && liquidInShape(tool, p, shape, eff)){ game.lastAction = now; doMineM(tool, p, shape, eff); }
+      return;
+    }
     if (plan.dur === 0){
       if (edge || now - game.lastAction > 250){ game.lastAction = now; doMineM(tool, p, shape, eff); }
       return;
@@ -29716,6 +30033,7 @@ function tryAction(dt, now){
   // dispenser: one placement per click, consumes the held material by volume
   AudioSys.setHum(false, 0, 0);
   if (brushSys.get()){ if (edge && game.mouseL) brushSys.fire(tool, p, eff); return; }
+  if (tool.spring || isLiquidMat(tool.mat)){ if (edge) doPlaceM(tool, p, shape, eff); return; }   // LIQUIDS (Build 109): one click, no charge
   const plan = actionPlan(tool, p, shape, eff);
   if (plan.dur < 0) return;                                       // nothing to fill/paint
   if (plan.dur === 0){
@@ -31932,6 +32250,7 @@ function itemInfoHTML(it, tool){
     const name = tool.lathe ? 'lathe' : tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
+      : tool.spring ? itemLabel(tool.item) + ' ×' + tool.count + ' [a source of ' + CORE.MAT_NAME[tool.mat] + ']'
       : CORE.TIER_NAME[tool.tier] + ' dispenser [' + CORE.MAT_NAME[tool.mat] + ' ×' + tool.count + ']';
     html = '<div class="t1">' + name + '</div>';
     if (tool.smooth) html += '<div class="t2">disc ' + (game.tool.trowelSize || 3).toFixed(1) + 'm · stroke depth ' + Math.round((game.tool.trowelDepth || 0.55) * 100) + '% · scroll sets the ' + (game.tool.trowelMode ? 'DEPTH' : 'DISC') + ' (middle click swaps)</div><div class="t2">hold left click to RAISE the ground under it (its own material) · hold right click to LOWER it · shift + left FLATTENS to the disc · shift + right SANDS it smooth</div>';
@@ -32116,7 +32435,7 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">' + itemLabel(it) + '</div><div class="t2">left click to swing</div>';
   } else if (it.kind === 'springstone' || it.kind === 'lavastone' || it.kind === 'ichorstone'){
     const nm = it.kind === 'springstone' ? 'spring stone' : it.kind === 'lavastone' ? 'lava stone' : 'ichor stone';
-    html = '<div class="t1">' + nm + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'springstone' ? 'set it in the ground and water wells up: a basin three metres across that never runs dry · fill the can at it · not on an airless world' : it.kind === 'lavastone' ? 'set it in the ground and lava wells up: a pool a metre and a half across, and it burns' : 'set it in the ground of Strata and ichor wells up: a basin that never runs dry · nowhere but Strata') + '</div>';
+    html = '<div class="t1">' + nm + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'springstone' ? 'a source of water, placed like the dispenser places (the ghost, right click for the shape, scroll for the size): what it lays flows, down into every gap and out to its own level, with no end · dig your lake first · Ctrl-Z drains all of it and gives the stone back · not on an airless world, nor on Strata' : it.kind === 'lavastone' ? 'lava, placed like the dispenser places, in the shape you choose; it burns, and it does not flow' : 'a source of ichor, placed like the dispenser places: it flows down and out to its own level with no end · nowhere but Strata · Ctrl-Z drains it') + '</div>';
   } else if (it.kind === 'fence' || it.kind === 'fencegate'){
     html = '<div class="t1">' + (it.kind === 'fence' ? 'fence' : 'fence gate') + ' ×' + it.count + '</div><div class="t2">' + (it.kind === 'fence' ? 'two metres of rail the animals cannot cross or jump, and you walk through · the ghost shows where it stands: aim near the end of a rail and it joins on, straight; scroll turns it about the joint, any angle · right-click it empty-handed to take it back' : 'a fence piece that opens: right-click it · C and right-click to take it back') + '</div>';
   } else if (it.kind === 'door'){
@@ -33439,11 +33758,13 @@ function buildSaveData(){
     doors: game.doors.map(d => [d.x, d.y, d.z, d.yaw, d.open ? 1 : 0, d.w || 1.2, d.h || 2.2, d.gate ? 1 : 0, d.broken ? 1 : 0, d.hp == null ? -1 : d.hp]),
     fences: (game.fences || []).map(f => [f.x, f.y, f.z, f.yaw, f.gate ? 1 : 0, f.open ? 1 : 0]),
     springs: game.springs || [],
+    liqSeq: game.liqSeq || 0,                                              // LIQUIDS (Build 109)
     tables: game.tables,
     ropes: game.ropes || [],
     rails: game.rails || [],
     roads: game.roads || {},
     water: waterSys.serialize(),
+    floods: waterSys.saveFloods(),                                         // LIQUIDS (Build 109): fills still going
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
     tubes: (game.tubes || []).map(t => ({ a: t.a, b: t.b })),
@@ -33511,6 +33832,7 @@ function startWorldData(id, data){
   game.rails = data.rails || [];
   game.roads = data.roads || {};
   waterSys.load(data.water || []);
+  waterSys.loadFloods(data.floods || []);
   roadSys.near = []; roadSys.scanT = 99; roadSys.cache = new Map();
   game.railDraft = null;
   game.riding = null;
@@ -33546,6 +33868,7 @@ function startWorldData(id, data){
   game.breath = 100; game.underwater = false;
   game.fences = (data.fences || []).map(f => ({ x: f[0], y: f[1], z: f[2], yaw: f[3], gate: f[4] ? 1 : 0, open: f[5] ? 1 : 0 }));
   game.springs = (data.springs || []).map(sp => ({ kind: sp.kind, x: sp.x, y: sp.y, z: sp.z }));
+  game.liqSeq = data.liqSeq || 0;
   springSys.rebuild();
   game.doors = (data.doors || []).map(d => { const o = { x: d[0], y: d[1], z: d[2], yaw: d[3], open: !!d[4], w: d[5] || 1.2, h: d[6] || 2.2 }; if (d[7]) o.gate = 1; if (d[8]) o.broken = 1; if (d[9] != null && d[9] >= 0) o.hp = d[9]; return o; });
   game.tables = (data.tables || []).map(t => [t[0], t[1], t[2]]);
