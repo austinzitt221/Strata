@@ -46,9 +46,14 @@ to a desert city and around it for fifteen seconds).
   - **Creatures and the props.** Half of the creatures' time went into
     reading every solid prop in the world (a city is every door of every
     house) for every physics probe. Props sit in 8 m columns now. A
-    probe reads its own nine columns and gets an exact answer (capped at
-    8 m, still a true lower bound). 4× faster at 80 props, and the gain
-    grows with the city.
+    probe reads the columns round it, 8 m and then 16 m out, and only a
+    probe with nothing that near reads the whole list. The answer is the
+    same as before to the last digit (checked on 4,000 probes), about 6×
+    faster at 80 props, and the gain grows with the city. A first version
+    capped the answer at 8 m, which is enough for a collision, but the
+    garrison's gunship reads the same field for its clearance and aim:
+    its hits on you halved in the b62 suite. The exact version brought
+    them back.
   - **The dispenser** worked out a placement's cost every frame its
     ghost moved, button or not (thousands of field samples each time).
     Now it does so when you click.

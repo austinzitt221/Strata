@@ -6787,13 +6787,20 @@ function propGrid(P){
 // solid props: closed doors + crafting tables (boxes), tree trunks (cylinders)
 function propSDF(x, y, z){
   if (game.solidProps.length > 24){
+    // exact: the nearest prop within the searched columns is the nearest of
+    // all once it is nearer than the columns reach (8 m, then 16); past
+    // that, the whole list, as before. (A cap was enough for a collision
+    // but not for the gunship, which reads the field for its clearance.)
     const G = propGrid(game.solidProps), ccx = Math.floor(x / PROP_CELL), ccz = Math.floor(z / PROP_CELL), seen = new Set();
-    let d = PROP_CELL;
-    for (let cz = ccz - 1; cz <= ccz + 1; cz++) for (let cx = ccx - 1; cx <= ccx + 1; cx++){
-      const a = G.get(cx * 65536 + cz); if (!a) continue;
-      for (const p of a){ if (seen.has(p)) continue; seen.add(p); const pd = propDist(p, x, y, z); if (pd < d) d = pd; }
+    let d = 1e9;
+    for (let k = 1; k <= 2; k++){
+      for (let cz = ccz - k; cz <= ccz + k; cz++) for (let cx = ccx - k; cx <= ccx + k; cx++){
+        if (k > 1 && Math.abs(cz - ccz) < k && Math.abs(cx - ccx) < k) continue;   // the ring, not the block again
+        const a = G.get(cx * 65536 + cz); if (!a) continue;
+        for (const p of a){ if (seen.has(p)) continue; seen.add(p); const pd = propDist(p, x, y, z); if (pd < d) d = pd; }
+      }
+      if (d < PROP_CELL * k) return d;
     }
-    return d;
   }
   let d = 1e9;
   for (const p of game.solidProps){ const pd = propDist(p, x, y, z); if (pd < d) d = pd; }

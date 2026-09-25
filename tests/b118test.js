@@ -56,14 +56,14 @@ const { chromium } = require('playwright');
   });
   console.log('2. a crossing :', JSON.stringify(r2));
 
-  // 3. the props in columns: the same answer as the whole list (to the 8 m cap)
+  // 3. the props in columns: the same answer as the whole list, exactly
   const r3 = await page.evaluate(() => {
     const g = window.__game, P = g.solidProps, api = window.__api;
     const lin = (x, y, z) => { let d = 1e9; for (const p of P){ let pd; if (p.t === 'box'){ let dx = x - p.x, dz = z - p.z; if (p.yaw){ const c = Math.cos(-p.yaw), s = Math.sin(-p.yaw); const rx = dx * c - dz * s; dz = dx * s + dz * c; dx = rx; } const qx = Math.abs(dx) - p.hx, qy = Math.abs(y - p.y) - p.hy, qz = Math.abs(dz) - p.hz; pd = Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, Math.max(qy, qz)), 0); } else { const d2 = Math.hypot(x - p.x, z - p.z) - p.r, dy = Math.abs(y - (p.y + p.h * 0.5)) - p.h * 0.5; pd = Math.hypot(Math.max(d2, 0), Math.max(dy, 0)) + Math.min(Math.max(d2, dy), 0); } if (pd < d) d = pd; } return d; };
     let bad = 0, near = 0, n = 0;
     for (let i = 0; i < 4000; i++){
       const p = P[i % P.length], x = p.x + (Math.random() - 0.5) * 30, z = p.z + (Math.random() - 0.5) * 30, y = p.y + (Math.random() - 0.5) * 6;
-      const want = P.length > 24 ? Math.min(lin(x, y, z), 8) : lin(x, y, z), got = api.propSDF(x, y, z);
+      const want = lin(x, y, z), got = api.propSDF(x, y, z);
       n++; if (want < 8) near++; if (Math.abs(want - got) > 1e-9) bad++;
     }
     const t0 = performance.now(); for (let i = 0; i < 20000; i++){ const p = P[i % P.length]; api.propSDF(p.x + 1, p.y, p.z + 1); } const tGrid = (performance.now() - t0) / 20;
