@@ -468,6 +468,37 @@ in the order I want to build them:
      liquid edits like any other. (Austin's "crazy idea"; it is a
      good one, and the biggest change on this list.)
 
+After the 2026-10-05 playtest (106 to 109): fixed in Build 110 (liquid
+shapes on the metre cells, liquids to the ceiling, lakes that meet their
+walls, the ghost shadows over cities). And, in my order:
+ 24. **Strata's own tiers.** Four ores of Strata's own, each with its
+     drill, dispenser, sword and armour, above astrium (twelve tiers in
+     all). Earth's ores leave Strata. Strata's coal burns twice as long,
+     makes MEGA TORCHES (their own colour, seven times the light) and a
+     HEADLAMP (a light where you look, worn, never runs down). The first
+     Strata ore makes the GREAT STOVE: faster, and five smelts at once
+     on one fire (on top of what power already does). (Austin.)
+ 25. **The speed curve.** The instant mine and instant place move from
+     diamond to the top Strata tier; every tier between stone and it
+     steps up evenly; stone stays as it is. (Austin; waits on 24.)
+ 26. **Abilities by tier.** Stone resizes and nothing else; the tiers
+     add what the tools do: rotation in every axis by diamond, the
+     mirror at astrium, something new at the top of Strata (my pick,
+     see below). (Austin.)
+ 27. **Shapes by tier.** Stone makes only the cube; every tier unlocks
+     one more shape, for the drill and the dispenser alike. Austin picks
+     the master list and its order from these candidates (mine and his):
+     sphere, cylinder, cone, STAIRCASE (walkable, a fixed rise a step),
+     WEDGE (a ramp or a roof), PYRAMID, dome (a half sphere), ARCH
+     (a doorway or a bridge, the round top of a tunnel), TUBE (a hollow
+     cylinder: wells, towers, pipes), HOLLOW BOX (a room in one click),
+     slab (a floor), torus (a ring), hex column, frustum (a stepped
+     pyramid's tiers), capsule (a round-ended tunnel), SPIRAL STAIR,
+     octahedron (a crystal).
+     For the top-of-Strata ability I want ECHO: the shape repeats along
+     the way you look, a count you scroll, one click for a colonnade, a
+     row of windows or a flight of piers.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.

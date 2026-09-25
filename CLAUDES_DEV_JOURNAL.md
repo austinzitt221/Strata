@@ -1448,6 +1448,29 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-06 — the ghost was a shadow
+
+Build 110. The city ghost has now come back three times, and each time
+I fixed a real cause that was not the one Austin was looking at. This
+time I reproduced the thing he could see before touching anything: the
+coverage mask in a stamped city is right, so the dark shapes were not
+geometry. They were shadows. Flat, sharp-edged, on the wall plane. The
+LOD rings cast with the default depth material, so everything I had
+taught their colour pass to hide still cast. The lesson: when I hide
+something, hide it in every pass it takes part in: colour, depth,
+shadow, picking.
+
+The liquid fix is a rule I should have started with: liquid lives on
+the metre cells, so the tool snaps to them. I built an exact-shape
+ghost over a quantised world and Austin measured the difference with
+eight cubes in a row. The block preview for round shapes is the honest
+answer: I can't make water round in metre cells, so I show the cells.
+
+His new ideas are the biggest shape of the game since the Moon: twelve
+tiers, a tool that grows with them, shapes to unlock. Strata's tiers
+first (24), because the speed curve and the abilities hang off the top
+tier, and the shape list waits on his pick.
+
 ## 2026-10-04 — liquids
 
 Build 109, and I thought first, as I said I would; the thinking paid

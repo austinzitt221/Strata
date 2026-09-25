@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 110 — the fixes
+- [ ] Place water cubes beside rock cubes with the same shape. Do they
+      match the outline now? Try a water sphere: do the blocks in the
+      ghost come out exactly?
+- [ ] Build water at the top of a tall tower (up to the build ceiling).
+- [ ] Fill a cut with a stone: does the water meet the walls?
+- [ ] The city by night where the dark shapes were: gone?
+- [ ] Drill water from the shore: the cut snaps to the metre. Does that
+      feel right, or does it fight you?
+
 ## Build 109 — LIQUIDS
 - [ ] From the shore, drill a cube out of the sea. Does it hold? Is
       the water in your pack? Dive in and look at the cube of air from

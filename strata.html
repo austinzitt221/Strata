@@ -6520,7 +6520,7 @@ const waterSys = {
   floodOf(lid){ return this.floods.find(F => F.lid === lid) || null; },
   floodNew(lid, L){ let F = this.floodOf(lid); if (!F){ F = { lid, L, b: [], lo: 1e9, park: [], n: 0 }; this.floods.push(F); } return F; },
   fpush(F, x, y, z){
-    if (y > F.L || y <= CORE.BEDROCK_Y + 1 || y < CORE.CY_MIN * 8 || y >= CORE.CY_MAX * 8) return;
+    if (y > F.L || y <= CORE.BEDROCK_Y + 1 || y < CORE.CY_MIN * 8 || y >= (CORE.CY_MAX + 1) * 8 - 1) return;
     const i = y - CORE.CY_MIN * 8;
     (F.b[i] || (F.b[i] = [])).push(x, z);
     if (i < F.lo) F.lo = i;
@@ -6630,7 +6630,7 @@ const waterSys = {
     if (e.liq){
       // LIQUIDS (Build 109): a liquid edit is a water event wherever it is
       const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
-      const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
+      const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX, Math.floor((B[4] + 1.5) / 8));   // Build 110: to the terrain's ceiling
       const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
       if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 4000) return;
       for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) this.materialize(CK(cx, cy, cz), true);
@@ -6821,6 +6821,21 @@ const waterSys = {
       for (let q = 0; q < 6; q++) flow.push(0, 0);
     };
     const topOf = (gx, gy, gz) => { const v = this.lv(gx, gy, gz); return this.isWet(v) ? gy - 0.5 + this.lvl(v) : null; };
+    // Build 110: a water surface against rock reaches out to the rock, found
+    // by a bisection of the field just under the surface, so a lake meets a
+    // cut wall wherever the wall stands and not at the last whole metre.
+    // Rock over the reach hides the overlap; open air stops it at nothing.
+    const leW = nearEdits([cx * 8 - 2, cy * 8 - 2, cz * 8 - 2, cx * 8 + 10, cy * 8 + 10, cz * 8 + 10]);
+    const reach = (gx, gy, gz, dx, dz, y) => {
+      if (this.lv(gx + dx, gy, gz + dz) !== W_SOLID) return 0;
+      const x0 = dx === 1 ? gx + 1 : dx === -1 ? gx : gx + 0.5, z0 = dz === 1 ? gz + 1 : dz === -1 ? gz : gz + 0.5;
+      const sd = t => CORE.evalSDF(x0 + dx * t, y, z0 + dz * t, leW, game.gen);
+      if (sd(1.0) >= 0) return 0;                        // no rock at this height within the cell: sealed air, a river's lid
+      let lo = 0, hi = 1;
+      if (sd(0) < 0) return 0.03;
+      for (let i = 0; i < 6; i++){ const m = (lo + hi) / 2; if (sd(m) < 0) hi = m; else lo = m; }
+      return Math.min(1, hi + 0.04);
+    };
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
       const v = a[this.idx(i, j, k)];
       if (!this.isWet(v)) continue;
@@ -6838,7 +6853,8 @@ const waterSys = {
       if (!this.isWet(this.lv(gx, gy + 1, gz))){
         let d = 0.5;
         for (let q = 1; q < 9; q++){ if (this.isWet(this.lv(gx, gy - q, gz))) d += 1; else break; }
-        quadH(gx, gz, gx + 1, gz + 1, top, d, fx, fz);
+        const sy = top - 0.06;
+        quadH(gx - reach(gx, gy, gz, -1, 0, sy), gz - reach(gx, gy, gz, 0, -1, sy), gx + 1 + reach(gx, gy, gz, 1, 0, sy), gz + 1 + reach(gx, gy, gz, 0, 1, sy), top, d, fx, fz);
       }
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
         const nn = this.lv(gx + dx, gy, gz + dz);
@@ -27711,6 +27727,8 @@ function updateGhost(){
   }
   mirrorSys.hideGhost();
   brushSys.hide();
+  liqVox.hide();
+  game.ghostLiq = false;
   if (game.gridViz) game.gridViz.visible = false;
   // held door: skinny door-shaped ghost with grid + side alignment
   if (tool && tool.kind === 'door' && game.ui === 'none' && isLocked()){
@@ -27753,19 +27771,23 @@ function updateGhost(){
   } else trowelSys.hide();
   if (!usable){ game.ghostPos = null; return; }
 
-  const eff = CORE.effSize(game.tool.size, tool.tier);
+  let eff = CORE.effSize(game.tool.size, tool.tier);
+  let p = ghostPlacement(eff);
+  // LIQUIDS (Build 110): on the metre cells
+  game.ghostLiq = !brushSys.get() && liquidMode(tool, p, eff);
+  if (game.ghostLiq){ const sn = liqSnap(p, eff); p = sn.p; eff = sn.eff; }
   game.ghostEff = eff;
-  const p = ghostPlacement(eff);
   game.ghostPos = p;
+  if (game.ghostLiq && game.tool.shape !== 1) liqVox.show(liqEdit(1, game.tool.shape, p, eff)); else liqVox.hide();
   if (brushSys.get() && !tool.bore){
     // a blueprint brush: its own outlines stand in for the shape
     brushSys.sync(tool, p, eff);
     return;
   }
   const paint = tool.kind === 'disp' && game.tool.mode === 'paint';
-  const rot = editRot(game.tool.shape);
-  const grx = game.tool.shape !== 0 ? game.tool.rx || 0 : 0;
-  const grz = game.tool.shape !== 0 ? game.tool.rz || 0 : 0;
+  const rot = game.ghostLiq ? 0 : editRot(game.tool.shape);
+  const grx = game.tool.shape !== 0 && !game.ghostLiq ? game.tool.rx || 0 : 0;
+  const grz = game.tool.shape !== 0 && !game.ghostLiq ? game.tool.rz || 0 : 0;
   if (tool.kind === 'disp' && !paint){
     // build preview: the real material, solid, world-tiled — not an outline
     const gm = game.ghostSolid[game.tool.shape];
@@ -28951,6 +28973,59 @@ function doPlaceM(tool, p, shape, eff){
 // of sources: what they lay flows by the water's own rules, out to its level
 // without limit, and Ctrl-Z or the wrench drains everything it made.
 function isLiquidMat(m){ return m === CORE.MAT.WATER || m === CORE.MAT.ICHOR; }
+// Build 110: liquid lives in metre cells (x and z cut at whole metres, y at
+// half metres), so a liquid shape snaps to them: a whole-metre size, centred
+// so its faces are cell faces, and never rotated. What the ghost shows is
+// then exactly what is filled or cut. (Austin: eight cubes from one shape,
+// the rock ones all alike, the water ones four sizes and none the outline.)
+const LIQ_TOP = (CORE.CY_MAX + 1) * CORE.CHUNK_M - 1;
+function liqSnap(p, eff){
+  const n = Math.max(1, Math.round(eff)), odd = n % 2 === 1;
+  return { p: { x: odd ? Math.floor(p.x) + 0.5 : Math.round(p.x), y: odd ? Math.round(p.y) : Math.floor(p.y) + 0.5, z: odd ? Math.floor(p.z) + 0.5 : Math.round(p.z) }, eff: n };
+}
+function liqEdit(op, shape, p, eff, mat){ return CORE.makeEdit(op, shape, p.x, p.y, p.z, eff, mat || 0, 0); }
+// the metre cells a liquid shape covers
+function liqCellsOf(e){
+  const out = [], B = CORE.editAABB(e);
+  for (let gy = Math.floor(B[1]); gy <= Math.ceil(B[4]); gy++) for (let gz = Math.floor(B[2]); gz <= Math.ceil(B[5]); gz++) for (let gx = Math.floor(B[0]); gx <= Math.ceil(B[3]); gx++)
+    if (CORE.shapeSDF(gx + 0.5, gy, gz + 0.5, e) <= 0) out.push(gx, gy, gz);
+  return out;
+}
+// is the held tool acting on liquid here? a liquid in the dispenser, a
+// stone of water or ichor, or the drill from dry land with liquid in its shape
+function liquidMode(tool, p, eff){
+  if (!tool) return false;
+  if (tool.kind === 'disp') return !!(tool.spring ? tool.mat !== CORE.MAT.LAVA : isLiquidMat(tool.mat));
+  if (tool.kind === 'drill' && !tool.smooth && !tool.bore && !tool.lathe && !brushSys.get()) return liquidInShape(tool, p, game.tool.shape, eff) > 0;
+  return false;
+}
+// the preview of a round liquid shape: its cells, the outer ones, as blocks
+const liqVox = {
+  mesh: null, key: '', MAX: 6000,
+  show(e){
+    if (!this.mesh){
+      const m = new THREE.InstancedMesh(new THREE.BoxGeometry(0.96, 0.96, 0.96), new THREE.MeshBasicMaterial({ color: 0x5aa8ff, transparent: true, opacity: 0.32, depthWrite: false }), this.MAX);
+      m.userData.noShadow = true; m.frustumCulled = false; m.renderOrder = 5;
+      game.scene.add(m); this.mesh = m;
+    }
+    if (this.mesh.parent !== game.scene) game.scene.add(this.mesh);
+    const key = e.shape + '|' + e.x + '|' + e.y + '|' + e.z + '|' + e.size;
+    if (key !== this.key){
+      this.key = key;
+      const c = liqCellsOf(e), set = new Set();
+      for (let i = 0; i < c.length; i += 3) set.add(c[i] + ',' + c[i + 1] + ',' + c[i + 2]);
+      const mx = new THREE.Matrix4(); let n = 0;
+      for (let i = 0; i < c.length && n < this.MAX; i += 3){
+        const x = c[i], y = c[i + 1], z = c[i + 2];
+        if (set.has((x + 1) + ',' + y + ',' + z) && set.has((x - 1) + ',' + y + ',' + z) && set.has(x + ',' + (y + 1) + ',' + z) && set.has(x + ',' + (y - 1) + ',' + z) && set.has(x + ',' + y + ',' + (z + 1)) && set.has(x + ',' + y + ',' + (z - 1))) continue;
+        mx.makeTranslation(x + 0.5, y, z + 0.5); this.mesh.setMatrixAt(n++, mx);
+      }
+      this.mesh.count = n; this.mesh.instanceMatrix.needsUpdate = true;
+    }
+    this.mesh.visible = true;
+  },
+  hide(){ if (this.mesh) this.mesh.visible = false; },
+};
 function liquidAt(p){ return inWater(p.x, p.y, p.z) ? (game.gen && game.gen.ichor ? CORE.MAT.ICHOR : CORE.MAT.WATER) : 0; }
 function liquidCells(e, want){
   // metre cells the shape covers that are liquid (want 'wet') or open air (want 'air')
@@ -28968,11 +29043,10 @@ function camDry(){ const c = game.camera.position; return !inWater(c.x, c.y, c.z
 // the drill from dry land cuts the liquid in its shape (from under water it mines as it always did)
 function liquidInShape(tool, p, shape, eff){
   if (tool.smooth || tool.bore || !camDry()) return 0;
-  const e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
-  return liquidCells(e, 'wet');
+  return liquidCells(liqEdit(0, shape, p, eff), 'wet');
 }
 function doLiquidCut(tool, p, shape, eff, group, mir){
-  let e = applyToolRot(CORE.makeEdit(0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  let e = liqEdit(0, shape, p, eff);
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
   e.liq = 1;
   const units = liquidCells(e, 'wet');
@@ -29010,7 +29084,8 @@ function doLiquidPlace(tool, p, shape, eff, group, mir){
   if (mat === CORE.MAT.ICHOR && game.planet !== 'alien'){ toast('ichor keeps nowhere but Strata'); AudioSys.sfx('deny'); return; }
   if (mat === CORE.MAT.WATER && game.planet === 'alien'){ toast('water will not keep here: it is ichor or nothing'); AudioSys.sfx('deny'); return; }
   if (!game.gen || game.gen.seaLevel == null){ toast('liquid will not hold here'); AudioSys.sfx('deny'); return; }
-  let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, mat, editRot(shape)));
+  if (p.y + eff * 0.5 > LIQ_TOP){ toast('too high: nothing holds up there'); AudioSys.sfx('deny'); return; }   // Build 110: refused before it is paid for
+  let e = liqEdit(1, shape, p, eff, mat);
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
   e.liq = src ? 2 : 1;
   const units = liquidCells(e, 'air');
@@ -29039,7 +29114,7 @@ function doMine(tool, p, shape, eff, group, mir){
     const g2 = group || ('lq' + (game.lqGroup = (game.lqGroup || 0) + 1));
     if (doLiquidCut(tool, p, shape, eff, g2, mir)) group = g2;
   }
-  let e = applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
+  let e = game.ghostLiq && !tool.smooth ? liqEdit(0, shape, p, eff) : applyToolRot(CORE.makeEdit(tool.smooth ? 4 : 0, shape, p.x, p.y, p.z, eff, 0, editRot(shape)));
   if (tool.smooth) e.k = +(eff * 0.5).toFixed(2);
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
   const got = CORE.mineYield(game.edits, e, game.gen);
@@ -36325,6 +36400,24 @@ void main(){
   }
   gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
 }`;
+// Build 110: the LOD rings' shadow pass makes the same three cuts their colour
+// pass makes (columns the real world covers, the feature ring's hole, the
+// near 24 m). With the default depth material a ring that drew nothing over
+// a city still threw its blocky duplicate's shadows on the real walls.
+const LOD_DEPTH_FRAG = `
+precision highp float;
+uniform vec3 uPlayerPos; uniform float uFeatNear;
+varying vec3 vPos; varying float vCut;
+const float PackUpscale = 256. / 255.;
+const vec3 PackFactors = vec3(256. * 256. * 256., 256. * 256., 256.);
+const float ShiftRight8 = 1. / 256.;
+vec4 packDepthToRGBA(const in float v){ vec4 r = vec4(fract(v * PackFactors), v); r.yzw -= r.xyz * ShiftRight8; return r * PackUpscale; }
+void main(){
+  if (vCut > 0.999) discard;
+  if (uFeatNear > 0.0 && distance(vPos.xz, uPlayerPos.xz) < uFeatNear) discard;
+  if (distance(vPos, uPlayerPos) < 24.0) discard;
+  gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
+}`;
 const SKIN_WATER_VERT = `
 attribute float aDep; attribute float aWY; attribute vec2 aFlow;
 uniform float uSeaY;
@@ -36850,6 +36943,7 @@ const lodTerrain = {
         polygonOffsetFactor: ring.feat ? 2 : 0,
         polygonOffsetUnits: ring.feat ? 6 : 0,
       });
+      ring.depthMat = new THREE.ShaderMaterial({ vertexShader: lodVert, fragmentShader: LOD_DEPTH_FRAG, uniforms: ru, side: THREE.DoubleSide });   // Build 110
     });
     this.mat = this.rings[0].mat;
     meshPool.sources = [game.terrain, ...this.rings];
@@ -37177,6 +37271,7 @@ const lodTerrain = {
     g.setAttribute('aAxis', new THREE.BufferAttribute(Ax.subarray(0, o1 * 3), 3, true));
     const mesh = new THREE.Mesh(g, ring.mat);
     mesh.castShadow = ring.sc <= 4;
+    if (mesh.castShadow && ring.depthMat) mesh.customDepthMaterial = ring.depthMat;   // Build 110: no ghost shadows
     mesh.frustumCulled = true;
     g.computeBoundingSphere();
     for (const key in g.attributes) g.attributes[key].onUpload(freeUploaded);   // rebuilt from the members' data, never edited
@@ -37882,7 +37977,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

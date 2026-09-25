@@ -2,6 +2,41 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 110 — the fixes from the 2026-10-05 playtest (2026-10-06)
+
+Austin: everything else perfect, farming perfect. Four things:
+
+- **Liquid shapes did not match their ghost.** Liquid lives in metre
+  cells, and a shape takes the cells whose centres it covers, so the
+  same 2 m cube came out 8, 12 or 18 cells depending where it stood
+  (his screenshot: four rock cubes alike, four water cubes of four
+  sizes). A liquid action now snaps to the cells: the size rounds to a
+  whole metre, the centre sits so the shape's faces are cell faces, and
+  rotation is ignored. A water cube is exactly its outline, every time.
+  This covers the dispenser with water or ichor, the stones, and the
+  drill when it is cutting water from dry land. A sphere or cylinder of
+  liquid cannot be round in metre cells, so its ghost shows the cells
+  themselves, as blocks: what you see is what fills.
+- **Liquid refused to place high up.** The water grid stopped one chunk
+  short of the terrain's ceiling: past 104 m a placed shape was charged
+  for and never appeared. It reaches the ceiling now (111 m), and above
+  it a placement is refused before it is paid for.
+- **Stone water stopped short of the walls.** A wall off the metre grid
+  left the last cell rock, and the surface ended a fraction of a metre
+  before it. The surface now reaches into the rock beside it to the wall
+  itself (a bisection of the field just under the surface), and the
+  rock hides the overlap. Measured: every wall of an off-grid cut is met
+  within 7 cm. Rivers are untouched (the reach finds only rock, not the
+  sealed air over a river).
+- **The city ghost, again.** Not ghost geometry this time: ghost
+  shadows. The LOD rings cast shadows with the default depth material,
+  so where they draw nothing (over a city the real world covers) their
+  blocky duplicate of the city still threw its shadows onto the real
+  walls: the dark shapes in his screenshot. The rings' shadow pass now
+  makes the same three cuts their colour pass makes (covered columns,
+  the feature ring's hole, the near 24 m). I also checked the city
+  coverage mask in a stamped city: it is right.
+
 ## Build 109 — LIQUIDS: water is a material (2026-10-04)
 
 Roadmap item 23, Austin's "crazy idea", and the biggest change on the
