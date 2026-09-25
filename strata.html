@@ -6325,17 +6325,26 @@ class Terrain {
     // tested by arithmetic, not by a set of six thousand keys built and
     // split again at every chunk border crossed
     const R = this.radius, RR = (R + 0.5) * (R + 0.5);
-    const wanted = (c) => { const dx = c[0] - ccx, dz = c[2] - ccz; return dx * dx + dz * dz <= RR && c[1] >= CORE.CY_MIN && c[1] <= CORE.CY_MAX; };
-    // drop far chunks
-    for (const [key, ch] of this.chunks){
-      if (!ch.c) ch.c = key.split(',').map(Number);
-      if (!wanted(ch.c)){
+    // Build 118: the disc is kept by column. A column that has been walked
+    // holds only one kind of chunk that can still change as you move -- the
+    // banded ones (the deep and the sky you are too far to see) -- so a
+    // crossing re-asks those, walks new columns whole, and drops the
+    // columns that left. (Every level of every column was walked at every
+    // crossing: 7 ms in a city, several times a second in flight.)
+    const cols = this.cols || (this.cols = new Map());
+    for (const [ck2, col] of cols){
+      const dx = col.cx - ccx, dz = col.cz - ccz;
+      if (dx * dx + dz * dz <= RR) continue;
+      for (let cy = CORE.CY_MIN; cy <= CORE.CY_MAX; cy++){
+        const key = CK(col.cx, cy, col.cz), ch = this.chunks.get(key);
+        if (!ch) continue;
         this.removeChunk(key, ch);
         if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
-      if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
+        if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
         this.chunks.delete(key);
         this.dirty.delete(key);
       }
+      cols.delete(ck2);
     }
     // queue new chunks — but keep provably-empty ones (solid deep zone,
     // sky far above the column) out of the dirty queue entirely: meshChunk
@@ -6348,14 +6357,19 @@ class Terrain {
     const eMin = this.editMinY(), eMax = this.editMaxY();
     for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++){
     if (dx * dx + dz * dz > RR) continue;
-    const cx = ccx + dx, cz = ccz + dz;
+    const cx = ccx + dx, cz = ccz + dz, colKey = cx + ',' + cz;
+    let col = cols.get(colKey);
+    if (col && !this.chunks.has(CK(cx, CORE.CY_MIN, cz))) col = null;   // the map was cleared under us: walk it again
+    if (col && !col.banded.size) continue;                              // nothing here can change
+    const levels = col ? [...col.banded] : null;
+    if (!col){ col = { cx, cz, banded: new Set() }; cols.set(colKey, col); }
     let W = null, hr = null;                     // the column's water and height range, asked once
-    for (let cy = CORE.CY_MIN; cy <= CORE.CY_MAX; cy++){
+    for (let li = 0, cy = levels ? levels[0] : CORE.CY_MIN; levels ? li < levels.length : cy <= CORE.CY_MAX; levels ? (cy = levels[++li]) : cy++){
       const key = CK(cx, cy, cz);
       let ch = this.chunks.get(key);
       const fresh = !ch;
       if (fresh){ ch = { mesh: null, c: [cx, cy, cz] }; this.chunks.set(key, ch); }
-      else if (!ch.banded) continue;       // already meshed, queued, or empty
+      else if (!ch.banded){ col.banded.delete(cy); continue; }       // already meshed, queued, or empty
       if (fresh && cy !== seaCy){
         // water-band chunks always process (water mesh). A surface is never
         // below the sea, so the deep never needs asking; nor does the sky
@@ -6378,8 +6392,8 @@ class Terrain {
       // within 64m; past that a column meshes only its surface band and
       // whatever is BUILT there. Chunks deferred this way stay marked and
       // queue the moment you come near.
-      if (cy !== seaCy && !this.inBand(cx, cy, cz)){ ch.banded = 1; continue; }
-      ch.banded = 0;
+      if (cy !== seaCy && !this.inBand(cx, cy, cz)){ ch.banded = 1; col.banded.add(cy); continue; }
+      ch.banded = 0; col.banded.delete(cy);
       this.dirty.set(key, [cx, cy, cz]);
     }
     }
@@ -6642,7 +6656,7 @@ class Terrain {
     }
     for (const [, t] of this.tiles) if (t.mesh){ this.scene.remove(t.mesh); t.mesh.geometry.dispose(); }
     this.tiles.clear();
-    this.chunks.clear(); this.dirty.clear();
+    this.chunks.clear(); this.dirty.clear(); if (this.cols) this.cols.clear();
   }
 }
 
@@ -6749,10 +6763,44 @@ const TOOL_REACH_MAX = 96;
 function nearEdits(box){
   return CORE.cullEdits(game.edits, box, 0.6);
 }
+// Build 118: the props in 8 m columns. A city is every door of every house,
+// and every physics probe of every creature read the whole list (half the
+// creatures' time). A probe now reads its own 3x3 columns; anything farther
+// is at least a column away, so the answer is capped there (still a true
+// lower bound, which is all a collision or a march needs).
+const PROP_CELL = 8, propGrids = new WeakMap();
+function propGrid(P){
+  let G = propGrids.get(P);
+  if (G) return G;
+  G = new Map();
+  P.forEach((p, i) => {
+    const r = p.t === 'box' ? Math.hypot(p.hx, p.hz) : p.r;
+    for (let cz = Math.floor((p.z - r) / PROP_CELL); cz <= Math.floor((p.z + r) / PROP_CELL); cz++)
+      for (let cx = Math.floor((p.x - r) / PROP_CELL); cx <= Math.floor((p.x + r) / PROP_CELL); cx++){
+        const k = cx * 65536 + cz;
+        let a = G.get(k); if (!a){ a = []; G.set(k, a); } a.push(p);
+      }
+  });
+  propGrids.set(P, G);
+  return G;
+}
 // solid props: closed doors + crafting tables (boxes), tree trunks (cylinders)
 function propSDF(x, y, z){
+  if (game.solidProps.length > 24){
+    const G = propGrid(game.solidProps), ccx = Math.floor(x / PROP_CELL), ccz = Math.floor(z / PROP_CELL), seen = new Set();
+    let d = PROP_CELL;
+    for (let cz = ccz - 1; cz <= ccz + 1; cz++) for (let cx = ccx - 1; cx <= ccx + 1; cx++){
+      const a = G.get(cx * 65536 + cz); if (!a) continue;
+      for (const p of a){ if (seen.has(p)) continue; seen.add(p); const pd = propDist(p, x, y, z); if (pd < d) d = pd; }
+    }
+    return d;
+  }
   let d = 1e9;
-  for (const p of game.solidProps){
+  for (const p of game.solidProps){ const pd = propDist(p, x, y, z); if (pd < d) d = pd; }
+  return d;
+}
+function propDist(p, x, y, z){
+  {
     let pd;
     if (p.t === 'box'){
       let dx = x - p.x, dz = z - p.z;
@@ -6769,9 +6817,8 @@ function propSDF(x, y, z){
       const dy = Math.abs(y - (p.y + p.h * 0.5)) - p.h * 0.5;
       pd = Math.hypot(Math.max(d2, 0), Math.max(dy, 0)) + Math.min(Math.max(d2, dy), 0);
     }
-    if (pd < d) d = pd;
+    return pd;
   }
-  return d;
 }
 // water occupies air below sea level over lake columns (ground below sea)
 function inWater(x, y, z){
@@ -7140,15 +7187,19 @@ const waterSys = {
   tick(dt){
     if (!game.running || !game.gen || game.gen.seaLevel == null) return;
     if (this.matQ.length) this.drainMat(this.MAT_MS);                      // Build 115
+    perfSys.m('water · stamps');                                          // Build 118: the stopwatch sees its parts
     this.accT += dt;
     if (this.accT >= 0.12){
       const st = this.accT;
       this.accT = 0;
       this.floodTick(st);                                        // Build 109
+      perfSys.m('water · fills');
       if (this.active.size) this.step();
+      perfSys.m('water · flow');
     }
     this.maintT += dt;
     if (this.maintT > 0.4 || this.dirtyMesh.size){ this.maintT = 0; this.maintain(); }
+    perfSys.m('water · meshes');
   },
   step(){
     const writes = [];
@@ -12367,19 +12418,25 @@ const torchSys = {
   init(scene){ this.group = new THREE.Group(); scene.add(this.group); },
   rebuild(){
     if (!this.group) return;
-    while (this.group.children.length){
-      const c = this.group.children.pop();
-      this.group.remove(c);
-    }
+    // Build 118: each torch keeps its model while it stays in range; a chunk
+    // crossed adds the ones that came in and drops the ones that left
+    // (every model was thrown away and built again: a city's street lights
+    // are torches, and that was 2.5 ms at every crossing)
+    if (this.liveFor !== this.group){ this.live = new Map(); this.liveFor = this.group; }
+    const live = this.live, keep = new Set();
     // near ones only — a city stamps its street lights from 1.4km away
     const px = game.pos.x, pz = game.pos.z, R2 = this.R * this.R;
     for (const t of game.torches){
       const dx = t[0] - px, dz = t[2] - pz;
       if (dx * dx + dz * dz > R2) continue;
-      const g = this.model(!!t[3]);
+      let g = live.get(t);
+      if (!g || g.userData.mega !== !!t[3]){ if (g) this.group.remove(g); g = this.model(!!t[3]); g.userData.mega = !!t[3]; live.set(t, g); }
       g.position.set(t[0], t[1], t[2]);
-      this.group.add(g);
+      if (g.parent !== this.group) this.group.add(g);
+      keep.add(g);
     }
+    for (const [t, g] of live) if (!keep.has(g)){ this.group.remove(g); live.delete(t); }
+    for (let i = this.group.children.length - 1; i >= 0; i--){ const c = this.group.children[i]; if (!keep.has(c)) this.group.remove(c); }
   },
   model(mega){
     if (!this.mats){
@@ -31298,6 +31355,9 @@ function tryAction(dt, now){
   AudioSys.setHum(false, 0, 0);
   if (brushSys.get()){ if (edge && game.mouseL) brushSys.fire(tool, p, eff); return; }
   if (tool.spring || isLiquidMat(tool.mat)){ if (edge) doPlaceM(tool, p, shape, eff); return; }   // LIQUIDS (Build 109): one click, no charge
+  // Build 118: the cost of a placement is worked out when you click, not in
+  // every frame the ghost moves (thousands of field samples a position)
+  if (!edge && !game.mouseL){ game.act.charging = false; game.act.t = 0; return; }
   const plan = actionPlan(tool, p, shape, eff);
   if (plan.dur < 0) return;                                       // nothing to fill/paint
   if (plan.dur === 0){
@@ -37539,7 +37599,12 @@ const farShapeSys = {
       .replace('void main(){',
         'void main(){\n' +
         '  { vec2 mi = (vPos.xz - uMaskOrigin) / uMaskSpan;\n' +
-        '    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){ float r = texture2D(uMask, mi).r; if ((r > 0.47 && r < 0.75) || r > 0.95) discard; } }\n');
+        // Build 118: the stand-in towers and halls obey the rule the skin and the rings
+        // have kept since Build 98 -- nothing of them within 24 m of you -- and they
+        // step aside on the real world's seam columns too (200/210), not only where
+        // it is fully covered: a stand-in box over a real building was the ghost city
+        '  if (distance(vPos, uPlayerPos) < 24.0) discard;\n' +
+        '    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){ float r = texture2D(uMask, mi).r; if ((r > 0.47 && r < 0.75) || r > 0.76) discard; } }\n');
     this.mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: TERRAIN_VERT, fragmentShader: frag });
   },
   build(){
@@ -39045,10 +39110,13 @@ function frameBody(now){
     updatePhoto(dt);
   } else if (game.ui === 'none'){
     updatePlayer(dt);
+    perfSys.m('player');
     updateGhostDist(dt);
     updateGhost();
     placePreview.update(now);
+    perfSys.m('ghost');
     tryAction(dt, now);
+    perfSys.m('tool action');
   }
   perfSys.m('player & tools');
   updateViewmodel(dt);
@@ -39083,6 +39151,7 @@ function frameBody(now){
     torchSys.rebuild();
     ropeSys.rebuild();
   } else if (treeSys.pending || decorSys.pending){
+    perfSys.m('streaming');
     // trees/decor held back until their ground meshed — retry as chunks land
     game.treeRetryT = (game.treeRetryT || 0) + dt;
     if (game.treeRetryT > 0.3){
@@ -39090,6 +39159,7 @@ function frameBody(now){
       if (treeSys.pending){ treeSys.refresh(); farTreeSys.lastCell = null; farTreeSys.refresh(); }
       if (decorSys.pending){ decorSys.lastCell = null; decorSys.refresh(); }
     }
+    perfSys.m('trees & decor wait');
   }
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
@@ -39421,7 +39491,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

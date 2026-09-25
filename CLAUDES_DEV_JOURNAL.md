@@ -1448,6 +1448,28 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-13 — the fourth ghost
+
+The ghost city came back a fourth time, and this time I found it by
+reading the one layer I had never suspected. Build 98's rule ("nothing
+of the skin or the rings within 24 m") named two layers, and there were
+three. The stand-in boxes for towers and halls had their own shader,
+written before the rule and never brought under it. The seam rule was
+copied from the skin, where a sunk surface backs a join. A box backs
+nothing; it just stands there.
+
+The lesson I keep not quite learning: when a fix is a rule ("nothing
+distant draws near you"), enforce it on everything distant. List the
+things a rule applies to by grepping, not from memory. Grep for every
+material built from TERRAIN_FRAG.
+
+The report from Austin's machine was worth the whole STOPWATCH build.
+A GPU at 4 ms and a CPU at 12 means everything I optimise has to be
+JavaScript. The city's steady cost was three plain loops over "every
+X": every level of every column, every torch, every door. None was
+clever work; all were plain loops. The next report will show whether I
+guessed the water right. The stopwatch splits it now.
+
 ## 2026-10-12, later — the wheel
 
 Build 117. Austin asked for one menu that holds everything a tool does.

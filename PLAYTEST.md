@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 118 — the ghost city
+- [ ] Fly to a city you have never seen and walk around in it. Any flat
+      grey box standing in for a building, anywhere, near or far?
+- [ ] The same run as last time, if you can: F3, fly to a new city,
+      fly round it 15 s, Shift+F3. I want to compare the two reports
+      line for line. The 'water' and 'player & tools' lines are split
+      into their parts now.
+
 ## Build 117 — THE TOOL WHEEL
 - [ ] Hold right click with a drill, then a dispenser. Is a quarter
       second the right hold? Does a quick tap still step the shape

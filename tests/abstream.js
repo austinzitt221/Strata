@@ -22,8 +22,11 @@ const run = async (FILE) => {
       const P = [[0, 0], [-20, 20], [300, -150], [1300, 1300], [-900, 400]];
       for (const [x, z] of P){
         const y = T.gen.height(x, z);
-        for (const dy of [2, 60, -70]){
-          T.update(x, y + dy, z);
+        const steps = [];
+        for (const dy of [2, 60, -70]) steps.push([x, y + dy, z]);
+        for (let k = 1; k <= 14; k++) steps.push([x + k * 7.9, y + 3 + (k % 5) * 9, z + (k % 3) * 8]);   // flying: a chunk at a time, up and down
+        for (const [sx, sy, sz] of steps){
+          T.update(sx, sy, sz);
           const keys = [...T.chunks.keys()].sort();
           for (const k of keys){ const ch = T.chunks.get(k); const st = ch.empty ? 1 : ch.banded ? 2 : T.dirty.has(k) ? 3 : 4; h = (Math.imul(h, 31) + st + k.length * 7 + k.charCodeAt(k.length - 1)) | 0; }
         }

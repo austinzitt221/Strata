@@ -2,6 +2,68 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 118 — the ghost city found, and the first real perf report (2026-10-13)
+
+Playtest of 116 and 117 (2026-10-13): everything from the last report
+is fixed. The drills and the wheel work, and the birds and fish look
+right. One thing is back: the city LOD ghost (flat walls that stay and
+can be walked through), in two new worlds. And the first STOPWATCH
+report from Austin's machine (an RTX 2060, render distance 7, flying
+to a desert city and around it for fifteen seconds).
+
+- **The ghost city, found.** It was never the skin or the rings, the
+  two layers I fixed in Builds 98, 106 and 110. It was the third
+  distant layer, the stand-in boxes (farShapeSys) that show a city's
+  towers and halls from kilometres off.
+  - Those boxes are drawn for a stamped city too, and they hide only
+    where the coverage mask says the real world stands.
+  - Build 98's rule, that nothing distant draws within 24 m of you,
+    was written for the skin and the rings. The boxes never had it.
+  - The boxes also kept drawing on the real world's seam columns (mask
+    values 200 and 210, where the skin keeps drawing sunk to back the
+    join). A box is not a join: it stood over the real building.
+  - So wherever the mask had a seam or a hole (the edge of the near
+    field, a column still meshing), a flat stand-in box stood over or
+    in place of the real building, and you could walk into it.
+  - Headless, in a desert city at render distance 7, 77 points of
+    stand-in box within 60 m were drawn before; now 0.
+  - Fix: the boxes follow the same 24 m rule, and they step aside on
+    seam columns as well as covered ones.
+- **What the report said.** 70 fps average (11 ms median frame), CPU
+  12 ms and GPU 4 ms: the GPU is idle, the CPU is the limit. In the city
+  the frames ran 35 to 45 ms, made of three things again and again:
+  streaming 10 to 13 ms, creatures 7 to 8, water 5 to 12. Fixed:
+  - **Streaming, by column.** Every chunk crossing walked every level
+    of every column in the disc (about 10,000 lookups at render
+    distance 7). Columns are remembered now. A crossing walks the new
+    columns and re-asks only the chunks too far away to mesh yet.
+    Measured in the city: 7.3 ms down to 5.5 ms per crossing. Checked
+    against Build 117 over 51 streaming steps on Earth, Strata and the
+    Moon: identical.
+  - **Torches kept.** A city's street lights are torches, and every
+    crossing threw away every torch model in range and built it again.
+    Now each keeps its model while in range: 2.5 ms down to 1.5 ms.
+  - **Creatures and the props.** Half of the creatures' time went into
+    reading every solid prop in the world (a city is every door of every
+    house) for every physics probe. Props sit in 8 m columns now. A
+    probe reads its own nine columns and gets an exact answer (capped at
+    8 m, still a true lower bound). 4× faster at 80 props, and the gain
+    grows with the city.
+  - **The dispenser** worked out a placement's cost every frame its
+    ghost moved, button or not (thousands of field samples each time).
+    Now it does so when you click.
+- **The stopwatch sees more.** 'player & tools' splits into player,
+  ghost and tool action; 'water' into stamps, fills, flow and meshes;
+  and the trees-and-decor retry has its own line. The next report says
+  which part it was.
+- **Not fixed, and why:**
+  - The report's single worst gap, 4.3 s, did not happen inside a frame:
+    CPU work never went over 262 ms. It looks like the browser pausing
+    (a window switch) or a load, not the game.
+  - Horizon rings (worst 240 ms), far shapes (179), a fort stamped (186)
+    and a city stamped (125) are single frames, once each per place.
+    They are next in line if they show up again.
+
 ## Build 117 — THE TOOL WHEEL, and birds and fish in detail (2026-10-12)
 
 The other two notes from Austin's playtest of 112 to 115.
