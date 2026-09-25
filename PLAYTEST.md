@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 117 — THE TOOL WHEEL
+- [ ] Hold right click with a drill, then a dispenser. Is a quarter
+      second the right hold? Does a quick tap still step the shape
+      without the wheel flashing up?
+- [ ] Set everything from the wheel once: shape, size, turn, grid,
+      mirror, echo. Is anything missing that you reach for a key for?
+- [ ] Birds and fish up close: do they match the animals now? Are the
+      birds big enough?
+
 ## Build 116 — THE SHAPES, FIXED
 - [ ] Walk up to a mountain with the nullite drill on the building and
       carve one in. Walk through the door. Is the room the size you

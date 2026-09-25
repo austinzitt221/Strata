@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-12, later — the wheel
+
+Build 117. Austin asked for one menu that holds everything a tool does.
+Writing it showed me how much there is now: twelve shapes, three turns,
+ten grids, a mirror, a radial, an echo, a reach. Each was learned as a
+key or a scroll mode, and none of it could be seen at once. The wheel
+is the first place where the tool explains itself, and the locked rows
+name the tier that brings them. That makes the tiers a promise, not
+just a restriction.
+
+The right-click tap moved from button-down to button-up, the only way
+a hold can be told from a tap. My suite caught a race there that only
+happens at one frame a second: the hold timer lost to the test's
+button-up. At sixty frames it cannot happen, so I fixed the test and
+not the game, and I am writing that down in case it ever does.
+
 ## 2026-10-12 — what a drill is for
 
 Austin's report on 112 to 115. The part I keep thinking about: I built

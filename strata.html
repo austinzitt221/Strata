@@ -141,6 +141,22 @@ body.pad{cursor:none;}
 #scope .dot{position:absolute; left:50%; top:50%; width:9px; height:9px; transform:translate(-50%,-50%); border-radius:50%; background:#d84a4a; box-shadow:0 0 4px #000;}
 #scope .tick{position:absolute; background:#0c0e12;}
 #scope .zl{position:absolute; left:50%; bottom:12vh; transform:translateX(-50%); color:#8fe6dc; font:14px monospace; text-shadow:0 1px 3px #000;}
+/* THE TOOL WHEEL (Build 117) */
+.panel.wheel{min-width:560px; max-width:720px; background:rgba(14,12,22,0.93);}
+.wheel .wsec{margin:10px 0 4px; font-size:11px; letter-spacing:2px; color:var(--ui-hi); opacity:.8;}
+.wheel .wshapes{display:grid; grid-template-columns:repeat(6, 1fr); gap:6px;}
+.wheel .wshape{display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px 5px; border:2px solid var(--ui-border); background:rgba(40,36,54,.7); cursor:pointer; font-size:10px; letter-spacing:1px; color:#ddd;}
+.wheel .wshape canvas{width:40px; height:40px; image-rendering:pixelated;}
+.wheel .wshape.sel{border-color:#6fd3ff; background:rgba(60,110,140,.55); color:#fff;}
+.wheel .wshape.locked{opacity:.35; cursor:default;}
+.wheel .wrow{display:flex; align-items:center; gap:10px; margin:5px 0; font-size:12px;}
+.wheel .wrow label{min-width:92px; color:#cfcbe0;}
+.wheel .wrow input[type=range]{flex:1;}
+.wheel .wrow .wval{min-width:74px; text-align:right; color:#fff;}
+.wheel .wbtns{display:flex; flex-wrap:wrap; gap:5px;}
+.wheel .wbtn{padding:4px 8px; border:2px solid var(--ui-border); background:rgba(40,36,54,.8); color:#ddd; cursor:pointer; font-size:11px; letter-spacing:1px;}
+.wheel .wbtn.on{border-color:#6fd3ff; color:#fff; background:rgba(60,110,140,.55);}
+.wheel .wlock{font-size:11px; color:#8a86a0; margin:4px 0;}
 .panel.end{text-align:center; max-width:640px; background:rgba(8,6,14,0.96);}
 .endline{opacity:0; transition:opacity 1.6s; margin:10px 0; color:#d8d0e8; font-size:14px; line-height:1.5;}
 .endline.on{opacity:1;}
@@ -504,6 +520,14 @@ body.pad{cursor:none;}
     <div class="sub" style="margin-bottom:8px;">active work, and where it is</div>
     <div id="missionlist"></div>
   </div>
+  </div>
+</div>
+
+<div id="wheelscreen" class="screen hidden">
+  <div class="panel wheel">
+    <h2 id="wheeltitle">THE TOOL</h2>
+    <div class="sub" id="wheelsub">right click, E or Esc to close</div>
+    <div id="wheelbody"></div>
   </div>
 </div>
 
@@ -20031,19 +20055,73 @@ const brushSys = {
 const shoreSys = {
   flocks: [], schools: [], spawnT: 0, chirpT: 0, meshes: null, MAXB: 48, MAXF: 64,
   KINDS: {
-    gull:  { col: 0xf0f0ee, wing: 0xc8ccd2, n: [5, 9],  sp: 7,   alt: [9, 18], size: 1.0, flap: 9 },
-    finch: { col: 0x8a6a4a, wing: 0x5e4630, n: [7, 12], sp: 6,   alt: [4, 10], size: 0.55, flap: 22 },
-    heron: { col: 0x9aa2aa, wing: 0x6e767e, n: [1, 1],  sp: 3.2, alt: [3, 7],  size: 2.0, flap: 4 },
+    gull:  { col: 0xf0f0ee, wing: 0xc8ccd2, n: [5, 9],  sp: 7,   alt: [9, 18], size: 1.3, flap: 9 },
+    finch: { col: 0x8a6a4a, wing: 0x5e4630, n: [7, 12], sp: 6,   alt: [4, 10], size: 0.8, flap: 22 },
+    heron: { col: 0x9aa2aa, wing: 0x6e767e, n: [1, 1],  sp: 3.2, alt: [3, 7],  size: 2.3, flap: 4 },
+  },
+  // Build 117: birds and fish built like the animals are (Austin: "match
+  // the detail of the normal animals, the birds a tad larger"): a body, a
+  // head with eyes and a beak, a tail, legs, and wings in two panels with
+  // their tips; fish with a back, flanks, a belly, fins and an eye, and a
+  // tail that beats. Each kind is one instanced draw per part, coloured
+  // per vertex; a bird's local +z is forward.
+  MODELS: {
+    gull: {
+      body: [[0.16, 0.14, 0.42, 0xf0f0ee, 0, 0, 0], [0.15, 0.03, 0.3, 0xb4bac4, 0, 0.075, -0.03], [0.13, 0.13, 0.14, 0xf6f6f4, 0, 0.07, 0.24],
+             [0.04, 0.035, 0.1, 0xf0c030, 0, 0.045, 0.36], [0.042, 0.014, 0.02, 0xd0402c, 0, 0.03, 0.39],
+             [0.02, 0.022, 0.022, 0x161616, 0.066, 0.095, 0.28], [0.02, 0.022, 0.022, 0x161616, -0.066, 0.095, 0.28],
+             [0.13, 0.03, 0.12, 0xf0f0ee, 0, 0.02, -0.26], [0.13, 0.024, 0.04, 0x222226, 0, 0.022, -0.33],
+             [0.022, 0.09, 0.022, 0xe0a040, 0.04, -0.11, 0.03], [0.022, 0.09, 0.022, 0xe0a040, -0.04, -0.11, 0.03]],
+      wing: [[0.26, 0.025, 0.18, 0xc4cad2, 0.13, 0, 0], [0.22, 0.02, 0.14, 0xb4bac4, 0.37, 0, -0.01], [0.11, 0.02, 0.11, 0x222226, 0.535, 0, -0.02], [0.02, 0.022, 0.1, 0xf0f0ee, 0.49, 0, 0.05]],
+    },
+    finch: {
+      body: [[0.13, 0.12, 0.2, 0x8a6a4a, 0, 0, 0], [0.1, 0.08, 0.1, 0xc98a5a, 0, -0.025, 0.06], [0.1, 0.1, 0.1, 0x7a5a3a, 0, 0.06, 0.13],
+             [0.1, 0.03, 0.08, 0x3a2a1a, 0, 0.115, 0.13], [0.03, 0.03, 0.05, 0x3a3230, 0, 0.05, 0.2],
+             [0.016, 0.02, 0.02, 0x0e0e0e, 0.051, 0.07, 0.16], [0.016, 0.02, 0.02, 0x0e0e0e, -0.051, 0.07, 0.16],
+             [0.06, 0.02, 0.14, 0x5e4630, 0, 0.03, -0.16], [0.016, 0.06, 0.016, 0x4a3a2a, 0.03, -0.08, 0.02], [0.016, 0.06, 0.016, 0x4a3a2a, -0.03, -0.08, 0.02]],
+      wing: [[0.18, 0.02, 0.12, 0x5e4630, 0.09, 0, 0], [0.17, 0.022, 0.03, 0xe8d8b8, 0.095, 0, 0.035], [0.08, 0.02, 0.09, 0x3e2e20, 0.2, 0, -0.01]],
+    },
+    heron: {
+      body: [[0.14, 0.16, 0.32, 0x9aa2aa, 0, 0, 0], [0.12, 0.04, 0.24, 0x7e868e, 0, 0.09, -0.02], [0.05, 0.22, 0.05, 0xd8dce0, 0, 0.16, 0.15], [0.05, 0.05, 0.1, 0xd8dce0, 0, 0.27, 0.19],
+             [0.07, 0.07, 0.1, 0xeef0f2, 0, 0.3, 0.25], [0.02, 0.02, 0.14, 0x202428, 0, 0.335, 0.2], [0.025, 0.025, 0.16, 0xd8b040, 0, 0.29, 0.37],
+             [0.016, 0.018, 0.018, 0x101010, 0.036, 0.31, 0.27], [0.016, 0.018, 0.018, 0x101010, -0.036, 0.31, 0.27],
+             [0.1, 0.03, 0.09, 0x7e868e, 0, 0.01, -0.2], [0.02, 0.36, 0.02, 0x8a7a50, 0.04, -0.24, 0], [0.02, 0.36, 0.02, 0x8a7a50, -0.04, -0.24, 0]],
+      wing: [[0.3, 0.025, 0.2, 0x8e969e, 0.15, 0, 0], [0.28, 0.02, 0.16, 0x7a828a, 0.44, 0, -0.01], [0.12, 0.02, 0.13, 0x2a2e34, 0.64, 0, -0.02]],
+    },
+    fish: [[0.08, 0.1, 0.34, 0x6a7a70, 0, 0, 0], [0.082, 0.03, 0.3, 0x34443e, 0, 0.045, -0.01], [0.07, 0.03, 0.26, 0xb0b8a8, 0, -0.045, 0.01],
+           [0.066, 0.08, 0.08, 0x5e6e64, 0, 0, 0.2], [0.02, 0.022, 0.022, 0x0c0c0c, 0.035, 0.02, 0.2], [0.02, 0.022, 0.022, 0x0c0c0c, -0.035, 0.02, 0.2],
+           [0.016, 0.06, 0.12, 0x2a3632, 0, 0.08, -0.02], [0.016, 0.14, 0.1, 0x33403a, 0, 0, -0.22], [0.06, 0.012, 0.05, 0x55665c, 0.05, -0.03, 0.08], [0.06, 0.012, 0.05, 0x55665c, -0.05, -0.03, 0.08]],
+  },
+  // boxes with their colours on the vertices, merged into one geometry
+  model(parts){
+    const pos = [], col = [], c = new THREE.Color();
+    for (const [w, h, d, hex, x, y, z] of parts){
+      const g = new THREE.BoxGeometry(w, h, d).toNonIndexed(); g.translate(x, y, z);
+      const P = g.attributes.position.array; c.setHex(hex);
+      for (let i = 0; i < P.length; i += 3){ pos.push(P[i], P[i + 1], P[i + 2]); col.push(c.r, c.g, c.b); }
+      g.dispose();
+    }
+    const G = new THREE.BufferGeometry();
+    G.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    G.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    return G;
   },
   ensure(){
     if (!this.meshes){
-      const mk = (geo, n, col) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = 0; m.frustumCulled = false; m.userData.noShadow = true; for (let i = 0; i < n; i++) m.setColorAt(i, new THREE.Color(col)); return m; };
-      const wing = new THREE.BoxGeometry(0.34, 0.02, 0.16); wing.translate(0.17, 0, 0);
-      this.meshes = { body: mk(new THREE.BoxGeometry(0.12, 0.1, 0.36), this.MAXB, 0xffffff), wl: mk(wing, this.MAXB, 0xffffff), wr: mk(wing.clone(), this.MAXB, 0xffffff), fish: mk(new THREE.BoxGeometry(0.1, 0.1, 0.5), this.MAXF, 0x2a3a3a) };
+      const mk = (geo, n, dbl) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true, side: dbl ? THREE.DoubleSide : THREE.FrontSide }), n); m.count = 0; m.frustumCulled = false; m.userData.noShadow = true; for (let i = 0; i < n; i++) m.setColorAt(i, new THREE.Color(0xffffff)); return m; };
+      this.meshes = {};
+      for (const k of ['gull', 'finch', 'heron']){
+        const Md = this.MODELS[k];
+        this.meshes[k + 'B'] = mk(this.model(Md.body), this.MAXB);
+        this.meshes[k + 'L'] = mk(this.model(Md.wing), this.MAXB, true);
+        this.meshes[k + 'R'] = mk(this.model(Md.wing), this.MAXB, true);   // drawn mirrored
+      }
+      this.meshes.fish = mk(this.model(this.MODELS.fish), this.MAXF);
       this.meshes.fish.renderOrder = 2;                    // under the water's surface, which draws at 3
     }
     for (const k in this.meshes) if (this.meshes[k].parent !== game.scene) game.scene.add(this.meshes[k]);
   },
+  birdCount(){ return this.meshes ? this.meshes.gullB.count + this.meshes.finchB.count + this.meshes.heronB.count : 0; },
   hide(){ if (this.meshes) for (const k in this.meshes) this.meshes[k].count = 0; this.flocks = []; this.schools = []; },
   // the water under a point: its top and its depth, or null
   wetAt(x, z){
@@ -20101,6 +20179,7 @@ const shoreSys = {
     // ---- the birds ----
     const now = performance.now() * 0.001, M = this.meshes, mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e3 = new THREE.Euler(0, 0, 0, 'YXZ'), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
     let nb = 0;
+    const NB = { gull: 0, finch: 0, heron: 0 };
     this.chirpT -= dt;
     for (let fi = this.flocks.length - 1; fi >= 0; fi--){
       const F = this.flocks[fi], K = this.KINDS[F.kind];
@@ -20142,17 +20221,19 @@ const shoreSys = {
           bx = F.x + Math.cos(B.ph) * B.r; bz = F.z + Math.sin(B.ph) * B.r; by = F.y + B.oy + Math.sin(B.ph * 2) * 0.3;
           yaw = F.hd; flap = Math.sin(now * K.flap + B.ph * 3) * (F.kind === 'gull' && Math.sin(now * 0.7 + B.ph) > 0.3 ? 0.1 : 0.9);   // gulls glide between strokes
         }
-        const s = K.size;
-        v.set(bx, by, bz); sc.set(s, s, s);
-        e3.set(0, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); M.body.setMatrixAt(nb, mx);
-        e3.set(0, yaw, flap); q.setFromEuler(e3); mx.compose(v, q, sc); M.wl.setMatrixAt(nb, mx);
-        e3.set(0, yaw, -flap); q.setFromEuler(e3); sc.set(-s, s, s); mx.compose(v, q, sc); M.wr.setMatrixAt(nb, mx);
-        col.setHex(K.col); M.body.setColorAt(nb, col); col.setHex(K.wing); M.wl.setColorAt(nb, col); M.wr.setColorAt(nb, col);
+        const s = K.size, ki = NB[F.kind]++, MB = M[F.kind + 'B'], ML = M[F.kind + 'L'], MR = M[F.kind + 'R'];
+        const lift = F.kind === 'heron' ? 0.36 * s : F.state === 'land' ? 0.1 * s : 0;   // stood on its legs
+        v.set(bx, by + lift, bz); sc.set(s, s, s);
+        const pitch = F.state === 'land' && F.kind === 'finch' && (B.peck % 1.4) < 0.25 ? 0.5 : 0;   // a peck
+        e3.set(pitch, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); MB.setMatrixAt(ki, mx);
+        const fold = F.state === 'land' ? 1.35 : 0;                                // wings folded to the body on the ground
+        e3.set(0, yaw + fold, flap); q.setFromEuler(e3); mx.compose(v, q, sc); ML.setMatrixAt(ki, mx);
+        e3.set(0, yaw - fold, -flap); q.setFromEuler(e3); sc.set(-s, s, s); mx.compose(v, q, sc); MR.setMatrixAt(ki, mx);
         nb++;
       }
     }
     if (this.chirpT <= 0) this.chirpT = 0.8 + Math.random() * 1.6;
-    for (const k of ['body', 'wl', 'wr']){ M[k].count = nb; M[k].instanceMatrix.needsUpdate = true; if (M[k].instanceColor) M[k].instanceColor.needsUpdate = true; }
+    for (const kind in NB) for (const part of ['B', 'L', 'R']){ const m = M[kind + part]; m.count = NB[kind]; m.instanceMatrix.needsUpdate = true; }
     // ---- the fish ----
     let nf = 0;
     const F2 = game.fishing, swim = inWater(P.x, P.y + 0.5, P.z);
@@ -20173,9 +20254,10 @@ const shoreSys = {
         f.a += f.sp * dt * (S.dart > 0 ? 3 : 1) / Math.max(0.5, f.r);
         const fx = S.x + Math.cos(f.a) * f.r, fz = S.z + Math.sin(f.a) * f.r;
         const fy = Math.min(H.top - 0.22, H.floor + 0.3 + f.fy * Math.max(0.1, H.depth - 0.6));
-        const yaw = Math.atan2(-Math.sin(f.a) * Math.sign(f.sp), Math.cos(f.a) * Math.sign(f.sp));
-        v.set(fx, fy, fz); sc.set(1, 1, 1); e3.set(0, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); M.fish.setMatrixAt(nf, mx);
-        col.setHex(f.dark ? 0x1e2a26 : 0x44564e); M.fish.setColorAt(nf, col);   // dark backs, as fish look from above
+        const beat = Math.sin(now * (S.dart > 0 ? 18 : 7) + f.a * 5) * (S.dart > 0 ? 0.28 : 0.14);   // the tail beats
+        const yaw = Math.atan2(-Math.sin(f.a) * Math.sign(f.sp), Math.cos(f.a) * Math.sign(f.sp)) + beat;
+        v.set(fx, fy, fz); sc.setScalar(1.15); e3.set(0, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); M.fish.setMatrixAt(nf, mx);
+        col.setHex(f.dark ? 0x6a746e : 0xe6ece6); M.fish.setColorAt(nf, col);   // dark backs, as fish look from above
         nf++;
       }
     }
@@ -26951,6 +27033,8 @@ function bindInput(){
         return;
       }
       if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
+        // THE TOOL WHEEL (Build 117): the step waits for the button to come up
+        if (!e.__tap && toolWheel.press()){ game.mouseRHeld = true; return; }
         if (brushSys.get()){ brushSys.clear(); toast('brush off — ' + CORE.SHAPE_NAME[game.tool.shape]); AudioSys.sfx('toggle'); return; }
         const SL = toolShapes(tool), si = SL.indexOf(game.tool.shape);
         if (SL.length < 2){ toast('a stone tool makes cubes: an iron one adds the sphere'); AudioSys.sfx('deny'); return; }
@@ -26970,8 +27054,17 @@ function bindInput(){
   });
   document.addEventListener('mouseup', e => {
     if (e.button === 0){ wrenchSys.endDrag(); game.mouseL = false; }
-    if (e.button === 2){ game.mouseR = false; unscope(); }
+    if (e.button === 2){
+      game.mouseR = false; game.mouseRHeld = false; unscope();
+      // a tap (the wheel never opened): the next shape, as a right click always was
+      const P = game.rmbHold; game.rmbHold = null;
+      if (P && !P.opened && game.ui === 'none' && game.running){
+        const ev = new MouseEvent('mousedown', { button: 2 }); ev.__tap = true; document.dispatchEvent(ev);
+      }
+    }
   });
+  // the wheel closes on a right click inside it
+  $('wheelscreen').addEventListener('mousedown', e => { if (e.button === 2 && game.ui === 'wheel'){ e.stopPropagation(); closeOverlay(); } });
   document.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => {
     if (!game.running || !isLocked() || game.ui !== 'none') return;
@@ -29869,6 +29962,142 @@ const shapeGhost = {
     const gs = game.ghostSet[shape], gm = game.ghostSolid[shape];
     if (gs.fill.geometry !== G.fill){ gs.fill.geometry = G.fill; gs.wire.geometry = G.wire; gm.geometry = G.fill; }
     return 1;
+  },
+};
+// ---------- THE TOOL WHEEL (Build 117, Austin's) ----------
+// Hold right click with a drill or a dispenser: one screen with everything
+// the tool does -- the shape (the ones its tier has, the rest shown with
+// the tier that brings them), the size, the turn, the grid, the mirror,
+// the echo, how far out the ghost sits -- all by the mouse. A tap of
+// right click still steps to the next shape. Right click, E or Esc closes.
+const WHEEL_HOLD_MS = 260;
+const toolWheel = {
+  icons: new Map(),
+  // a shape's icon: a front view in pixels, lit from the top left
+  icon(k){
+    if (this.icons.has(k)) return this.icons.get(k);
+    const c = document.createElement('canvas'); c.width = c.height = 20;
+    const x = c.getContext('2d'), L = '#d9d6e4', M = '#9d99ae', D = '#6a667c';
+    const R = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+    if (k === 1){ R(4, 6, 12, 11, M); R(4, 6, 12, 2, L); R(14, 6, 2, 11, D); R(6, 3, 12, 3, L); R(16, 3, 2, 12, D); }
+    else if (k === 0){ for (let yy = 0; yy < 20; yy++) for (let xx = 0; xx < 20; xx++){ const d = Math.hypot(xx - 9.5, yy - 9.5); if (d < 7.5) R(xx, yy, 1, 1, Math.hypot(xx - 7, yy - 7) < 3 ? L : d > 6 ? D : M); } }
+    else if (k === 2){ R(5, 5, 10, 11, M); R(5, 3, 10, 3, L); R(13, 5, 2, 11, D); R(5, 16, 10, 1, D); }
+    else if (k === 3){ for (let i = 0; i < 5; i++){ R(3 + i * 3, 16 - (i + 1) * 3, 3, (i + 1) * 3, M); R(3 + i * 3, 16 - (i + 1) * 3, 3, 1, L); } R(3, 16, 15, 1, D); }
+    else if (k === 4){ R(3, 10, 14, 6, M); R(3, 10, 14, 2, L); R(15, 10, 2, 6, D); R(3, 4, 14, 6, 'rgba(160,156,176,0.25)'); }
+    else if (k === 5){ for (let yy = 3; yy < 17; yy++){ const w = Math.round((yy - 3) * 0.55); R(10 - w, yy, 2 * w, 1, M); R(10 - w, yy, 1, 1, L); R(10 + w - 1, yy, 1, 1, D); } }
+    else if (k === 6){ for (let yy = 5; yy < 16; yy++) for (let xx = 2; xx < 18; xx++){ if (Math.hypot((xx - 9.5) / 7.5, (yy - 15.5) / 10.5) < 1) R(xx, yy, 1, 1, yy < 8 ? L : M); } R(2, 15, 16, 1, D); }
+    else if (k === 7){ R(9, 2, 2, 16, D); for (let i = 0; i < 6; i++){ const yy = 15 - i * 2.4, left = i % 2 === 0; R(left ? 3 : 11, Math.round(yy), 7, 2, i % 3 === 0 ? L : M); } }
+    else if (k === 8){ for (let yy = 4; yy < 17; yy++){ const w = Math.round((yy - 4) * 0.62); R(10 - w, yy, w, 1, L); R(10, yy, w, 1, M); } R(3, 16, 15, 1, D); }
+    else if (k === 9){ R(2, 4, 16, 13, M); R(2, 4, 16, 2, L); for (let yy = 8; yy < 17; yy++) for (let xx = 6; xx < 14; xx++){ if (yy >= 11 || Math.hypot(xx - 9.5, yy - 11) < 4) R(xx, yy, 1, 1, '#1b1826'); } }
+    else if (k === 10){ R(3, 9, 14, 8, M); for (let yy = 3; yy < 10; yy++){ const w = Math.round((yy - 2) * 1.1); R(10 - w, yy, 2 * w, 1, yy < 5 ? L : '#b3584a'); } R(8, 12, 4, 5, '#1b1826'); R(3, 16, 14, 1, D); }
+    else { R(5, 5, 10, 12, M); R(13, 5, 2, 12, D); for (let i = 0; i < 3; i++) R(5 + i * 4, 2, 2, 3, L); R(8, 12, 4, 5, '#1b1826'); }
+    this.icons.set(k, c);
+    return c;
+  },
+  tool(){ const t = activeTool(); return t && (t.kind === 'drill' || t.kind === 'disp') && !t.bore && !t.smooth && !t.lathe ? t : null; },
+  open(){
+    const t = this.tool();
+    if (!t || game.ui !== 'none') return false;
+    game.ui = 'wheel'; this.build(); show('wheelscreen'); document.exitPointerLock();
+    AudioSys.sfx('toggle');
+    return true;
+  },
+  build(){
+    const t = this.tool(); if (!t){ closeOverlay(); return; }
+    const tier = t.tier | 0, body = $('wheelbody');
+    $('wheeltitle').textContent = (CORE.TIER_NAME[tier] + ' ' + (t.kind === 'drill' ? 'drill' : 'dispenser')).toUpperCase();
+    body.innerHTML = '';
+    const sec = (txt) => { const d = document.createElement('div'); d.className = 'wsec'; d.textContent = txt; body.appendChild(d); return d; };
+    const row = (label) => { const r = document.createElement('div'); r.className = 'wrow'; const l = document.createElement('label'); l.textContent = label; r.appendChild(l); body.appendChild(r); return r; };
+    const btn = (parent, txt, on, fn) => { const b = document.createElement('div'); b.className = 'wbtn' + (on ? ' on' : ''); b.textContent = txt; b.addEventListener('click', (ev) => { ev.stopPropagation(); fn(); AudioSys.sfx('toggle'); this.changed(); }); parent.appendChild(b); return b; };
+    const slider = (label, min, max, step, val, fmt, fn) => {
+      const r = row(label), i = document.createElement('input'); i.type = 'range'; i.min = min; i.max = max; i.step = step; i.value = val;
+      const v = document.createElement('span'); v.className = 'wval'; v.textContent = fmt(+val);
+      i.addEventListener('input', () => { fn(+i.value); v.textContent = fmt(+i.value); this.changed(true); });
+      r.appendChild(i); r.appendChild(v); return i;
+    };
+    const lock = (txt) => { const d = document.createElement('div'); d.className = 'wlock'; d.textContent = txt; body.appendChild(d); };
+    // the shapes
+    sec('SHAPE');
+    const grid = document.createElement('div'); grid.className = 'wshapes'; body.appendChild(grid);
+    const have = toolShapes(t);
+    CORE.SHAPE_UNLOCK.forEach((k, i) => {
+      const ok = have.includes(k), d = document.createElement('div');
+      d.className = 'wshape' + (ok ? '' : ' locked') + (game.tool.shape === k ? ' sel' : '');
+      d.dataset.shape = k;
+      const cv = document.createElement('canvas'); cv.width = cv.height = 20; cv.getContext('2d').drawImage(this.icon(k), 0, 0);
+      d.appendChild(cv);
+      const n = document.createElement('span'); n.textContent = ok ? CORE.SHAPE_NAME[k] : CORE.TIER_NAME[i]; d.appendChild(n);
+      d.title = ok ? CORE.SHAPE_NAME[k] : CORE.SHAPE_NAME[k] + ' comes with ' + CORE.TIER_NAME[i] + ' tools';
+      if (ok) d.addEventListener('click', (ev) => { ev.stopPropagation(); if (brushSys.get()) brushSys.clear(); game.tool.shape = k; AudioSys.sfx('toggle'); this.changed(); });
+      grid.appendChild(d);
+    });
+    // the size: the tier's steps, or smooth from diamond up
+    sec('SIZE');
+    if (tier >= 4){
+      const lo = Math.log(CORE.SIZE_MIN), hi = Math.log(CORE.tierCap(tier)), cur = CORE.effSize(game.tool.size, tier);
+      slider('size', 0, 1000, 1, Math.round((Math.log(cur) - lo) / (hi - lo) * 1000), v => Math.exp(lo + (hi - lo) * v / 1000).toFixed(2) + ' m', v => { game.tool.size = +Math.exp(lo + (hi - lo) * v / 1000).toFixed(3); });
+    } else {
+      const S = CORE.STEPS, a = CORE.tierMin(tier), b2 = CORE.tierMax(tier), cur = S.indexOf(CORE.effSize(game.tool.size, tier));
+      slider('size', a, b2, 1, cur, v => S[v] + ' m', v => { game.tool.size = S[v]; });
+    }
+    slider('reach', 1, TOOL_REACH_MAX, 0.5, game.tool.dist, v => v.toFixed(1) + ' m', v => { game.tool.dist = v; });
+    // the turn
+    sec('TURN');
+    if (!toolCan('yaw')) lock('iron tools and up turn the shape');
+    else {
+      const deg = a => Math.round(((a || 0) * 180 / Math.PI) / 15) * 15 % 360;
+      const set = (K) => v => { game.tool[K] = v * Math.PI / 180; };
+      slider('yaw', 0, 345, 15, deg(game.tool.rot), v => v + '°', set('rot'));
+      if (toolCan('tilt')){ slider('pitch', 0, 345, 15, deg(game.tool.rx), v => v + '°', set('rx')); slider('roll', 0, 345, 15, deg(game.tool.rz), v => v + '°', set('rz')); }
+      else lock('diamond tools and up turn it every way');
+      const r = row(''); btn(r, 'SQUARE IT UP', false, () => { game.tool.rot = 0; game.tool.rx = 0; game.tool.rz = 0; });
+    }
+    // the grid
+    sec('GRID');
+    if (!toolCan('snap')) lock('iron tools and up snap to the grid');
+    else {
+      const r = row('snap'), bs = document.createElement('div'); bs.className = 'wbtns'; r.appendChild(bs);
+      btn(bs, game.snapOn ? 'ON' : 'OFF', game.snapOn, () => { game.snapOn = !game.snapOn; });
+      CORE.GRID_SIZES.forEach((gsz, i) => btn(bs, gsz + 'm', game.snapOn && game.gridIdx === i, () => { game.gridIdx = i; game.snapOn = true; }));
+    }
+    // the mirror
+    sec('MIRROR');
+    if (!toolCan('mirror')) lock('astrium tools and up mirror what they do');
+    else {
+      const M = game.tool.mirror, Rd = game.tool.radial;
+      const r = row('plane'), bs = document.createElement('div'); bs.className = 'wbtns'; r.appendChild(bs);
+      btn(bs, M ? 'ON · across ' + (M.axis ? 'z' : 'x') : 'OFF', !!M, () => mirrorSys.toggle(false));
+      if (M) btn(bs, 'TURN IT', false, () => mirrorSys.toggle(true));
+      const r2 = row('radial'), b3 = document.createElement('div'); b3.className = 'wbtns'; r2.appendChild(b3);
+      btn(b3, 'OFF', !Rd, () => mirrorSys.setRadial(1));
+      for (let n = 2; n <= 10; n++) btn(b3, '×' + n, !!(Rd && Rd.n === n), () => mirrorSys.setRadial(n));
+    }
+    // the echo
+    sec('ECHO');
+    if (!toolCan('echo')) lock('vehlite tools echo the shape along the way you look');
+    else {
+      slider('copies', 1, 16, 1, game.tool.echo || 1, v => v === 1 ? 'off' : '×' + v, v => { game.tool.echo = v; });
+      slider('gap', 0, 4, 0.25, game.tool.echoGap || 0, v => v + '× the shape', v => { game.tool.echoGap = v; });
+    }
+    if (t.kind === 'disp'){
+      sec('DISPENSER');
+      const r = row('mode'), bs = document.createElement('div'); bs.className = 'wbtns'; r.appendChild(bs);
+      btn(bs, 'BUILD', game.tool.mode !== 'paint', () => { game.tool.mode = 'build'; });
+      btn(bs, 'PAINT', game.tool.mode === 'paint', () => { game.tool.mode = 'paint'; });
+    }
+  },
+  // a choice made: the HUD and the save follow; buttons redraw, sliders keep their drag
+  changed(slider){
+    refreshToolHUD(); markSave();
+    if (!slider) this.build();
+  },
+  // right click held: open when it has been held long enough, a tap steps the shape
+  press(){
+    const t = this.tool(); if (!t) return false;
+    const P = game.rmbHold = { t: performance.now(), opened: false };
+    setTimeout(() => { if (game.rmbHold === P && game.mouseRHeld){ P.opened = true; this.open(); } }, WHEEL_HOLD_MS);
+    return true;
   },
 };
 // ---- what a tool of a tier may do (Build 113, Austin's) ----
@@ -34574,7 +34803,7 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('endscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
+  hide('endscreen'); hide('wheelscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
   game.activeDecraft = null;
   game.activeWtab = null;
   game.activeTrade = null;
@@ -39192,7 +39421,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

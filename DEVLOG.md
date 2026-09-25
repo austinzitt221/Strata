@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 117 — THE TOOL WHEEL, and birds and fish in detail (2026-10-12)
+
+The other two notes from Austin's playtest of 112 to 115.
+
+- **The tool wheel.** Hold right click with a drill or a dispenser (a
+  quarter of a second) and one screen opens with everything the tool
+  does, all by the mouse:
+  - SHAPE: all twelve, each with a pixel icon. The ones your tier does
+    not have are dimmed and name the tier that brings them.
+  - SIZE: the tier's steps, or a smooth slider from diamond up, plus
+    how far out the ghost sits (the reach, V/B's job).
+  - TURN: yaw, and pitch and roll from diamond, in 15° steps, with
+    SQUARE IT UP to reset them.
+  - GRID: on or off, and the ten grid sizes.
+  - MIRROR: the plane through the ghost, TURN IT, and radial ×2 to ×10.
+  - ECHO: copies and gap.
+  - DISPENSER: build or paint.
+  Anything the tier cannot do yet says which tier brings it. A tap of
+  right click still steps to the next shape, as it always has; the step
+  now happens when the button comes up. Right click, E or Esc closes
+  the wheel.
+- **Birds as the animals are built.** Each bird is a body, a head with
+  eyes and a beak, a tail, legs, and wings in two panels with their
+  tips, coloured per part:
+  - GULL: grey back, yellow beak with its red spot, black wingtips and
+    tail band, orange legs.
+  - FINCH: rusty breast, dark cap, a pale wing bar.
+  - HERON: long neck, black plume, dagger beak, long legs it stands on.
+  Landed birds fold their wings back and finches peck. They are bigger:
+  gulls ×1.3, finches ×1.45, herons ×1.15. Still instanced, three draws
+  a kind.
+- **Fish:** a dark back, pale flanks and belly, a dorsal fin, side fins,
+  eyes and a tail fin. The tail beats, faster when they dart.
+
 ## Build 116 — THE SHAPES, FIXED: the wrench, clean treads, the drill carves the space (2026-10-12)
 
 Playtest of Builds 112 to 115 (2026-10-12, Austin):

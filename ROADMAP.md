@@ -524,10 +524,10 @@ birds went down well. The shapes need work. In my order:
      the stairway with headroom, the shaft, the opening, the tower's
      inside, and the rock left standing is the thing. Walk up to a
      mountain, drill a house into it, walk in. (Austin.)
- 31. **The tool wheel** (Build 117). Hold right click: one screen with the
+ 31. **The tool wheel** (DONE, Build 117). Hold right click: one screen with the
      shape, the size, the rotation, the mirror, the echo and the grid,
      all clickable; tap right click still steps the shape. (Austin.)
- 32. **Birds and fish in detail** (Build 117). As much detail as the
+ 32. **Birds and fish in detail** (DONE, Build 117). As much detail as the
      animals have, and the birds a little bigger. (Austin.)
 
 Small things I want, slotted wherever a session has room:

@@ -21,7 +21,7 @@ const { chromium } = require('playwright');
     const kinds = {};
     for (let i = 0; i < 400; i++){ S.tick(0.1); }
     for (const F of S.flocks) kinds[F.kind] = (kinds[F.kind] || 0) + 1;
-    const flocks = S.flocks.length, schools = S.schools.length, birds = S.meshes.body.count, fish = S.meshes.fish.count;
+    const flocks = S.flocks.length, schools = S.schools.length, birds = S.birdCount(), fish = S.meshes.fish.count;
     // every school is in water of the right depth; every fish under the surface
     let okDepth = true; for (const sc of S.schools){ const W = S.wetAt(sc.x, sc.z); if (!W || W.depth < 0.6) okDepth = false; }
     return { shore: +bd.toFixed(0), flocks, kinds, schools, birds, fish, okDepth };
@@ -57,7 +57,7 @@ const { chromium } = require('playwright');
     for (let i = 0; i < 900; i++) S.tick(0.1);
     const night = { flocks: S.flocks.length, schools: S.schools.length };
     g.timeOfDay = 0.3; api.updateDayNight(0);
-    const planet = g.planet; g.planet = 'moon'; S.tick(0.1); const moon = { birds: S.meshes.body.count, fish: S.meshes.fish.count }; g.planet = planet;
+    const planet = g.planet; g.planet = 'moon'; S.tick(0.1); const moon = { birds: S.birdCount(), fish: S.meshes.fish.count }; g.planet = planet;
     return { night, moon };
   });
   console.log('3. night/moon :', JSON.stringify(r3));
@@ -72,7 +72,7 @@ const { chromium } = require('playwright');
   });
   await settle(3);
   await page.screenshot({ path: __dirname + '/b114_shallows.png' });
-  console.log('4. the shot   :', JSON.stringify(await page.evaluate(() => Object.assign(window.__shot || {}, { fishDrawn: window.__api.shoreSys.meshes.fish.count, birdsDrawn: window.__api.shoreSys.meshes.body.count }))));
+  console.log('4. the shot   :', JSON.stringify(await page.evaluate(() => Object.assign(window.__shot || {}, { fishDrawn: window.__api.shoreSys.meshes.fish.count, birdsDrawn: window.__api.shoreSys.birdCount() }))));
   await page.evaluate(() => { const g = window.__game; g.pitch = 0.3; const S = window.__api.shoreSys; for (const F of S.flocks){ F.landT = 99; } });
   await settle(2);
   await page.screenshot({ path: __dirname + '/b114_sky.png' });
