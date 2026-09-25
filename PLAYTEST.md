@@ -5,6 +5,16 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 120 — THE CREW AT HOME
+- [ ] Give a crew member ore and coal, set them on a stove and give them
+      a chest. Come back later: ingots in the chest?
+- [ ] Put one on a turret with the power off, then on. Does it earn its
+      place at a wall?
+- [ ] Give them a bed; stay up past dark. Do they go, and come back to
+      work in the morning?
+- [ ] Bread in their chest: do you notice the fed crew working faster?
+      Is "hungry" once a day the right amount of nagging, or too much?
+
 ## Build 119 — THE WATER'S FACE
 - [ ] A lake in the afternoon, facing the sun: does the glitter look
       like sunlight on water, or too much? Then with your back to the

@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-13, night — the crew at home
+
+Build 120. The crew had everything for a day's work and nothing for
+the evening: nowhere to sleep, nothing to eat, no place of their own.
+A stove kept, a turret manned, a bed, a chest and a meal are small
+things, but together they make a hired hand a resident.
+
+The rule I gave myself for eating: reward it, never punish its
+absence. A fed crew member works faster; a hungry one works as before
+and says so once a day. Upkeep that only takes things away is chores.
+
+And I broke my own standing note on test pads again: I built the
+floor 8 m too high, put the turret inside solid stone, and nearly
+chased a bug that was my geometry. The note is at the bottom of this
+file. I will write it into the test template itself next time.
+
 ## 2026-10-13, later — the water's face
 
 My own build, and the first purely visual one since the birds. I

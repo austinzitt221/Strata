@@ -12212,13 +12212,17 @@ const powerSys = {
   // pay nothing — it isn't you.
   turretTick(n, dt){
     if (n.broken){ n.aim = null; n.target = null; return; }
-    const ratio = this.turretMap ? (this.turretMap.get(n.id) || 0) : 0;
+    // THE CREW AT HOME (Build 120): a crew member at it cranks it by hand
+    // without power, and sees farther with it
+    const man = !!(crewSys.manned && crewSys.manned.has(n.id));
+    let ratio = this.turretMap ? (this.turretMap.get(n.id) || 0) : 0;
+    if (ratio <= 0 && man) ratio = 0.5;
     n.reload = Math.max(0, (n.reload || 0) - dt);
     if (ratio <= 0){ n.aim = null; return; }
     n.scanT = (n.scanT || 0) - dt;
     if (n.scanT <= 0){
       n.scanT = 0.25;
-      let best = null, bd = 24;
+      let best = null, bd = man ? 34 : 24;
       const mx = n.x, my = n.y + 0.95, mz = n.z;
       for (const e of game.entities){
         const hostile = e.siege || e.raider || e.bossType || e.type === 'lurker' || e.type === 'stalker' || e.type === 'husk' || e.type === 'wisp' || e.type === 'angel' || HOSTILE_BEASTS.has(e.type) || (e.type === 'soldier' && !e.friendly) || (VEH[e.type] && e.crewed && !e.friendly);
@@ -16653,6 +16657,16 @@ const crewSys = {
       reap: ['ripe. in the pack.', 'a good one.', 'that\'s the harvest.'],
       fill: ['can\'s full again.', 'cold, that.', 'right, back to it.'],
       dry: ['no water anywhere near here for the can.', 'the can\'s empty and there\'s nothing to fill it at.', 'I need water closer than this.'],
+      // THE CREW AT HOME (Build 120)
+      stove: ['I\'ll keep the fire in.', 'ore in, ingots out. I know it.', 'a warm job. I\'ll take it.'],
+      turret: ['nothing gets past this.', 'I\'ll crank it if the power goes.', 'eyes on the dark.'],
+      bed: ['a bed of my own. thank you.', 'I\'ll sleep better for it.', 'that one\'s mine, then.'],
+      chest: ['what I dig goes in there.', 'I\'ll keep it tidy.', 'my chest. good.'],
+      fed: ['that\'s better.', 'good food. I\'ll work the faster for it.', 'thank you. I was starving.'],
+      hungry: ['nothing to eat in my pack or my chest.', 'I could eat. if there were food.', 'a meal would help.'],
+      nopost: ['it\'s gone. I\'ll wait here.', 'nothing left to tend.', 'my post is gone.'],
+      deposit: ['in the chest it goes.', 'that\'s the pack emptied.', 'all put away.'],
+      none: ['there\'s nothing like that near here.', 'show me which one, closer.', 'I don\'t see it.'],
     }[what];
     if (L) toast(this.nameOf(e) + ': "' + L[(Math.random() * L.length) | 0] + '"');
   },
@@ -16663,6 +16677,10 @@ const crewSys = {
     this.accT += dt;
     if (this.accT < 1) return;
     this.accT = 0;
+    // THE CREW AT HOME (Build 120): the turrets a crew member stands at
+    const man = new Set();
+    for (const c of this.all()){ const C = c.crew; if (C.mode !== 'turret' || !C.post) continue; const P = this.postRef(C); if (P && Math.hypot(P.x + (C.post.ox || 0) - c.x, P.z + (C.post.oz || 0) - c.z) < 1.6) man.add(P.id); }
+    this.manned = man;
     for (const [store, city] of [[game.villages, false], [game.cities || {}, true]]) for (const key in store){
       const rec = store[key];
       for (let i = 0; i < rec.houses.length; i++){
@@ -16943,10 +16961,12 @@ const crewSys = {
     const R = VROLE[hrec.role];
     $('tradetitle').textContent = (hrec.vname + ' · your crew' + (R && hrec.role !== 'walker' ? ' · ' + R.name : '')).toUpperCase();
     const MODE = { follow: 'following you', stay: 'staying put', roam: 'roaming ' + C.r + ' m around their post', quarry: 'digging a quarry' + (C.job && C.job.cuts ? ' · ' + (C.job.cuts.length - C.job.i) + ' cuts to go' : ''),
+                   stove: 'keeping a stove', turret: 'manning a turret',
                    build: 'building ' + (C.job && C.job.edits ? '“' + C.job.name + '” · ' + (C.job.edits.length - C.job.i) + ' to go' : '') };
     const M = this.matOf(C), ar = this.armorRed(C);
     const over = Object.keys(C.pack).some(k => C.pack[k] > 0);
     $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · hp ' + Math.max(0, Math.round(e.hp)) + (ar ? ' · armor ' + Math.round(ar * 100) + '%' : '') +
+      (this.fed(C) ? ' · fed today' : ' · hungry') + (this.bedOk(C) ? ' · has a bed' : '') + (this.chestOf(C) ? ' · has a chest' : '') +
       ' · in hand: <b>' + this.toolText(C.tool) + '</b> · material: <b>' + this.matText(M) + '</b>' + (over ? ' · overflow: ' + this.packText(C) : '');
     document.querySelectorAll('#trademain .slot, #tradehot .slot, #crewhand .slot, #crewpack .slot').forEach(paintSlot);
     const list = $('tradelist');
@@ -16980,6 +17000,12 @@ const crewSys = {
     row('stay right here' + (armed ? ', fighting what comes near' : ''), C.mode === 'stay' ? 'STAYING' : 'STAY', '#4fc3f7', () => this.order(e, 'stay'));
     row('roam around here · ' + C.r + ' m (click again for ' + this.nextR(C.r) + ' m)', C.mode === 'roam' ? 'ROAMING' : 'ROAM', '#4fc3f7', () => this.order(e, 'roam'));
     row('dig a quarry where you are looking · 10 m across, 6 m down' + (drill ? '' : ' (needs a drill)'), C.mode === 'quarry' ? 'DIGGING' : 'QUARRY', '#ffb44d', () => this.order(e, 'quarry'), !drill);
+    // THE CREW AT HOME (Build 120)
+    const nStove = (game.stoves || []).length, nTur = (game.pnodes || []).filter(n => n.t === 'turret').length, nBed = (game.beds || []).length, nChest = (game.pnodes || []).filter(n => n.t === 'chest').length;
+    row('keep the stove nearest where you look: ore and fuel in from their pack and chest, what it makes out' + (nStove ? '' : ' (build a stove first)'), C.mode === 'stove' ? 'KEEPING' : 'STOVE', '#ff9a5c', () => this.order(e, 'stove'), !nStove);
+    row('man the turret nearest where you look: it fires without power, and farther with it' + (nTur ? '' : ' (build a turret first)'), C.mode === 'turret' ? 'MANNING' : 'TURRET', '#ff9a5c', () => this.order(e, 'turret'), !nTur);
+    row('their bed: the one nearest where you look · they sleep there at night and wake mended' + (nBed ? '' : ' (place a bed first)'), this.bedOk(C) ? 'MOVE BED' : 'BED', '#c9a0ff', () => this.assign(e, 'bed'), !nBed);
+    row('their chest: the one nearest where you look · what they dig goes in it, they eat from it, a stove they keep fills it' + (nChest ? '' : ' (place a chest first)'), this.chestOf(C) ? 'MOVE CHEST' : 'CHEST', '#c9a0ff', () => this.assign(e, 'chest'), !nChest);
     const bps = this.bpList();
     if (bps.length){
       const cur = bps[Math.min(C.bp || 0, bps.length - 1)];
@@ -16993,8 +17019,158 @@ const crewSys = {
     row('let ' + hrec.vname + ' go home (everything they carry comes to you)', 'DISMISS', '#e07070', () => this.dismiss(e));
   },
   nextR(r){ return r >= 40 ? 6 : r >= 15 ? 40 : 15; },
+  // ---------- THE CREW AT HOME (Build 120) ----------
+  // A post: a stove they keep (ore and fuel in from their pack and their
+  // chest, what it makes out to the chest), or a turret they man (it fires
+  // without power, cranked by hand, and farther with it). A bed they sleep in
+  // at night and wake mended. A chest their digging goes into. And a meal a
+  // day from their pack or chest: fed, they work a fifth faster.
+  FOOD: ['burger', 'spaghetti', 'salad', 'bread', 'cookedmeat', 'cookedfish', 'tomato', 'lettuce', 'nightcap'],
+  fed(C){ return C.fedDay === (game.day || 0); },
+  pace(C){ return this.fed(C) ? 0.8 : 1; },
+  // the one nearest where you look (or nearest them), within reach
+  findNear(e, list, pos){
+    const h = surfaceHit(), ax = h ? h[0] : e.x, az = h ? h[2] : e.z;
+    let best = null, bd = 9;
+    for (const o of list){ const q = pos(o), d = Math.hypot(q[0] - ax, q[2] - az); if (d < bd){ bd = d; best = o; } }
+    if (!best){ bd = 14; for (const o of list){ const q = pos(o), d = Math.hypot(q[0] - e.x, q[2] - e.z); if (d < bd){ bd = d; best = o; } } }
+    return best;
+  },
+  assign(e, what){
+    const C = e.crew;
+    if (what === 'stove' || what === 'turret'){
+      const list = what === 'stove' ? (game.stoves || []) : (game.pnodes || []).filter(n => n.t === 'turret');
+      const ref = this.findNear(e, list, o => [o.x, o.y, o.z]);
+      if (!ref){ this.say(e, 'none'); AudioSys.sfx('deny'); return; }
+      // stand on the side they are on, a step off it
+      const dx = e.x - ref.x, dz = e.z - ref.z, L = Math.hypot(dx, dz) || 1;
+      C.post = { kind: what, id: ref.id, ox: +(dx / L * 1.25).toFixed(2), oz: +(dz / L * 1.25).toFixed(2) };
+      C.mode = what; C.job = null; C.tasks = []; C.home = { x: ref.x, z: ref.z }; C.r = 1.5;
+    } else if (what === 'bed'){
+      const b = this.findNear(e, game.beds || [], o => o);
+      if (!b){ this.say(e, 'none'); AudioSys.sfx('deny'); return; }
+      C.bed = [b[0], b[1], b[2]];
+    } else if (what === 'chest'){
+      const k = this.findNear(e, (game.pnodes || []).filter(n => n.t === 'chest'), o => [o.x, o.y, o.z]);
+      if (!k){ this.say(e, 'none'); AudioSys.sfx('deny'); return; }
+      C.chest = k.id;
+    }
+    this.say(e, what);
+    AudioSys.sfx('select');
+    this.refresh(); markSave();
+  },
+  postRef(C){
+    if (!C.post) return null;
+    if (C.post.kind === 'stove') return (game.stoves || []).find(s => s.id === C.post.id) || null;
+    const n = pnodeSys.byId(C.post.id); return n && n.t === 'turret' ? n : null;
+  },
+  chestOf(C){ if (C.chest == null) return null; const n = pnodeSys.byId(C.chest); if (!n || n.t !== 'chest'){ C.chest = null; return null; } if (!n.inv) n.inv = new Array(chestSlots(n.sc)).fill(null); return n; },
+  bedOk(C){ if (!C.bed) return null; const b = (game.beds || []).find(q => Math.abs(q[0] - C.bed[0]) < 0.05 && Math.abs(q[2] - C.bed[2]) < 0.05); if (!b) C.bed = null; return b || null; },
+  // n of kind (and mat) into an inventory: onto a stack, else a free slot; what did not fit
+  put(inv, kind, mat, n){
+    for (const t of inv) if (n > 0 && t && t.count != null && t.kind === kind && (kind !== 'mat' || t.mat === mat)){ t.count += n; n = 0; }
+    for (let i = 0; i < inv.length && n > 0; i++) if (!inv[i]){ inv[i] = kind === 'mat' ? { kind: 'mat', mat, count: n } : { kind, count: n }; n = 0; }
+    return n;
+  },
+  packSum(C){ let n = 0; for (const k in (C.pack || {})) n += C.pack[k] > 0 ? C.pack[k] : 0; return n; },
+  // the pack's takings into the chest
+  deposit(e, K){
+    const C = e.crew; let moved = 0;
+    for (const k in C.pack){
+      const n = C.pack[k]; if (!(n > 0)) continue;
+      const left = isNaN(+k) ? this.put(K.inv, k, 0, n) : this.put(K.inv, 'mat', +k, n);
+      moved += n - left; C.pack[k] = left;
+    }
+    if (moved){ this.say(e, 'deposit'); markSave(); }
+    e.depositT = 30;                                             // not again straight away, full chest or not
+  },
+  // a meal: the best thing in their pack, else in their chest
+  eat(e){
+    const C = e.crew, K = this.chestOf(C);
+    const srcs = [C.bag];
+    if (K && Math.hypot(K.x - e.x, K.z - e.z) < 40) srcs.push(K.inv);
+    for (const f of this.FOOD) for (const inv of srcs) for (let i = 0; i < inv.length; i++){
+      const it = inv[i];
+      if (!it || it.kind !== f || !(it.count > 0)) continue;
+      it.count--; if (it.count <= 0) inv[i] = null;
+      C.fedDay = game.day || 0; this.say(e, 'fed'); markSave();
+      return true;
+    }
+    if (!C.hungrySaid || C.hungrySaid !== (game.day || 0)){ C.hungrySaid = game.day || 0; if (Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) this.say(e, 'hungry'); }
+    return false;
+  },
+  // keep a stove: its lanes fed, its fire in, what it made put away
+  tend(e, st){
+    const C = e.crew, K = this.chestOf(C);
+    const srcs = [C.bag];
+    if (K && Math.hypot(K.x - st.x, K.z - st.z) < 24) srcs.push(K.inv);
+    const fuelLow = !st.fuel || st.fuel.count < 4;
+    let n = 0;
+    for (const inv of srcs) for (let i = 0; i < inv.length; i++){
+      const it = inv[i];
+      if (!it || !(it.count > 0) || it.kind === 'drill' || it.kind === 'disp') continue;
+      const smelt = it.kind !== 'mat' && CORE.SMELTS[it.kind];
+      const fuel = !smelt && CORE.fuelOps(it.kind === 'mat' ? { kind: 'mat', mat: it.mat, count: 1 } : { kind: it.kind, count: 1 });
+      if (!smelt && !(fuel && fuelLow)) continue;
+      let k = 0;
+      while (it.count > 0 && k < (smelt ? 32 : 8) && powerSys.give(st, it)){ it.count--; k++; }
+      if (it.count <= 0) inv[i] = null;
+      n += k;
+    }
+    // what it made: to the chest, else their pack
+    const outs = st.great ? st.gout.map((o, i) => [o, i]) : [[st.out, -1]];
+    for (const [o, i] of outs){
+      if (!o || !(o.count > 0)) continue;
+      let left = K ? this.put(K.inv, o.kind, 0, o.count) : o.count;
+      if (left > 0) left = this.put(C.bag, o.kind, 0, left);
+      if (left !== o.count){ n++; if (left <= 0){ if (i >= 0) st.gout[i] = null; else st.out = null; } else o.count = left; }
+    }
+    if (n){ markSave(); if (game.ui === 'stove') refreshStoveUI(true); }
+  },
+  // home before the job: a meal, a bed at night, the chest when the pack is heavy, the post
+  homeStep(e, dt, alarm){
+    const C = e.crew;
+    if (alarm) return null;
+    e.eatT = (e.eatT || 0) - dt;
+    if (!this.fed(C) && e.eatT <= 0){ e.eatT = 25; this.eat(e); }
+    // night: to bed, if they have one and are not out with you
+    const b = C.mode !== 'follow' && (game.dayF != null ? game.dayF : 1) < 0.15 ? this.bedOk(C) : null;
+    if (b){
+      const d = Math.hypot(b[0] - e.x, b[2] - e.z);
+      if (d < 150){
+        if (d > 1.0) return [b[0] - e.x, b[2] - e.z, d > 20 ? 4.6 : 3.2];
+        e.asleep = true;
+        e.hp = Math.min(ENT_DEF.villager.hp, e.hp + dt * 3);               // they wake mended
+        if (Math.random() < dt * 0.6 && Math.hypot(e.x - game.pos.x, e.z - game.pos.z) < 30) Particles.burst(e.x, e.y + 1.9, e.z, 0.15, [0xcfd8ff], 1, 0.3);
+        return [0, 0, 0];
+      }
+    }
+    e.asleep = false;
+    // a heavy pack goes to the chest
+    e.depositT = Math.max(0, (e.depositT || 0) - dt);
+    const K = e.depositT <= 0 && C.mode !== 'follow' ? this.chestOf(C) : null;
+    if (K){
+      const sum = this.packSum(C), idle = !(C.job && ((C.job.cuts && C.job.i < C.job.cuts.length) || (C.job.edits && C.job.i < C.job.edits.length)));
+      if (sum >= 120 || (sum > 0 && idle)){
+        const d = Math.hypot(K.x - e.x, K.z - e.z);
+        if (d < 90){ if (d > 1.5) return [K.x - e.x, K.z - e.z, 4.0]; this.deposit(e, K); return [0, 0, 0]; }
+      }
+    }
+    // the post
+    if (C.mode === 'stove' || C.mode === 'turret'){
+      const P = this.postRef(C);
+      if (!P){ C.mode = 'stay'; C.post = null; C.home = { x: e.x, z: e.z }; C.r = 1.5; this.say(e, 'nopost'); markSave(); return null; }
+      const sx = P.x + (C.post.ox || 1.25), sz = P.z + (C.post.oz || 0), d = Math.hypot(sx - e.x, sz - e.z);
+      if (d > 0.6) return [sx - e.x, sz - e.z, d > 8 ? 4.4 : 2.6];
+      if (e.mesh) e.mesh.rotation.y = Math.atan2(-(P.x - e.x), -(P.z - e.z));
+      if (C.mode === 'stove'){ e.tendT = (e.tendT || 0) - dt; if (e.tendT <= 0){ e.tendT = 2.5; this.tend(e, P); } }
+      return [0, 0, 0];
+    }
+    return null;
+  },
   order(e, mode){
     const C = e.crew;
+    if (mode === 'stove' || mode === 'turret'){ this.assign(e, mode); return; }
     if (mode === 'roam'){
       if (C.mode === 'roam') C.r = this.nextR(C.r);
       const h = surfaceHit();
@@ -17215,6 +17391,7 @@ const crewSys = {
     }
     // (what they hold after a fight is whatever they used last: the drill
     // comes back out when you start drilling, the dispenser when you place)
+    { const hs = this.homeStep(e, dt, alarm); if (hs) return hs; }      // THE CREW AT HOME (Build 120)
     if (C.mode === 'build' && C.job && C.job.kind === 'build'){
       const J = C.job;
       if (!this.equip(e, 'disp')){ C.mode = 'stay'; C.home = { x: e.x, z: e.z }; return [0, 0, 0]; }
@@ -17275,12 +17452,12 @@ const crewSys = {
           e.workT = (e.workT || 0) - dt;
           if (e.workT <= 0){
             if (t.place){
-              e.workT = this.DISP_RATE[C.tool.tier | 0] || 0.6;
+              e.workT = (this.DISP_RATE[C.tool.tier | 0] || 0.6) * this.pace(C);
               const ed = CORE.makeEdit(1, t.shape, t.x, t.y, t.z, t.eff, 0, t.rot || 0);
               if (t.rx) ed.rx = t.rx; if (t.rz) ed.rz = t.rz;
               if (!this.place(e, ed)) C.tasks = [];
             } else {
-              e.workT = this.DRILL_RATE[C.tool.tier | 0] || 1;
+              e.workT = (this.DRILL_RATE[C.tool.tier | 0] || 1) * this.pace(C);
               this.cut(e, t.x, t.y, t.z, t.shape, t.eff);
             }
             C.tasks.shift();

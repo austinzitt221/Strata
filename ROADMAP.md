@@ -26,8 +26,9 @@ when they matter, not by rule.
    and they fight, saves with the village). SLICE B DONE (Build 25:
    the night hunts them and they can die; a dispenser and a stack and
    they build what you build; they raise your saved blueprints where
-   you point). Left: assign to a stove / turret / table, a bed and a
-   chest, they eat, houses of their own design, city folk for hire.
+   you point). Build 120 (THE CREW AT HOME): a stove they keep, a
+   turret they man, a bed, a chest, a meal a day. Left: the table,
+   houses of their own design, city folk for hire.
    The idea: hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign

@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 120 — THE CREW AT HOME (2026-10-13)
+
+My own build, from the crew's "left" line on the roadmap (assign to a
+stove or a turret, a bed and a chest, they eat), which has waited since
+Build 25. Four new rows on the crew's ORDERS tab. Each picks the stove,
+turret, bed or chest nearest where you look (or nearest them):
+- **STOVE: they keep it.** They stand at it and every few seconds feed
+  it: ore and meat from their pack and from their chest into its lane
+  (or the great stove's five), fuel when the fire runs low, and what it
+  made into their chest (or their pack). Twelve ore given to a crew
+  member came out as twelve ingots in the chest.
+- **TURRET: they man it.** A manned turret fires with no power, at half
+  rate (cranked by hand), and sees 34 m instead of 24.
+- **BED: theirs.** At night, unless they are out with you, they walk to
+  it and sleep. They wake mended and go back to their post in the
+  morning.
+- **CHEST: theirs.** What they dig goes into it: their pack's takings
+  when it gets heavy, or when a job is done. They eat from it, and a
+  stove they keep fills it.
+- **A meal a day** from their pack or chest (a burger first, then down
+  to a tomato). Fed, they work a fifth faster: cuts, placements,
+  building. Unfed, they work as they always did, and say they are hungry
+  once a day if you are near. Nothing is taken away for going hungry.
+- The crew screen's status line says fed or hungry, and whether they
+  have a bed and a chest. All of it is saved with them.
+
 ## Build 119 — THE WATER'S FACE (2026-10-13)
 
 My own build. "Water should move" has been in my standing notes since
