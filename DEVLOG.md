@@ -2,6 +2,37 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 111 — STRATA'S TIERS and the speed curve (2026-10-07)
+
+Roadmap items 24 (the tiers) and 25 (the speed curve), Austin's. Strata's
+fire (its coal as fuel for torches and the headlamp, the great stove) is
+the next build; the shapes and abilities by tier the one after.
+
+- **Four tiers past astrium,** twelve in all: VOID (from voidore, the ore
+  Strata already had), ICHORITE, NULLITE and VEHLITE. Each has its drill,
+  dispenser, sword, helmet, chestplate and boots, made at Strata's table
+  from its own ore. Their colours: deep green, lime, magenta, gold.
+- **Strata's ground.** Its veins now choose an ore by depth: SCARCOAL
+  (Strata's coal, an ember in it) from just under the ground to 110 m
+  down, voidore everywhere under, ichorite from 30 m down, nullite from
+  70 m, vehlite from 130 m and rare. The Earth has none of them.
+- **The Earth's ores leave Strata.** The ground never held them; the
+  loot did. A vault's diamonds are nullite now, and a hollow drops
+  ichorite instead of diamonds.
+- **The speed curve.** Stone takes as long as it always did (0.85 s for
+  the reference shape); vehlite is instant; every tier between is an
+  even step (0.077 s each). Diamond is no longer instant: it sits at
+  0.54 s. That changes a line of the Build 1 spec in CLAUDE.md ("diamond
+  dispenser is instant"), at Austin's asking; the spec text is left as
+  it was written, and this entry is the record.
+- **Sizes.** The size steps gain 20 m and 24 m: void reaches 20 m, the
+  three above it 24 m. Diamond and up stay smooth.
+- **Armour** blocks a little more a tier (34 to 40 per cent a piece,
+  capped at 60 per cent as before); swords hit harder, crew swords too.
+- **Scarcoal** burns sixteen smelts to coal's eight, in a stove or a
+  generator.
+- Creative carries all twelve tiers and the four new ores.
+
 ## Build 110 — the fixes from the 2026-10-05 playtest (2026-10-06)
 
 Austin: everything else perfect, farming perfect. Four things:

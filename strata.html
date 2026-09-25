@@ -720,9 +720,10 @@ const MAT = { ROCK:1, BEDROCK:2, IRON:3, RUBY:4, OBSIDIAN:5, DIAMOND:6, GRASS:7,
               NULLSTONE:52,     // STRATA D (Build 88): the spike at the centre, and the plate it stands on
               VEILSTONE:53,
               TILLED:54, TILLEDWET:55,
-              WATER:56, ICHOR:57 };      // LIQUIDS (Build 109): water and ichor as materials in the pack   // HOED GROUND (Build 108): the ground itself, turned; dry and wet   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
-const NMAT = 57;
-const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone','tilled earth','wet tilled earth','water','ichor'];
+              WATER:56, ICHOR:57,
+              SCARCOAL:58, ICHORITE:59, NULLITE:60, VEHLITE:61 };   // STRATA'S TIERS (Build 111): its coal and its three deep ores      // LIQUIDS (Build 109): water and ichor as materials in the pack   // HOED GROUND (Build 108): the ground itself, turned; dry and wet   // STRATA F (Build 93): what Vehl's people built with   // STRATA B (Build 86): the maws' stalks and what is sawn from them   // STRATA A (Build 85): the alien world's own grounds, its blight, its ore                                  // THE CROSSING (Build 81): the alien world's ground                                // MOON TIERS (Build 76): the first and the last of the Moon's ores                                 // LIFTOFF B (Build 75): the bases' walls, the Moon's ore                               // LIFTOFF (Build 74): the Moon's ground   // BIOMES D (Build 72): each biome's own ground, and peat under the swamp
+const NMAT = 61;
+const MAT_NAME = ['','rock','bedrock','iron','ruby','obsidian','diamond','grass','sand','glowshroom','wood','planks','snow','stonebrick','coal','basalt','lava','crystal','aether ore','marble','mud','jungle wood','jungle planks','mangrove wood','mangrove planks','spruce wood','spruce planks','acacia wood','acacia planks','dry grass','permafrost','leaf litter','peat','regolith','moonrock','plating','lunite','selenite','astrium','violet moss','duskrock','ash','bone','scarglass','corruption','voidore','glowstalk','glow planks','ashstalk','ash planks','bonestalk','bone planks','nullstone','veilstone','tilled earth','wet tilled earth','water','ichor','scarcoal','ichorite','nullite','vehlite'];
 // every wood, its planks: the log ends the shader paints, the planks a saw makes
 const LOG_MATS = [MAT.WOOD, MAT.JWOOD, MAT.MWOOD, MAT.SWOOD, MAT.AWOOD, MAT.GLOWSTALK, MAT.ASHSTALK, MAT.BONESTALK];
 const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD]: MAT.MPLANKS, [MAT.SWOOD]: MAT.SPLANKS, [MAT.AWOOD]: MAT.APLANKS,
@@ -730,21 +731,25 @@ const PLANKS_OF = { [MAT.WOOD]: MAT.PLANKS, [MAT.JWOOD]: MAT.JPLANKS, [MAT.MWOOD
 
 // ---- tools ----
 // MOON TIERS (Build 76): three tiers past diamond, from the Moon's ores
-const TIER_NAME = ['stone','iron','ruby','obsidian','diamond','selenite','lunite','astrium'];
+// STRATA'S TIERS (Build 111): four more, from Strata's ores, past astrium
+const TIER_NAME = ['stone','iron','ruby','obsidian','diamond','selenite','lunite','astrium','void','ichorite','nullite','vehlite'];
+const TIERS = TIER_NAME.length;
 // discrete size steps (diameter for spheres, edge for cubes)
-const STEPS = [0.375, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16];
+const STEPS = [0.375, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24];   // 20 and 24: the top of Strata (Build 111)
 // tier t (0..3) unlocks STEPS[tierMin(t) .. tierMax(t)]; diamond (4) and up
 // are continuous. Diamond caps the smallest; the moon tiers only go bigger
 function tierMin(t){ return t >= 4 ? 0 : 4 - t; }
-function tierMax(t){ return t >= 7 ? STEPS.length - 1 : t >= 4 ? 12 + (t - 4) : 8 + t; }
+function tierMax(t){ return t >= 4 ? Math.min(STEPS.length - 1, 12 + (t - 4)) : 8 + t; }
 function tierCap(t){ return STEPS[tierMax(t)]; }
 const SIZE_MIN = STEPS[0], SIZE_MAX = STEPS[STEPS.length - 1];
 // the thinnest thing the sampled field can always show: a voxel and a half
 // contains a sample plane on every axis, even turned 45 degrees
 const MIN_THICK = 0.75;
-// seconds to break/build one shape (like Minecraft block mine time);
-// diamond (tier 4) is instant: the whole shape goes in one click
-const TIER_TIME = [0.85, 0.62, 0.42, 0.25, 0, 0, 0, 0];
+// seconds to break/build one shape (like Minecraft block mine time).
+// THE SPEED CURVE (Build 111, Austin's): stone as it always was, the top of
+// Strata instant, and every tier between an even step. (Diamond was instant
+// from Build 1; that line of the first spec changes here, at his asking.)
+const TIER_TIME = Array.from({ length: TIER_NAME.length }, (_, t) => +(0.85 * (1 - t / (TIER_NAME.length - 1))).toFixed(3));
 
 // grid snap presets, keys 1..0 while holding F
 const GRID_SIZES = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 6, 8];
@@ -2934,17 +2939,29 @@ function makeStrataGen(seed){
     return d;
   }
   function sdf(x, y, z){ return sdfFromH(height(x, z), x, y, z); }
-  const ORES = [{ mat: MAT.VOIDORE, yMin: -240, yMax: -4, p: 0.26, rMin: 0.7, rMax: 1.3 }];
+  // STRATA'S TIERS (Build 111): its coal near the top, voidore everywhere
+  // under, and the three deep ores each deeper and rarer than the last
+  const ORES = [
+    { mat: MAT.SCARCOAL, yMin: -110, yMax: -2,  w: 4.0, rMin: 0.8, rMax: 1.5 },
+    { mat: MAT.VOIDORE,  yMin: -240, yMax: -4,  w: 4.0, rMin: 0.7, rMax: 1.3 },
+    { mat: MAT.ICHORITE, yMin: -240, yMax: -30, w: 2.2, rMin: 0.6, rMax: 1.1 },
+    { mat: MAT.NULLITE,  yMin: -240, yMax: -70, w: 1.5, rMin: 0.6, rMax: 1.0 },
+    { mat: MAT.VEHLITE,  yMin: -240, yMax: -130, w: 0.8, rMin: 0.5, rMax: 0.9 },
+  ];
+  const ORE_P = 0.34;
   function oreAt(x, y, z){
     if (y > -1 || y < BEDROCK_Y) return 0;
     const cx = Math.floor(x / VEIN_CELL), cy = Math.floor(y / VEIN_CELL), cz = Math.floor(z / VEIN_CELL);
     for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
       const gx = cx + dx, gy = cy + dy, gz = cz + dz;
       const h0 = hashInt(sV ^ Math.imul(gx, 0x9E3779B1) ^ Math.imul(gy, 0xC2B2AE3D) ^ Math.imul(gz, 0x85EBCA77));
-      const t = ORES[0];
-      if (h0 / 4294967296 > t.p) continue;
+      if (h0 / 4294967296 > ORE_P) continue;
       const oy = gy * VEIN_CELL + (hashInt(h0 ^ 2) / 4294967296) * VEIN_CELL;
-      if (oy < t.yMin || oy > t.yMax) continue;
+      let W = 0; for (const o of ORES) if (oy >= o.yMin && oy <= o.yMax) W += o.w;
+      if (!W) continue;
+      let pick = (hashInt(h0 ^ 5) / 4294967296) * W, t = null;
+      for (const o of ORES){ if (oy < o.yMin || oy > o.yMax) continue; pick -= o.w; if (pick <= 0){ t = o; break; } }
+      if (!t) continue;
       const ox = gx * VEIN_CELL + (hashInt(h0 ^ 1) / 4294967296) * VEIN_CELL, oz = gz * VEIN_CELL + (hashInt(h0 ^ 3) / 4294967296) * VEIN_CELL;
       const r = t.rMin + (hashInt(h0 ^ 4) / 4294967296) * (t.rMax - t.rMin);
       const ddx = x - ox, ddy = (y - oy) * 1.4, ddz = z - oz;
@@ -4001,12 +4018,12 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springs
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'nullcore', 'relic',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'ichorworm', 'veillamp', 'ichorcrown', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
 // iron/ruby then smelt to ingots in a stove; diamond is the gem itself
-const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat', [MAT.LUNITE]: 'lunite', [MAT.SELENITE]: 'selenite', [MAT.ASTRIUM]: 'astrium', [MAT.VOIDORE]: 'voidore' };
+const ORE_ITEM = { [MAT.IRON]: 'ironore', [MAT.RUBY]: 'rubyore', [MAT.COAL]: 'coal', [MAT.DIAMOND]: 'diamond', [MAT.AETHER]: 'aetherore', [MAT.PEAT]: 'peat', [MAT.LUNITE]: 'lunite', [MAT.SELENITE]: 'selenite', [MAT.ASTRIUM]: 'astrium', [MAT.VOIDORE]: 'voidore', [MAT.SCARCOAL]: 'scarcoal', [MAT.ICHORITE]: 'ichorite', [MAT.NULLITE]: 'nullite', [MAT.VEHLITE]: 'vehlite' };
 // stove: what smelts into what, and what burns (ops per unit of fuel)
 const SMELTS = { ironore: 'ironingot', rubyore: 'rubyingot', meat: 'cookedmeat', fish: 'cookedfish', aetherore: 'aetheringot', huskmeat: 'cookedmeat', flour: 'bread' };
 // what bites where: the fish of each region
@@ -4021,6 +4038,7 @@ const SMELT_T = 2.0;   // seconds per item
 function fuelOps(slot){
   if (!slot) return 0;
   if (slot.kind === 'coal') return 8;
+  if (slot.kind === 'scarcoal') return 16;                  // Strata's coal burns twice as long (Build 111)
   if (slot.kind === 'peat') return 5;                       // the swamp's fuel (Build 72)
   if (slot.kind === 'mat' && slot.mat === MAT.WOOD) return 2;
   if (slot.kind === 'mat' && slot.mat === MAT.PLANKS) return 1;
@@ -4128,7 +4146,7 @@ function paintCost(edits, e, gen){
 }
 
 // ---- action durations: tier base x volume factor x material hardness ----
-const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05, 0.5, 0.9, 1.3, 0.7, 1.6, 0.8, 0.4, 0.8, 0.4, 0.9, 0.4, 5.0, 1.4]; // by MAT id
+const HARDNESS = [0, 1, 0, 1.35, 1.7, 2.2, 2.6, 0.6, 0.5, 0.45, 0.8, 0.4, 0.35, 1.25, 0.9, 1.5, 0.7, 1.9, 2.0, 1.3, 0.35, 0.85, 0.4, 0.9, 0.4, 0.8, 0.4, 0.95, 0.4, 0.6, 0.9, 0.55, 0.5, 0.45, 1.0, 1.5, 1.2, 1.1, 1.8, 0.55, 1.05, 0.5, 0.9, 1.3, 0.7, 1.6, 0.8, 0.4, 0.8, 0.4, 0.9, 0.4, 5.0, 1.4, 0.5, 0.5, 0.3, 0.3, 1.1, 2.0, 2.4, 2.8]; // by MAT id
 const VOL_REF = 4.19;                                       // a 2m sphere, m^3
 function volFactor(volM3){
   return Math.min(2.2, Math.max(0.6, Math.cbrt(volM3 / VOL_REF)));
@@ -4258,17 +4276,18 @@ const RECIPES = [];
     t === 3 ? { mat: MAT.OBSIDIAN, n } :
     t === 4 ? { item: 'diamond', n } :
     t === 5 ? { item: 'selenite', n } :
-    t === 6 ? { item: 'lunite', n } : { item: 'astrium', n };
-  const wOf = t => t >= 5 ? 'moon' : undefined;                 // the moon tiers are made at the Moon's table (Build 86)
-  for (let t = 0; t <= 7; t++){
+    t === 6 ? { item: 'lunite', n } : t === 7 ? { item: 'astrium', n } :
+    t === 8 ? { item: 'voidore', n } : t === 9 ? { item: 'ichorite', n } : t === 10 ? { item: 'nullite', n } : { item: 'vehlite', n };
+  const wOf = t => t >= 8 ? 'alien' : t >= 5 ? 'moon' : undefined;   // the moon tiers at the Moon's table (Build 86), Strata's at Strata's (Build 111)
+  for (let t = 0; t < TIERS; t++){
     RECIPES.push({ kind: 'sword', tier: t, station: true, world: wOf(t),
       costs: [{ item: 'stick', n: 2 }, tierCost(t, 12)] });
   }
-  for (let t = 1; t <= 7; t++){
+  for (let t = 1; t < TIERS; t++){
     RECIPES.push({ kind: 'drill', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 24)] });
     RECIPES.push({ kind: 'disp',  tier: t, station: true, world: wOf(t), costs: [tierCost(t, 18)] });
   }
-  for (let t = 0; t <= 7; t++){
+  for (let t = 0; t < TIERS; t++){
     RECIPES.push({ kind: 'helm',  tier: t, station: true, world: wOf(t), costs: [tierCost(t, 5)] });
     RECIPES.push({ kind: 'plate', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 8)] });
     RECIPES.push({ kind: 'boots', tier: t, station: true, world: wOf(t), costs: [tierCost(t, 4)] });
@@ -4888,7 +4907,7 @@ function hashSeed(str){
 
 return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
-  MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
+  MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, TIERS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
@@ -5188,6 +5207,23 @@ function makeTileDrawers(){
       speckle(ctx, rng, '#3aa84a', '#2e8a3c', '#4cc45a', 0.3, 0.2);
       for (const y of [3, 9, 14]){ ctx.fillStyle = '#b0ffb8'; ctx.fillRect(1, y, 5, 1); ctx.fillRect(9, y - 1, 5, 1); }
       ctx.fillStyle = '#1a1424'; ctx.fillRect(6, 6, 1, 1); ctx.fillRect(12, 12, 1, 1);
+    },
+    [CORE.MAT.SCARCOAL](ctx, rng){
+      // STRATA'S TIERS (Build 111): coal with a coal's black and an ember in it
+      speckle(ctx, rng, '#2a1e20', '#1e1418', '#34262a', 0.3, 0.2);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 13) | 0, y = (rng() * 13) | 0; ctx.fillStyle = '#120c0e'; ctx.fillRect(x, y, 3, 2); ctx.fillStyle = '#ff7a3a'; ctx.fillRect(x + 1, y, 1, 1); }
+    },
+    [CORE.MAT.ICHORITE](ctx, rng){
+      speckle(ctx, rng, '#2c3a2e', '#243026', '#344436', 0.3, 0.2);
+      for (let i = 0; i < 4; i++){ const x = (rng() * 12) | 0, y = (rng() * 12) | 0; ctx.fillStyle = '#a8ff4a'; ctx.fillRect(x, y + 1, 3, 2); ctx.fillRect(x + 1, y, 1, 4); ctx.fillStyle = '#f0ffc8'; ctx.fillRect(x + 1, y + 1, 1, 1); }
+    },
+    [CORE.MAT.NULLITE](ctx, rng){
+      speckle(ctx, rng, '#14101c', '#0e0a14', '#1c1626', 0.3, 0.2);
+      for (let i = 0; i < 5; i++){ const x = (rng() * 13) | 0, y = (rng() * 13) | 0; ctx.fillStyle = '#c83aa0'; ctx.fillRect(x, y, 2, 2); ctx.fillStyle = '#ffb8ea'; ctx.fillRect(x, y, 1, 1); }
+    },
+    [CORE.MAT.VEHLITE](ctx, rng){
+      speckle(ctx, rng, '#6e6a86', '#5e5a76', '#7e7a96', 0.3, 0.2);
+      for (let i = 0; i < 4; i++){ const x = (rng() * 12) | 0, y = (rng() * 12) | 0; ctx.fillStyle = '#d8c070'; ctx.fillRect(x, y, 3, 3); ctx.fillStyle = '#fff4c0'; ctx.fillRect(x + 1, y + 1, 1, 1); }
     },
     [CORE.MAT.NULLSTONE](ctx, rng){
       // black, and a green that is not quite there
@@ -7289,7 +7325,7 @@ function buildScene(){
 }
 
 // material accent colors for the dispenser's loaded-material orb
-const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e, 0x4a2a6a, 0x8a5aaa, 0x2a2426, 0x5a4e50, 0xb8b0a0, 0xd8d0c0, 0x0a0810, 0x9a86b8, 0x4a3322, 0x33221a, 0x3a80cc, 0x4cc45a];   // tilled, wet tilled, water, ichor (Builds 108/109)
+const MAT_COLOR = [0, 0x7d7d84, 0x2e2c33, 0x9c9aa4, 0xa5233c, 0x221b31, 0x59c8d8, 0x58a83c, 0xd8c485, 0x9a6bc4, 0x8a6237, 0xb08d55, 0xe8f0f8, 0x8f8f96, 0x35363c, 0x3c3f45, 0xff7a26, 0x7fe8e8, 0xb9a3ff, 0xe8e6ee, 0x5a4630, 0x55603a, 0xa08a4e, 0x3e2c22, 0x7a5a3a, 0x5a3a2c, 0xb58a68, 0x6e5236, 0xb8763e, 0xb8a85a, 0x6f7a86, 0x4a4a2a, 0x2e2418, 0x8f8f94, 0x5c5c66, 0x7a8494, 0x9fd8ff, 0xdce8f4, 0x5a2a7a, 0x6a3aaa, 0x2e3a4a, 0x4a4442, 0xd8d0b8, 0x141018, 0xc02a9a, 0x1e2a1e, 0x4a2a6a, 0x8a5aaa, 0x2a2426, 0x5a4e50, 0xb8b0a0, 0xd8d0c0, 0x0a0810, 0x9a86b8, 0x4a3322, 0x33221a, 0x3a80cc, 0x4cc45a, 0x2a1e20, 0x8ad84a, 0xa0307a, 0xd8c070];   // tilled, wet tilled, water, ichor (Builds 108/109)
 // ---- pixel textures for the viewmodel & props (16x16 canvases, nearest) ----
 const PixTex = {
   cache: new Map(),
@@ -8400,7 +8436,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -13257,7 +13293,7 @@ const BEAST_DROP = {
   // STRATA C (Build 87): loot better than anywhere (a third number is the
   // odds of that line; none means always)
   thrall: [['voidore', 2], ['coin', 14], ['astrium', 1, 0.12]], gnasher: [['voidore', 1], ['coin', 8], ['voidfruit', 1, 0.5]],
-  lancer: [['nullcore', 1], ['voidore', 3], ['coin', 34], ['astrium', 1, 0.5]], hollow: [['nullcore', 1], ['coin', 24], ['diamond', 2, 0.5]],
+  lancer: [['nullcore', 1], ['voidore', 3], ['coin', 34], ['astrium', 1, 0.5]], hollow: [['nullcore', 1], ['coin', 24], ['ichorite', 2, 0.5]],
 };
 const CREW_HAT = 0x4fc3f7;
 const VROLE = {
@@ -15789,7 +15825,7 @@ const breachSys = {
 // record lives on the villager's house, so it saves with the village.
 const crewSys = {
   HIRE_REP: 10, HIRE_COST: 60, accT: 0,
-  SWORD_DMG: [8, 12, 16, 20, 26],
+  SWORD_DMG: [8, 12, 16, 20, 26, 30, 34, 38, 42, 46, 50, 56],
   DRILL_EFF: [1.5, 2.0, 2.4, 2.8, 3.2],
   DRILL_RATE: [1.4, 1.0, 0.75, 0.55, 0.4],
   all(){ return game.entities.filter(e => e.type === 'villager' && e.crew); },
@@ -15821,7 +15857,7 @@ const crewSys = {
   armorRed(C){
     const A = C && C.arm || {};
     let r = 0;
-    for (const p of [A.head, A.chest, A.feet]) if (p) r += [0.06, 0.09, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32][p.tier | 0] || 0;
+    for (const p of [A.head, A.chest, A.feet]) if (p) r += [0.06, 0.09, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.34, 0.36, 0.38, 0.4][p.tier | 0] || 0;
     return Math.min(0.6, r);
   },
   hurt(e, dmg, kx, kz){
@@ -30202,7 +30238,7 @@ function updateGhostDist(dt){
 }
 
 // ---------- item icons ----------
-const TIER_COL = ['#8a8a92', '#c9c7d1', '#d84a63', '#5d4a86', '#6fe3ef', '#e8f4ff', '#9fd8ff', '#b070ff'];
+const TIER_COL = ['#8a8a92', '#c9c7d1', '#d84a63', '#5d4a86', '#6fe3ef', '#e8f4ff', '#9fd8ff', '#b070ff', '#1f6a45', '#a8ff4a', '#e040b0', '#ffd76a'];
 const iconCache = new Map();
 function itemIconURL(it){
   if (!it) return null;
@@ -30213,7 +30249,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -30471,6 +30507,14 @@ function itemIconURL(it){
     c.fillStyle = '#9affb0'; c.fillRect(6, 6, 4, 4);
     c.fillStyle = '#eaffee'; c.fillRect(7, 7, 2, 2);
     c.fillStyle = '#5a2a6a'; c.fillRect(4, 4, 1, 1); c.fillRect(11, 4, 1, 1); c.fillRect(4, 11, 1, 1); c.fillRect(11, 11, 1, 1);
+  } else if (it.kind === 'scarcoal' || it.kind === 'ichorite' || it.kind === 'nullite' || it.kind === 'vehlite'){
+    // STRATA'S TIERS (Build 111): a lump of each, its own colours
+    const P = { scarcoal: ['#2a1e20', '#1e1418', '#ff7a3a', '#ffd0a0'], ichorite: ['#2c3a2e', '#243026', '#a8ff4a', '#f0ffc8'],
+                nullite: ['#14101c', '#0e0a14', '#e040b0', '#ffc8f0'], vehlite: ['#6e6a86', '#5e5a76', '#d8c070', '#fff4c0'] }[it.kind];
+    c.fillStyle = P[0]; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
+    c.fillStyle = P[1]; c.fillRect(3, 11, 10, 2);
+    c.fillStyle = P[2]; c.fillRect(5, 6, 2, 2); c.fillRect(9, 8, 2, 2); c.fillRect(7, 10, 2, 2);
+    c.fillStyle = P[3]; c.fillRect(5, 6, 1, 1); c.fillRect(9, 8, 1, 1); c.fillRect(7, 10, 1, 1);
   } else if (it.kind === 'voidore'){
     c.fillStyle = '#1e2a1e'; c.fillRect(3, 4, 10, 9); c.fillRect(5, 3, 6, 1); c.fillRect(4, 13, 8, 1);
     c.fillStyle = '#182218'; c.fillRect(3, 11, 10, 2);
@@ -31122,6 +31166,10 @@ function itemLabel(it){
   if (it.kind === 'translator') return 'translator';
   if (it.kind === 'band') return 'teleport band';
   if (it.kind === 'voidore') return 'voidore';
+  if (it.kind === 'scarcoal') return 'scarcoal';
+  if (it.kind === 'ichorite') return 'ichorite';
+  if (it.kind === 'nullite') return 'nullite';
+  if (it.kind === 'vehlite') return 'vehlite';
   if (it.kind === 'nullcore') return 'null core';
   if (it.kind === 'relic') return 'relic';
   if (it.kind === 'voidfruit') return 'voidfruit';
@@ -31499,15 +31547,15 @@ function buildCatTabs(host, active, onPick){
 function catalogEntries(){
   const out = [];
   for (let m = 1; m <= CORE.NMAT; m++) out.push({ kind: 'mat', mat: m, count: 500 });
-  for (let t = 0; t < 8; t++) out.push(CORE.makeDrill(t));
+  for (let t = 0; t < CORE.TIERS; t++) out.push(CORE.makeDrill(t));
   out.push({ kind: 'trowel' });
   out.push({ kind: 'bore' });
   out.push({ kind: 'lathe' });
-  for (let t = 0; t < 8; t++) out.push(CORE.makeDispenser(t));
-  for (let t = 0; t < 8; t++) out.push(CORE.makeSword(t));
-  for (let t = 0; t < 8; t++) out.push({ kind: 'helm', tier: t });
-  for (let t = 0; t < 8; t++) out.push({ kind: 'plate', tier: t });
-  for (let t = 0; t < 8; t++) out.push({ kind: 'boots', tier: t });
+  for (let t = 0; t < CORE.TIERS; t++) out.push(CORE.makeDispenser(t));
+  for (let t = 0; t < CORE.TIERS; t++) out.push(CORE.makeSword(t));
+  for (let t = 0; t < CORE.TIERS; t++) out.push({ kind: 'helm', tier: t });
+  for (let t = 0; t < CORE.TIERS; t++) out.push({ kind: 'plate', tier: t });
+  for (let t = 0; t < CORE.TIERS; t++) out.push({ kind: 'boots', tier: t });
   out.push({ kind: 'jetpack', fuel: 100 });
   out.push({ kind: 'grapple' });
   out.push({ kind: 'khammer' }); out.push({ kind: 'nullheart' }); out.push({ kind: 'nullcore', count: 6 });
@@ -31536,7 +31584,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'springstone', count: 4 }); out.push({ kind: 'lavastone', count: 4 }); out.push({ kind: 'ichorstone', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); for (const k of ['scarcoal', 'ichorite', 'nullite', 'vehlite']) out.push({ kind: k, count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'springstone', count: 4 }); out.push({ kind: 'lavastone', count: 4 }); out.push({ kind: 'ichorstone', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -32422,8 +32470,16 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">relic ×' + it.count + '</div><div class="t2">a tablet of veilstone out of a vault, a line of Vehl\'s people\'s writing on it · Sova pays 400 · Vehl says keep them: they will matter when there is something to rebuild</div>';
   } else if (it.kind === 'nullcore'){
     html = '<div class="t1">null core ×' + it.count + '</div><div class="t2">out of a lancer or a hollow: the thing that drives them, and it is not of Strata either · Sova pays well for one · Vehl wants them kept for the centre</div>';
+  } else if (it.kind === 'scarcoal'){
+    html = '<div class="t1">scarcoal ×' + it.count + '</div><div class="t2">Strata\'s coal, an ember still in it, from just under the ground · burns twice as long as the Earth\'s in a stove or a generator</div>';
+  } else if (it.kind === 'ichorite'){
+    html = '<div class="t1">ichorite ×' + it.count + '</div><div class="t2">ichor gone to crystal, from thirty metres down on Strata · the tier past void: tools, a sword and armour at Strata\'s table, shapes to 24 m</div>';
+  } else if (it.kind === 'nullite'){
+    html = '<div class="t1">nullite ×' + it.count + '</div><div class="t2">black, and magenta where it breaks, from seventy metres down on Strata · the tier past ichorite</div>';
+  } else if (it.kind === 'vehlite'){
+    html = '<div class="t1">vehlite ×' + it.count + '</div><div class="t2">the rarest thing in Strata, from a hundred and thirty metres down: the metal Vehl\'s people built their best with · the last tier: tools that cut and build in an instant</div>';
   } else if (it.kind === 'voidore'){
-    html = '<div class="t1">voidore ×' + it.count + '</div><div class="t2">Strata\'s own ore, in veins under every ground of it · nothing of the Earth\'s is made from it: its table comes next · Sova buys it</div>';
+    html = '<div class="t1">voidore ×' + it.count + '</div><div class="t2">Strata\'s own ore, in veins under every ground of it · the first of Strata\'s four tiers, past astrium: the void drill, dispenser, sword and armour at Strata\'s table · Sova buys it</div>';
   } else if (it.kind === 'band'){
     html = '<div class="t1">teleport band</div><div class="t2">Vehl\'s experimental gift · while it rides in your pack, the MAP (M) marks every beacon and every rocket on every world — click one to go there, no flight</div>';
   } else if (it.kind === 'translator'){
@@ -32719,7 +32775,7 @@ function armorRed(){
   const A = game.armor || {};
   let r = 0;
   for (const p of [A.head, A.chest, A.feet])
-    if (p) r += p.kind === 'mech' ? 0.34 : ([0.06, 0.09, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32][p.tier] || 0);   // the mech suit (Build 75) shrugs off a third on its own
+    if (p) r += p.kind === 'mech' ? 0.34 : ([0.06, 0.09, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.34, 0.36, 0.38, 0.4][p.tier] || 0);   // the mech suit (Build 75) shrugs off a third on its own
   return Math.min(0.6, r);
 }
 function damagePlayer(dmg, kx, kz){
@@ -34777,7 +34833,7 @@ const vaultSys = {
       ch.inv[i++] = { kind: 'relic', count: 1 };
       ch.inv[i++] = { kind: 'astrium', count: 4 + ((rng() * 5) | 0) };
       ch.inv[i++] = { kind: 'nullcore', count: 2 + ((rng() * 2) | 0) };
-      ch.inv[i++] = { kind: 'diamond', count: 3 + ((rng() * 4) | 0) };
+      ch.inv[i++] = { kind: 'nullite', count: 3 + ((rng() * 4) | 0) };   // Build 111: Strata's own, not the Earth's diamonds
       ch.inv[i++] = { kind: 'aetheringot', count: 4 + ((rng() * 5) | 0) };
       ch.inv[i++] = { kind: 'coin', count: 250 + ((rng() * 151) | 0) };
       if (rng() < 0.5) ch.inv[i++] = { kind: 'voidore', count: 12 + ((rng() * 9) | 0) };
@@ -37977,7 +38033,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

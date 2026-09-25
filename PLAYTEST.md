@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 111 — STRATA'S TIERS
+- [ ] On Strata, dig down: scarcoal and voidore near the top, ichorite
+      past 30 m, nullite past 70 m, vehlite past 130 m. Are they too
+      rare, or too common?
+- [ ] Make each tier at Strata's table. Does the vehlite drill feel
+      instant, and diamond feel slower than it used to? Is the curve
+      between them even to the hand, not just on paper?
+- [ ] Do the four colours read apart in the hotbar?
+
 ## Build 110 — the fixes
 - [ ] Place water cubes beside rock cubes with the same shape. Do they
       match the outline now? Try a water sphere: do the blocks in the

@@ -1448,6 +1448,22 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-07 — twelve tiers
+
+Build 111. The tier number was hard-coded in more places than I
+expected: arrays of eight in armour, crew swords, the creative loops,
+the recipe loops, the colours. I made the tier count a constant from
+the name table so the next extension is one line, and wrote the speed
+curve as a formula of it for the same reason.
+
+Changing diamond from instant is the first time a Build 1 spec line
+moved. Austin wrote it and Austin moved it; I recorded it in the DEVLOG
+rather than editing the spec, which is his document to change.
+
+I checked the art by rendering a sheet of every new texture and icon,
+and two pairs were too close (two greens, two purples). Colour is the
+first thing a hotbar is read by. Worth doing for every new tier.
+
 ## 2026-10-06 — the ghost was a shadow
 
 Build 110. The city ghost has now come back three times, and each time
