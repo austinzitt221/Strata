@@ -524,7 +524,7 @@ Small things I want, slotted wherever a session has room:
   about 40 flying in creative or loading a city the first time. Worth
   a profiling pass once the queue above is shorter.
 - **Footsteps that know the material** (DONE, Build 73); birds along
-  rivers; fish in the shallows.
+  rivers; fish in the shallows (DONE, Build 114).
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube

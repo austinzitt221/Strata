@@ -19766,6 +19766,167 @@ const brushSys = {
 // Every house window is a warm pane once the sun is down (most of them --
 // a few are dark tonight), every roof carries a chimney, and from dusk the
 // chimneys within earshot puff smoke that drifts up and thins.
+// ---------- THE LIVING SHORE (Build 114) ----------
+// The Earth by day has birds where birds would be: gulls wheeling over the
+// sea and resting on it, finches in flocks round the trees that come down to
+// peck, a heron working a river alone. Walk up and they go. In the shallows
+// (knee to head deep) fish school, and dart off from a swimmer or a splash;
+// a line cast over a school bites sooner. Winter thins them all. Nothing
+// here is an entity: instanced boxes, a few dozen, and no save.
+const shoreSys = {
+  flocks: [], schools: [], spawnT: 0, chirpT: 0, meshes: null, MAXB: 48, MAXF: 64,
+  KINDS: {
+    gull:  { col: 0xf0f0ee, wing: 0xc8ccd2, n: [5, 9],  sp: 7,   alt: [9, 18], size: 1.0, flap: 9 },
+    finch: { col: 0x8a6a4a, wing: 0x5e4630, n: [7, 12], sp: 6,   alt: [4, 10], size: 0.55, flap: 22 },
+    heron: { col: 0x9aa2aa, wing: 0x6e767e, n: [1, 1],  sp: 3.2, alt: [3, 7],  size: 2.0, flap: 4 },
+  },
+  ensure(){
+    if (!this.meshes){
+      const mk = (geo, n, col) => { const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: 0xffffff }), n); m.count = 0; m.frustumCulled = false; m.userData.noShadow = true; for (let i = 0; i < n; i++) m.setColorAt(i, new THREE.Color(col)); return m; };
+      const wing = new THREE.BoxGeometry(0.34, 0.02, 0.16); wing.translate(0.17, 0, 0);
+      this.meshes = { body: mk(new THREE.BoxGeometry(0.12, 0.1, 0.36), this.MAXB, 0xffffff), wl: mk(wing, this.MAXB, 0xffffff), wr: mk(wing.clone(), this.MAXB, 0xffffff), fish: mk(new THREE.BoxGeometry(0.1, 0.1, 0.5), this.MAXF, 0x2a3a3a) };
+      this.meshes.fish.renderOrder = 2;                    // under the water's surface, which draws at 3
+    }
+    for (const k in this.meshes) if (this.meshes[k].parent !== game.scene) game.scene.add(this.meshes[k]);
+  },
+  hide(){ if (this.meshes) for (const k in this.meshes) this.meshes[k].count = 0; this.flocks = []; this.schools = []; },
+  // the water under a point: its top and its depth, or null
+  wetAt(x, z){
+    const h = game.gen.height(x, z), wt = waterTopAt(x, z, h + 1);
+    return wt == null || wt <= h ? null : { top: wt, floor: h, depth: wt - h, sea: game.gen.seaLevel != null && Math.abs(wt - game.gen.seaLevel) < 0.3 };
+  },
+  treeNear(x, z, r){ for (const v of treeSys.visible.values()){ const t = v.t; if (t && Math.hypot(t.x - x, t.z - z) < r) return t; } return null; },
+  spawnFlock(){
+    const P = game.pos;
+    for (let k = 0; k < 8; k++){
+      const a = Math.random() * Math.PI * 2, r = 35 + Math.random() * 45, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+      const W = this.wetAt(x, z), T = !W && this.treeNear(x, z, 14);
+      const kind = W ? (W.sea ? 'gull' : (Math.random() < 0.35 ? 'heron' : 'gull')) : T ? 'finch' : null;
+      if (!kind) continue;
+      const K = this.KINDS[kind], n = K.n[0] + ((Math.random() * (K.n[1] - K.n[0] + 1)) | 0);
+      const base = W ? W.top : game.gen.height(x, z);
+      const F = { kind, x, z, hx: x, hz: z, y: base + K.alt[0] + Math.random() * (K.alt[1] - K.alt[0]), hd: Math.random() * Math.PI * 2, state: 'fly', landT: 6 + Math.random() * 14, t: 0, fleeT: 0, birds: [] };
+      for (let i = 0; i < n; i++) F.birds.push({ r: n === 1 ? 0 : 1.2 + Math.random() * 3, ph: Math.random() * Math.PI * 2, oy: (Math.random() - 0.5) * 2, lx: (Math.random() - 0.5) * 5, lz: (Math.random() - 0.5) * 5, peck: Math.random() * 6 });
+      this.flocks.push(F);
+      return F;
+    }
+    return null;
+  },
+  spawnSchool(){
+    const P = game.pos;
+    for (let k = 0; k < 10; k++){
+      const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 28, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+      const W = this.wetAt(x, z);
+      if (!W || W.depth < 0.7 || W.depth > 5) continue;
+      const n = 4 + ((Math.random() * 5) | 0), S = { x, z, hd: Math.random() * Math.PI * 2, dart: 0, fish: [] };
+      for (let i = 0; i < n; i++) S.fish.push({ a: Math.random() * Math.PI * 2, r: 0.5 + Math.random() * 1.8, sp: (0.5 + Math.random() * 0.6) * (Math.random() < 0.5 ? 1 : -1), fy: Math.random(), dark: Math.random() < 0.35 });
+      this.schools.push(S);
+      return S;
+    }
+    return null;
+  },
+  // a school near a point (fishing asks)
+  near(x, z, r){ for (const S of this.schools) if (Math.hypot(S.x - x, S.z - z) < r) return S; return null; },
+  chirp(F, d){
+    const q = Math.max(0, 1 - d / 38);
+    if (F.kind === 'finch'){ const f = 2600 + Math.random() * 1400; AudioSys.sweep({ from: f, to: f * 1.35, dur: 0.07, type: 'sine', gain: 0.018 * q }); AudioSys.sweep({ from: f * 1.1, to: f * 1.5, dur: 0.06, type: 'sine', gain: 0.014 * q, delay: 0.11 }); }
+    else if (F.kind === 'gull') AudioSys.sweep({ from: 1500 + Math.random() * 300, to: 900, dur: 0.32, type: 'triangle', gain: 0.02 * q });
+    else AudioSys.noise({ dur: 0.25, from: 420, to: 260, gain: 0.03 * q });
+  },
+  tick(dt){
+    if (!game.gen || !game.scene || game.planet !== 'earth'){ this.hide(); return; }
+    this.ensure();
+    const P = game.pos, day = game.dayF > 0.3, winter = seasonSys.winter;
+    this.spawnT -= dt;
+    if (this.spawnT <= 0){
+      this.spawnT = 3 + Math.random() * 3;
+      if (day && this.flocks.length < (winter ? 1 : 3)) this.spawnFlock();
+      if (this.schools.length < (winter ? 2 : 5)) this.spawnSchool();
+    }
+    // ---- the birds ----
+    const now = performance.now() * 0.001, M = this.meshes, mx = new THREE.Matrix4(), q = new THREE.Quaternion(), e3 = new THREE.Euler(0, 0, 0, 'YXZ'), v = new THREE.Vector3(), sc = new THREE.Vector3(), col = new THREE.Color();
+    let nb = 0;
+    this.chirpT -= dt;
+    for (let fi = this.flocks.length - 1; fi >= 0; fi--){
+      const F = this.flocks[fi], K = this.KINDS[F.kind];
+      const pd = Math.hypot(F.x - P.x, F.z - P.z);
+      if (pd > 150 || (!day && pd > 60)){ this.flocks.splice(fi, 1); continue; }
+      F.t += dt;
+      const W = this.wetAt(F.x, F.z), ground = W ? W.top : game.gen.height(F.x, F.z);
+      if (F.state === 'land'){
+        F.y += (ground + 0.05 - F.y) * Math.min(1, dt * 3);
+        F.landT -= dt;
+        if (pd < (F.kind === 'heron' ? 16 : 11) || F.landT <= 0 || !day){
+          // up and away: from you when it is you
+          F.state = 'fly'; F.landT = 10 + Math.random() * 16;
+          if (pd < 16){ F.hd = Math.atan2(F.x - P.x, F.z - P.z); F.fleeT = 3; if (pd < 40) this.chirp(F, pd); }
+        }
+      } else {
+        const spd = K.sp * (F.fleeT > 0 ? 2 : 1); F.fleeT = Math.max(0, F.fleeT - dt);
+        // wander, and keep to the place it came from (or leave, by night)
+        const hd = Math.hypot(F.hx - F.x, F.hz - F.z);
+        F.hd += Math.sin(now * 0.3 + fi) * dt * 0.35;
+        if (hd > 45 && day && F.fleeT <= 0){ const want = Math.atan2(F.hx - F.x, F.hz - F.z); let dA = want - F.hd; dA = Math.atan2(Math.sin(dA), Math.cos(dA)); F.hd += dA * Math.min(1, dt * 0.8); }
+        F.x += Math.sin(F.hd) * spd * dt; F.z += Math.cos(F.hd) * spd * dt;
+        const alt = ground + (K.alt[0] + K.alt[1]) / 2 + Math.sin(now * 0.4 + fi) * 2;
+        F.y += (Math.max(alt, game.gen.height(F.x, F.z) + 3) - F.y) * Math.min(1, dt * 0.8);
+        F.landT -= dt;
+        if (F.landT <= 0 && day && pd > 22 && F.fleeT <= 0){ F.state = 'land'; F.landT = 8 + Math.random() * 14; }
+      }
+      if (this.chirpT <= 0 && pd < 38 && Math.random() < 0.35){ this.chirp(F, pd); }
+      // draw each bird
+      for (const B of F.birds){
+        if (nb >= this.MAXB) break;
+        let bx, by, bz, yaw, flap;
+        if (F.state === 'land'){
+          bx = F.x + B.lx; bz = F.z + B.lz; const lg = this.wetAt(bx, bz); by = (lg ? lg.top : game.gen.height(bx, bz)) + 0.04;
+          yaw = B.ph; flap = 0.15; B.peck += dt;
+          if (F.kind === 'finch' && (B.peck % 1.4) < 0.25) by -= 0.04;
+        } else {
+          B.ph += dt * (1.1 + B.r * 0.1);
+          bx = F.x + Math.cos(B.ph) * B.r; bz = F.z + Math.sin(B.ph) * B.r; by = F.y + B.oy + Math.sin(B.ph * 2) * 0.3;
+          yaw = F.hd; flap = Math.sin(now * K.flap + B.ph * 3) * (F.kind === 'gull' && Math.sin(now * 0.7 + B.ph) > 0.3 ? 0.1 : 0.9);   // gulls glide between strokes
+        }
+        const s = K.size;
+        v.set(bx, by, bz); sc.set(s, s, s);
+        e3.set(0, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); M.body.setMatrixAt(nb, mx);
+        e3.set(0, yaw, flap); q.setFromEuler(e3); mx.compose(v, q, sc); M.wl.setMatrixAt(nb, mx);
+        e3.set(0, yaw, -flap); q.setFromEuler(e3); sc.set(-s, s, s); mx.compose(v, q, sc); M.wr.setMatrixAt(nb, mx);
+        col.setHex(K.col); M.body.setColorAt(nb, col); col.setHex(K.wing); M.wl.setColorAt(nb, col); M.wr.setColorAt(nb, col);
+        nb++;
+      }
+    }
+    if (this.chirpT <= 0) this.chirpT = 0.8 + Math.random() * 1.6;
+    for (const k of ['body', 'wl', 'wr']){ M[k].count = nb; M[k].instanceMatrix.needsUpdate = true; if (M[k].instanceColor) M[k].instanceColor.needsUpdate = true; }
+    // ---- the fish ----
+    let nf = 0;
+    const F2 = game.fishing, swim = inWater(P.x, P.y + 0.5, P.z);
+    for (let si = this.schools.length - 1; si >= 0; si--){
+      const S = this.schools[si];
+      const pd = Math.hypot(S.x - P.x, S.z - P.z);
+      if (pd > 55){ this.schools.splice(si, 1); continue; }
+      // a swimmer near, or a splash: dart off
+      const splash = F2 && F2.t < 0.8 && Math.hypot(F2.x - S.x, F2.z - S.z) < 4;
+      if (S.dart <= 0 && ((swim && pd < 6) || (pd < 3.5) || splash)){ S.dart = 1.4; S.hd = Math.atan2(S.x - (splash ? F2.x : P.x), S.z - (splash ? F2.z : P.z)); }
+      const spd = S.dart > 0 ? 4 : 0.35; S.dart = Math.max(0, S.dart - dt);
+      if (S.dart <= 0) S.hd += Math.sin(now * 0.5 + si) * dt * 0.5;
+      const nx = S.x + Math.sin(S.hd) * spd * dt, nz = S.z + Math.cos(S.hd) * spd * dt, W = this.wetAt(nx, nz);
+      if (W && W.depth > 0.6){ S.x = nx; S.z = nz; } else S.hd += Math.PI * (0.5 + Math.random() * 0.5);
+      const H = this.wetAt(S.x, S.z); if (!H){ this.schools.splice(si, 1); continue; }
+      for (const f of S.fish){
+        if (nf >= this.MAXF) break;
+        f.a += f.sp * dt * (S.dart > 0 ? 3 : 1) / Math.max(0.5, f.r);
+        const fx = S.x + Math.cos(f.a) * f.r, fz = S.z + Math.sin(f.a) * f.r;
+        const fy = Math.min(H.top - 0.22, H.floor + 0.3 + f.fy * Math.max(0.1, H.depth - 0.6));
+        const yaw = Math.atan2(-Math.sin(f.a) * Math.sign(f.sp), Math.cos(f.a) * Math.sign(f.sp));
+        v.set(fx, fy, fz); sc.set(1, 1, 1); e3.set(0, yaw, 0); q.setFromEuler(e3); mx.compose(v, q, sc); M.fish.setMatrixAt(nf, mx);
+        col.setHex(f.dark ? 0x1e2a26 : 0x44564e); M.fish.setColorAt(nf, col);   // dark backs, as fish look from above
+        nf++;
+      }
+    }
+    M.fish.count = nf; M.fish.instanceMatrix.needsUpdate = true; if (M.fish.instanceColor) M.fish.instanceColor.needsUpdate = true;
+  },
+};
 const hearthSys = {
   panes: null, halos: null, chimneys: null, cap: 1200, builtFor: '', checkT: 9, puffT: 0, spots: [],
   ensure(){
@@ -30022,7 +30183,8 @@ function tryAction(dt, now){
       bob.add(top, bot);
       bob.position.set(hit[0], hit[1], hit[2]);
       game.scene.add(bob);
-      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (ichor ? 5 + Math.random() * 9 : (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1)) * (bait ? 0.5 : 1), bit: false, bitT: 0, mesh: bob,
+      const school = !ichor && shoreSys.near(hit[0], hit[2], 6);                   // Build 114: fish you can see bite sooner
+      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (ichor ? 5 + Math.random() * 9 : (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1)) * (bait ? 0.5 : 1) * (school ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
                        px: game.pos.x, pz: game.pos.z, ichor, bait: !!bait };
       toast(ichor ? 'cast into the ichor — something down there is looking at it' : 'cast — watch the bobber, click when it bites' + (bait ? ' · the worm is on the hook' : ''));
       AudioSys.sfx('toggle');
@@ -30515,6 +30677,7 @@ function tryAction(dt, now){
   }
 
   if (tool.kind === 'drill' && tool.smooth){ trowelSys.action(dt, now); return; }
+  if (tool.kind === 'drill' || tool.kind === 'disp') ensureShape(tool);           // Build 113
   const usable = game.ghostPos;
   if (!usable){ game.act.t = 0; game.act.charging = false; AudioSys.setHum(false, 0, 0); return; }
   const p = game.ghostPos, shape = game.tool.shape, eff = game.ghostEff;
@@ -32826,6 +32989,7 @@ function itemInfoHTML(it, tool){
           ? '<div class="t2">left click jabs · right click lowers fists</div>'
           : '<div class="t2">left click gathers plants, picks up animals, and takes back anything you placed · right click raises fists</div>');
   } else if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
+    ensureShape(tool);                                                            // Build 113: the HUD shows a shape the tool has
     const name = tool.lathe ? 'lathe' : tool.bore ? 'bore' : tool.smooth ? 'trowel'
       : tool.kind === 'drill'
       ? CORE.TIER_NAME[tool.tier] + ' drill'
@@ -38256,6 +38420,7 @@ function frameBody(now){
   if (!netSys.guest && onEarth){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); menagerieSys.tick(dt); }
   if (onEarth) cityLightSys.tick(dt);
   if (onEarth) hearthSys.tick(dt);
+  shoreSys.tick(dt);                                                         // THE LIVING SHORE (Build 114)
   boreSys.tick(dt);
   mirrorSys.tick(dt);
   if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
@@ -38499,7 +38664,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

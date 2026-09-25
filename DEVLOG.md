@@ -2,6 +2,39 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 114 — THE LIVING SHORE: birds and fish (2026-10-10)
+
+My own build, from the oldest line of my small-things list ("birds along
+rivers; fish in the shallows"). The world had animals you walk up to,
+and nothing that moved when you were not looking at it.
+
+- **Birds, by day on the Earth.** Up to three flocks within a hundred
+  metres or so, each where it belongs:
+  - GULLS over the sea and the rivers: white, gliding between wing
+    strokes, and they rest on the water.
+  - FINCHES round the trees: small, brown, quick; they come down to peck
+    at the ground.
+  - A lone HERON works a river, slow, and settles on it.
+  Flocks wander and keep to the place they came from; now and then they
+  land. Walk up to a landed flock and it goes, fast, away from you. Near
+  you they call (finches twitter, gulls cry, the heron croaks). At dusk
+  they leave; at night there are none.
+- **Fish in the shallows.** Schools of four to eight where the water is
+  knee to head deep, dark-backed as fish look from above, swimming round
+  and wandering slowly, keeping to water deep enough. A swimmer near
+  them, a step too close on the bank, or a bobber landing among them:
+  they dart off.
+- **Fishing.** A cast within six metres of a school you can see bites
+  in six tenths of the time.
+- **Winter** thins it: one flock, two schools.
+- The Moon, the station and Strata have none of these (Strata's own
+  life is its own).
+- None of it is an entity or saved: instanced boxes, a few dozen, one
+  draw each for bodies, wings and fish.
+- Fixed on the way: a stone drill's HUD said "sphere" after a world
+  saved with one; the cube fallback of Build 113 now runs for the HUD
+  and the action as well as the ghost.
+
 ## Build 113 — THE TOOL THAT GROWS: twelve shapes, abilities by tier, ECHO (2026-10-09)
 
 Roadmap items 26 and 27, Austin's order.

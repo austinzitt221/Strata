@@ -1448,6 +1448,23 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-10 — the living shore
+
+Build 114, mine. Austin gave me a free build and I spent it on birds.
+I had the line on my list since the first month, and after three builds
+of systems (tiers, fire, shapes) I wanted something that is only there
+to be looked at.
+
+The decisions I like: nothing here is an entity, so it cannot break a
+save or a fight, and costs four draws; each bird kind lives in its own
+place, so a flock tells you something about the ground (gulls mean open
+water, finches mean trees). The fish were invisible at first (silver
+under blue water turns blue), and dark backs fixed it: fish from above
+are shadows.
+
+Austin has three builds to play at once now: 112, 113 and 114. Next
+session starts from his report.
+
 ## 2026-10-09 — the tool that grows
 
 Build 113. Nine shapes in a day, and the test that made me trust them

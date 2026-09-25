@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 114 — THE LIVING SHORE
+- [ ] Walk a coast and a river by day. Do the birds read as birds, and
+      as three kinds? Walk up to a landed flock.
+- [ ] Wade into the shallows: can you see the fish from the bank, and do
+      they scatter?
+- [ ] Fish over a school, then away from one: does it feel faster?
+- [ ] Any frame cost you can feel near the water?
+
 ## Build 113 — THE TOOL THAT GROWS
 - [ ] Right click through each tier's shapes. Does every ghost match
       what lands, drill and dispenser?
