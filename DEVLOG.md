@@ -2,6 +2,59 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 116 — THE SHAPES, FIXED: the wrench, clean treads, the drill carves the space (2026-10-12)
+
+Playtest of Builds 112 to 115 (2026-10-12, Austin):
+- The tier order, the abilities and ECHO all work ("works perfect
+  already", "a really good final upgrade").
+- The birds and fish are liked. He wants them as detailed as the
+  animals, and the birds a bit bigger (Build 117).
+- Hold right click for one menu with shape, size, mirror, echo and
+  rotation (Build 117).
+- The new shapes had three problems, and this build fixes them:
+
+- **The wrench froze on every new shape.** Selecting a staircase, slab,
+  cone, dome, spiral, pyramid, arch, building or tower threw an error
+  every frame ("Cannot set properties of undefined"): the outline table
+  held only the sphere, cube and cylinder. Every shape now has its own
+  outline (its ghost, shrunk to a unit box and cached), for the primary
+  selection, the extra selections and the paste ghost.
+- **H hollowed the new shapes by shrinking them.** A shrunk pyramid
+  has different slopes, so its faces came out stepped. A shrunk
+  staircase has a different step count, so its treads were cut away.
+  The new shapes now hollow by an offset instead: a subtract of the same
+  shape moved in by the wall (`e.off`), so the walls are even and the
+  outside does not move. Checked at four points just outside a
+  pyramid: identical before and after. The spiral stair, arch, building
+  and tower are hollow already and say so. Spheres, cubes and cylinders
+  hollow as before.
+- **Clean spiral stairs and towers.** A tread was half a metre thick
+  on a half-metre lattice, so treads went missing or came out ragged
+  at every size. A tread is now 1.5 m thick under its top: the walking
+  surfaces have not moved, and underneath is a stepped helix the mesher
+  can hold. In the mesher every tread now comes out: 20 of 20 for a
+  10 m spiral, 48 of 48 at 24 m, 28 of 28 in a 16 m tower. The ghosts
+  match.
+- **The drill carves the space.** For five shapes the drill now takes
+  the space the shape encloses, and the rock left standing is the
+  shape (`e.neg`, saved):
+  - BUILDING: the room, a gabled attic under the roof, and the door
+    out through the front.
+  - STAIRCASE: the stairway with 3 m of headroom over every tread.
+  - SPIRAL STAIR: the shaft round the stair and its column.
+  - ARCH: the arched opening, through.
+  - TOWER: its hollow, open to the sky, the stair standing inside, and
+    the door carried out to the ghost's front face.
+  The ghost shows the space, with the treads that stay drawn in, and
+  the HUD says what the drill will carve. The action time, the yield
+  and the crew's drills all count the space. The sphere, cube,
+  cylinder, slab, cone, dome and pyramid are carved whole, as before.
+  The dispenser still builds the solid.
+- **The save.** Two new fields at the end of an edit's row: the drill's
+  space (`neg`) and the hollow's offset (`off`). Older saves load
+  unchanged. Build 113 and 114 drill cuts keep their old meaning, so
+  anything already dug stays as it was.
+
 ## Build 115 — THE STOPWATCH: the frame-rate pass (2026-10-11)
 
 My own build, and the oldest open line of my small-things list: "frame

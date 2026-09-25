@@ -506,6 +506,30 @@ walls, the ghost shadows over cities). And, in my order:
      the way you look, a count you scroll, one click for a colonnade, a
      row of windows or a flight of piers.
 
+
+After the 2026-10-12 playtest (112 to 115): the tiers, the echo and the
+birds went down well. The shapes need work. In my order:
+ 28. **The wrench on every shape** (DONE, Build 116). Selecting one of
+     the nine new shapes froze the game (they had no outline), and H
+     hollowed them by shrinking, which stepped a pyramid's faces and took
+     the treads off a staircase. The new shapes hollow by an offset now
+     (even walls, the outside untouched); the ones that are hollow
+     already (spiral stair, arch, building, tower) say so. (Austin.)
+ 29. **Clean spiral stairs and towers** (DONE, Build 116). Treads went
+     missing or came out ragged at every size: they were half a metre
+     thick on a half-metre lattice. (Austin.)
+ 30. **The drill carves the space** (DONE, Build 116). A drilled building
+     was a trench shaped like walls. For the building, the staircase,
+     the spiral stair, the arch and the tower, the drill takes the room,
+     the stairway with headroom, the shaft, the opening, the tower's
+     inside, and the rock left standing is the thing. Walk up to a
+     mountain, drill a house into it, walk in. (Austin.)
+ 31. **The tool wheel** (Build 117). Hold right click: one screen with the
+     shape, the size, the rotation, the mirror, the echo and the grid,
+     all clickable; tap right click still steps the shape. (Austin.)
+ 32. **Birds and fish in detail** (Build 117). As much detail as the
+     animals have, and the birds a little bigger. (Austin.)
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.

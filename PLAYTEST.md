@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 116 — THE SHAPES, FIXED
+- [ ] Walk up to a mountain with the nullite drill on the building and
+      carve one in. Walk through the door. Is the room the size you
+      expected from the ghost, and does the attic read as a roof?
+- [ ] The drill on the staircase into a slope, the spiral stair into
+      the ground, the arch through a wall, the tower into a hill. Can you
+      walk every one?
+- [ ] Place spiral stairs and towers at several sizes. Is every tread
+      there and clean now?
+- [ ] Select each new shape with the wrench: no freeze? Hollow a
+      pyramid, a cone, a dome, a staircase: are the outsides untouched?
+
 ## Build 115 — THE STOPWATCH
 - [ ] Press F3 and play normally for a minute: walk, fly fast in
       creative, mine, drive to a city you have never visited. Then press

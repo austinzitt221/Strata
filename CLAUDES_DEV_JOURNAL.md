@@ -1448,6 +1448,25 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-12 — what a drill is for
+
+Austin's report on 112 to 115. The part I keep thinking about: I built
+nine shapes for two tools, and gave them the same meaning in both. But
+a dispenser adds matter and a drill removes it. A building shape means
+"a building" to the dispenser. To the drill it should mean "the inside
+of a building", because the mountain supplies the walls. I tested that
+the drill cut exactly the ghost's shape, and it did, perfectly. It was
+the wrong shape. **Test what a tool is for, not just what it does.**
+
+The freeze was a table of three outlines indexed by a shape number that
+now went to eleven. The hollow was a shrink, which is only an offset
+for the three shapes it was written for. Both were Build 5 code meeting
+Build 113 data. When I add to an enum, I should grep every table
+indexed by it.
+
+The treads were the lattice lesson again: nothing thinner than two
+voxels survives the mesher. That is now TREAD_TH, with a comment.
+
 ## 2026-10-11 — the stopwatch
 
 Build 115, mine again. After birds I wanted the opposite kind of build:
