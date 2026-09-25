@@ -1448,6 +1448,21 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-09 — the tool that grows
+
+Build 113. Nine shapes in a day, and the test that made me trust them
+was a cheap one: every vertex of every ghost must lie on the shape's
+field. It caught the tower's battlements drawn as pie slices from the
+axis, which the eye might have forgiven in a screenshot.
+
+ECHO went in as translations in the mirror's transform list, so it got
+the ghost, the costs, the mirror and the undo without a line of its own.
+Except the undo: the group id was only handed out when the mirror was
+on. The suite found that too.
+
+The facing rule (stairs rise away, doors face you) is the kind of
+default nobody asks for and everybody notices when it's wrong.
+
 ## 2026-10-08 — Strata's fire
 
 Build 112. The mega torch's colour needed a second light in the shader,

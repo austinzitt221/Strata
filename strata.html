@@ -3196,12 +3196,126 @@ function sdCylinder(px, py, pz, e){
   const ox = Math.max(d2, 0), oy = Math.max(dy, 0);
   return Math.hypot(ox, oy) + Math.min(Math.max(d2, dy), 0);
 }
+// ---- THE TOOL THAT GROWS (Build 113): nine more shapes, one a tier ----
+// Each lives in its edit's box (half extents hx, hy, hz, rotated like any
+// edit). Local -z is the far side: stairs rise away from you, and the
+// building's and the tower's doors face you (+z). Unions of exact pieces
+// are exact outside and a bound inside, which the mesher needs.
+const STEP_RISE = 0.5;
+function locP(px, py, pz, e){ return editHasRot(e) ? toLocal(e, px, py, pz) : [px - e.x, py - e.y, pz - e.z]; }
+function boxD(x, y, z, x0, x1, y0, y1, z0, z1){
+  const qx = Math.abs(x - (x0 + x1) * 0.5) - (x1 - x0) * 0.5, qy = Math.abs(y - (y0 + y1) * 0.5) - (y1 - y0) * 0.5, qz = Math.abs(z - (z0 + z1) * 0.5) - (z1 - z0) * 0.5;
+  const ax = Math.max(qx, 0), ay = Math.max(qy, 0), az = Math.max(qz, 0);
+  return Math.sqrt(ax * ax + ay * ay + az * az) + Math.min(Math.max(qx, Math.max(qy, qz)), 0);
+}
+function stairN(hy){ return Math.max(1, Math.min(96, Math.round(2 * hy / STEP_RISE))); }
+function sdStairsL(x, y, z, hx, hy, hz){
+  const n = stairN(hy), dy = 2 * hy / n, dz = 2 * hz / n;
+  const iy = Math.floor((y + hy) / dy), iz = Math.floor((hz - z) / dz);
+  let i0 = Math.max(0, Math.min(iy, iz) - 1), i1 = Math.min(n - 1, Math.max(iy, iz) + 1);
+  if (i0 > i1){ i0 = i1 = Math.max(0, Math.min(n - 1, iy)); }
+  let d = 1e9;
+  for (let i = i0; i <= i1; i++) d = Math.min(d, boxD(x, y, z, -hx, hx, -hy, -hy + (i + 1) * dy, -hz, hz - i * dz));
+  return d;
+}
+function sdConeL(x, y, z, hx, hy, hz){
+  const r1 = Math.min(hx, hz), qx = hx === hz ? Math.hypot(x, z) : Math.hypot(x / hx, z / hz) * r1, qy = y, h = hy;
+  const cax = qx - Math.min(qx, qy < 0 ? r1 : 0), cay = Math.abs(qy) - h;
+  const k2x = -r1, k2y = 2 * h;
+  const t = Math.max(0, Math.min(1, (-qx * k2x + (h - qy) * k2y) / (k2x * k2x + k2y * k2y)));
+  const cbx = qx + k2x * t, cby = qy - h + k2y * t;
+  const sg = (cbx < 0 && cay < 0) ? -1 : 1;
+  return sg * Math.sqrt(Math.min(cax * cax + cay * cay, cbx * cbx + cby * cby));
+}
+function sdDomeL(x, y, z, hx, hy, hz){
+  const yy = y + hy;                                   // a half ellipsoid on the box's floor, as tall as half the box
+  let de;
+  if (hx === hy && hy === hz) de = Math.hypot(x, yy, z) - hx;
+  else { const k0 = Math.hypot(x / hx, yy / hy, z / hz), k1 = Math.hypot(x / (hx * hx), yy / (hy * hy), z / (hz * hz)) || 1e-9; de = k0 * (k0 - 1) / k1; }
+  return Math.max(de, -yy);
+}
+// a spiral of wedge treads round a column; a0 turns where it starts
+function sdSpiralL(x, y, z, R, hy, a0, rc){
+  const n = stairN(hy), dy = 2 * hy / n, PER = 12, STEP = Math.PI * 2 / PER, W = STEP * 1.25;
+  const r = Math.hypot(x, z);
+  let d = Math.max(r - rc, Math.abs(y) - hy);        // the column
+  const iy = Math.floor((y + hy) / dy), hs = Math.sin(W / 2), hc = Math.cos(W / 2);
+  for (let i = Math.max(0, iy - 1); i <= Math.min(n - 1, iy + 1); i++){
+    const mid = a0 + i * STEP + W / 2, c = Math.cos(mid), sn = Math.sin(mid);
+    const lx = x * c + z * sn, lz = -x * sn + z * c;
+    const dang = Math.max(-lx * hs + lz * hc, -lx * hs - lz * hc);
+    const dyv = Math.abs(y - (-hy + (i + 0.5) * dy)) - dy / 2;
+    d = Math.min(d, Math.max(dang, r - R, dyv));
+  }
+  return d;
+}
+function sdPyramidL(x, y, z, hx, hy, hz){
+  const H = 2 * hy, yb = y + hy;
+  const dx = ((Math.abs(x) - hx) * H + yb * hx) / Math.hypot(H, hx);
+  const dz = ((Math.abs(z) - hz) * H + yb * hz) / Math.hypot(H, hz);
+  return Math.max(dx, dz, -yb);
+}
+function archDims(hx, hy){ const a = hx * 0.6, top = hy - Math.max(0.75, 2 * hy * 0.22); return { a, cy: top - a }; }
+function sdArchL(x, y, z, hx, hy, hz){
+  const box = boxD(x, y, z, -hx, hx, -hy, hy, -hz, hz), A = archDims(hx, hy);
+  const open = Math.min(Math.hypot(x, y - A.cy) - A.a, Math.max(Math.abs(x) - A.a, y - A.cy));
+  return Math.max(box, -open);
+}
+function buildingDims(hx, hy, hz){
+  const t = Math.max(0.75, Math.min(hx, hz) * 0.12), yb = -hy + 2 * hy * 0.64;
+  const dw = Math.max(0.9, Math.min(2.6, 2 * hx * 0.28)), dh = Math.max(0.8, Math.min(yb - (-hy + t) - 0.25, Math.max(2.1, (yb + hy) * 0.6)));
+  return { t, yb, dw, dh };
+}
+function sdBuildingL(x, y, z, hx, hy, hz){
+  const B = buildingDims(hx, hy, hz), rh = hy - B.yb;
+  const body = boxD(x, y, z, -hx, hx, -hy, B.yb, -hz, hz);
+  const roof = Math.max(((Math.abs(z) - hz) * rh + (y - B.yb) * hz) / Math.hypot(rh, hz), B.yb - y, Math.abs(x) - hx);
+  let d = Math.min(body, roof);
+  d = Math.max(d, -boxD(x, y, z, -hx + B.t, hx - B.t, -hy + B.t, B.yb, -hz + B.t, hz - B.t));                 // the room
+  d = Math.max(d, -boxD(x, y, z, -B.dw / 2, B.dw / 2, -hy + B.t, -hy + B.t + B.dh, hz - B.t - 0.05, hz + 1));   // the door, facing you
+  return d;
+}
+function towerDims(hx, hy, hz){
+  const R = Math.min(hx, hz) * 0.55, t = Math.max(0.75, R * 0.16), cren = Math.max(0.8, 2 * hy * 0.07);
+  return { R, t, ri: R - t, top: hy - cren, N: Math.max(6, Math.round(Math.PI * 2 * R / 1.6)), dw: Math.min(1.4, R), dh: Math.min(2.2, hy) };
+}
+function sdTowerL(x, y, z, hx, hy, hz){
+  const T = towerDims(hx, hy, hz), r = Math.hypot(x, z);
+  const ring = Math.max(r - T.R, T.ri - r);
+  let wall = Math.max(ring, Math.max(-hy - y, y - T.top));
+  wall = Math.max(wall, -boxD(x, y, z, -T.dw / 2, T.dw / 2, -hy + T.t, -hy + T.t + T.dh, T.ri - 0.3, T.R + 1));   // the door, facing you
+  const floor = Math.max(r - T.R, Math.max(-hy - y, y - (-hy + T.t)));
+  const w = Math.PI * 2 / T.N, ph = Math.atan2(z, x), a = ((ph % w) + w) % w - w / 2;
+  const merlon = Math.max(ring, Math.max(T.top - y, y - hy), r * Math.sin(Math.min(Math.PI / 2, Math.abs(a) - w / 4)));
+  const y0 = -hy + T.t, sh = (T.top - y0) / 2;
+  const stair = sdSpiralL(x, y - (y0 + sh), z, T.ri + 0.02, sh, Math.PI / 2 + Math.PI / 6, Math.max(0.3, T.ri * 0.14));
+  return Math.min(wall, floor, merlon, stair);
+}
+function sdShapeN(px, py, pz, e){
+  const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
+  const p = locP(px, py, pz, e), x = p[0], y = p[1], z = p[2];
+  switch (e.shape){
+    case 3: return sdStairsL(x, y, z, hx, hy, hz);
+    case 4: return boxD(x, y, z, -hx, hx, -hy, 0, -hz, hz);                 // the slab: the lower half
+    case 5: return sdConeL(x, y, z, hx, hy, hz);
+    case 6: return sdDomeL(x, y, z, hx, hy, hz);
+    case 7: return sdSpiralL(x, y, z, Math.min(hx, hz), hy, 0, Math.max(0.3, Math.min(hx, hz) * 0.14));
+    case 8: return sdPyramidL(x, y, z, hx, hy, hz);
+    case 9: return sdArchL(x, y, z, hx, hy, hz);
+    case 10: return sdBuildingL(x, y, z, hx, hy, hz);
+    default: return sdTowerL(x, y, z, hx, hy, hz);
+  }
+}
 function shapeSDF(px, py, pz, e){
   return e.shape === 1 ? sdCube(px, py, pz, e)
        : e.shape === 2 ? sdCylinder(px, py, pz, e)
+       : e.shape >= 3 ? sdShapeN(px, py, pz, e)
        : sdSphere(px, py, pz, e);
 }
-const SHAPE_NAME = ['sphere', 'cube', 'cylinder'];
+const SHAPE_NAME = ['sphere', 'cube', 'cylinder', 'staircase', 'slab', 'cone', 'dome', 'spiral stair', 'pyramid', 'arch', 'building', 'tower'];
+// the order the tiers unlock them (Austin's): stone the cube, each tier one more
+const SHAPE_UNLOCK = [1, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+function shapesFor(tier){ return SHAPE_UNLOCK.slice(0, Math.max(1, Math.min(SHAPE_UNLOCK.length, (tier | 0) + 1))); }
 
 // edit: { op: 0 subtract | 1 union | 2 paint, shape: 0 sphere | 1 cube |
 //         2 cylinder, x,y,z, size, mat, rot (yaw) [, rx, rz, sx, sy, sz] }
@@ -3350,6 +3464,16 @@ function materialAt(px, py, pz, edits, gen){
 // component along the edge that crossed it).
 function editNormal(e, px, py, pz, axis){
   let nx = 0, ny = 0, nz = 0;
+  if (e.shape >= 3){
+    // Build 113: the new shapes are pieces and planes; a fine central difference finds the face
+    const h = 1e-3;
+    nx = shapeSDF(px + h, py, pz, e) - shapeSDF(px - h, py, pz, e);
+    ny = shapeSDF(px, py + h, pz, e) - shapeSDF(px, py - h, pz, e);
+    nz = shapeSDF(px, py, pz + h, e) - shapeSDF(px, py, pz - h, e);
+    const L = Math.hypot(nx, ny, nz) || 1; nx /= L; ny /= L; nz /= L;
+    if (e.op === 0 || e.op === 4){ nx = -nx; ny = -ny; nz = -nz; }
+    return [nx, ny, nz];
+  }
   const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
   const rot = editHasRot(e);
   const p = rot ? toLocal(e, px, py, pz) : [px - e.x, py - e.y, pz - e.z];
@@ -4549,6 +4673,17 @@ function craft(slots, r, free){
 // field itself. Vertical extent of shape e over column (x,z), or null.
 function editProfile(e, x, z){
   const hx = (e.sx || e.size) * 0.5, hy = (e.sy || e.size) * 0.5, hz = (e.sz || e.size) * 0.5;
+  if (e.shape >= 3){
+    // Build 113: scan the column for the shape's top and bottom
+    const b = editAABB(e);
+    if (x < b[0] || x > b[3] || z < b[2] || z > b[5]) return null;
+    const N = 16, dy = (b[4] - b[1]) / N;
+    let top = null, bot = null;
+    for (let i = 0; i <= N; i++){ const y = b[4] - i * dy; if (shapeSDF(x, y, z, e) <= 0){ top = y; break; } }
+    if (top == null) return null;
+    for (let i = 0; i <= N; i++){ const y = b[1] + i * dy; if (shapeSDF(x, y, z, e) <= 0){ bot = y; break; } }
+    return [bot, top];
+  }
   if (editHasRot(e)){
     const b = editAABB(e);
     if (x < b[0] || x > b[3] || z < b[2] || z > b[5]) return null;
@@ -4914,7 +5049,7 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, TIERS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, SHAPE_UNLOCK, shapesFor, STEP_RISE, stairN, archDims, buildingDims, towerDims, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS, mirrorEdit, rotateEditY, evalRaw, smoothWeight,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
@@ -7208,7 +7343,11 @@ function buildScene(){
     2: { fill: new THREE.Mesh(cylG, ghostFill),
          wire: new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.CylinderGeometry(0.5, 0.5, 1, 10, 1)), ghostLine) },
   };
-  for (const k of [0, 1, 2]){
+  for (let k = 3; k < 12; k++){                          // Build 113: the new shapes' ghosts, their geometry built per size
+    const ph = new THREE.BoxGeometry(1, 1, 1);
+    game.ghostSet[k] = { fill: new THREE.Mesh(ph, ghostFill), wire: new THREE.LineSegments(new THREE.EdgesGeometry(ph), ghostLine) };
+  }
+  for (let k = 0; k < 12; k++){
     game.ghostSet[k].fill.visible = false; game.ghostSet[k].wire.visible = false;
     game.ghostSet[k].fill.renderOrder = 5; game.ghostSet[k].wire.renderOrder = 6;
     game.ghostSet[k].fill.userData.noShadow = true; game.ghostSet[k].wire.userData.noShadow = true;
@@ -7245,7 +7384,8 @@ function buildScene(){
     1: new THREE.Mesh(cubeG, game.ghostSolidMat),
     2: new THREE.Mesh(cylG, game.ghostSolidMat),
   };
-  for (const k of [0, 1, 2]){
+  for (let k = 3; k < 12; k++) game.ghostSolid[k] = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), game.ghostSolidMat);
+  for (let k = 0; k < 12; k++){
     game.ghostSolid[k].visible = false;
     game.ghostSolid[k].renderOrder = 5;
     game.ghostSolid[k].userData.noShadow = true;
@@ -18872,6 +19012,28 @@ const mirrorSys = {
   // dispensers, the trowel, the bore, the lathe and the brushes all repeat
   // the same way.
   xforms(){
+    const base = toolCan('mirror') ? this.mirrorXforms() : [];
+    return this.echoXforms(base);
+  },
+  // ECHO (Build 113): the shape again, n times along the way you look, with a gap; every mirror copy echoes too
+  echoDir(){
+    const d = new THREE.Vector3(); game.camera.getWorldDirection(d);
+    if (game.snapOn && toolCan('snap')){ const ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z); return ax >= ay && ax >= az ? [Math.sign(d.x), 0, 0] : az >= ay ? [0, 0, Math.sign(d.z)] : [0, Math.sign(d.y), 0]; }
+    const h = Math.hypot(d.x, d.z) || 1; return [d.x / h, 0, d.z / h];
+  },
+  echoXforms(base){
+    const n = Math.max(1, Math.min(16, game.tool.echo || 1));
+    if (n <= 1 || !toolCan('echo')) return base;
+    const D = this.echoDir(), sp = (game.ghostEff || CORE.effSize(game.tool.size, 11)) * (1 + (game.tool.echoGap || 0));
+    const out = base.slice(), all = [{ e: e => e, h: h => h }, ...base];
+    for (let k = 1; k < n; k++){
+      const ox = +(D[0] * sp * k).toFixed(3), oy = +(D[1] * sp * k).toFixed(3), oz = +(D[2] * sp * k).toFixed(3);
+      for (const b of all) out.push({ e: e => { const m = Object.assign({}, b.e(e)); m.x = +(m.x + ox).toFixed(3); m.y = +(m.y + oy).toFixed(3); m.z = +(m.z + oz).toFixed(3); return m; },
+                                      h: h => { const m = Object.assign({}, b.h(h)); m.x += ox; m.y += oy; m.z += oz; return m; } });
+    }
+    return out;
+  },
+  mirrorXforms(){
     const M = this.get(), R = this.radial(), out = [];
     const turns = [];
     if (R) for (let i = 1; i < R.n; i++){
@@ -19024,7 +19186,7 @@ const mirrorSys = {
       const e = X[i].e({ x: p.x, y: p.y, z: p.z, rot, rx, rz, shape, size: eff });
       w.visible = true;
       w.position.set(e.x, e.y, e.z);
-      w.scale.setScalar(eff);
+      w.scale.setScalar(shape >= 3 ? 1 : eff);
       applyEditRot(w, e.rot, e.rx, e.rz);
     }
     for (let i = X.length; i < this.ghosts.length; i++) this.ghosts[i].visible = false;
@@ -26004,8 +26166,10 @@ function bindInput(){
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
       } else if (t && (t.kind === 'drill' || t.kind === 'disp' || t.kind === 'wrench')){
-        game.tool.scrollMode = (game.tool.scrollMode + 1) % 4;
-        toast('scroll: ' + ['resize', 'rotate Y (yaw)', 'rotate X (pitch)', 'rotate Z (roll)'][game.tool.scrollMode]);
+        const ML = scrollModesFor(t), mi = ML.indexOf(game.tool.scrollMode);
+        if (ML.length < 2){ toast('a stone tool only resizes: iron turns, diamond turns every way'); AudioSys.sfx('deny'); return; }
+        game.tool.scrollMode = ML[(mi + 1) % ML.length];
+        toast('scroll: ' + SCROLL_NAMES[game.tool.scrollMode]);
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
       }
@@ -26360,8 +26524,10 @@ function bindInput(){
       }
       if (tool && (tool.kind === 'drill' || tool.kind === 'disp')){
         if (brushSys.get()){ brushSys.clear(); toast('brush off — ' + CORE.SHAPE_NAME[game.tool.shape]); AudioSys.sfx('toggle'); return; }
-        game.tool.shape = (game.tool.shape + 1) % 3;
-        toast(CORE.SHAPE_NAME[game.tool.shape]);
+        const SL = toolShapes(tool), si = SL.indexOf(game.tool.shape);
+        if (SL.length < 2){ toast('a stone tool makes cubes: an iron one adds the sphere'); AudioSys.sfx('deny'); return; }
+        game.tool.shape = SL[(si + 1) % SL.length];
+        toast(CORE.SHAPE_NAME[game.tool.shape] + ' (' + (SL.indexOf(game.tool.shape) + 1) + ' of ' + SL.length + ')');
         AudioSys.sfx('toggle');
         refreshToolHUD(); markSave();
         return;
@@ -26442,7 +26608,11 @@ function bindInput(){
       game.tool.pYaw = ((game.tool.pYaw || 0) + dir * Math.PI / 12 + Math.PI * 2) % (Math.PI * 2);
       if (tool.kind === 'fence' || tool.kind === 'fencegate') toast('turned ' + Math.round(game.tool.pYaw * 180 / Math.PI) + '\u00b0' + (placePreview.fenceJoined ? ' about the joint' : ''));
       else toast('facing ' + Math.round(game.tool.pYaw * 180 / Math.PI) + '\u00b0');
-    } else if (game.tool.scrollMode > 0 && (tool.kind === 'drill' || tool.kind === 'disp' || tool.kind === 'wrench')){
+    } else if (game.tool.scrollMode >= 4 && scrollModesFor(tool).includes(game.tool.scrollMode)){
+      // ECHO (Build 113): how many, and how far apart
+      if (game.tool.scrollMode === 4){ game.tool.echo = Math.max(1, Math.min(16, (game.tool.echo || 1) + dir)); toast('echo ×' + game.tool.echo + (game.tool.echo === 1 ? ' (off)' : '')); }
+      else { game.tool.echoGap = Math.max(0, Math.min(4, +((game.tool.echoGap || 0) + dir * 0.25).toFixed(2))); toast('echo gap ' + game.tool.echoGap + '× the shape'); }
+    } else if (game.tool.scrollMode > 0 && scrollModesFor(tool).includes(game.tool.scrollMode) && (tool.kind === 'drill' || tool.kind === 'disp' || tool.kind === 'wrench')){
       // rotate mode (middle click cycles resize → yaw → pitch → roll).
       // Rotation works with grid snap on: the lattice itself stays
       // world-aligned, so rotated and unrotated builds still snap together.
@@ -26559,11 +26729,13 @@ function bindInput(){
     game.keys[e.code] = false;
     if (e.code === 'KeyK' && game.kHeld){
       game.kHeld = false;
-      if (!game.kUsed){ const t = activeTool(); if (!game.photo && t && (t.kind === 'drill' || t.kind === 'disp')) mirrorSys.toggle(game.kShift || !!e.shiftKey); }
+      if (!game.kUsed){ const t = activeTool(); if (!game.photo && t && (t.kind === 'drill' || t.kind === 'disp')){ if (!toolCan('mirror')){ toast('the mirror comes with astrium tools'); AudioSys.sfx('deny'); } else mirrorSys.toggle(game.kShift || !!e.shiftKey); } }
     }
     if (e.code === 'KeyF' && game.fHeld){
       game.fHeld = false;
       if (!game.fUsedCombo){
+        const tf = activeTool();
+        if (tf && (tf.kind === 'drill' || tf.kind === 'disp') && !toolCan('snap')){ toast('the grid comes with iron tools and up'); AudioSys.sfx('deny'); return; }
         game.snapOn = !game.snapOn;
         toast(game.snapOn ? 'grid snap on' : 'grid snap off');
         AudioSys.sfx('toggle');
@@ -27837,7 +28009,7 @@ function ghostPlacement(eff){
   const o = game.camera.position;
   const reach = TOOL_REACH_MAX;
   const cb = game.camBack || 0;
-  if (!game.snapOn){
+  if (!game.snapOn || !toolCan('snap')){
     const tt = Math.min(reach, Math.max(1.0, game.tool.dist)) + cb;
     return { x: o.x + dir.x*tt, y: o.y + dir.y*tt, z: o.z + dir.z*tt };
   }
@@ -27864,7 +28036,7 @@ function updateGhost(){
   const tool = activeTool();
   const usable = tool && (tool.kind === 'drill' || tool.kind === 'disp') &&
                  game.ui === 'none' && isLocked();
-  for (const k of [0, 1, 2]){
+  for (let k = 0; k < 12; k++){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
@@ -27915,6 +28087,7 @@ function updateGhost(){
   } else trowelSys.hide();
   if (!usable){ game.ghostPos = null; return; }
 
+  ensureShape(tool);                                                            // Build 113: a tier's shapes
   let eff = CORE.effSize(game.tool.size, tool.tier);
   let p = ghostPlacement(eff);
   // LIQUIDS (Build 110): on the metre cells
@@ -27930,8 +28103,9 @@ function updateGhost(){
   }
   const paint = tool.kind === 'disp' && game.tool.mode === 'paint';
   const rot = game.ghostLiq ? 0 : editRot(game.tool.shape);
-  const grx = game.tool.shape !== 0 && !game.ghostLiq ? game.tool.rx || 0 : 0;
-  const grz = game.tool.shape !== 0 && !game.ghostLiq ? game.tool.rz || 0 : 0;
+  const grx = game.tool.shape !== 0 && !game.ghostLiq && toolCan('tilt') ? game.tool.rx || 0 : 0;
+  const grz = game.tool.shape !== 0 && !game.ghostLiq && toolCan('tilt') ? game.tool.rz || 0 : 0;
+  const gsc = shapeGhost.apply(game.tool.shape, eff);
   if (tool.kind === 'disp' && !paint){
     // build preview: the real material, solid, world-tiled — not an outline
     const gm = game.ghostSolid[game.tool.shape];
@@ -27952,21 +28126,21 @@ function updateGhost(){
     else game.ghostSolidMat.uniforms.uAnchor.value.set(p.x, p.y, p.z);
     gm.visible = true;
     gm.position.set(p.x, p.y, p.z);
-    gm.scale.setScalar(eff);
+    gm.scale.setScalar(gsc);
     applyEditRot(gm, rot, grx, grz);
   } else {
     const gs = game.ghostSet[game.tool.shape];
     gs.fill.material.color.set(paint ? 0xffb44d : 0x6fd3ff);
     gs.fill.visible = true; gs.wire.visible = true;
     gs.fill.position.set(p.x, p.y, p.z); gs.wire.position.set(p.x, p.y, p.z);
-    gs.fill.scale.setScalar(eff); gs.wire.scale.setScalar(eff);
+    gs.fill.scale.setScalar(gsc); gs.wire.scale.setScalar(gsc);
     applyEditRot(gs.fill, rot, grx, grz); applyEditRot(gs.wire, rot, grx, grz);
     // charging feedback: the shape visibly "fills in" as the action completes
     gs.fill.material.opacity = 0.22 + game.actProgress * 0.3;
   }
   mirrorSys.syncGhost(game.tool.shape, p, eff, rot, grx, grz);
 
-  if (game.snapOn){
+  if (game.snapOn && toolCan('snap')){
     // visualize the actual placement lattice (spacing = shape size when the
     // grid cell is smaller), anchored on the ghost's bottom face. When the
     // brush is rotated the lattice is too, so the grid plane tilts and spins
@@ -29072,7 +29246,11 @@ const wrenchSys = {
 };
 
 function editRot(shape){
-  return shape !== 0 ? game.tool.rot : 0;
+  if (shape === 0) return 0;
+  let r = toolCan('yaw') ? (game.tool.rot || 0) : 0;
+  // Build 113: stairs, arches, the building and the tower face the way you look
+  if (FACING_SHAPES.has(shape)) r += -Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2);
+  return +(((r % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)).toFixed(4);
 }
 function brushRX(){ return game.tool.shape !== 0 ? game.tool.rx || 0 : 0; }
 function brushRZ(){ return game.tool.shape !== 0 ? game.tool.rz || 0 : 0; }
@@ -29081,13 +29259,127 @@ function brushRZ(){ return game.tool.shape !== 0 ? game.tool.rz || 0 : 0; }
 // wrong drew rotated outlines mirrored about the Z axis -- invisible on a
 // plain cube (4-fold symmetric) and obvious the moment one is stretched.
 // Order YXZ matches CORE's world = Ry * Rx * Rz.
+// ---- THE TOOL THAT GROWS (Build 113): a new shape's ghost, built at its size ----
+const shapeGhost = {
+  cache: new Map(),
+  merge(list){
+    const pos = [], nrm = [];
+    for (let g of list){
+      g = g.index ? g.toNonIndexed() : g;
+      if (!g.attributes.normal) g.computeVertexNormals();
+      pos.push(...g.attributes.position.array); nrm.push(...g.attributes.normal.array);
+    }
+    const G = new THREE.BufferGeometry();
+    G.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    G.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+    return G;
+  },
+  box(x0, x1, y0, y1, z0, z1){ const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0); g.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); return g; },
+  // a profile drawn in (z, y), pushed out along x
+  prismZY(pts, hx){
+    const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 2 * hx, bevelEnabled: false });
+    g.applyMatrix4(new THREE.Matrix4().set(0, 0, -1, hx, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1));
+    return g;
+  },
+  treads(R, hy, a0, rc, yOff){
+    const n = CORE.stairN(hy), dy = 2 * hy / n, STEP = Math.PI * 2 / 12, W = STEP * 1.25, out = [];
+    const col = new THREE.CylinderGeometry(rc, rc, 2 * hy, 10); col.translate(0, yOff, 0); out.push(col);
+    for (let i = 0; i < n; i++){
+      const a = a0 + i * STEP, g = new THREE.CylinderGeometry(R, R, dy, 5, 1, false, Math.PI / 2 - a - W, W);
+      g.translate(0, yOff - hy + (i + 0.5) * dy, 0); out.push(g);
+    }
+    return out;
+  },
+  build(shape, s){
+    const h = s / 2, P = [];
+    if (shape === 3){
+      const n = CORE.stairN(h), dy = s / n, dz = s / n, pts = [[h, -h]];
+      for (let i = 0; i < n; i++){ pts.push([h - i * dz, -h + (i + 1) * dy]); pts.push([h - (i + 1) * dz, -h + (i + 1) * dy]); }
+      pts.push([-h, -h]);
+      P.push(this.prismZY(pts, h));
+    } else if (shape === 4) P.push(this.box(-h, h, -h, 0, -h, h));
+    else if (shape === 5) P.push(new THREE.ConeGeometry(h, s, 24));
+    else if (shape === 6){ const d = new THREE.SphereGeometry(h, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2); d.translate(0, -h, 0); const b = new THREE.CircleGeometry(h, 24); b.rotateX(Math.PI / 2); b.translate(0, -h, 0); P.push(d, b); }
+    else if (shape === 7) P.push(...this.treads(h, h, 0, Math.max(0.3, h * 0.14), 0));
+    else if (shape === 8){ const g = new THREE.ConeGeometry(h * Math.SQRT2, s, 4, 1); g.rotateY(Math.PI / 4); P.push(g); }
+    else if (shape === 9){
+      const A = CORE.archDims(h, h), sh = new THREE.Shape();
+      sh.moveTo(-h, -h); sh.lineTo(-A.a, -h); sh.lineTo(-A.a, A.cy);
+      for (let k = 1; k <= 16; k++){ const t = Math.PI - Math.PI * k / 16; sh.lineTo(Math.cos(t) * A.a, A.cy + Math.sin(t) * A.a); }
+      sh.lineTo(A.a, -h); sh.lineTo(h, -h); sh.lineTo(h, h); sh.lineTo(-h, h); sh.lineTo(-h, -h);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: s, bevelEnabled: false }); g.translate(0, 0, -h); P.push(g);
+    } else if (shape === 10){
+      const B = CORE.buildingDims(h, h, h), t = B.t;
+      P.push(this.box(-h, h, -h, -h + t, -h, h));                                   // floor
+      P.push(this.box(-h, h, -h, B.yb, -h, -h + t));                                // back
+      P.push(this.box(-h, -h + t, -h, B.yb, -h + t, h - t), this.box(h - t, h, -h, B.yb, -h + t, h - t));   // sides
+      P.push(this.box(-h, -B.dw / 2, -h, B.yb, h - t, h), this.box(B.dw / 2, h, -h, B.yb, h - t, h));      // front, either side of the door
+      P.push(this.box(-B.dw / 2, B.dw / 2, -h + t + B.dh, B.yb, h - t, h));                                // over the door
+      P.push(this.prismZY([[h, B.yb], [0, h], [-h, B.yb]], h));                                           // the roof
+    } else {
+      const T = CORE.towerDims(h, h, h);
+      const wall = new THREE.LatheGeometry([new THREE.Vector2(T.ri, -h), new THREE.Vector2(T.R, -h), new THREE.Vector2(T.R, T.top), new THREE.Vector2(T.ri, T.top), new THREE.Vector2(T.ri, -h)], 28);
+      P.push(wall);
+      const fl = new THREE.CylinderGeometry(T.R, T.R, T.t, 24); fl.translate(0, -h + T.t / 2, 0); P.push(fl);
+      const w = Math.PI * 2 / T.N;
+      for (let i = 0; i < T.N; i++){
+        // a merlon: a block on the ring, a quarter of each bay either side of its centre
+        const phi = w / 2 + i * w, rm = (T.R + T.ri) / 2, g = new THREE.BoxGeometry(2 * rm * Math.sin(w / 4), h - T.top, T.t);
+        g.rotateY(Math.PI / 2 - phi); g.translate(Math.cos(phi) * rm, (T.top + h) / 2, Math.sin(phi) * rm); P.push(g);
+      }
+      const y0 = -h + T.t, sh2 = (T.top - y0) / 2;
+      P.push(...this.treads(T.ri, sh2, Math.PI / 2 + Math.PI / 6, Math.max(0.3, T.ri * 0.14), y0 + sh2));
+    }
+    const fill = this.merge(P);
+    return { fill, wire: new THREE.EdgesGeometry(fill, 25) };
+  },
+  get(shape, s){
+    const key = shape + '|' + s.toFixed(2);
+    let G = this.cache.get(key);
+    if (!G){
+      G = this.build(shape, s);
+      if (this.cache.size > 48){ const k0 = this.cache.keys().next().value; const o = this.cache.get(k0); o.fill.dispose(); o.wire.dispose(); this.cache.delete(k0); }
+      this.cache.set(key, G);
+    }
+    return G;
+  },
+  // put a new shape's geometry on its ghosts; the scale they want back
+  apply(shape, s){
+    if (shape < 3) return s;
+    const G = this.get(shape, s);
+    const gs = game.ghostSet[shape], gm = game.ghostSolid[shape];
+    if (gs.fill.geometry !== G.fill){ gs.fill.geometry = G.fill; gs.wire.geometry = G.wire; gm.geometry = G.fill; }
+    return 1;
+  },
+};
+// ---- what a tool of a tier may do (Build 113, Austin's) ----
+// stone resizes and nothing else; iron turns (yaw) and snaps to the grid;
+// diamond turns in every axis; astrium mirrors; vehlite echoes
+const TOOL_ABIL = { yaw: 1, snap: 1, tilt: 4, mirror: 7, echo: 11 };
+const FACING_SHAPES = new Set([3, 9, 10, 11]);
+function toolCan(ab){
+  const t = activeTool();
+  if (!t || (t.kind !== 'drill' && t.kind !== 'disp')) return ab !== 'echo';
+  return (t.tier | 0) >= TOOL_ABIL[ab];
+}
+function toolShapes(t){ return t && (t.kind === 'drill' || t.kind === 'disp') && !t.bore && !t.smooth && !t.lathe ? CORE.shapesFor(t.tier) : [0, 1, 2]; }
+// a lower tool in hand: the shape comes back to the cube
+function ensureShape(t){ const L = toolShapes(t); if (!L.includes(game.tool.shape)) game.tool.shape = L[0]; }
+function scrollModesFor(t){
+  if (!t) return [0];
+  if (t.kind === 'wrench') return [0, 1, 2, 3];
+  const L = [0]; if ((t.tier | 0) >= TOOL_ABIL.yaw) L.push(1); if ((t.tier | 0) >= TOOL_ABIL.tilt) L.push(2, 3); if ((t.tier | 0) >= TOOL_ABIL.echo) L.push(4, 5);
+  return L;
+}
+const SCROLL_NAMES = ['resize', 'rotate Y (yaw)', 'rotate X (pitch)', 'rotate Z (roll)', 'echo count', 'echo gap'];
 function applyEditRot(obj, rot, rx, rz){
   obj.rotation.order = 'YXZ';
   obj.rotation.set(rx || 0, -(rot || 0), rz || 0);
 }
 // attach the tool's full rotation to a new edit (spheres ignore rotation)
 function applyToolRot(e){
-  if (e.shape === 0) return e;
+  if (e.shape === 0 || !toolCan('tilt')) return e;
   if (game.tool.rx) e.rx = game.tool.rx;
   if (game.tool.rz) e.rz = game.tool.rz;
   return e;
@@ -29100,13 +29392,13 @@ function yieldColors(got){
 // the mirror's twin of a mine or a place: the same call again with the
 // edit reflected, the two sharing an undo group
 function doMineM(tool, p, shape, eff){
-  const X = mirrorSys.xforms(), gp = X.length ? mirrorSys.group() : null;
+  const X = mirrorSys.xforms(), gp = X.length ? (mirrorSys.group() || 'echo' + (++boreSys.seq)) : null;   // echoes undo as one (Build 113)
   doMine(tool, p, shape, eff, gp);
   for (const xf of X) doMine(tool, p, shape, eff, gp, xf);
   crewSys.onMine(p, shape, eff);
 }
 function doPlaceM(tool, p, shape, eff){
-  const X = mirrorSys.xforms(), gp = X.length ? mirrorSys.group() : null;
+  const X = mirrorSys.xforms(), gp = X.length ? (mirrorSys.group() || 'echo' + (++boreSys.seq)) : null;
   doPlace(tool, p, shape, eff, gp);
   for (const xf of X) doPlace(tool, p, shape, eff, gp, xf);
   crewSys.onPlace(p, shape, eff);
@@ -32554,7 +32846,9 @@ function itemInfoHTML(it, tool){
     // the trowel's disc line and the lathe's profile say it all already
     if (!tool.smooth && !tool.lathe){
       html += '<div class="t2">' + shape + ' · ' + sizeStr + '</div>';
-      html += '<div class="t2">scroll: ' + ['resize', 'rotate Y', 'rotate X', 'rotate Z'][game.tool.scrollMode || 0] + ' (middle click)</div>';
+      html += '<div class="t2">scroll: ' + (scrollModesFor(tool).includes(game.tool.scrollMode || 0) ? SCROLL_NAMES[game.tool.scrollMode || 0] : 'resize') + (scrollModesFor(tool).length > 1 ? ' (middle click)' : '') + ((game.tool.echo || 1) > 1 && toolCan('echo') ? ' · echo ×' + game.tool.echo : '') + '</div>';
+      { const SL = toolShapes(tool), ab = ['resize']; if ((tool.tier | 0) >= 1) ab.push('turn', 'grid'); if ((tool.tier | 0) >= 4) ab.push('every axis'); if ((tool.tier | 0) >= 7) ab.push('mirror'); if ((tool.tier | 0) >= 11) ab.push('echo');
+        html += '<div class="t2">' + SL.length + ' of 12 shapes (right click) · ' + ab.join(', ') + '</div>'; }
     }
     if (game.snapOn){
       html += '<div class="t2">snap: <span class="on">on · grid ' + CORE.GRID_SIZES[game.gridIdx] + 'm</span> · dist ' + game.tool.dist.toFixed(1) + 'm (V/B)</div>';
@@ -37653,7 +37947,7 @@ function enterPhoto(drone){
   };
   document.body.classList.add('photo');
   if (game.vm) game.vm.root.visible = false;
-  for (const k of [0, 1, 2]){
+  for (let k = 0; k < 12; k++){
     game.ghostSet[k].fill.visible = false;
     game.ghostSet[k].wire.visible = false;
     if (game.ghostSolid) game.ghostSolid[k].visible = false;
@@ -38205,7 +38499,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

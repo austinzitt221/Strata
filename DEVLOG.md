@@ -2,6 +2,51 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 113 — THE TOOL THAT GROWS: twelve shapes, abilities by tier, ECHO (2026-10-09)
+
+Roadmap items 26 and 27, Austin's order.
+
+- **Twelve shapes, one a tier,** for the drill and the dispenser alike:
+  stone the cube; iron the sphere; ruby the cylinder; obsidian the
+  STAIRCASE; diamond the SLAB; selenite the CONE; lunite the DOME;
+  astrium the SPIRAL STAIR; void the PYRAMID; ichorite the ARCH;
+  nullite the BUILDING; vehlite the TOWER. Right click walks the ones
+  your tool has, in that order; pick up a lower tool and the shape falls
+  back to the cube.
+- **The shapes.** Each is an exact field in its box, built of pieces the
+  mesher keeps sharp (their normals are a fine central difference):
+  - STAIRCASE: steps of a fixed half-metre rise, as many as the size
+    needs, rising away from you.
+  - SLAB: the lower half of the box.
+  - CONE and PYRAMID: base on the box's floor, point at its top.
+  - DOME: a half sphere on the box's floor.
+  - SPIRAL STAIR: twelve wedge treads a turn round a column, half a
+    metre a tread.
+  - ARCH: a block with a round-topped opening through it.
+  - BUILDING: walls, a floor, a gabled roof, a hollow room and a door
+    facing you, one click.
+  - TOWER: a round hollow tower half as wide as it is tall, a spiral
+    stair inside, battlements, a door facing you. Build it big.
+  Stairs, arches, buildings and towers turn to face the way you look,
+  on top of any turn the tool gives them.
+- **The ghost is the shape.** The new shapes' ghosts are built at the
+  size you hold (the stair's step count depends on it), cached, on the
+  outline, the fill and the dispenser's textured preview. Tested: every
+  vertex of every exact ghost lies on its shape's surface.
+- **Abilities by tier.** Stone resizes and nothing else. Iron turns
+  (yaw) and snaps to the grid. Diamond turns in every axis. Astrium
+  mirrors. Vehlite ECHOES. The middle click walks only the scroll modes
+  your tool has; F and K say which tier brings them when refused. The
+  HUD says how many shapes and which abilities the held tool has.
+- **ECHO.** Two more scroll modes on a vehlite tool: echo count (1 to
+  16) and echo gap (0 to 4 times the shape). The shape repeats along the
+  way you look (level, or along the nearest axis with the grid on), the
+  ghost shows every copy, a mirror copies every echo, and one Ctrl-Z
+  takes the whole row back. A colonnade is one click.
+- The far skin reads the new shapes by scanning their columns.
+- Known: a spiral stair smaller than about 6 m is rough, its half-metre
+  treads being the terrain's own resolution; build it bigger.
+
 ## Build 112 — STRATA'S FIRE: mega torches, the headlamp, the great stove (2026-10-08)
 
 The rest of roadmap item 24, Austin's: what Strata's coal is for.

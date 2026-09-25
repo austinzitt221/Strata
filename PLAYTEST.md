@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 113 — THE TOOL THAT GROWS
+- [ ] Right click through each tier's shapes. Does every ghost match
+      what lands, drill and dispenser?
+- [ ] Walk up a staircase and a spiral stair (build the spiral 8 m or
+      more). Are the steps the right height to walk?
+- [ ] Place a building and a tower: do the doors face you? Go inside,
+      climb the tower.
+- [ ] A vehlite tool, echo ×6, gap 1: a colonnade of cylinders. Then
+      with the mirror on. Then Ctrl-Z.
+- [ ] Stone to diamond: does losing the turn and the grid on the low
+      tiers feel like progress, or like punishment?
+
 ## Build 112 — STRATA'S FIRE
 - [ ] Light a camp at night with mega torches. Is seven times too much,
       and is the green light the right colour for them?

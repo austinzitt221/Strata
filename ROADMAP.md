@@ -481,11 +481,11 @@ walls, the ghost shadows over cities). And, in my order:
  25. **The speed curve** (DONE, Build 111). The instant mine and instant place move from
      diamond to the top Strata tier; every tier between stone and it
      steps up evenly; stone stays as it is. (Austin; waits on 24.)
- 26. **Abilities by tier.** Stone resizes and nothing else; the tiers
+ 26. **Abilities by tier** (DONE, Build 113). Stone resizes and nothing else; the tiers
      add what the tools do: rotation in every axis by diamond, the
      mirror at astrium, something new at the top of Strata (my pick,
      see below). (Austin.)
- 27. **Shapes by tier.** Austin's order (2026-10-07), one a tier from
+ 27. **Shapes by tier** (DONE, Build 113). Austin's order (2026-10-07), one a tier from
      stone: cube, sphere, cylinder, straight STAIRCASE, SLAB (a half
      cube), cone, DOME (a half sphere), SPIRAL STAIR, PYRAMID, ARCH, and
      the FULL BUILDING (a hollow box with a roof and a door cut, in one
