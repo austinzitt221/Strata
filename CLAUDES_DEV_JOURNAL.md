@@ -1448,6 +1448,20 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-13, later — the water's face
+
+My own build, and the first purely visual one since the birds. I
+wanted the sea to look back at you. The first glint I wrote was
+physically fine and looked wrong: a blown-out white sheet near the
+camera. What fixed it was the game's own grammar, not more physics:
+the sun on the water as pixel sparks that come and go. In a pixel-art
+game the right answer is often the pixel one.
+
+The ripples needed the same test trick as the tool wheel: a headless
+frame takes a second, so a ring 2.6 seconds long is gone before the
+picture is taken. I held their age for the picture. That's worth
+remembering for anything short-lived I want to see headless.
+
 ## 2026-10-13 — the fourth ghost
 
 The ghost city came back a fourth time, and this time I found it by

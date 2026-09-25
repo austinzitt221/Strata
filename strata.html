@@ -7748,7 +7748,9 @@ function buildScene(){
     game.uIchor = game.uIchor || { value: 0 };    // STRATA E (Build 92): 1 on Strata, where the water is green
     game.waterMat = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTex: { value: wt }, uTime: game.uTime, uIchor: game.uIchor },
+      uniforms: { uTex: { value: wt }, uTime: game.uTime, uIchor: game.uIchor,
+                  uSunDir: game.terrainMat.uniforms.uSunDir, uSunCol: game.terrainMat.uniforms.uSunCol, uFogCol: game.terrainMat.uniforms.uFogCol,
+                  uRip: { value: rippleSys.slots() } },
       vertexShader: `
         attribute float aDep; attribute vec2 aFlow;
         varying vec2 vUv; varying float vDep; varying vec2 vFlow; varying vec3 vPos;
@@ -7758,8 +7760,10 @@ function buildScene(){
         }`,
       fragmentShader: `
         precision highp float;
-        uniform sampler2D uTex; uniform float uTime; uniform float uIchor;
+        uniform sampler2D uTex; uniform float uTime; uniform float uIchor; uniform vec3 uFogCol;
+        uniform vec4 uRip[16];
         varying vec2 vUv; varying float vDep; varying vec2 vFlow; varying vec3 vPos;
+        ` + WATER_FACE + `
         void main(){
           if (vDep < -0.5){
             // a waterfall: white water in streaks running down the sheet (the ichor's is pale green)
@@ -7773,7 +7777,22 @@ function buildScene(){
           vec3 col = texture2D(uTex, vUv + vFlow * uTime * 0.12).rgb * tint;
           float deep = smoothstep(0.6, 7.5, vDep);
           col = mix(col, mix(vec3(0.075, 0.20, 0.42), vec3(0.04, 0.30, 0.08), uIchor), deep * 0.88);
-          gl_FragColor = vec4(col, mix(0.68, 0.96, deep));
+          // Build 119: rings where something touched the water, on top of the waves
+          vec2 slope = waveSlope(vPos.xz, uTime, vFlow); float ringB = 0.0;
+          for (int i = 0; i < 16; i++){
+            vec4 R = uRip[i]; float age = uTime - R.z;
+            if (R.w <= 0.0 || age < 0.0 || age > 2.6) continue;
+            vec2 d = vPos.xz - R.xy; float L = length(d), r = age * (1.0 + R.w * 0.9);
+            float ring = exp(-pow((L - r) / (0.22 + age * 0.14), 2.0)) * (1.0 - age / 2.6) * R.w;
+            float w = sin((L - r) * 11.0);
+            slope += (d / max(L, 0.001)) * w * ring * 0.4; ringB += ring * max(w, 0.0);
+          }
+          float fres; col = waterFace(col, vPos, slope, uFogCol, 1.0, fres);
+          col += vec3(0.9, 0.95, 1.0) * ringB * 0.16;
+          // a shallow shore foams
+          float foam = smoothstep(0.42, 0.06, vDep) * (0.55 + 0.45 * sin(uTime * 1.3 + vPos.x * 1.7 + vPos.z * 1.3));
+          col = mix(col, mix(vec3(0.93, 0.96, 1.0), vec3(0.86, 1.0, 0.8), uIchor), foam * 0.5);
+          gl_FragColor = vec4(col, min(1.0, max(mix(0.68, 0.96, deep) + fres * 0.25, foam * 0.85)));
         }`,
     });
     game.waterMat.map = wt;      // farTerrain reads .map for its own surface
@@ -20109,6 +20128,57 @@ const brushSys = {
 // Every house window is a warm pane once the sun is down (most of them --
 // a few are dark tonight), every roof carries a chimney, and from dusk the
 // chimneys within earshot puff smoke that drifts up and thins.
+// ---------- THE WATER'S FACE: what touches it (Build 119) ----------
+// Sixteen rings at a time, in a round robin: you wading or swimming (a big
+// one as you go in), an animal in the water, a cast bobber and a bite, a
+// school of fish darting, and rain on every pond and river near you.
+const rippleSys = {
+  N: 16, arr: null, i: 0, stepT: 0, entT: 0, rainT: 0, wasIn: false, fishSeen: null, fishBit: false,
+  slots(){ if (!this.arr){ this.arr = []; for (let k = 0; k < this.N; k++) this.arr.push(new THREE.Vector4(0, 0, -99, 0)); } return this.arr; },
+  now(){ return game.uTime ? game.uTime.value : performance.now() * 0.001 % 3600; },
+  add(x, z, s){ const a = this.slots(); a[this.i].set(x, z, this.now(), s); this.i = (this.i + 1) % this.N; },
+  tick(dt){
+    if (!game.running || !game.gen || game.gen.seaLevel == null || zeroG()) return;
+    const P = game.pos;
+    // you: in over your feet and not over your head
+    const feet = inWater(P.x, P.y + 0.15, P.z), head = inWater(P.x, P.y + playerHeight() - 0.1, P.z);
+    const wading = feet && !head;
+    if (feet && !this.wasIn){ const t = waterTopAt(P.x, P.z, P.y + 2); if (t != null) this.add(P.x, P.z, 1.0); }
+    this.wasIn = feet;
+    this.stepT -= dt;
+    const sp = Math.hypot(game.vel ? game.vel.x : 0, game.vel ? game.vel.z : 0);
+    if (wading && sp > 0.8 && this.stepT <= 0){ this.stepT = Math.max(0.22, 0.5 - sp * 0.03); this.add(P.x + (Math.random() - 0.5) * 0.3, P.z + (Math.random() - 0.5) * 0.3, 0.5); }
+    // the animals in the water near you
+    this.entT -= dt;
+    if (this.entT <= 0){
+      this.entT = 0.45; let n = 0;
+      for (const e of game.entities){
+        if (n >= 2) break;
+        if (!e.mesh || Math.abs(e.x - P.x) > 40 || Math.abs(e.z - P.z) > 40) continue;
+        if ((Math.abs(e.vx || 0) + Math.abs(e.vz || 0)) < 0.4 && !(e.boat)) continue;
+        const t = waterTopAt(e.x, e.z, e.y + 2);
+        if (t == null || Math.abs(t - e.y) > 1.2) continue;
+        this.add(e.x, e.z, e.boat ? 0.9 : 0.45); n++;
+      }
+    }
+    // the line
+    const F = game.fishing;
+    if (F && F !== this.fishSeen && F.t < 0.5){ this.fishSeen = F; this.add(F.x, F.z, 0.8); }
+    if (F && F.bit && !this.fishBit) this.add(F.x, F.z, 0.9);
+    this.fishBit = !!(F && F.bit);
+    // rain on the water
+    const wet = weatherSys.kind === 'rain' || weatherSys.kind === 'storm';
+    if (wet){
+      this.rainT -= dt * (weatherSys.kind === 'storm' ? 16 : 9);
+      while (this.rainT <= 0){
+        this.rainT += 1;
+        const x = P.x + (Math.random() - 0.5) * 26, z = P.z + (Math.random() - 0.5) * 26;
+        const h = game.gen.height(x, z), t = waterTopAt(x, z, h + 1);
+        if (t != null && t > h) this.add(x, z, 0.22 + Math.random() * 0.12);
+      }
+    }
+  },
+};
 // ---------- THE LIVING SHORE (Build 114) ----------
 // The Earth by day has birds where birds would be: gulls wheeling over the
 // sea and resting on it, finches in flocks round the trees that come down to
@@ -20307,7 +20377,7 @@ const shoreSys = {
       if (pd > 55){ this.schools.splice(si, 1); continue; }
       // a swimmer near, or a splash: dart off
       const splash = F2 && F2.t < 0.8 && Math.hypot(F2.x - S.x, F2.z - S.z) < 4;
-      if (S.dart <= 0 && ((swim && pd < 6) || (pd < 3.5) || splash)){ S.dart = 1.4; S.hd = Math.atan2(S.x - (splash ? F2.x : P.x), S.z - (splash ? F2.z : P.z)); }
+      if (S.dart <= 0 && ((swim && pd < 6) || (pd < 3.5) || splash)){ S.dart = 1.4; S.hd = Math.atan2(S.x - (splash ? F2.x : P.x), S.z - (splash ? F2.z : P.z)); rippleSys.add(S.x, S.z, 0.4); }
       const spd = S.dart > 0 ? 4 : 0.35; S.dart = Math.max(0, S.dart - dt);
       if (S.dart <= 0) S.hd += Math.sin(now * 0.5 + si) * dt * 0.5;
       const nx = S.x + Math.sin(S.hd) * spd * dt, nz = S.z + Math.cos(S.hd) * spd * dt, W = this.wetAt(nx, nz);
@@ -37773,6 +37843,36 @@ void main(){
   if (distance(vPos, uPlayerPos) < 24.0) discard;
   gl_FragColor = packDepthToRGBA(gl_FragCoord.z);
 }`;
+// ---------- THE WATER'S FACE (Build 119) ----------
+// Water had a colour and nothing else. Now its surface moves (three sets of
+// small waves, carried downstream on a river), it takes the sky at a
+// low angle and the sun where the sun would glint, and it foams white where
+// it runs shallow on a shore. The near water and the far skin's water share
+// this light, so the line where they meet is not a change of tone; the near
+// water also rings where things touch it (rippleSys).
+const WATER_FACE = `
+uniform vec3 uSunDir; uniform vec3 uSunCol;
+vec2 waveSlope(vec2 q, float t, vec2 flow){
+  q -= flow * t * 0.6;
+  vec2 s = vec2(cos(q.x * 1.3 + q.y * 0.4 + t * 1.1), cos(q.y * 1.1 - q.x * 0.3 + t * 0.9)) * 0.045;
+  s += vec2(cos(q.x * 2.9 - q.y * 1.7 + t * 1.9), cos(q.y * 3.3 + q.x * 1.2 - t * 1.6)) * 0.025;
+  s += vec2(cos(q.x * 6.1 + q.y * 4.3 - t * 2.7), cos(q.y * 5.7 - q.x * 3.9 + t * 3.1)) * 0.012;
+  return s;
+}
+vec3 waterFace(vec3 col, vec3 p, vec2 slope, vec3 skyCol, float glint, out float fres){
+  fres = 0.0;
+  if (cameraPosition.y < p.y) return col;                      // seen from under the surface: as it was
+  vec3 n = normalize(vec3(-slope.x, 1.0, -slope.y));
+  vec3 V = normalize(cameraPosition - p);
+  fres = 0.04 + 0.96 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+  col = mix(col, skyCol * 1.12, fres * 0.6);
+  float nh = max(dot(n, normalize(uSunDir + V)), 0.0);
+  // the sun on it glitters: quarter-metre sparks that come and go, not a sheet of white
+  vec2 gc = floor(p.xz * 4.0);
+  float spark = step(0.55, fract(sin(dot(gc, vec2(12.9898, 78.233))) * 43758.5453 + uTime * 0.9));
+  col += min(uSunCol * (pow(nh, 300.0) * 4.5 * mix(0.15, 1.0, spark) + pow(nh, 64.0) * 0.14) * glint * step(0.0, uSunDir.y), vec3(0.8));
+  return col;
+}`;
 const SKIN_WATER_VERT = `
 attribute float aDep; attribute float aWY; attribute vec2 aFlow;
 uniform float uSeaY;
@@ -37788,6 +37888,7 @@ uniform sampler2D uWaterTex; uniform vec3 uFogCol; uniform float uFogFar; unifor
 uniform sampler2D uMask; uniform vec2 uMaskOrigin; uniform float uMaskSpan; uniform float uMaskOn;
 uniform vec4 uHole; uniform float uTime;
 varying vec3 vW; varying float vDep; varying vec2 vFlow;
+` + WATER_FACE + `
 void main(){
   if (vW.x > uHole.x && vW.x < uHole.z && vW.z > uHole.y && vW.z < uHole.w) discard;
   if (uMaskOn > 0.5){
@@ -37798,9 +37899,10 @@ void main(){
   vec3 col = texture2D(uWaterTex, vW.xz / 4.0 + vFlow * uTime * 0.12).rgb * mix(vec3(0.737, 0.831, 0.910), vec3(0.50, 0.95, 0.42), uIchor);
   float deep = smoothstep(0.6, 7.5, vDep);
   col = mix(col, vec3(0.075, 0.20, 0.42), deep * 0.88);
+  float fres; col = waterFace(col, vW, waveSlope(vW.xz, uTime, vFlow), uFogCol, 1.0, fres);   // Build 119
   float dist = gl_FragCoord.z / gl_FragCoord.w;
   float fog = smoothstep(uFogFar * 0.35, uFogFar * 0.97, dist);
-  gl_FragColor = vec4(mix(col, uFogCol, fog), mix(0.68, 0.96, deep));
+  gl_FragColor = vec4(mix(col, uFogCol, fog), min(1.0, mix(0.68, 0.96, deep) + fres * 0.25));
 }`;
 const farTerrain = {
   scene: null, mat: null, waterSurfMat: null, dirty: true, levels: null,
@@ -37837,7 +37939,7 @@ const farTerrain = {
       uniforms: Object.assign({
         uWaterTex: { value: game.waterMat ? game.waterMat.map : null },
         uIchor: (game.uIchor = game.uIchor || { value: 0 }),
-        uFogCol: tu.uFogCol, uFogFar: tu.uFogFar,
+        uFogCol: tu.uFogCol, uFogFar: tu.uFogFar, uSunDir: tu.uSunDir, uSunCol: tu.uSunCol,
         uMaskOn: { value: k === 0 ? 1 : 0 },
         uHole: { value: new THREE.Vector4(1, 1, 0, 0) },
         uSeaY: { value: game.gen && game.gen.seaLevel != null ? game.gen.seaLevel - 0.02 : 0 },
@@ -39238,6 +39340,7 @@ function frameBody(now){
   if (onEarth) hearthSys.tick(dt);
   perfSys.m('lights & hearths');
   shoreSys.tick(dt);                                                         // THE LIVING SHORE (Build 114)
+  rippleSys.tick(dt);                                                        // THE WATER'S FACE (Build 119)
   perfSys.m('shore life');
   boreSys.tick(dt);
   mirrorSys.tick(dt);
@@ -39498,7 +39601,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

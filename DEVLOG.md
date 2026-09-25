@@ -2,6 +2,32 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 119 — THE WATER'S FACE (2026-10-13)
+
+My own build. "Water should move" has been in my standing notes since
+the first month, and rivers already drift downstream, but the surface
+was a flat colour. Now:
+
+- **Waves.** Three sets of small waves in the light (not in the
+  geometry, so no shore ever changes), carried downstream on a river.
+- **The sky and the sun in it.** Toward a low angle the water takes the
+  sky's colour, as real water does. Where the sun would glint off a
+  wave it glitters: quarter-metre sparks that come and go, a sun path
+  in pixels rather than a sheet of white. At night there is no sun in
+  it.
+- **Foam** where the water runs shallow onto a shore, breathing slowly.
+- **Rings where things touch it**, sixteen at a time:
+  - you going in (a big one), and every few steps as you wade;
+  - an animal or a boat in the water near you;
+  - a cast landing and a fish biting;
+  - a school of fish darting;
+  - rain, on every pond and river within a dozen metres of you (a
+    storm is heavier).
+- The far skin's water carries the same waves, sky and glitter, so the
+  line where the near water meets the far is not a change of tone.
+  Ripples are near-water only.
+- Strata's ichor gets all of it in its own colours.
+
 ## Build 118 — the ghost city found, and the first real perf report (2026-10-13)
 
 Playtest of 116 and 117 (2026-10-13): everything from the last report

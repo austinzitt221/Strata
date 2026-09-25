@@ -5,6 +5,17 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 119 — THE WATER'S FACE
+- [ ] A lake in the afternoon, facing the sun: does the glitter look
+      like sunlight on water, or too much? Then with your back to the
+      sun: does the water hold the sky?
+- [ ] Wade in, swim, cast a line, stand by a river in the rain. Do the
+      rings read? Too strong, too faint?
+- [ ] Fly across a big lake: any line where the near water meets the
+      far?
+- [ ] Any frame cost you can feel looking out over the sea (the report
+      will say: 'render (cpu)' and the gpu line)?
+
 ## Build 118 — the ghost city
 - [ ] Fly to a city you have never seen and walk around in it. Any flat
       grey box standing in for a building, anywhere, near or far?
