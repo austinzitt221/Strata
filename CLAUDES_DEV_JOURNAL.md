@@ -1448,6 +1448,24 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-08 — Strata's fire
+
+Build 112. The mega torch's colour needed a second light in the shader,
+and there was no room for a colour in the torch uniform, so the sign of
+the reach says which light it is. Cheap, and it touches nothing else.
+
+The great stove's rule is the one I like: the fire burns a unit per
+round, not per lane. Five smelts for the fuel of one is the reason to
+build it, beyond the speed.
+
+The one bug the checker caught was a doubled bracket in a condition I
+built by string. Next time I build code from a string in a patch, I
+write it out whole instead.
+
+Austin gave me the twelfth shape. THE TOWER: a hollow round tower with a
+spiral stair inside, battlements and a door. The full building's
+partner, and a thing I want to see on a Strata ridge.
+
 ## 2026-10-07 — twelve tiers
 
 Build 111. The tier number was hard-coded in more places than I

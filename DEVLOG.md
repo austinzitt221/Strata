@@ -2,6 +2,37 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 112 — STRATA'S FIRE: mega torches, the headlamp, the great stove (2026-10-08)
+
+The rest of roadmap item 24, Austin's: what Strata's coal is for.
+
+- **Mega torches.** Four from a scarcoal and a stick, anywhere. A taller
+  iron shaft with a cold green flame in a cage. Seven times a torch's
+  reach (68.6 m against 9.8 m), in its own colour: the terrain shader
+  now carries a second light, green-white, beside the torches' warm one
+  (a mega torch's reach goes to the shader negative, which is how it is
+  told apart). Nothing hunts within seven times its reach either. The
+  drill gives mega torches back as mega torches; they save as such.
+- **The headlamp.** Six scarcoal, four voidore and two crystal at a
+  crafting table. Wear it in the helmet slot: a beam from your eyes
+  wherever you look, a cone out to 48 m, and it never runs down. It is
+  a strap and a lamp on your brow, and no armour at all.
+- **The great stove.** At Strata's table, from a stove, sixteen voidore
+  and eight scarcoal. A wide hearth with five mouths and two stacks. Its
+  panel has one fire and five lanes of input and output: five different
+  things smelting at once, each twice as fast as a plain stove, and the
+  fire burns one unit a round for all five. Power still speeds it
+  (tripled, as for a stove). Shift-click sends a smeltable to the lane
+  holding its like or the first empty one; tubes feed it the same way;
+  the drill and the wrench give it back as a great stove.
+- **Scarcoal** feeds generators now too, and holds a generator's fire
+  twice as long as coal.
+
+The 12th shape (Austin left a gap): THE TOWER, at vehlite. A round
+hollow tower with a spiral stair inside, battlements and a door, in one
+click: a partner to nullite's full building. On the roadmap for the
+shapes build.
+
 ## Build 111 — STRATA'S TIERS and the speed curve (2026-10-07)
 
 Roadmap items 24 (the tiers) and 25 (the speed curve), Austin's. Strata's

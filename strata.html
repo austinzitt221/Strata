@@ -4018,7 +4018,7 @@ const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springs
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
-  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'relic',
+  'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'megatorch', 'greatstove', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'ichorworm', 'veillamp', 'ichorcrown', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
 // mined ore materials that land in the inventory as ITEMS, not mat stacks —
@@ -4324,6 +4324,10 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'tnt', yields: 2, station: true, costs: [{ item: 'coal', n: 6 }, { item: 'ironingot', n: 1 }, { mat: MAT.SAND, n: 4 }] });
   RECIPES.push({ kind: 'mcharge', yields: 2, station: true, costs: [{ item: 'coal', n: 4 }, { item: 'ironingot', n: 2 }] });
   RECIPES.push({ kind: 'stove', yields: 1, station: true, costs: [{ mat: MAT.ROCK, n: 12 }, { mat: MAT.WOOD, n: 4 }] });
+  // STRATA'S FIRE (Build 112)
+  RECIPES.push({ kind: 'megatorch', yields: 4, costs: [{ item: 'scarcoal', n: 1 }, { item: 'stick', n: 1 }] });
+  RECIPES.push({ kind: 'headlamp', yields: 1, station: true, costs: [{ item: 'scarcoal', n: 6 }, { item: 'voidore', n: 4 }, { mat: MAT.CRYSTAL, n: 2 }] });
+  RECIPES.push({ kind: 'greatstove', yields: 1, station: true, world: 'alien', costs: [{ item: 'stove', n: 1 }, { item: 'voidore', n: 16 }, { item: 'scarcoal', n: 8 }] });
   RECIPES.push({ kind: 'wrench', station: true, costs: [{ item: 'ironingot', n: 3 }, { item: 'stick', n: 2 }] });
   // the trowel: a drill that blends
   RECIPES.push({ kind: 'trowel', station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'stick', n: 2 }] });
@@ -4507,6 +4511,7 @@ function craft(slots, r, free){
                   : r.kind === 'drone' ? { kind: 'drone', charge: 100 }
                   : r.kind === 'tdrone' ? { kind: 'tdrone', charge: 100 }
                   : r.kind === 'jetpack' ? { kind: 'jetpack', fuel: 100 }
+                  : r.kind === 'headlamp' ? { kind: 'headlamp' }
                   : r.kind === 'wings' ? { kind: 'wings' }
                   : r.kind === 'grapple' ? { kind: 'grapple' }
                   : r.kind === 'phone' ? { kind: 'phone' }
@@ -5458,6 +5463,7 @@ uniform float uDeep;
 uniform float uLampSky;
 uniform vec4 uTorch[16];
 uniform float uTorchN;
+uniform float uHead; uniform vec3 uHeadDir;   // STRATA'S FIRE (Build 112): the headlamp
 uniform sampler2D uShadowMap;
 uniform float uShadowOn;
 uniform float uShadowTexel;
@@ -5553,14 +5559,24 @@ void main(){
   float aoP = 0.85 + 0.15 * ao;          // placed light fills dark creases
   vec3 lampLit = vec3(1.0, 0.94, 0.80) * (0.85 * lamp * (1.0 - vSky * uLampSky)) * aoP;
   // placed torches
-  float tl = 0.0;
+  // a mega torch (Build 112) comes with its reach negative: its own cold light
+  float tl = 0.0, tm = 0.0;
   for (int i = 0; i < 16; i++){
     if (float(i) >= uTorchN) break;
     float td = length(vPos - uTorch[i].xyz);
-    float t = clamp(1.0 - td / uTorch[i].w, 0.0, 1.0);
-    tl = max(tl, t * t * (3.0 - 2.0 * t));
+    float tw = uTorch[i].w;
+    float t = clamp(1.0 - td / abs(tw), 0.0, 1.0);
+    float sm = t * t * (3.0 - 2.0 * t);
+    if (tw < 0.0) tm = max(tm, sm); else tl = max(tl, sm);
   }
-  vec3 torchLit = vec3(1.0, 0.72, 0.42) * (0.9 * tl) * aoP;
+  vec3 torchLit = (vec3(1.0, 0.72, 0.42) * (0.9 * tl) + vec3(0.62, 1.0, 0.74) * (0.95 * tm)) * aoP;
+  // the headlamp: a cone from your eyes, forty-eight metres
+  if (uHead > 0.5){
+    vec3 hv = vPos - uPlayerPos; float hd = length(hv);
+    float cone = smoothstep(0.82, 0.95, dot(hv / max(hd, 0.001), uHeadDir));
+    float hf = clamp(1.0 - hd / 48.0, 0.0, 1.0);
+    torchLit += vec3(1.0, 0.97, 0.9) * (cone * hf * hf * 1.05) * aoP;
+  }
   vec3 col = tex.rgb * min(dayLit * vSky + lampLit + torchLit + vec3(0.02 * ao + 0.005), vec3(1.05));
   // world-anchored luminance variation (~3m scale, ±5%)
   col *= 0.95 + 0.10 * vnoise(vPos * 0.33);
@@ -7150,6 +7166,7 @@ function buildScene(){
       uLampSky: { value: 0.85 },
       uTorch: { value: Array.from({ length: 16 }, () => new THREE.Vector4(0, -9999, 0, 1)) },
       uTorchN: { value: 0 },
+      uHead: { value: 0 }, uHeadDir: { value: new THREE.Vector3(0, 0, -1) },
       uShadowMap: { value: null },
       uShadowMatrix: { value: new THREE.Matrix4() },
       uShadowOn: { value: 0 },
@@ -7574,7 +7591,14 @@ const playerBody = {
     this.armorMeshes = [];
     const A = game.armor || {};
     const col = t => new THREE.MeshBasicMaterial({ color: new THREE.Color(TIER_COL[t] || '#8a8a92') });
-    if (A.head){
+    if (A.head && A.head.kind === 'headlamp'){
+      // the headlamp (Build 112): a strap and a lamp on the brow
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.07, 0.58), new THREE.MeshBasicMaterial({ color: 0x2a2630 }));
+      strap.position.y = 0.2;
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.08), new THREE.MeshBasicMaterial({ color: 0xfff6d8 }));
+      lamp.position.set(0, 0.22, -0.3);
+      this.head.add(strap, lamp); this.armorMeshes.push(strap, lamp);
+    } else if (A.head){
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.305, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6), col(A.head.tier));
       m.position.y = 0.26; m.rotation.x = 0.3;
       this.head.add(m); this.armorMeshes.push(m);
@@ -8411,7 +8435,7 @@ function updateViewmodel(dt){
       fg.rotation.x = kk * 0.08;
     }
   }
-  v.torch.visible = kind === 'torch';
+  v.torch.visible = kind === 'torch' || kind === 'megatorch';
   v.sword.visible = kind === 'sword' || kind === 'khammer';
   v.sword.scale.setScalar(kind === 'khammer' ? 1.7 : 1);
   v.stick.visible = kind === 'stick';
@@ -8436,7 +8460,7 @@ function updateViewmodel(dt){
                         'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove', 'jetpack',
                         'helm', 'plate', 'boots', 'astand', 'pad',
                         'coin', 'drone', 'tmap', 'relic', 'ped', 'sign', 'chest',
-                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
+                        'rounds', 'cells', 'rockets', 'tnt', 'mcharge', 'wtable', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'fish', 'cookedfish', 'divehelm', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'megatorch', 'greatstove', 'headlamp', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate'];
   v.generic.visible = genericKinds.includes(kind);
   v.matCube.visible = kind === 'mat';
   v.fists.visible = kind === null;
@@ -10146,16 +10170,29 @@ const stoveSys = {
     this.meshes = [];
     const M = this.ensureMats();
     for (const st of game.stoves){
-      const g = this.model();
+      const g = this.model(st.great);
       g.position.set(st.x, st.y, st.z);
       g.rotation.y = st.yaw || 0;
       this.group.add(g);
-      this.meshes.push({ st, mouth: g.userData.mouth });
+      this.meshes.push({ st, mouth: g.userData.mouth, mouths: g.userData.mouths });
     }
     rebuildSolidProps();
   },
-  model(){
+  model(great){
     const M = this.ensureMats();
+    if (great){
+      // THE GREAT STOVE (Build 112): a wide duskrock hearth with five mouths and two stacks
+      if (!M.gStone){ M.gStone = new THREE.MeshBasicMaterial({ color: 0x3a3440 }); M.gTrim = new THREE.MeshBasicMaterial({ color: 0x1f6a45 }); M.gHot = new THREE.MeshBasicMaterial({ color: 0x9effb4 }); }
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.2, 1.1), M.gStone); body.position.y = 0.6;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.12, 1.2), M.gTrim); top.position.y = 1.26;
+      g.add(body, top);
+      for (const x of [-0.7, 0.7]){ const ch = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.8, 0.28), M.gStone); ch.position.set(x, 1.7, 0.3); g.add(ch); }
+      const mouths = [];
+      for (let i = 0; i < 5; i++){ const m = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.34, 0.06), M.mouthCold); m.position.set(-0.84 + i * 0.42, 0.46, -0.56); m.userData.keep = true; g.add(m); mouths.push(m); }
+      g.userData.mouth = mouths[2]; g.userData.mouths = mouths;
+      return g;
+    }
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.95, 0.95), M.stone);
     body.position.y = 0.48;
@@ -10172,17 +10209,21 @@ const stoveSys = {
     g.userData.mouth = mouth;
     return g;
   },
-  add(x, y, z, yaw){
-    game.stoves.push({ x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0, id: game.pSeq++ });
+  add(x, y, z, yaw, great){
+    const st = { x, y, z, yaw, in: null, fuel: null, out: null, burn: 0, prog: 0, id: game.pSeq++ };
+    if (great){ st.great = 1; st.gin = new Array(5).fill(null); st.gout = new Array(5).fill(null); }
+    game.stoves.push(st);
     propRebuild(this); markSave();
   },
   removeNear(x, y, z, r){
     const keep = [], n0 = game.stoves.length;
+    this.poppedGreat = 0;
     for (const st of game.stoves){
-      if (Math.hypot(st.x - x, st.y + 0.5 - y, st.z - z) > r) keep.push(st);
+      if (Math.hypot(st.x - x, st.y + 0.5 - y, st.z - z) > r + (st.great ? 0.8 : 0)) keep.push(st);
       else {
+        if (st.great) this.poppedGreat++;
         // spill the contents so nothing is lost
-        for (const sl of [st.in, st.fuel, st.out]){
+        for (const sl of [st.in, st.fuel, st.out, ...(st.gin || []), ...(st.gout || [])]){
           if (!sl) continue;
           if (sl.kind === 'mat') CORE.addMat(game.slots, sl.mat, sl.count);
           else addStackItem(sl.kind, sl.count);
@@ -10205,14 +10246,44 @@ const stoveSys = {
       const tt = vx * dir.x + vy * dir.y + vz * dir.z;
       if (tt < 0 || tt > bestT) continue;
       const px = vx - dir.x * tt, py = vy - dir.y * tt, pz = vz - dir.z * tt;
-      if (Math.abs(py) < 0.85 && Math.hypot(px, pz) < 0.85){ best = st; bestT = tt; }
+      if (Math.abs(py) < 0.85 && Math.hypot(px, pz) < (st.great ? 1.35 : 0.85)){ best = st; bestT = tt; }
     }
     return best;
   },
   // furnace tick: runs for every stove whether or not its menu is open
+  // THE GREAT STOVE (Build 112): five lanes on one fire, twice as fast. The
+  // fire burns a unit per round, not per lane: five smelts for the fuel of one
+  greatTick(st, dt){
+    if (!st.gin){ st.gin = new Array(5).fill(null); st.gout = new Array(5).fill(null); }
+    const lanes = [];
+    for (let i = 0; i < 5; i++){
+      const it = st.gin[i], sm = it && CORE.SMELTS[it.kind], o = st.gout[i];
+      if (sm && (!o || (o.kind === sm && o.count < 999999))) lanes.push(i);
+    }
+    if (!lanes.length){ st.prog = 0; return false; }
+    let changed = false;
+    if (st.burn <= 0){
+      const ops = CORE.fuelOps(st.fuel);
+      if (!ops){ st.prog = 0; return false; }
+      st.fuel.count--; if (st.fuel.count <= 0) st.fuel = null;
+      st.burn = ops; changed = true;
+    }
+    st.prog += dt * 2 * (1 + 2 * powerSys.stoveBoost(st));
+    if (st.prog >= CORE.SMELT_T){
+      st.prog = 0; st.burn--;
+      for (const i of lanes){
+        const it = st.gin[i], sm = CORE.SMELTS[it.kind];
+        it.count--; if (it.count <= 0) st.gin[i] = null;
+        if (st.gout[i]) st.gout[i].count++; else st.gout[i] = { kind: sm, count: 1 };
+      }
+      changed = true; markSave();
+    }
+    return changed;
+  },
   update(dt){
     let changed = false;
     for (const st of game.stoves){
+      if (st.great){ if (this.greatTick(st, dt)) changed = true; continue; }
       const smelt = st.in && CORE.SMELTS[st.in.kind];
       const outOk = smelt && (!st.out || (st.out.kind === smelt && st.out.count < 999999));
       if (!smelt || !outOk){ st.prog = 0; continue; }
@@ -10238,6 +10309,10 @@ const stoveSys = {
     }
     // glowing mouths + live menu refresh
     for (const m of this.meshes){
+      if (m.mouths){
+        for (let i = 0; i < 5; i++){ const want = m.st.burn > 0 && m.st.gin && m.st.gin[i] ? this.mats.gHot : this.mats.mouthCold; if (m.mouths[i].material !== want) m.mouths[i].material = want; }
+        continue;
+      }
       const hot = m.st.burn > 0 && m.st.in;
       const want = hot ? this.mats.mouthHot : this.mats.mouthCold;
       if (m.mouth.material !== want) m.mouth.material = want;
@@ -11569,9 +11644,10 @@ const powerSys = {
             n.burn = Math.max(0, (n.burn || 0) - dt);
             // out of burn but coal in the tank: shovel the next lump in
             if (n.burn <= 0 && n.fuel && n.fuel.count > 0){
+              const hot = n.fuel.kind === 'scarcoal' ? 2 : 1;          // Strata's coal: twice as long (Build 112)
               n.fuel.count--;
               if (n.fuel.count <= 0) n.fuel = null;
-              n.burn = n.t === 'gen2' ? 60 : 30;
+              n.burn = (n.t === 'gen2' ? 60 : 30) * hot;
               if (game.ui === 'cont' && game.activeCont === n) refreshContUI();
             }
           }
@@ -11802,10 +11878,25 @@ const powerSys = {
     if (dst.t === 'hopper' || dst.t === 'crafter' || dst.t === 'chest')
       return this.invGive(dst.inv || (dst.inv = new Array(dst.t === 'chest' ? chestSlots(dst.sc) : 24).fill(null)), s.kind, s.mat);
     if (dst.t === 'gen' || dst.t === 'gen2'){
-      if (s.kind !== 'coal') return false;
-      if (!dst.fuel){ dst.fuel = { kind: 'coal', count: 1 }; return true; }
+      if (s.kind !== 'coal' && s.kind !== 'scarcoal') return false;
+      if (!dst.fuel){ dst.fuel = { kind: s.kind, count: 1 }; return true; }
+      if (dst.fuel.kind !== s.kind) return false;
       dst.fuel.count++;
       return true;
+    }
+    // THE GREAT STOVE (Build 112): smeltables to the first lane that takes them, fuel to the fire
+    if (dst.great){
+      if (s.kind !== 'mat' && CORE.SMELTS[s.kind]){
+        for (let i = 0; i < 5; i++){ const L = dst.gin[i]; if (L && L.kind === s.kind){ L.count++; return true; } }
+        for (let i = 0; i < 5; i++) if (!dst.gin[i]){ dst.gin[i] = { kind: s.kind, count: 1 }; return true; }
+        return false;
+      }
+      const probe = s.kind === 'mat' ? { kind: 'mat', mat: s.mat, count: 1 } : { kind: s.kind, count: 1 };
+      if (CORE.fuelOps(probe)){
+        if (!dst.fuel){ dst.fuel = probe; return true; }
+        if (dst.fuel.kind === probe.kind && (probe.kind !== 'mat' || dst.fuel.mat === probe.mat)){ dst.fuel.count++; return true; }
+      }
+      return false;
     }
     // a stove: smeltables to INPUT, burnables to FUEL
     if (dst.in !== undefined){
@@ -11867,14 +11958,25 @@ const torchSys = {
     for (const t of game.torches){
       const dx = t[0] - px, dz = t[2] - pz;
       if (dx * dx + dz * dz > R2) continue;
-      const g = this.model();
+      const g = this.model(!!t[3]);
       g.position.set(t[0], t[1], t[2]);
       this.group.add(g);
     }
   },
-  model(){
+  model(mega){
     if (!this.mats){
       this.mats = { bark: pixMat(PROP_TEX.bark, null, 1, 2), ember: pixMat(PROP_TEX.ember) };
+    }
+    if (mega){
+      // STRATA'S FIRE (Build 112): a taller shaft of duskrock iron, a cold green flame in a cage
+      if (!this.mats.megaFlame){ this.mats.megaFlame = new THREE.MeshBasicMaterial({ color: 0x9effb4 }); this.mats.megaCore = new THREE.MeshBasicMaterial({ color: 0xeafff0 }); this.mats.megaIron = new THREE.MeshBasicMaterial({ color: 0x2a2630 }); }
+      const g = new THREE.Group();
+      const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.7, 0.09), this.mats.megaIron); shaft.position.y = 0.35;
+      const flame = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.2), this.mats.megaFlame); flame.position.y = 0.84;
+      const core = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.1), this.mats.megaCore); core.position.y = 0.84;
+      g.add(shaft, flame, core);
+      for (const [x, z] of [[-0.13, -0.13], [0.13, -0.13], [-0.13, 0.13], [0.13, 0.13]]){ const bar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.34, 0.03), this.mats.megaIron); bar.position.set(x, 0.84, z); g.add(bar); }
+      return g;
     }
     const g = new THREE.Group();
     this.gS = this.gS || new THREE.BoxGeometry(0.07, 0.42, 0.07);
@@ -11886,12 +11988,14 @@ const torchSys = {
     g.add(stick); g.add(tip);
     return g;
   },
-  add(x, y, z){ game.torches.push([x, y, z]); propRebuild(this); markSave(); },
+  add(x, y, z, mega){ game.torches.push(mega ? [x, y, z, 1] : [x, y, z]); propRebuild(this); markSave(); },
   // remove torches near a point; returns how many were popped
   removeNear(x, y, z, r){
     const keep = [], popped = game.torches.length;
+    this.poppedMega = 0;
     for (const t of game.torches){
       if (Math.hypot(t[0]-x, t[1]-y, t[2]-z) > r) keep.push(t);
+      else if (t[3]) this.poppedMega++;
     }
     game.torches = keep;
     const n = popped - keep.length;
@@ -11905,7 +12009,8 @@ const torchSys = {
     for (let i = 0; i < game.torches.length; i++){
       const t = game.torches[i];
       const d = Math.hypot(t[0]-game.pos.x, t[1]-game.pos.y, t[2]-game.pos.z);
-      if (d < 50) near.push([d, t, 0.45, 9.8]);
+      if (t[3]){ if (d < 130) near.push([d * 0.35, t, 0.84, -68.6]); }   // a mega torch: seven times the reach, and it wins a place in the sixteen
+      else if (d < 50) near.push([d, t, 0.45, 9.8]);
     }
     for (let i = 0; i < game.beacons.length; i++){
       const b = game.beacons[i];
@@ -12893,7 +12998,7 @@ const placePreview = {
   build(kind, vkey){
     while (this.root.children.length) this.root.remove(this.root.children[0]);
     let g = null;
-    if (kind === 'torch') g = torchSys.model();
+    if (kind === 'torch') g = torchSys.model(vkey.endsWith('|mega'));
     else if (kind === 'bulb') g = bulbSys.model();
     else if (kind === 'table') g = tableSys.model();
     else if (kind === 'beacon') g = beaconSys.model();
@@ -12956,6 +13061,7 @@ const placePreview = {
     if (!hit){ this.hide(); return; }
     let vkey = tool.kind;
     if (tool.kind === 'decor') vkey += '|' + tool.decorType;
+    if (tool.kind === 'torch' && tool.mega) vkey += '|mega';
     if (tool.kind === 'pnode') vkey += '|' + tool.ptype;
     if (tool.kind === 'rope'){
       // live drop length: same probe the click runs, throttled to hit moves
@@ -14687,7 +14793,7 @@ function nearestLightDist(x, y, z){
 function nearestTorchDist(x, y, z){
   let best = 1e9;
   for (const t of game.torches){
-    const d = Math.hypot(t[0]-x, t[1]-y, t[2]-z);
+    const d = Math.hypot(t[0]-x, t[1]-y, t[2]-z) / (t[3] ? 7 : 1);   // a mega torch keeps the night seven times as far off
     if (d < best) best = d;
   }
   return best;
@@ -27691,6 +27797,7 @@ function activeTool(){
   if (it.kind === 'rail') return { kind: 'rail', tier: 0, item: it };
   if (it.kind === 'deed') return { kind: 'deedtool', tier: 0, item: it };
   if (it.kind === 'torch') return { kind: 'torch', tier: 0, item: it };
+  if (it.kind === 'megatorch') return { kind: 'torch', mega: 1, tier: 0, item: it };
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
@@ -27709,6 +27816,7 @@ function activeTool(){
   if (it.kind === 'beacon') return { kind: 'beacon', tier: 0, item: it };
   if (it.kind === 'bed') return { kind: 'bed', tier: 0, item: it };
   if (it.kind === 'stove') return { kind: 'stove', tier: 0, item: it };
+  if (it.kind === 'greatstove') return { kind: 'stove', great: 1, tier: 0, item: it };
   if (it.kind === 'bulb') return { kind: 'bulb', tier: 0, item: it };
   if (it.kind === 'tuft' || it.kind === 'flower' || it.kind === 'shrub' || it.kind === 'coral' || it.kind === 'kelp')
     return { kind: 'decor', decorType: it.kind, tier: 0, item: it };
@@ -28075,14 +28183,14 @@ const wrenchProps = {
     if (k === 'stove'){
       const i = game.stoves.indexOf(ref);
       if (i < 0) return;
-      this.spillInv([ref.in, ref.fuel, ref.out]);
+      this.spillInv([ref.in, ref.fuel, ref.out, ...(ref.gin || []), ...(ref.gout || [])]);
       const sid = 's' + ref.id;
       let w = 0;
       game.wires = game.wires.filter(wr => { if (wr.a === sid || wr.b === sid){ w++; return false; } return true; });
       if (w) give('wire', w);
       this.dropTubesFor(sid);
       game.stoves.splice(i, 1);
-      give('stove', 1);
+      give(ref.great ? 'greatstove' : 'stove', 1);
       touched.add('stove'); touched.add('pnode');
       return;
     }
@@ -28106,7 +28214,7 @@ const wrenchProps = {
       return Object.assign({ k, yaw: ref[3] || 0 }, P3(ref[0], ref[1], ref[2]));
     if (k === 'bulb')
       return Object.assign({ k, n: [ref[3] || 0, ref[4] == null ? 1 : ref[4], ref[5] || 0] }, P3(ref[0], ref[1], ref[2]));
-    if (k === 'stove') return Object.assign({ k, yaw: ref.yaw || 0 }, P3(ref.x, ref.y, ref.z));
+    if (k === 'stove') return Object.assign({ k, yaw: ref.yaw || 0, great: ref.great ? 1 : 0 }, P3(ref.x, ref.y, ref.z));
     if (k === 'door') return Object.assign({ k, yaw: ref.yaw, w: ref.w || 1.2, h: ref.h || 2.2, gate: ref.gate ? 1 : undefined }, P3(ref.x, ref.y, ref.z));
     if (k === 'rope') return Object.assign({ k, len: ref[3] }, P3(ref[0], ref[1], ref[2]));
     if (k === 'decor')
@@ -28149,7 +28257,9 @@ const wrenchProps = {
     }
     if (rec.k === 'stove'){
       const id = game.pSeq++;
-      game.stoves.push({ x, y, z, yaw: (rec.yaw || 0) + yawOff, in: null, fuel: null, out: null, burn: 0, prog: 0, id });
+      const ns = { x, y, z, yaw: (rec.yaw || 0) + yawOff, in: null, fuel: null, out: null, burn: 0, prog: 0, id };
+      if (rec.great){ ns.great = 1; ns.gin = new Array(5).fill(null); ns.gout = new Array(5).fill(null); }
+      game.stoves.push(ns);
       newIds['s' + rec.oldStoveId] = 's' + id;
       return 'stove';
     }
@@ -29188,7 +29298,7 @@ function doMine(tool, p, shape, eff, group, mir){
     }
   }
   const poppedTorches = torchSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
-  if (poppedTorches){ addTorchesToInv(poppedTorches); parts.push('+' + poppedTorches + ' torch'); }
+  if (poppedTorches){ const mg = torchSys.poppedMega || 0; if (poppedTorches - mg) addTorchesToInv(poppedTorches - mg); if (mg) addStackItem('megatorch', mg); parts.push('+' + poppedTorches + ' torch'); }
   const poppedDoors = doorSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
   if (poppedDoors){ addStackItem('door', poppedDoors); parts.push('+' + poppedDoors + ' door'); }
   const poppedTables = tableSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.8);
@@ -29198,7 +29308,7 @@ function doMine(tool, p, shape, eff, group, mir){
   const poppedBeds = bedSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 1.0);
   if (poppedBeds){ addStackItem('bed', poppedBeds); parts.push('+' + poppedBeds + ' bed'); }
   const poppedStoves = stoveSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.9);
-  if (poppedStoves){ addStackItem('stove', poppedStoves); parts.push('+' + poppedStoves + ' stove'); }
+  if (poppedStoves){ const gs = stoveSys.poppedGreat || 0; if (poppedStoves - gs) addStackItem('stove', poppedStoves - gs); if (gs) addStackItem('greatstove', gs); parts.push('+' + poppedStoves + ' stove'); }
   const poppedBulbs = bulbSys.removeNear(p.x, p.y, p.z, eff * 0.5 + 0.6);
   if (poppedBulbs){ addStackItem('bulb', poppedBulbs); parts.push('+' + poppedBulbs + ' bulb'); }
   collapseSys.note(p, eff);
@@ -29692,7 +29802,7 @@ function tryAction(dt, now){
       const pY = game.tool.pYaw || 0;
       if (tool.kind === 'table') tableSys.add(hit[0], hit[1], hit[2], pY, tool.item.kind === 'mtable' ? 'moon' : tool.item.kind === 'atable' ? 'alien' : 'earth');
       else if (tool.kind === 'beacon') beaconSys.add(hit[0], hit[1], hit[2], pY);
-      else if (tool.kind === 'stove') stoveSys.add(hit[0], hit[1], hit[2], pY + Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2));
+      else if (tool.kind === 'stove') stoveSys.add(hit[0], hit[1], hit[2], pY + Math.round((game.yaw + Math.PI) / (Math.PI / 2)) * (Math.PI / 2), tool.great);
       else bedSys.add(hit[0], hit[1], hit[2], pY + Math.round(game.yaw / (Math.PI / 2)) * (Math.PI / 2));
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
@@ -30071,7 +30181,7 @@ function tryAction(dt, now){
       if (!hit){ toast('no surface in reach'); return; }
       if (game.mode !== 'creative') tool.item.count--;
       if (tool.item.count <= 0) game.slots[game.hotSel] = null;
-      torchSys.add(hit[0], hit[1], hit[2]);
+      torchSys.add(hit[0], hit[1], hit[2], tool.mega);
       AudioSys.sfx('place');
       refreshHotbar(); refreshToolHUD();
     }
@@ -30249,7 +30359,7 @@ function itemIconURL(it){
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
-       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
+       'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'megatorch', 'greatstove', 'headlamp', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
@@ -30507,6 +30617,18 @@ function itemIconURL(it){
     c.fillStyle = '#9affb0'; c.fillRect(6, 6, 4, 4);
     c.fillStyle = '#eaffee'; c.fillRect(7, 7, 2, 2);
     c.fillStyle = '#5a2a6a'; c.fillRect(4, 4, 1, 1); c.fillRect(11, 4, 1, 1); c.fillRect(4, 11, 1, 1); c.fillRect(11, 11, 1, 1);
+  } else if (it.kind === 'megatorch'){
+    c.fillStyle = '#2a2630'; c.fillRect(7, 6, 2, 9);
+    c.fillStyle = '#9effb4'; c.fillRect(5, 1, 6, 5); c.fillStyle = '#eafff0'; c.fillRect(7, 2, 2, 3);
+    c.fillStyle = '#2a2630'; c.fillRect(4, 1, 1, 5); c.fillRect(11, 1, 1, 5);
+  } else if (it.kind === 'greatstove'){
+    c.fillStyle = '#3a3440'; c.fillRect(1, 6, 14, 9); c.fillStyle = '#1f6a45'; c.fillRect(1, 5, 14, 2);
+    c.fillStyle = '#3a3440'; c.fillRect(3, 2, 2, 3); c.fillRect(11, 2, 2, 3);
+    c.fillStyle = '#9effb4'; for (let i = 0; i < 5; i++) c.fillRect(2 + i * 2.6, 10, 2, 3);
+  } else if (it.kind === 'headlamp'){
+    c.fillStyle = '#2a2630'; c.fillRect(2, 7, 12, 3); c.fillRect(2, 6, 2, 5); c.fillRect(12, 6, 2, 5);
+    c.fillStyle = '#c9c7d1'; c.fillRect(6, 5, 4, 6);
+    c.fillStyle = '#fff6d8'; c.fillRect(7, 6, 2, 4); c.fillStyle = 'rgba(255,246,216,0.5)'; c.fillRect(10, 4, 4, 1); c.fillRect(10, 11, 4, 1);
   } else if (it.kind === 'scarcoal' || it.kind === 'ichorite' || it.kind === 'nullite' || it.kind === 'vehlite'){
     // STRATA'S TIERS (Build 111): a lump of each, its own colours
     const P = { scarcoal: ['#2a1e20', '#1e1418', '#ff7a3a', '#ffd0a0'], ichorite: ['#2c3a2e', '#243026', '#a8ff4a', '#f0ffc8'],
@@ -31167,6 +31289,9 @@ function itemLabel(it){
   if (it.kind === 'band') return 'teleport band';
   if (it.kind === 'voidore') return 'voidore';
   if (it.kind === 'scarcoal') return 'scarcoal';
+  if (it.kind === 'megatorch') return 'mega torch';
+  if (it.kind === 'greatstove') return 'great stove';
+  if (it.kind === 'headlamp') return 'headlamp';
   if (it.kind === 'ichorite') return 'ichorite';
   if (it.kind === 'nullite') return 'nullite';
   if (it.kind === 'vehlite') return 'vehlite';
@@ -31301,6 +31426,7 @@ function slotItem(key){
   if (key === 'sin') return game.activeStove && game.activeStove.in;
   if (key === 'sfuel') return game.activeStove && game.activeStove.fuel;
   if (key === 'sout') return game.activeStove && game.activeStove.out;
+  if (typeof key === 'string' && /^g[io][0-4]$/.test(key)){ const st = game.activeStove; const A = st && (key[1] === 'i' ? st.gin : st.gout); return A ? A[+key[2]] : null; }
   if (key === 'ahead') return game.armor.head;
   if (key === 'aback') return game.armor.back;
   if (key === 'achest') return game.armor.chest;
@@ -31495,10 +31621,10 @@ function sortInventory(){
 const CAT_GADGETS  = ['drill', 'disp', 'trowel', 'bore', 'lathe', 'wrench', 'mender', 'grapple', 'drone', 'tdrone', 'rod', 'cannon', 'phone', 'hoe', 'can', 'grabber', 'spawner'];
 const CAT_VEHICLES = ['car', 'sportscar', 'bike', 'boat', 'motorboat', 'plane', 'hover', 'tank', 'heli', 'jet', 'rocket', 'rocket2', 'jetfuel', 'rail', 'repair', 'hangar', 'airstrip', 'windsock'];      // the garage: car now; boats, bikes, plane, rocket as they land
 const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spikes', 'bell', 'trench', 'flamejet'];   // swords, blaster, the arsenal, explosives
-const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings'];
+const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings', 'headlamp'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery', 'sprinkler', 'intake'];
-const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'greatstove', 'megatorch', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -31584,7 +31710,7 @@ function catalogEntries(){
   for (const t of MENAGERIE_TYPES) out.push({ kind: 'spawner', ent: t, rec: null });
   out.push({ kind: 'boat' }); out.push({ kind: 'motorboat', charge: 100 });
   out.push({ kind: 'rod' }); out.push({ kind: 'divehelm', tier: 0 });
-  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); for (const k of ['scarcoal', 'ichorite', 'nullite', 'vehlite']) out.push({ kind: k, count: 16 }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'springstone', count: 4 }); out.push({ kind: 'lavastone', count: 4 }); out.push({ kind: 'ichorstone', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
+  out.push({ kind: 'spacesuit', tier: 0 }); out.push({ kind: 'rocket', charge: 100 }); out.push({ kind: 'mech', tier: 4 }); out.push({ kind: 'lunite', count: 16 }); out.push({ kind: 'selenite', count: 16 }); out.push({ kind: 'astrium', count: 16 }); out.push({ kind: 'translator' }); out.push({ kind: 'band' }); out.push({ kind: 'voidore', count: 16 }); for (const k of ['scarcoal', 'ichorite', 'nullite', 'vehlite']) out.push({ kind: k, count: 16 }); out.push({ kind: 'megatorch', count: 16 }); out.push({ kind: 'greatstove', count: 2 }); out.push({ kind: 'headlamp' }); out.push({ kind: 'nullcore', count: 8 }); out.push({ kind: 'relic', count: 3 }); out.push({ kind: 'fence', count: 32 }); out.push({ kind: 'fencegate', count: 4 }); out.push({ kind: 'springstone', count: 4 }); out.push({ kind: 'lavastone', count: 4 }); out.push({ kind: 'ichorstone', count: 4 }); out.push({ kind: 'mtable', count: 1 }); out.push({ kind: 'atable', count: 1 }); out.push({ kind: 'voidfruit', count: 8 }); out.push({ kind: 'rocket2', charge: 100 });
   out.push({ kind: 'plane', charge: 100 }); out.push({ kind: 'hover', charge: 100 });
   out.push({ kind: 'tank', charge: 100 }); out.push({ kind: 'heli', charge: 100 }); out.push({ kind: 'jet', charge: 100 }); out.push({ kind: 'jetfuel', count: 4 }); out.push({ kind: 'tankpart', count: 3 }); out.push({ kind: 'gunpart', count: 3 }); out.push({ kind: 'jetpart', count: 3 });
   out.push({ kind: 'aetherore', count: 16 }); out.push({ kind: 'aetheringot', count: 16 });
@@ -31949,6 +32075,23 @@ function openStove(st){
 function buildStoveUI(){
   const row = $('stoverow'), main = $('stovemain'), hot = $('stovehot');
   row.innerHTML = ''; main.innerHTML = ''; hot.innerHTML = '';
+  const st = game.activeStove;
+  if (st && st.great){
+    // THE GREAT STOVE (Build 112): the fire, then five lanes of input -> output
+    row.style.gridTemplateColumns = '52px 40px 52px';
+    row.appendChild(slotEl('sfuel'));
+    const lab = document.createElement('div'); lab.style.cssText = 'grid-column:span 2;font-size:12px;color:#9effb4;'; lab.textContent = 'one fire, five lanes'; row.appendChild(lab);
+    for (let i = 0; i < 5; i++){
+      row.appendChild(slotEl('gi' + i));
+      const ar = document.createElement('div'); ar.style.cssText = 'text-align:center;font-size:18px;color:#9effb4;'; ar.textContent = '\u2192'; row.appendChild(ar);
+      row.appendChild(slotEl('go' + i));
+    }
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    refreshStoveUI(true);
+    return;
+  }
+  row.style.gridTemplateColumns = '52px 52px 70px 52px';
   row.appendChild(slotEl('sin'));
   row.appendChild(slotEl('sfuel'));
   const arrow = document.createElement('div');
@@ -31965,6 +32108,11 @@ function refreshStoveUI(repaint){
   const st = game.activeStove;
   if (!st) return;
   if (repaint) document.querySelectorAll('#stoverow .slot, #stovemain .slot, #stovehot .slot').forEach(paintSlot);
+  if (st.great){
+    const busy = (st.gin || []).filter(q => q && CORE.SMELTS[q.kind]).length;
+    $('stovestatus').textContent = st.burn > 0 && busy ? '\ud83d\udd25 ' + busy + ' lane' + (busy > 1 ? 's' : '') + ' · ' + Math.round(st.prog / CORE.SMELT_T * 100) + '%' : busy ? 'needs fuel (coal, scarcoal or wood)' : 'up to five things to smelt, one in each lane';
+    return;
+  }
   const pct = st.in && CORE.SMELTS[st.in.kind] ? Math.round(st.prog / CORE.SMELT_T * 100) : 0;
   const burning = st.burn > 0;
   $('stovestatus').textContent = burning
@@ -31981,6 +32129,7 @@ function uiMove(from, to){
   const st = game.activeStove, pc = game.activeCont;
   const get = k => k === 'disp' ? game.dispSlot
     : k === 'sin' ? (st && st.in) : k === 'sfuel' ? (st && st.fuel) : k === 'sout' ? (st && st.out)
+    : (typeof k === 'string' && /^g[io][0-4]$/.test(k)) ? (st && (k[1] === 'i' ? st.gin : st.gout) && (k[1] === 'i' ? st.gin : st.gout)[+k[2]])
     : k === 'aback' ? game.armor.back
     : k === 'ahead' ? game.armor.head
     : k === 'achest' ? game.armor.chest
@@ -31996,6 +32145,7 @@ function uiMove(from, to){
     else if (k === 'sin'){ if (st) st.in = v; }
     else if (k === 'sfuel'){ if (st) st.fuel = v; }
     else if (k === 'sout'){ if (st) st.out = v; }
+    else if (typeof k === 'string' && /^g[io][0-4]$/.test(k)){ if (st && st.gin) (k[1] === 'i' ? st.gin : st.gout)[+k[2]] = v; }
     else if (k === 'aback') game.armor.back = v;
     else if (k === 'ahead') game.armor.head = v;
     else if (k === 'achest') game.armor.chest = v;
@@ -32012,18 +32162,19 @@ function uiMove(from, to){
   if (CREW_KEY.test(String(to))){ const why = slotRefuses(to, A); if (why){ toast(why); return 'none'; } }
   if (to === 'disp' && A.kind !== 'disp'){ toast('only a dispenser fits in the dispenser slot'); return 'none'; }
   if (from === 'disp' && B && B.kind !== 'disp'){ toast('that slot is taken'); return 'none'; }
-  if (to === 'sout'){ toast('the output slot only gives'); return 'none'; }
+  if (to === 'sout' || /^go[0-4]$/.test(String(to))){ toast('the output slot only gives'); return 'none'; }
+  if (/^gi[0-4]$/.test(String(to)) && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sin' && !CORE.SMELTS[A.kind]){ toast('the stove can smelt ore and cook meat'); return 'none'; }
   if (to === 'sfuel' && !CORE.fuelOps(A)){ toast('fuel is coal or wood'); return 'none'; }
-  if (to === 'gfuel' && A.kind !== 'coal'){ toast('generators burn coal'); return 'none'; }
-  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit'){ toast('that slot wants a helmet'); return 'none'; }
+  if (to === 'gfuel' && A.kind !== 'coal' && A.kind !== 'scarcoal'){ toast('generators burn coal'); return 'none'; }
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit' && A.kind !== 'headlamp'){ toast('that slot wants a helmet'); return 'none'; }
   if (to === 'achest' && A.kind !== 'plate' && A.kind !== 'mech'){ toast('that slot wants a chestplate'); return 'none'; }
   if (to === 'afeet' && A.kind !== 'boots'){ toast('that slot wants boots'); return 'none'; }
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings'){ toast('that slot wants a jetpack or wings'); return 'none'; }
   if (/^c\d+$/.test(String(to)) && game.activeCont && game.activeCont.t === 'astand' &&
       !['helm', 'plate', 'boots'].includes(A.kind)){ toast('the stand holds armor'); return 'none'; }
   if (B && CORE.stackableWith(A, B)){ B.count += A.count; set(from, null); return 'merged'; }
-  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout' || from === 'gfuel' ||
+  if (B && (from === 'sin' || from === 'sfuel' || from === 'sout' || from === 'gfuel' || /^g[io][0-4]$/.test(String(from)) ||
             from === 'ahead' || from === 'achest' || from === 'afeet' || from === 'aback')){ toast('that slot is taken'); return 'none'; }
   set(from, B || null); set(to, A);
   return 'swapped';
@@ -32075,6 +32226,7 @@ function quickMove(key, n){
       else if (key === 'sin') game.activeStove.in = null;
       else if (key === 'sfuel') game.activeStove.fuel = null;
       else if (key === 'sout') game.activeStove.out = null;
+      else if (/^g[io][0-4]$/.test(key)) (key[1] === 'i' ? game.activeStove.gin : game.activeStove.gout)[+key[2]] = null;
       else if (key === 'disp') game.dispSlot = null;
       else if (key === 'dcin') game.activeDecraft.inv[0] = null;
       else if (key === 'vbat') game.driving.bat = null;
@@ -32092,6 +32244,17 @@ function quickMove(key, n){
     if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
     else if (CORE.stackableWith(it, pn.inv[0])){ pn.inv[0].count += it.count; game.slots[key] = null; done = true; }
     else toast('the de-crafter holds one thing at a time');
+  } else if (game.ui === 'stove' && game.activeStove && game.activeStove.great){
+    // the great stove: a smeltable to the lane holding its like, else the first empty one
+    const st = game.activeStove;
+    if (CORE.SMELTS[it.kind]){
+      let i = st.gin.findIndex(q => q && CORE.stackableWith(it, q)); if (i < 0) i = st.gin.findIndex(q => !q);
+      if (i >= 0){ if (st.gin[i]) st.gin[i].count += it.count; else st.gin[i] = it; game.slots[key] = null; done = true; }
+      else toast('all five lanes are full');
+    } else if (CORE.fuelOps(it) && (!st.fuel || CORE.stackableWith(it, st.fuel))){
+      if (st.fuel) st.fuel.count += it.count; else st.fuel = it;
+      game.slots[key] = null; done = true;
+    }
   } else if (game.ui === 'stove' && game.activeStove){
     const st = game.activeStove;
     if (CORE.SMELTS[it.kind] && (!st.in || CORE.stackableWith(it, st.in))){
@@ -32104,7 +32267,7 @@ function quickMove(key, n){
   } else if ((game.ui === 'cont' || game.ui === 'crafter') && game.activeCont){
     const pn = game.activeCont;
     if (pn.t === 'gen' || pn.t === 'gen2'){
-      if (it.kind === 'coal'){
+      if (it.kind === 'coal' || it.kind === 'scarcoal'){
         if (!pn.fuel){ pn.fuel = it; game.slots[key] = null; done = true; }
         else if (CORE.stackableWith(it, pn.fuel)){ pn.fuel.count += it.count; game.slots[key] = null; done = true; }
       } else toast('generators burn coal');
@@ -32122,9 +32285,9 @@ function quickMove(key, n){
       if (!pn.inv) pn.inv = new Array(pn.t === 'chest' ? chestSlots(pn.sc) : 24).fill(null);
       if (mergeInto(pn.inv)){ game.slots[key] = null; done = true; }
     }
-  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm' || it.kind === 'spacesuit' || it.kind === 'mech')){
+  } else if (game.ui === 'inv' && (it.kind === 'helm' || it.kind === 'plate' || it.kind === 'boots' || it.kind === 'jetpack' || it.kind === 'wings' || it.kind === 'divehelm' || it.kind === 'spacesuit' || it.kind === 'headlamp' || it.kind === 'mech')){
     // shift-click armor in your inventory = wear it (swaps what you had on)
-    const slot = it.kind === 'helm' || it.kind === 'divehelm' || it.kind === 'spacesuit' ? 'head' : it.kind === 'plate' || it.kind === 'mech' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
+    const slot = it.kind === 'helm' || it.kind === 'divehelm' || it.kind === 'spacesuit' || it.kind === 'headlamp' ? 'head' : it.kind === 'plate' || it.kind === 'mech' ? 'chest' : it.kind === 'boots' ? 'feet' : 'back';
     const prev = game.armor[slot];
     game.armor[slot] = it;
     game.slots[key] = prev || null;
@@ -32168,6 +32331,7 @@ function slotSet(k, v){
   else if (k === 'sin'){ if (st) st.in = v; }
   else if (k === 'sfuel'){ if (st) st.fuel = v; }
   else if (k === 'sout'){ if (st) st.out = v; }
+  else if (typeof k === 'string' && /^g[io][0-4]$/.test(k)){ if (st && st.gin) (k[1] === 'i' ? st.gin : st.gout)[+k[2]] = v; }
   else if (k === 'aback') game.armor.back = v;
   else if (k === 'ahead') game.armor.head = v;
   else if (k === 'achest') game.armor.chest = v;
@@ -32186,7 +32350,7 @@ function slotRefuses(to, A){
   if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
   if (to === 'sfuel' && !CORE.fuelOps(A)) return 'fuel is coal or wood';
   if (to === 'gfuel' && A.kind !== 'coal') return 'generators burn coal';
-  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit') return 'that slot wants a helmet';
+  if (to === 'ahead' && A.kind !== 'helm' && A.kind !== 'divehelm' && A.kind !== 'spacesuit' && A.kind !== 'headlamp') return 'that slot wants a helmet';
   if (to === 'achest' && A.kind !== 'plate' && A.kind !== 'mech') return 'that slot wants a chestplate';
   if (to === 'afeet' && A.kind !== 'boots') return 'that slot wants boots';
   if (to === 'aback' && A.kind !== 'jetpack' && A.kind !== 'wings') return 'that slot wants a jetpack or wings';
@@ -32470,6 +32634,12 @@ function itemInfoHTML(it, tool){
     html = '<div class="t1">relic ×' + it.count + '</div><div class="t2">a tablet of veilstone out of a vault, a line of Vehl\'s people\'s writing on it · Sova pays 400 · Vehl says keep them: they will matter when there is something to rebuild</div>';
   } else if (it.kind === 'nullcore'){
     html = '<div class="t1">null core ×' + it.count + '</div><div class="t2">out of a lancer or a hollow: the thing that drives them, and it is not of Strata either · Sova pays well for one · Vehl wants them kept for the centre</div>';
+  } else if (it.kind === 'megatorch'){
+    html = '<div class="t1">mega torch ×' + it.count + '</div><div class="t2">a cold green fire in an iron cage, lit with Strata\'s coal: seven times a torch\'s light, and nothing hunts inside seven times its reach · four from a scarcoal and a stick</div>';
+  } else if (it.kind === 'greatstove'){
+    html = '<div class="t1">great stove ×' + it.count + '</div><div class="t2">a hearth of five mouths on one fire: five things smelting at once, twice as fast as a stove, and one unit of fuel for each round of all five · wire it and it runs faster still · made at Strata\'s table from a stove, voidore and scarcoal</div>';
+  } else if (it.kind === 'headlamp'){
+    html = '<div class="t1">headlamp</div><div class="t2">wear it in the helmet slot: a beam wherever you look, fifty metres of it, and it never runs down</div>';
   } else if (it.kind === 'scarcoal'){
     html = '<div class="t1">scarcoal ×' + it.count + '</div><div class="t2">Strata\'s coal, an ember still in it, from just under the ground · burns twice as long as the Earth\'s in a stove or a generator</div>';
   } else if (it.kind === 'ichorite'){
@@ -33988,7 +34158,7 @@ function startWorldData(id, data){
   if (data.weather && WEATHER[data.weather.kind]) weatherSys.set(data.weather.kind, data.weather.t || 60); else weatherSys.set('clear', 200 + Math.random() * 400);
   weatherSys.fires = []; weatherSys.thunder = []; weatherSys.puddles = (data.weather && data.weather.puddles) || [];
   if (airless()) weatherSys.set('clear', 1e9);                   // no air, no weather
-  game.torches = (data.torches || []).map(t => [t[0], t[1], t[2]]);
+  game.torches = (data.torches || []).map(t => t[3] ? [t[0], t[1], t[2], 1] : [t[0], t[1], t[2]]);
   game.beacons = (data.beacons || []).map(b => [b[0], b[1], b[2]]);
   game.beds = (data.beds || []).map(b => [b[0], b[1], b[2], b[3] || 0]);
   game.spawnPoint = data.spawnPoint || null;
@@ -37765,6 +37935,8 @@ function frameBody(now){
   if (!meshPool.ok) lodTerrain.processSync(2);
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
+  { const U = game.terrainMat.uniforms, on = !!(game.armor && game.armor.head && game.armor.head.kind === 'headlamp');   // Build 112
+    U.uHead.value = on ? 1 : 0; if (on) game.camera.getWorldDirection(U.uHeadDir.value); }
   updateDayNight(dt);
   skySys.update(dt);
   updateSunShadow(dt);
@@ -38033,7 +38205,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

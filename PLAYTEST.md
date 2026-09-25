@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 112 — STRATA'S FIRE
+- [ ] Light a camp at night with mega torches. Is seven times too much,
+      and is the green light the right colour for them?
+- [ ] Wear the headlamp down a cave and across the surface at night.
+      Is the cone the right width?
+- [ ] Build a great stove, fill all five lanes, fuel it once. Tube a
+      hopper into it. Is it worth the voidore?
+
 ## Build 111 — STRATA'S TIERS
 - [ ] On Strata, dig down: scarcoal and voidore near the top, ichorite
       past 30 m, nullite past 70 m, vehlite past 130 m. Are they too

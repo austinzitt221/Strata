@@ -471,7 +471,7 @@ in the order I want to build them:
 After the 2026-10-05 playtest (106 to 109): fixed in Build 110 (liquid
 shapes on the metre cells, liquids to the ceiling, lakes that meet their
 walls, the ghost shadows over cities). And, in my order:
- 24. **Strata's own tiers** (DONE, Build 111; the coal's torches, headlamp and great stove are Build 112). Four ores of Strata's own, each with its
+ 24. **Strata's own tiers** (DONE, Builds 111 and 112). Four ores of Strata's own, each with its
      drill, dispenser, sword and armour, above astrium (twelve tiers in
      all). Earth's ores leave Strata. Strata's coal burns twice as long,
      makes MEGA TORCHES (their own colour, seven times the light) and a
@@ -489,8 +489,9 @@ walls, the ghost shadows over cities). And, in my order:
      stone: cube, sphere, cylinder, straight STAIRCASE, SLAB (a half
      cube), cone, DOME (a half sphere), SPIRAL STAIR, PYRAMID, ARCH, and
      the FULL BUILDING (a hollow box with a roof and a door cut, in one
-     click) at nullite. Vehlite, the twelfth, gets ECHO instead of a
-     shape. The candidates that were offered:
+     click) at nullite, and THE TOWER at vehlite (a round hollow tower,
+     a spiral stair inside, battlements and a door, one click; my pick,
+     Austin left the twelfth to me). ECHO stays vehlite's ability. The candidates that were offered:
      Stone makes only the cube; every tier unlocks
      one more shape, for the drill and the dispenser alike. Austin picks
      the master list and its order from these candidates (mine and his):
