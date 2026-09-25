@@ -2021,7 +2021,17 @@ function makeEarthGen(seed){
   // friendly ground — dense enough that plains read alive, deterministic
   // per seed so it never changes between visits
   const sDe = hashInt(seed ^ 0x3dc0de11);
+  const decorMemo = new Map();                       // Build 115: pure per cell, like the trees
   function decorAt(cx, cz){
+    const mk = (cx + 1048576) * 2097152 + (cz + 1048576);
+    const hit = decorMemo.get(mk);
+    if (hit !== undefined) return hit;
+    const d = decorAtRaw(cx, cz);
+    if (decorMemo.size > 200000) decorMemo.clear();
+    decorMemo.set(mk, d);
+    return d;
+  }
+  function decorAtRaw(cx, cz){
     const h0 = hashInt(sDe ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
     if (h0 / 4294967296 > 0.58) return null;
     const x = cx * DECOR_CELL + 0.4 + (hashInt(h0 ^ 5) / 4294967296) * (DECOR_CELL - 0.8);
@@ -2056,7 +2066,20 @@ function makeEarthGen(seed){
   }
   // trees: one candidate per 11m lattice cell, on gentle grassy ground
   const sT = hashInt(seed ^ 0x71f68b1c);
+  // Build 115: a cell's tree is a pure function of the cell, and the far
+  // forest asks for five thousand of them each time you cross eleven metres
+  // (five heights apiece): the answers are kept
+  const treeMemo = new Map();
   function treeAt(cx, cz){
+    const mk = (cx + 1048576) * 2097152 + (cz + 1048576);
+    const hit = treeMemo.get(mk);
+    if (hit !== undefined) return hit;
+    const t = treeAtRaw(cx, cz);
+    if (treeMemo.size > 200000) treeMemo.clear();
+    treeMemo.set(mk, t);
+    return t;
+  }
+  function treeAtRaw(cx, cz){
     const h0 = hashInt(sT ^ Math.imul(cx, 0x9E3779B1) ^ Math.imul(cz, 0x85EBCA77));
     const x = cx * TREE_CELL + 1.5 + (hashInt(h0 ^ 1) / 4294967296) * (TREE_CELL - 3);
     const z = cz * TREE_CELL + 1.5 + (hashInt(h0 ^ 3) / 4294967296) * (TREE_CELL - 3);
@@ -3340,8 +3363,85 @@ function aabbOverlap(a, b, pad){
          a[1] - pad <= b[4] && a[4] + pad >= b[1] &&
          a[2] - pad <= b[5] && a[5] + pad >= b[2];
 }
+// Build 115: a spatial index for long edit lists. cullEdits read every
+// edit for every chunk job, collision probe and ray, and a city with its
+// highways is thousands of edits (each rotated one paying for three
+// rotations per read). 32 m columns hold the position of every edit whose
+// box crosses them; an edit wider than sixteen columns sits on a list every
+// query reads. The index follows its list by length and last edit: a push
+// extends it, anything else (an undo, a splice, a new list) rebuilds it.
+// Answers come back in list order, as before: the CSG order is the world.
+const EIX_CELL = 32, EIX_MIN = 192, EIX_WIDE = 16;
+const EIX = new WeakMap();
+function editIndex(edits){
+  const n = edits.length;
+  let X = EIX.get(edits);
+  if (X && (n < X.n || (X.n && edits[X.n - 1] !== X.last))) X = null;
+  if (!X){ X = { n: 0, last: null, pos: new WeakMap(), cells: new Map(), wide: [], sp: [], bb: new Float64Array(Math.max(6144, n * 12)), mark: new Uint32Array(Math.max(1024, n * 2)), gen: 0 }; EIX.set(edits, X); }
+  if (X.n < n){
+    if (X.bb.length < n * 6){ const b = new Float64Array(n * 12); b.set(X.bb); X.bb = b; }
+    if (X.mark.length < n){ const m = new Uint32Array(n * 2); m.set(X.mark); X.mark = m; }
+    for (let i = X.n; i < n; i++){
+      const e = edits[i], B = editAABB(e);
+      for (let k = 0; k < 6; k++) X.bb[i * 6 + k] = B[k];
+      X.pos.set(e, i);
+      if (e.op === 5) X.sp.push(i);
+      const c0x = Math.floor(B[0] / EIX_CELL), c1x = Math.floor(B[3] / EIX_CELL), c0z = Math.floor(B[2] / EIX_CELL), c1z = Math.floor(B[5] / EIX_CELL);
+      if (!(c1x - c0x < EIX_WIDE && c1z - c0z < EIX_WIDE)){ X.wide.push(i); continue; }
+      for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
+        const key = (cx + 1048576) * 2097152 + (cz + 1048576);
+        let a = X.cells.get(key);
+        if (!a){ a = []; X.cells.set(key, a); }
+        a.push(i);
+      }
+    }
+    X.n = n; X.last = edits[n - 1];
+  }
+  return X;
+}
+// an edit changed in place (moved, resized, turned by the wrench): if its
+// box moved, the index is rebuilt on the next query
+function editMoved(edits, e){
+  const X = EIX.get(edits);
+  if (!X) return;
+  const i = X.pos.get(e);
+  if (i === undefined || i >= X.n || edits[i] !== e){ if (i !== undefined) EIX.delete(edits); return; }
+  const B = editAABB(e);
+  for (let k = 0; k < 6; k++) if (B[k] !== X.bb[i * 6 + k]){ EIX.delete(edits); return; }
+}
+function cullIndexed(edits, box, pad){
+  const X = editIndex(edits), bb = X.bb;
+  const hit = (i, p) => bb[i * 6] - p <= box[3] && bb[i * 6 + 3] + p >= box[0] &&
+                        bb[i * 6 + 1] - p <= box[4] && bb[i * 6 + 4] + p >= box[1] &&
+                        bb[i * 6 + 2] - p <= box[5] && bb[i * 6 + 5] + p >= box[2];
+  let sp = 0;
+  for (const i of X.sp){ const k = edits[i].k || 0.5; if (k > sp && hit(i, pad)) sp = k; }
+  if (sp) pad += sp;
+  const idx = [];
+  const c0x = Math.floor((box[0] - pad) / EIX_CELL), c1x = Math.floor((box[3] + pad) / EIX_CELL);
+  const c0z = Math.floor((box[2] - pad) / EIX_CELL), c1z = Math.floor((box[5] + pad) / EIX_CELL);
+  if (!((c1x - c0x + 1) * (c1z - c0z + 1) <= 1024)){
+    // a box wider than the index is worth: read the list, with its boxes kept
+    for (let i = 0; i < X.n; i++) if (hit(i, pad)) idx.push(i);
+  } else {
+    X.gen = (X.gen + 1) >>> 0;
+    if (!X.gen){ X.mark.fill(0); X.gen = 1; }
+    const g = X.gen, mark = X.mark;
+    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
+      const a = X.cells.get((cx + 1048576) * 2097152 + (cz + 1048576));
+      if (!a) continue;
+      for (let j = 0; j < a.length; j++){ const i = a[j]; if (mark[i] === g) continue; mark[i] = g; if (hit(i, pad)) idx.push(i); }
+    }
+    for (const i of X.wide) if (hit(i, pad)) idx.push(i);
+    idx.sort((a, b) => a - b);
+  }
+  const out = new Array(idx.length);
+  for (let j = 0; j < idx.length; j++) out[j] = edits[idx[j]];
+  return out;
+}
 // edits whose influence can touch box (pad covers gradient sampling reach)
 function cullEdits(edits, box, pad){
+  if (edits.length >= EIX_MIN) return cullIndexed(edits, box, pad);
   // a smoothing stroke reads the field k past every point it touches, so a
   // box that meets one needs the edits k further out as well (Build 58)
   let sp = 0;
@@ -5049,7 +5149,7 @@ return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
   MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, TIERS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
-  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, SHAPE_UNLOCK, shapesFor, STEP_RISE, stairN, archDims, buildingDims, towerDims, makeEdit, editAABB, aabbOverlap, cullEdits, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
+  sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, SHAPE_UNLOCK, shapesFor, STEP_RISE, stairN, archDims, buildingDims, towerDims, makeEdit, editAABB, aabbOverlap, cullEdits, editMoved, editProfile, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
   editHalf, editHasRot, toLocal, rotToWorld, MINE_EPS, mirrorEdit, rotateEditY, evalRaw, smoothWeight,
   makeDrill, makeDispenser, makeStack, invMove, effSize, scrollSize,
@@ -5758,6 +5858,9 @@ const meshPool = {
     try {
       const src =
         'const CORE = (' + CORE_FACTORY.toString() + ')();\n' +
+        // Build 115: the half of a result the main thread used to shrink
+        // (normals to bytes) is shrunk here, and half as much crosses over
+        'const QZ = ({' + lodTerrain.quantize.toString() + '}).quantize;\n' +
         'let gen = CORE.FLAT_GEN;\n' +
         'onmessage = (ev) => {\n' +
         '  const m = ev.data;\n' +
@@ -5773,6 +5876,7 @@ const meshPool = {
         '  let d = CORE.meshChunk(m.cx, m.cy, m.cz, edits, gen, m.sc || 1);\n' +
         '  if (m.drop && d) d = CORE.dropGroundTris(d, gen, 2.5);\n' +
         '  if (!d){ postMessage({ id: m.id, d: null }); return; }\n' +
+        '  d = QZ(d);\n' +
         '  postMessage({ id: m.id, d },\n' +
         '    [d.positions.buffer, d.normals.buffer, d.mats.buffer, d.skys.buffer, d.aos.buffer, d.axes.buffer]);\n' +
         '};\n';
@@ -5949,15 +6053,34 @@ const meshPool = {
       }
       if (best){ src.hot.delete(best[0]); this.pickedHot = true; return best; }
     }
-    for (const [key, c] of src.dirty){
-      if (this.inflight.has(src.id + '|' + key)) continue;  // wait for the stale result
-      const dx = c[0] - px, dy = c[1] - py, dz = c[2] - pz;
-      let d = dx * dx + dy * dy + dz * dz;
-      if (f && d > 3){
-        const dot = (dx * f[0] + dy * f[1] + dz * f[2]) / Math.sqrt(d);
-        d *= dot < -0.2 ? 6 : dot < 0.25 ? 2.2 : 1;
+    // Build 115: the backlog is scored and sorted once and read in order
+    // for a tenth of a second. A full scan for every chunk dispatched (and
+    // one is dispatched each time a worker comes back) was the single
+    // biggest cost of flying: thousands of ring tiles, times every result.
+    const now = performance.now();
+    let Q = src._pq;
+    if (!Q || now - Q.t > 100 || Q.i >= Q.keys.length){
+      const keys = [], ds = [];
+      for (const [key, c] of src.dirty){
+        if (this.inflight.has(src.id + '|' + key)) continue;  // wait for the stale result
+        const dx = c[0] - px, dy = c[1] - py, dz = c[2] - pz;
+        let d = dx * dx + dy * dy + dz * dz;
+        if (f && d > 3){
+          const dot = (dx * f[0] + dy * f[1] + dz * f[2]) / Math.sqrt(d);
+          d *= dot < -0.2 ? 6 : dot < 0.25 ? 2.2 : 1;
+        }
+        keys.push(key); ds.push(d);
       }
-      if (d < bd){ bd = d; best = [key, c]; }
+      const ord = new Uint32Array(keys.length);
+      for (let i = 0; i < ord.length; i++) ord[i] = i;
+      ord.sort((a, b) => ds[a] - ds[b]);
+      Q = src._pq = { t: now, i: 0, keys: Array.from(ord, i => keys[i]) };
+    }
+    while (Q.i < Q.keys.length){
+      const key = Q.keys[Q.i++], c = src.dirty.get(key);
+      if (!c || this.inflight.has(src.id + '|' + key)) continue;
+      best = [key, c];
+      break;
     }
     return best;
   },
@@ -6110,17 +6233,15 @@ class Terrain {
     this.center = [ccx, Math.floor(py / CORE.CHUNK_M), ccz];
     // are we out in the open? (underground, the deep IS the view)
     this.surfaceEye = py > this.gen.height(px, pz) - 3;
-    const want = new Set();
-    const R = this.radius;
-    for (let dz = -R; dz <= R; dz++)
-      for (let dx = -R; dx <= R; dx++){
-        if (dx*dx + dz*dz > (R + 0.5) * (R + 0.5)) continue;
-        for (let cy = CORE.CY_MIN; cy <= CORE.CY_MAX; cy++)
-          want.add(CK(ccx + dx, cy, ccz + dz));
-      }
+    // Build 115: what is wanted is a disc of columns, every level of each:
+    // tested by arithmetic, not by a set of six thousand keys built and
+    // split again at every chunk border crossed
+    const R = this.radius, RR = (R + 0.5) * (R + 0.5);
+    const wanted = (c) => { const dx = c[0] - ccx, dz = c[2] - ccz; return dx * dx + dz * dz <= RR && c[1] >= CORE.CY_MIN && c[1] <= CORE.CY_MAX; };
     // drop far chunks
     for (const [key, ch] of this.chunks){
-      if (!want.has(key)){
+      if (!ch.c) ch.c = key.split(',').map(Number);
+      if (!wanted(ch.c)){
         this.removeChunk(key, ch);
         if (ch.water){ this.scene.remove(ch.water); ch.water.geometry.dispose(); }
       if (ch.waterFall){ this.scene.remove(ch.waterFall); ch.waterFall.geometry.dispose(); ch.waterFall = null; }
@@ -6136,20 +6257,31 @@ class Terrain {
     const M = CORE.CHUNK_M;
     const floorY = this.gen.caveFloorY != null ? this.gen.caveFloorY : -1e9;
     const seaCy = this.gen.seaLevel != null ? Math.floor(this.gen.seaLevel / M) : null;
-    for (const key of want){
+    const eMin = this.editMinY(), eMax = this.editMaxY();
+    for (let dz = -R; dz <= R; dz++) for (let dx = -R; dx <= R; dx++){
+    if (dx * dx + dz * dz > RR) continue;
+    const cx = ccx + dx, cz = ccz + dz;
+    let W = null, hr = null;                     // the column's water and height range, asked once
+    for (let cy = CORE.CY_MIN; cy <= CORE.CY_MAX; cy++){
+      const key = CK(cx, cy, cz);
       let ch = this.chunks.get(key);
       const fresh = !ch;
-      if (fresh){ ch = { mesh: null }; this.chunks.set(key, ch); }
+      if (fresh){ ch = { mesh: null, c: [cx, cy, cz] }; this.chunks.set(key, ch); }
       else if (!ch.banded) continue;       // already meshed, queued, or empty
-      const [cx, cy, cz] = key.split(',').map(Number);
-      if (fresh && cy !== seaCy && !this.waterInfo(cx, cz).bands.has(cy)){   // water-band chunks always process (water mesh)
+      if (fresh && cy !== seaCy){
+        // water-band chunks always process (water mesh). A surface is never
+        // below the sea, so the deep never needs asking; nor does the sky
+        // well above the column's highest ground (the one question that
+        // costs a thousand heights, now asked only where it can matter)
         const topY = (cy + 1) * M + 0.5, botY = cy * M - 0.5;
-        if (topY < floorY && topY < this.editMinY() - 1 &&
+        const seaY = this.gen.planet === 'alien' ? -1e9 : this.gen.seaLevel != null ? this.gen.seaLevel : 1e9;   // Strata's rivers run at their own height
+        if (topY < floorY && topY < eMin - 1 && (topY < seaY || !(W || (W = this.waterInfo(cx, cz))).bands.has(cy)) &&
             !(this.gen.caveInBox && this.gen.caveInBox(
               [cx * M - 0.5, botY, cz * M - 0.5, cx * M + M + 0.5, topY, cz * M + M + 0.5]))){ ch.empty = 1; continue; }
-        const hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
-                                        cx * M + M + 0.5, cz * M + M + 0.5);
-        if (botY > hr[1] + 0.5 && botY > this.editMaxY() + 1){ ch.empty = 1; continue; }
+        if (!hr) hr = this.gen.heightRange(cx * M - 0.5, cz * M - 0.5,
+                                          cx * M + M + 0.5, cz * M + M + 0.5);
+        if (botY > hr[1] + 0.5 && botY > eMax + 1 &&
+            (botY > hr[1] + 24 || !(W || (W = this.waterInfo(cx, cz))).bands.has(cy))){ ch.empty = 1; continue; }
       }
       if (ch.empty) continue;
       // the deep world you cannot see is not worth a worker: a surface
@@ -6161,6 +6293,7 @@ class Terrain {
       if (cy !== seaCy && !this.inBand(cx, cy, cz)){ ch.banded = 1; continue; }
       ch.banded = 0;
       this.dirty.set(key, [cx, cy, cz]);
+    }
     }
   }
 
@@ -6223,6 +6356,7 @@ class Terrain {
 
   // mark chunks overlapping an edit AABB dirty
   invalidate(e){
+    CORE.editMoved(this.edits, e);                  // Build 115: the edit index follows a move
     this._envN = -1;   // edit list changed or an edit moved: envelope stale
     this._band = null; // a new build changes what a distant column shows
     if (lodTerrain.rings) lodTerrain.invalidate(e);
@@ -6585,21 +6719,22 @@ const W_SOLID = 255, W_SRC = 8, W_REACH = 32;
 // liquid that never flows and feeds nothing; DRY is a cell a drill cut out of
 // a liquid that no liquid may enter again. Both come from liquid edits.
 const W_HELD = 253, W_DRY = 254;   // cells of travel a flood gets from a true source
+const W_SIDE = [1, 0, -1, 0, 0, 1, 0, -1];         // the four sideways neighbours (Build 115: no arrays built per cell)
 const waterSys = {
   cells: new Map(), dist: new Map(), stat: new Map(), active: new Set(), meshes: new Map(), dirtyMesh: new Set(), lin: new Map(), floods: [], parkT: 0, empty: new Set(),
   accT: 0, maintT: 0, MAX_ACTIVE: 48, MESH_MS: 3,
   idx(i, j, k){ return (j * 8 + k) * 8 + i; },
   keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
-  reset(){ this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set(); this.lin = new Map(); this.floods = []; this.parkT = 0; this.empty = new Set();
+  reset(){ this.matQ = []; this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set(); this.lin = new Map(); this.floods = []; this.parkT = 0; this.empty = new Set();
     for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
     this.meshes = new Map(); },
   // what an untouched cell holds: rock, still water, or air
-  staticLevel(gx, gy, gz){
-    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+  staticLevel(gx, gy, gz, Lg){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5, G = Lg || g;
     if (springSys.isSrc(gx, gy, gz)) return W_SRC;                       // SPRINGS (Build 100)
-    if (g.sdf(x, gy, z) < 0) return W_SOLID;
+    if (G.sdf(x, gy, z) < 0) return W_SOLID;
     if (g.seaLevel != null){
-      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      const wy = g.waterYAt ? g.waterYAt(x, z, G.height(x, z)) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
       if (wy != null && gy < wy) return W_SRC;
       if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
     }
@@ -6608,14 +6743,14 @@ const waterSys = {
   },
   // the same with every edit applied: carved rock is air (it fills), placed
   // rock is rock, original water is a source
-  editedLevel(gx, gy, gz, le){
-    const g = game.gen, x = gx + 0.5, z = gz + 0.5;
+  editedLevel(gx, gy, gz, le, Lg){
+    const g = game.gen, x = gx + 0.5, z = gz + 0.5, G = Lg || g;
     if (springSys.isSrc(gx, gy, gz)) return W_SRC;                       // SPRINGS (Build 100)
-    if (CORE.evalSDF(x, gy, z, le, g) < 0) return W_SOLID;
+    if (CORE.evalSDF(x, gy, z, le, G) < 0) return W_SOLID;
     const lq = this.liqAt(gx, gy, gz, le); if (lq != null) return lq;       // LIQUIDS (Build 109)
-    if (g.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
+    if (G.sdf(x, gy, z) < 0) return 0;                     // carved: fills from its neighbours
     if (g.seaLevel != null){
-      const wy = g.waterYAt ? g.waterYAt(x, z) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
+      const wy = g.waterYAt ? g.waterYAt(x, z, G.height(x, z)) : (g.wetAt && g.wetAt(x, z) ? g.seaLevel : null);
       if (wy != null && gy < wy) return W_SRC;
       if (wy != null && wy > g.seaLevel + 1e-6 && gy < wy + 3) return W_SOLID;   // the air over a river: sealed, so its slope holds
     }
@@ -6627,8 +6762,9 @@ const waterSys = {
     if (a) return a;
     const [cx, cy, cz] = key.split(',').map(Number);
     a = new Uint8Array(512);
+    const Lg = this.localGen(cx, cz);
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++)
-      a[this.idx(i, j, k)] = this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k);
+      a[this.idx(i, j, k)] = this.staticLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k, Lg);
     this.stat.set(key, a);
     return a;
   },
@@ -6644,6 +6780,42 @@ const waterSys = {
     for (let q = 0; q < 512; q++) if ((a[q] >= 1 && a[q] <= 8) || a[q] === W_HELD) return true;
     return false;
   },
+  // Build 115: a chunk's columns, heights sampled once on the cell centres
+  // (exact there) -- the same local generator the mesher uses, so the
+  // 512 cells of a chunk ask the terrain for 144 heights, not 1,500
+  localGen(cx, cz){
+    const g = game.gen;
+    return g.makeLocal ? g.makeLocal(cx * 8 + 0.5, cz * 8 + 0.5, cx * 8 + 7.5, cz * 8 + 7.5, 1) : g;
+  },
+  // Build 115: what the world stamps for itself (a highway's embankment, a
+  // city's slab, a village) is queued and met a few milliseconds a frame.
+  // A highway laid across a river used to materialize hundreds of chunks
+  // of water in the frame that stamped it: an eleven-second freeze the
+  // first time you came near a city.
+  defer: false, matQ: [], MAT_MS: 3,
+  drainMat(ms){
+    const t0 = performance.now();
+    while (this.matQ.length){
+      const J = this.matQ[0];
+      if (!J.keys){ J.keys = this.editKeys(J.B) || []; if (!J.keys.length){ this.matQ.shift(); continue; } }
+      // is any of it wet? (asked a chunk at a time, inside the budget too)
+      J.w = J.w || 0;
+      while (J.wet === null){
+        if (J.w >= J.keys.length){ J.wet = false; break; }
+        const key = J.keys[J.w++];
+        if (this.cells.has(key) || this.hasWater(key)) J.wet = true;
+        else if (ms != null && performance.now() - t0 > ms) return;
+      }
+      if (!J.wet){ this.matQ.shift(); continue; }
+      while (J.i < J.keys.length){
+        this.materialize(J.keys[J.i++], true);
+        if (ms != null && performance.now() - t0 > ms) return;
+      }
+      this.matQ.shift();
+      this.reseed(J.B);
+      if (ms != null && performance.now() - t0 > ms) return;
+    }
+  },
   // a chunk the flow has reached: its cells, with the edits applied
   materialize(key, keep){
     const [cx, cy, cz] = key.split(',').map(Number);
@@ -6652,9 +6824,10 @@ const waterSys = {
     const hasLiq = le.some(e => e.liq);
     const a = new Uint8Array(512), oldL = keep ? this.lin.get(key) : null;
     let L = oldL || null;
+    const Lg = this.localGen(cx, cz);
     for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
       const q = this.idx(i, j, k), gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
-      const v = le.length ? this.editedLevel(gx, gy, gz, le) : this.staticLevel(gx, gy, gz);
+      const v = le.length ? this.editedLevel(gx, gy, gz, le, Lg) : this.staticLevel(gx, gy, gz, Lg);
       // LIQUIDS (Build 109): a liquid edit says what its cells are, over any water already there
       const lq = hasLiq && v !== W_SOLID ? this.liqAt(gx, gy, gz, le) : null;
       if (lq != null){
@@ -6834,26 +7007,32 @@ const waterSys = {
       return;
     }
     if (B[1] > 95 && B[1] > -6) return;                         // above every water there is
+    if (this.defer){ this.matQ.push({ keys: null, B, i: 0, wet: null }); return; }   // Build 115: the world's own stamps, a little at a time
+    const keys = this.editKeys(B);
+    if (!keys) return;
+    let wet = false;
+    for (const key of keys) if (this.cells.has(key) || this.hasWater(key)){ wet = true; break; }
+    if (!wet) return;
+    for (const key of keys) this.materialize(key, true);
+    this.reseed(B);                                              // Build 109
+  },
+  // the water chunks an edit's box can change, or null when it cannot be a
+  // water event (a city slab; dry land above every water table)
+  editKeys(B){
+    const g = game.gen;
     const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
     const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
     const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
-    if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return;   // a city slab: not a water event
+    if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return null;   // a city slab: not a water event
     // dry land, above every water table under this footprint (the sea, or a river)
     let top = g.seaLevel;
     for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){ const W = game.terrain.waterInfo(cx, cz); if (W.maxWy != null && W.maxWy > top) top = W.maxWy; }
     let anyCells = false;
     for (let cy = c0y; cy <= c1y && !anyCells; cy++) for (let cz = c0z; cz <= c1z && !anyCells; cz++) for (let cx = c0x; cx <= c1x; cx++) if (this.cells.has(CK(cx, cy, cz))){ anyCells = true; break; }
-    if (B[1] > top + 1 && B[1] > -6 && !anyCells) return;        // Build 109: placed water lives above any water table
+    if (B[1] > top + 1 && B[1] > -6 && !anyCells) return null;   // Build 109: placed water lives above any water table
     const keys = [];
-    let wet = false;
-    for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){
-      const key = CK(cx, cy, cz);
-      keys.push(key);
-      if (this.cells.has(key) || this.hasWater(key)) wet = true;
-    }
-    if (!wet) return;
-    for (const key of keys) this.materialize(key, true);
-    this.reseed(B);                                              // Build 109
+    for (let cy = c0y; cy <= c1y; cy++) for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++) keys.push(CK(cx, cy, cz));
+    return keys;
   },
   // LIQUIDS (Build 109): a liquid edit is gone (undo, the wrench): its cells
   // go back to what the world and the other edits say, and a placed source
@@ -6872,6 +7051,7 @@ const waterSys = {
   },
   tick(dt){
     if (!game.running || !game.gen || game.gen.seaLevel == null) return;
+    if (this.matQ.length) this.drainMat(this.MAT_MS);                      // Build 115
     this.accT += dt;
     if (this.accT >= 0.12){
       const st = this.accT;
@@ -6891,26 +7071,36 @@ const waterSys = {
       const a = this.cells.get(key);
       if (!a) continue;
       const [cx, cy, cz] = key.split(',').map(Number);
+      // Build 115: a neighbour inside this chunk is read from its arrays
+      // straight; only the faces go through the map of chunks
+      const dA = this.dist.get(key), LA = this.lin.get(key), ox = cx * 8, oy = cy * 8, oz = cz * 8;
+      const inC = (i, j, k) => i >= 0 && i < 8 && j >= 0 && j < 8 && k >= 0 && k < 8;
+      const lvL = (i, j, k) => inC(i, j, k) ? a[(j * 8 + k) * 8 + i] : this.lv(ox + i, oy + j, oz + k);
+      const dvL = (i, j, k) => { if (!inC(i, j, k)) return this.dv(ox + i, oy + j, oz + k); const q = (j * 8 + k) * 8 + i; return dA ? dA[q] : (a[q] === W_SRC ? 0 : 255); };
+      const linL = (i, j, k) => inC(i, j, k) ? (LA ? LA[(j * 8 + k) * 8 + i] : 0) : this.linOf(ox + i, oy + j, oz + k);
       for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++){
         const q = this.idx(i, j, k), v = a[q];
         if (v === W_SOLID || v === W_SRC || v === W_HELD || v === W_DRY) continue;   // held and dry cells never change (Build 109)
         const gx = cx * 8 + i, gy = cy * 8 + j, gz = cz * 8 + k;
         if (gy <= CORE.BEDROCK_Y + 1) continue;
-        const above = this.lv(gx, gy + 1, gz), below = this.lv(gx, gy - 1, gz);
+        const above = lvL(i, j + 1, k);
         let nv = 0, srcN = 0, nd = 255, lin = 255;
-        if (this.isW(above)){ nv = 7; nd = this.dv(gx, gy + 1, gz) + 1; if (above === W_SRC) lin = Math.min(lin, this.linOf(gx, gy + 1, gz)); }
-        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
-          const nn = this.lv(gx + dx, gy, gz + dz);
+        if (this.isW(above)){ nv = 7; nd = dvL(i, j + 1, k) + 1; if (above === W_SRC) lin = Math.min(lin, linL(i, j + 1, k)); }
+        for (let s4 = 0; s4 < 4; s4++){
+          const dx = W_SIDE[s4 * 2], dz = W_SIDE[s4 * 2 + 1];
+          const nn = lvL(i + dx, j, k + dz);
           if (!this.isW(nn)) continue;
-          if (nn === W_SRC){ srcN++; lin = Math.min(lin, this.linOf(gx + dx, gy, gz + dz)); }
+          if (nn === W_SRC){ srcN++; lin = Math.min(lin, linL(i + dx, j, k + dz)); }
           // a neighbour spreads sideways when it is a source or stands on
           // something (falling water only falls; held and dry cells are floor)
-          const nb = nn === W_SRC ? W_SOLID : this.lv(gx + dx, gy - 1, gz + dz);
+          const nb = nn === W_SRC ? W_SOLID : lvL(i + dx, j - 1, k + dz);
           if (nb === W_SOLID || nb === W_SRC || nb === W_HELD || nb === W_DRY){
-            if (nn - 1 > nv || (nn - 1 === nv && nv > 0)) nd = Math.min(nd, this.dv(gx + dx, gy, gz + dz) + 1);
+            if (nn - 1 > nv || (nn - 1 === nv && nv > 0)) nd = Math.min(nd, dvL(i + dx, j, k + dz) + 1);
             nv = Math.max(nv, nn - 1);
           }
         }
+        if (nv === 0 && v === 0) continue;                       // dry air with nothing coming: no write, no need of the floor
+        const below = lvL(i, j - 1, k);
         // a flood only travels so far from a true source: past W_REACH cells
         // of falling and spreading it trails off and stops, so a river cut
         // open on a mountainside cannot drown the valley below
@@ -7720,7 +7910,7 @@ const playerBody = {
   iconMat(it){
     const key = it.kind + ':' + (it.mat != null ? it.mat : it.tier != null ? it.tier : '');
     if (!this.icons.has(key)){
-      const tex = new THREE.TextureLoader().load(itemIconURL(it));
+      const tex = new THREE.CanvasTexture(itemIconURL(it, true));
       tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
       this.icons.set(key, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
     }
@@ -8054,7 +8244,7 @@ const vmIconCache = new Map();
 function vmIconMaterial(it){
   const key = it.kind;
   if (!vmIconCache.has(key)){
-    const tex = new THREE.TextureLoader().load(itemIconURL(it));
+    const tex = new THREE.CanvasTexture(itemIconURL(it, true));
     tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
     vmIconCache.set(key, new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
   }
@@ -13584,10 +13774,10 @@ function entMesh(type, ent){
   const legs = [];
   if (type === 'drop'){
     // a card of the item's icon, both sides, turning on the spot
-    const url = itemIconURL(ent.item) || '';
+    const url = itemIconURL(ent.item, true) || '';
     let tex = dropTexCache.get(url);
     if (!tex){
-      tex = new THREE.TextureLoader().load(url);
+      tex = url ? new THREE.CanvasTexture(url) : new THREE.Texture();
       tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.NearestFilter;
       dropTexCache.set(url, tex);
     }
@@ -21492,7 +21682,17 @@ const roadSys = {
   ensure(){
     if (!game.running || !game.gen) return;
     game.roads = game.roads || {};
+    // Build 115: the whole highway within 700 m used to go down in one
+    // frame (half a second on arriving at a city); now the nearest segments
+    // first, a few milliseconds a frame, until it is all down
+    propBatchBegin();                              // the signs join the props once, at the end
+    try { this.ensureLay(); } finally { propBatchEnd(); }
+  },
+  ensureLay(){
+    const t0 = performance.now(), over = () => { if (performance.now() - t0 > this.ROAD_MS){ this.more = true; return true; } return false; };
+    const segD = (L, i) => { const t = (i + 0.5) / L.segs; return Math.hypot(L.sx + (L.ex - L.sx) * t - game.pos.x, L.sz + (L.ez - L.sz) * t - game.pos.z); };
     for (const L of this.linksNear(game.pos.x, game.pos.z, 700)){
+      if (this.more) break;
       let rec = game.roads[L.key];
       if (!rec){ rec = { done: [], ver: ROAD_VER }; game.roads[L.key] = rec; }
       // a link laid by an older road builder is laid again on top: the new
@@ -21500,11 +21700,11 @@ const roadSys = {
       if (rec.ver !== ROAD_VER){ rec.done = []; rec.ver = ROAD_VER; }
       const done = new Set(rec.done);
       let any = false;
-      for (let i = 0; i < L.segs; i++){
-        if (done.has(i)) continue;
-        const t = (i + 0.5) / L.segs;
-        const mx = L.sx + (L.ex - L.sx) * t, mz = L.sz + (L.ez - L.sz) * t;
-        if (Math.hypot(mx - game.pos.x, mz - game.pos.z) > 700) continue;
+      const order = [];
+      for (let i = 0; i < L.segs; i++) if (!done.has(i)){ const d = segD(L, i); if (d <= 700) order.push([d, i]); }
+      order.sort((a, b) => a[0] - b[0]);
+      for (const [, i] of order){
+        if (over()) break;
         const n0 = game.edits.length;
         this.stampSeg(L, i);
         farShapeSys.tagRange(n0);
@@ -21514,11 +21714,10 @@ const roadSys = {
       // between the city approaches
       const lined = new Set(rec.line || (rec.line = []));
       const RA = lineSys.approach(L.a, L, true), RB = lineSys.approach(L.b, L, false);
-      for (let i = RA.k; i < L.segs - RB.k; i++){
+      for (let i = RA.k; i < L.segs - RB.k && !this.more; i++){
         if (!done.has(i) || lined.has(i)) continue;
-        const t = (i + 0.5) / L.segs;
-        const mx = L.sx + (L.ex - L.sx) * t, mz = L.sz + (L.ez - L.sz) * t;
-        if (Math.hypot(mx - game.pos.x, mz - game.pos.z) > 700) continue;
+        if (segD(L, i) > 700) continue;
+        if (over()) break;
         lineSys.trackSeg(L, i);
         rec.line.push(i); any = true;
       }
@@ -21528,6 +21727,7 @@ const roadSys = {
         const crec = (game.cities || {})['c' + c.key];
         if (!crec || !crec.stamped || (crec.lineEnds && crec.lineEnds[L.key])) continue;
         if (Math.hypot(c.x - game.pos.x, c.z - game.pos.z) > 700) continue;
+        if (this.more || over()) break;
         if (lineSys.stampApproach(c, L, atA)) any = true;
       }
       if (any) markSave();
@@ -21536,10 +21736,12 @@ const roadSys = {
   tick(dt){
     this.accT += dt; this.scanT += dt;
     if (this.scanT > 6){ this.scanT = 0; this.near = game.gen ? this.linksNear(game.pos.x, game.pos.z, 900) : []; }
-    if (this.accT < 1.5) return;
-    this.accT = 0;
+    if (this.accT < 1.5 && !this.more) return;
+    this.accT = 0; this.more = false;
     if (!netSys.guest) this.ensure();             // a guest's roads come from the host
   },
+  // Build 115: a frame's worth of laying, then the rest next frame
+  ROAD_MS: 6,
   // is (x,y,z) on a highway's tarmac? (the cruise bonus)
   onRoad(x, y, z){
     game.roads = game.roads || {};
@@ -26839,9 +27041,21 @@ function bindInput(){
     }
     if (code === 'F3'){
       e.preventDefault();
+      // THE STOPWATCH (Build 115): shift+F3 copies what the stopwatch saw
+      if (e.shiftKey){
+        if (!perfSys.on){ game.perfHUD = true; $('fpsbox').classList.add('wide'); perfSys.start(); toast('stopwatch on — play the slow part, then shift+F3 again to copy the report'); return; }
+        const txt = perfSys.report();
+        game.perfReport = txt; console.log(txt);
+        let copied = false;
+        try { if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(() => {}, () => {}); copied = true; } } catch (err){}
+        perfSys.resetReport();
+        toast(copied ? 'perf report copied — paste it into the playtest notes (also in the console)' : 'perf report in the console (F12) — the clipboard said no');
+        return;
+      }
       game.perfHUD = !game.perfHUD;
       $('fpsbox').classList.toggle('wide', game.perfHUD);
-      toast(game.perfHUD ? 'perf overlay on — F3 to hide' : 'perf overlay off');
+      if (game.perfHUD) perfSys.start(); else perfSys.stop();
+      toast(game.perfHUD ? 'perf overlay on — F3 to hide, shift+F3 to copy a report' : 'perf overlay off');
       return;
     }
     if (code === 'F5'){
@@ -30805,7 +31019,11 @@ function updateGhostDist(dt){
 // ---------- item icons ----------
 const TIER_COL = ['#8a8a92', '#c9c7d1', '#d84a63', '#5d4a86', '#6fe3ef', '#e8f4ff', '#9fd8ff', '#b070ff', '#1f6a45', '#a8ff4a', '#e040b0', '#ffd76a'];
 const iconCache = new Map();
-function itemIconURL(it){
+// Build 115: the canvas behind each icon, for the 3D cards and models. A
+// texture read straight off it skips encoding a PNG and decoding it again:
+// a city's shop counters dressed with fifty goods cost a second of that.
+const iconCanvases = new Map();
+function itemIconURL(it, asCanvas){
   if (!it) return null;
   const key = (it.kind === 'mat' ? 'm' + it.mat
     : it.kind === 'fw' ? 'fw' + it.g
@@ -30815,7 +31033,8 @@ function itemIconURL(it){
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
        'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
        'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'megatorch', 'greatstove', 'headlamp', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
-  if (iconCache.has(key)) return iconCache.get(key);
+  if (asCanvas && iconCanvases.has(key)) return iconCanvases.get(key);
+  if (!asCanvas && iconCache.has(key)) return iconCache.get(key);
   const cv = document.createElement('canvas');
   cv.width = 16; cv.height = 16;
   if (it.wrecked) cv.__wrecked = true;
@@ -31684,6 +31903,8 @@ function itemIconURL(it){
     c.fillStyle = '#e04a3a';
     for (let q = 0; q < 12; q++) c.fillRect(2 + q, 13 - q, 2, 1);
   }
+  iconCanvases.set(key, cv);
+  if (asCanvas) return cv;
   const url = cv.toDataURL();
   iconCache.set(key, url);
   return url;
@@ -34523,6 +34744,7 @@ function buildSaveData(){
     rails: game.rails || [],
     roads: game.roads || {},
     water: waterSys.serialize(),
+    waterQ: waterSys.matQ.map(J => [J.keys ? J.keys.slice(J.i) : null, Array.from(J.B), J.wet]),   // Build 115: stamps the water has still to meet
     floods: waterSys.saveFloods(),                                         // LIQUIDS (Build 109): fills still going
     pnodes: game.pnodes || [],
     wires: (game.wires || []).map(w => ({ a: w.a, b: w.b, pa: w.pa, pb: w.pb })),
@@ -34591,6 +34813,7 @@ function startWorldData(id, data){
   game.rails = data.rails || [];
   game.roads = data.roads || {};
   waterSys.load(data.water || []);
+  for (const [keys, B, wet] of data.waterQ || []) waterSys.matQ.push({ keys, B, i: 0, wet: wet ? true : null });
   waterSys.loadFloods(data.floods || []);
   roadSys.near = []; roadSys.scanT = 99; roadSys.cache = new Map();
   game.railDraft = null;
@@ -38296,6 +38519,109 @@ function updateSunShadow(dt){
     u.uShadowOn.value = 1;
   }
 }
+// ---------- THE STOPWATCH (Build 115) ----------
+// F3's overlay says where each frame's milliseconds go, system by system,
+// and what the worst frame of the last half second spent its time on.
+// Shift+F3 copies a report of everything since the last one (frame-time
+// percentiles, every system's average and worst, the GPU's time where the
+// browser will measure it, and every hitch with its culprits) so a
+// playtest on a real machine comes back with numbers instead of a feeling.
+// Off (F3 hidden), every mark is one test of a boolean.
+const perfSys = {
+  on: false, t: 0, t0: 0, lastNow: 0, cur: new Map(),
+  win: new Map(), winN: 0, winCpu: 0, winWorst: 0, winTop: '',
+  rep: new Map(), repMax: new Map(), repN: 0, repT0: 0, frames: [], cpus: [], hitches: [],
+  gl: null, gx: null, qFree: [], qPend: [], qCur: null, gpuSum: 0, gpuN: 0, gpuMax: 0, gpuWin: 0, gpuWinN: 0,
+  start(){
+    this.on = true; this.lastNow = 0; this.resetReport();
+    try {
+      const gl = game.renderer && game.renderer.getContext();
+      this.gl = gl; this.gx = gl && gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    } catch (err){ this.gx = null; }
+  },
+  stop(){ this.on = false; if (this.qCur){ try { this.gl.endQuery(this.gx.TIME_ELAPSED_EXT); } catch (err){} this.qPend.push(this.qCur); this.qCur = null; } },
+  resetReport(){ this.rep = new Map(); this.repMax = new Map(); this.repN = 0; this.repT0 = performance.now(); this.frames = []; this.cpus = []; this.hitches = []; this.gpuSum = 0; this.gpuN = 0; this.gpuMax = 0; },
+  begin(now){
+    if (!this.on) return;
+    this.interval = this.lastNow ? now - this.lastNow : 0; this.lastNow = now;
+    this.cur.clear(); this.t0 = this.t = performance.now();
+  },
+  m(label){
+    if (!this.on) return;
+    const n = performance.now();
+    this.cur.set(label, (this.cur.get(label) || 0) + (n - this.t));
+    this.t = n;
+  },
+  end(){
+    if (!this.on) return;
+    const cpu = performance.now() - this.t0;
+    let top = '', tv = 0;
+    for (const [k, v] of this.cur){
+      this.win.set(k, (this.win.get(k) || 0) + v);
+      this.rep.set(k, (this.rep.get(k) || 0) + v);
+      if (v > (this.repMax.get(k) || 0)) this.repMax.set(k, v);
+      if (v > tv){ tv = v; top = k; }
+    }
+    this.winN++; this.winCpu += cpu; this.repN++;
+    if (cpu > this.winWorst){ this.winWorst = cpu; this.winTop = top + ' ' + tv.toFixed(0); }
+    if (this.frames.length < 36000){ this.frames.push(this.interval); this.cpus.push(cpu); }
+    // a hitch: a frame the eye can catch (the gap before it, or its own work)
+    if (this.interval > 50 || cpu > 33){
+      const parts = [...this.cur].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + v.toFixed(0));
+      this.hitches.push({ t: (performance.now() - this.repT0) / 1000, gap: this.interval, cpu, parts });
+      if (this.hitches.length > 40) this.hitches.shift();
+    }
+  },
+  // the GPU's own time for the frame's draws, where the browser allows it
+  gpuBegin(){
+    if (!this.on || !this.gx || this.qCur || this.qPend.length > 4) return;
+    try { const gl = this.gl, q = this.qFree.pop() || gl.createQuery(); gl.beginQuery(this.gx.TIME_ELAPSED_EXT, q); this.qCur = q; } catch (err){ this.gx = null; }
+  },
+  gpuEnd(){
+    if (!this.gx) return;
+    const gl = this.gl;
+    try {
+      if (this.qCur){ gl.endQuery(this.gx.TIME_ELAPSED_EXT); this.qPend.push(this.qCur); this.qCur = null; }
+      while (this.qPend.length){
+        const q = this.qPend[0];
+        if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+        const lost = gl.getParameter(this.gx.GPU_DISJOINT_EXT), ms = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6;
+        this.qPend.shift(); this.qFree.push(q);
+        if (!lost && this.on){ this.gpuSum += ms; this.gpuN++; if (ms > this.gpuMax) this.gpuMax = ms; this.gpuWin += ms; this.gpuWinN++; }
+      }
+    } catch (err){ this.gx = null; }
+  },
+  // the overlay's lines, over the last half second
+  lines(){
+    const n = Math.max(1, this.winN);
+    const top = [...this.win].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => k + ' ' + (v / n).toFixed(1));
+    const out = 'cpu ' + (this.winCpu / n).toFixed(1) + ' · gpu ' + (this.gx ? (this.gpuWinN ? (this.gpuWin / this.gpuWinN).toFixed(1) : '…') : 'n/a') + ' ms/frame\n' +
+      top.slice(0, 2).join(' · ') + '\n' + top.slice(2, 4).join(' · ') + '\n' + top.slice(4, 6).join(' · ') + '\n' +
+      'worst ' + this.winWorst.toFixed(0) + ' ms: ' + (this.winTop || '-');
+    this.win.clear(); this.winN = 0; this.winCpu = 0; this.winWorst = 0; this.winTop = ''; this.gpuWin = 0; this.gpuWinN = 0;
+    return out;
+  },
+  pct(a, p){ if (!a.length) return 0; const b = a.slice().sort((x, y) => x - y); return b[Math.min(b.length - 1, Math.floor(p * b.length))]; },
+  report(){
+    const n = Math.max(1, this.repN), secs = (performance.now() - this.repT0) / 1000;
+    const F = this.frames.filter(v => v > 0), fps = F.length ? 1000 / (F.reduce((s, v) => s + v, 0) / F.length) : 0;
+    const f1 = v => v.toFixed(1);
+    const L = [];
+    L.push('STRATA perf report · ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + ' · ' + f1(secs) + ' s, ' + this.repN + ' frames');
+    L.push('where: ' + Math.round(game.pos.x) + ' ' + Math.round(game.pos.y) + ' ' + Math.round(game.pos.z) + ' · ' + (game.planet || 'earth') + (zeroG() ? '' : ' · ' + regionNameAt(game.pos.x, game.pos.z)) +
+      (game.fly ? ' · flying' : '') + (game.driving ? ' · driving ' + game.driving.type : '') + ' · edits ' + game.edits.length + ' · entities ' + game.entities.length);
+    L.push('settings: render distance ' + game.opts.rd + ' · shadows ' + game.opts.shadows + ' · scale ' + game.opts.rscale + '% · fps cap ' + (game.opts.fpsCap || 'off') + ' · god rays ' + (game.opts.rays ? 'on' : 'off'));
+    L.push(gfxInfo().split('\n').slice(0, 2).join('\n'));
+    L.push('frames: ' + f1(fps) + ' fps · frame ms p50 ' + f1(this.pct(F, 0.5)) + ' p95 ' + f1(this.pct(F, 0.95)) + ' p99 ' + f1(this.pct(F, 0.99)) + ' max ' + f1(this.pct(F, 1)));
+    L.push('cpu: ' + f1(this.cpus.reduce((s, v) => s + v, 0) / n) + ' ms/frame avg · p95 ' + f1(this.pct(this.cpus, 0.95)) + ' · max ' + f1(this.pct(this.cpus, 1)));
+    L.push('gpu: ' + (this.gx ? (this.gpuN ? f1(this.gpuSum / this.gpuN) + ' ms/frame avg · max ' + f1(this.gpuMax) : 'no results yet') : 'not measurable in this browser'));
+    L.push('per system (avg / worst ms):');
+    for (const [k, v] of [...this.rep].sort((a, b) => b[1] - a[1])) if (v / n >= 0.01 || (this.repMax.get(k) || 0) >= 2) L.push('  ' + k.padEnd(20) + ' ' + (v / n).toFixed(2).padStart(6) + ' / ' + (this.repMax.get(k) || 0).toFixed(1));
+    L.push('hitches (a gap over 50 ms or work over 33 ms): ' + (this.hitches.length ? '' : 'none'));
+    for (const h of this.hitches) L.push('  at ' + f1(h.t) + ' s: gap ' + h.gap.toFixed(0) + ' ms, work ' + h.cpu.toFixed(0) + ' ms — ' + h.parts.join(', '));
+    return L.join('\n');
+  },
+};
 function frame(now){
   requestAnimationFrame(frame);
   try { frameBody(now); }
@@ -38322,6 +38648,8 @@ function frameBody(now){
   const dt = Math.min(0.05, (now - lastT) / 1000);
   lastT = now;
   if (!game.running || !game.scene){ return; }
+  waterSys.defer = false;
+  perfSys.begin(now);
 
   loadSys.tick();
   spaceSys.tick(dt);
@@ -38332,8 +38660,10 @@ function frameBody(now){
   centreSys.tick(dt);
   ruinSys.tick(dt);
   vaultSys.tick(dt);
+  perfSys.m('space & sites');
   villageLifeSys.tick(dt);
   breedSys.tick(dt);
+  perfSys.m('village life');
   const onEarth = game.planet === 'earth';      // LIFTOFF (Build 74): the Moon and the station have no villages, roads, rivers, raids or bosses
   if (game.photo){
     updatePhoto(dt);
@@ -38344,6 +38674,7 @@ function frameBody(now){
     placePreview.update(now);
     tryAction(dt, now);
   }
+  perfSys.m('player & tools');
   updateViewmodel(dt);
   playerBody.update(dt);
   grappleSys.update();
@@ -38357,6 +38688,7 @@ function frameBody(now){
       jb.classList.remove('hidden');
     } else jb.classList.add('hidden');
   }
+  perfSys.m('hands & body');
 
   // stream chunks when crossing chunk borders (or forced). The vertical
   // chunk is part of the key: the deep world is 46 chunks tall, and the
@@ -38385,12 +38717,17 @@ function frameBody(now){
   }
   // adaptive meshing budget: clear big backlogs (world load, long teleports)
   // faster at the cost of brief hitches nobody can see terrain through anyway
+  perfSys.m('streaming');
   game.terrain.process(game.terrain.dirty.size > 150 ? 12 : 6);
+  perfSys.m('terrain meshing');
   if (!netSys.guest) waterSys.tick(dt);
+  perfSys.m('water');
   fishingTick(dt);
   if (!netSys.guest && onEarth) wreckSys.tick(dt);
+  perfSys.m('fishing & wrecks');
   if (!zeroG()){ lodTerrain.update(game.pos.x, game.pos.y, game.pos.z); lodTerrain.frame(); }   // the stations have no horizon
   if (!meshPool.ok) lodTerrain.processSync(2);
+  perfSys.m('horizon rings');
 
   game.terrainMat.uniforms.uPlayerPos.value.copy(game.camera.position);
   { const U = game.terrainMat.uniforms, on = !!(game.armor && game.armor.head && game.armor.head.kind === 'headlamp');   // Build 112
@@ -38398,37 +38735,71 @@ function frameBody(now){
   updateDayNight(dt);
   skySys.update(dt);
   updateSunShadow(dt);
+  perfSys.m('sky & sun');
   farTerrain.update();
+  perfSys.m('far skin');
   farShapeSys.update();
   treeSys.snaps();
+  perfSys.m('far shapes & trees');
+  // Build 115: what the world stamps for itself (a city, a highway, a
+  // village) meets the water a little at a time from here on, not all in
+  // one frame; the player's own edits still meet it at once
+  waterSys.defer = true;
   if (game.ui === 'none' && !netSys.guest) updateEntities(dt, now);
+  perfSys.m('creatures');
   netSys.tick(dt);
+  perfSys.m('network');
   torchSys.updateUniforms(now);
   stoveSys.update(dt);
   powerSys.update(dt);
+  perfSys.m('fire & power');
   if (!netSys.guest && onEarth) villageSys.tick(dt);
+  perfSys.m('villages');
   if (!netSys.guest) crewSys.tick(dt);
+  perfSys.m('crew');
   if (!netSys.guest && onEarth) expeditionSys.tick(dt);
   if (!netSys.guest && onEarth) deepSys.tick(dt);
+  perfSys.m('expedition & deep');
   if (!netSys.guest && onEarth) raidSys.tick(dt);
   if (!netSys.guest && onEarth) raidSys.update(dt);
   if (!netSys.guest && onEarth){ raidBaseSys.tick(dt); baseSys.tick(dt); }
+  perfSys.m('raids & bases');
   if (!netSys.guest && onEarth) spireSys.tick(dt);
   if (!netSys.guest && onEarth) zigSys.tick(dt);
+  perfSys.m('spires & ziggurats');
   weatherSys.tick(dt);
+  perfSys.m('weather');
   if (!netSys.guest) collapseSys.tick(dt);
-  if (!netSys.guest && onEarth){ citySys.tick(dt); pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt); farmSys.tick(dt); menagerieSys.tick(dt); }
+  perfSys.m('collapse');
+  if (!netSys.guest && onEarth){
+    citySys.tick(dt);
+    perfSys.m('cities');
+    pitSys.tick(dt); bankSys.tick(dt); trackSys.tick(dt); contractSys.tick(dt); mailSys.update(dt);
+    perfSys.m('city trade');
+    farmSys.tick(dt);
+    perfSys.m('farms');
+    menagerieSys.tick(dt);
+    perfSys.m('menagerie');
+  }
   if (onEarth) cityLightSys.tick(dt);
   if (onEarth) hearthSys.tick(dt);
+  perfSys.m('lights & hearths');
   shoreSys.tick(dt);                                                         // THE LIVING SHORE (Build 114)
+  perfSys.m('shore life');
   boreSys.tick(dt);
   mirrorSys.tick(dt);
+  perfSys.m('bore & mirror');
   if (game.uTime) game.uTime.value = (performance.now() * 0.001) % 3600;
   if (!netSys.guest && onEarth) siegeSys.tick(dt);
+  perfSys.m('siege');
   if (onEarth) roadSys.tick(dt);
+  perfSys.m('roads');
   if (onEarth) fallsSys.tick(dt);
   if (onEarth) lineSys.tick(dt);
+  perfSys.m('falls & railway');
   if (!netSys.guest) bossSys.tick(dt);
+  waterSys.defer = false;
+  perfSys.m('bosses');
   // boss HP bar: the nearest live boss within 90m owns the top of the screen
   {
     let bb = null, bd = 90;
@@ -38457,6 +38828,7 @@ function frameBody(now){
   wrenchSys.frame();
   objectiveSys.frame();
   updateSurvival(dt);
+  perfSys.m('hud & survival');
   // embers off nearby placed torches
   game.emberT = (game.emberT || 0) + dt;
   if (game.emberT > 0.4){
@@ -38479,6 +38851,7 @@ function frameBody(now){
   updateProjectiles(dt);
   chargeSys.update(dt);
   palisadeSys.tick(dt);
+  perfSys.m('particles & shots');
   if (game.mode === 'survival'){
     $('hpfill').style.width = game.hp.toFixed(0) + '%';
   }
@@ -38559,14 +38932,20 @@ function frameBody(now){
     $('navpos').textContent = posTxt + '  ·  ' + (game.planet === 'moon' ? 'the Moon' : game.planet === 'station' ? 'STATION ONE' : game.planet === 'site' ? 'STATION TWO · the site' : game.planet === 'alien' ? 'STRATA · ' + seasonSys.name : seasonSys.name) + (weatherSys.kind !== 'clear' ? ' · ' + weatherSys.kind : '') + (zeroG() ? ' · zero-G' : ' · ' + regionNameAt(game.pos.x, game.pos.z));
   }
 
+  perfSys.m('hud & audio');
   // autosave: 2.5s after last change
   if (game.savePending && now - game.saveTimer > 2500) saveNow();
+  perfSys.m('saving');
 
   shadowSys.decide();
+  perfSys.m('shadow decide');
+  perfSys.gpuBegin();
   godRays.prepass();
   if (spaceSys.scene && spaceSys.flight && spaceSys.flight.phase === 'transit') game.renderer.render(spaceSys.scene, spaceSys.cam);
   else game.renderer.render(game.scene, game.camera);
   godRays.composite();
+  perfSys.gpuEnd();
+  perfSys.m('render (cpu)');
   if (game.shotReq){ game.shotReq = false; saveSnapshot(); }
 
   game.fpsAcc += dt; game.fpsN++;
@@ -38588,13 +38967,15 @@ function frameBody(now){
           (mp.ok ? (mp.workers.length - mp.idle.length) + '/' + mp.workers.length : 'off') + '  tiles ' + game.terrain.tiles.size + '\n' +
         'ring queue ' + lodQ + '  tiles ' + lodTiles + '  skin ' + skinL + '/' + farTerrain.L.length + (skinJ ? ' (building)' : '') + '\n' +
         'tris ' + (Math.round((ri.render.triangles + lodTris) / 1000)) + 'k  draws ' + ri.render.calls + '\n' +
-        'shadow passes ' + (shadowSys.passes - (game.shPass0 || 0)) + '/' + (shadowSys.frames - (game.shFrame0 || 0)) + '  skin draws ' + (farTerrain.draws || 0);
+        'shadow passes ' + (shadowSys.passes - (game.shPass0 || 0)) + '/' + (shadowSys.frames - (game.shFrame0 || 0)) + '  skin draws ' + (farTerrain.draws || 0) + '\n' +
+        perfSys.lines();
       game.shPass0 = shadowSys.passes; game.shFrame0 = shadowSys.frames;
     } else {
       $('fpsbox').textContent = game.fps + ' fps' + (game.terrain.dirty.size ? ' · meshing ' + game.terrain.dirty.size : '');
     }
     game.fpsAcc = 0; game.fpsN = 0;
   }
+  perfSys.end();
 }
 
 // ---------- boot ----------
@@ -38664,7 +39045,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

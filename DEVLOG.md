@@ -2,6 +2,92 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 115 — THE STOPWATCH: the frame-rate pass (2026-10-11)
+
+My own build, and the oldest open line of my small-things list: "frame
+rate: 60 to 70 standing still, dips to about 40 flying or loading a city
+the first time. Worth a profiling pass." I can't feel frame pacing
+headless, but I can measure where the main thread's milliseconds go, so
+I profiled the real frame loop in four places (standing at spawn,
+standing in a city, flying at 40 m/s, mining every frame) and fixed what
+the profiler found. Then I made the game able to tell us the same thing
+on Austin's machine.
+
+- **The stopwatch (F3).** The overlay now splits each frame's CPU time
+  across 35 named parts (terrain meshing, water, horizon rings,
+  creatures, roads, render and so on), shows the top six, the GPU's own
+  time where the browser will measure it (EXT_disjoint_timer_query), and
+  the worst frame of the last half second with what it spent it on.
+  **Shift+F3** copies a report of everything since the last one: where
+  you are, the settings, the GPU, frame-time p50/p95/p99, every system's
+  average and worst, and every hitch (a gap over 50 ms or work over 33
+  ms) with its three biggest parts. It goes to the clipboard and the
+  console. With F3 off each mark is one test of a boolean.
+- **An eleven-second freeze near a highway.** The first time you came
+  within 700 m of a city, the highway to it was stamped in one frame,
+  and every embankment that crossed a river asked the water to
+  re-evaluate hundreds of 8 m chunks, each cell reading every nearby
+  edit and three terrain heights. On seed 7 that frame took 11.9 s
+  headless. Three fixes:
+  - What the world stamps for itself (highways, cities, villages,
+    anything in the world-simulation part of the frame) now reaches
+    the water through a queue that is worked 3 ms a frame. The
+    player's own edits still reach it at once. The save carries the
+    queue, so nothing is lost on quitting.
+  - The water reads the terrain through the same cached local
+    generator the mesher uses: 144 heights a chunk instead of about
+    1,500.
+  - The highway goes down nearest segment first, 6 ms a frame, and its
+    signs join the props once per pass, not once each.
+  Now the whole highway costs 56 ms of CPU spread over three frames.
+  Checked against Build 114 cell by cell: the water comes out
+  identical.
+- **A city's first stamp: 1.3 s down to about 0.13 s.** A second of it
+  was encoding PNGs: every shop good on a counter turned its icon into
+  a data URL and decoded it back into a texture. The 3D icons (counters,
+  held items, dropped items) now use a texture read straight off the
+  icon's canvas.
+- **The edit list gets a spatial index.** Every chunk job, collision
+  probe and ray read the whole edit list, and a city with its highways
+  is thousands of edits (each rotated one costing three rotations per
+  read). 32 m columns now hold each edit's position in the list. A push
+  extends the index, and an undo, a splice or a wrench move rebuilds it.
+  Answers come back in list order, so CSG order is untouched. On a
+  900-edit list a query takes 3 µs instead of 250 µs. Checked against a
+  full read over 1,800 random boxes, through pushes, undos, splices and
+  moves: identical.
+- **Flying.** Crossing a chunk border cost about 53 ms (headless); now
+  it costs 14 to 19.
+  - The streaming disc is tested by arithmetic instead of building a
+    set of 6,000 keys and splitting them again.
+  - A column's water survey (a thousand heights) is asked for only
+    where it could matter.
+  - Trees and ground decor are remembered per cell. They are pure
+    functions of the cell, and the far forest asked for 5,000 of them
+    every eleven metres.
+  Checked against Build 114 on Earth, Strata and the Moon: the same
+  chunks are empty, banded and queued.
+- **The mesh dispatcher** re-scored its whole backlog for every chunk
+  it handed out, about 30 ms a frame when flying. It now sorts the
+  backlog once and reads it in order for a tenth of a second (about 5 ms).
+- **The workers shrink their own results** (normals and lighting to
+  bytes) before sending them. That is 13 ms a frame off the main thread
+  when flying, and half as much data crossing over.
+- **The water's step** reads neighbours inside a chunk straight from
+  its arrays, and skips dry air with nothing coming. Same result, cell
+  for cell.
+
+Known, and what I want the stopwatch to settle on a real machine:
+- **Shader compiles.** The first sight of a new material combination
+  (a city's shop cards, an alpha-tested shadow) compiles a program on
+  the spot. Headless that is the biggest remaining spike, and on
+  Windows (ANGLE to D3D) compiles are slow. It is my best guess for
+  "the first city dips". If the reports show `render (cpu)` hitches on
+  arrival, a warm-up pass on the loading screen is next.
+- Horizon ring tiles occasionally take 100 ms+ to merge headless.
+- GPU upload of new chunks (bufferData) is large headless, but
+  SwiftShader says nothing about a real GPU.
+
 ## Build 114 — THE LIVING SHORE: birds and fish (2026-10-10)
 
 My own build, from the oldest line of my small-things list ("birds along

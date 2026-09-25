@@ -5,6 +5,21 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 115 — THE STOPWATCH
+- [ ] Press F3 and play normally for a minute: walk, fly fast in
+      creative, mine, drive to a city you have never visited. Then press
+      Shift+F3 and paste the report into your notes. Nothing else I ask
+      for this build matters as much as this: it is the first time I
+      will see numbers from your machine.
+- [ ] Is flying over new ground smoother than before? Does the first
+      trip to a new city still dip, and if it does, do the hitches in
+      the report say `render (cpu)`?
+- [ ] Stand beside a highway where it crosses a river, in a new world:
+      does the water meet the embankment within a second or two?
+- [ ] Anything that looks wrong that did not before: a missing chunk,
+      a tree or a tuft in the wrong place, a shop counter's goods, a
+      hole that won't mesh after a wrench move.
+
 ## Build 114 — THE LIVING SHORE
 - [ ] Walk a coast and a river by day. Do the birds read as birds, and
       as three kinds? Walk up to a landed flock.

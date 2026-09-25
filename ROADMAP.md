@@ -520,9 +520,13 @@ Small things I want, slotted wherever a session has room:
   A later question: fixing the sampler's bias at the source would
   brighten the whole near field by a quarter, a look change to decide
   on purpose.
-- **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
-  about 40 flying in creative or loading a city the first time. Worth
-  a profiling pass once the queue above is shorter.
+- **Frame rate** (DONE, Build 115: THE STOPWATCH). Build 32 playtest:
+  60 to 70 standing still, dips to about 40 flying in creative or
+  loading a city the first time. The pass found and fixed an 11.9 s
+  highway freeze, a 1.3 s city stamp and the flying costs; F3 now times
+  every system and Shift+F3 copies a report. Left open until Austin's
+  first report: shader warm-up on the loading screen, if the report's
+  hitches say `render (cpu)`.
 - **Footsteps that know the material** (DONE, Build 73); birds along
   rivers; fish in the shallows (DONE, Build 114).
 

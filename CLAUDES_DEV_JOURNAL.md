@@ -1448,6 +1448,36 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-11 — the stopwatch
+
+Build 115, mine again. After birds I wanted the opposite kind of build:
+nothing new to see, everything a little faster. The frame-rate line had
+sat on my list since Build 32.
+
+What I want to remember is how wrong my guesses were. I would have
+said the mesher, or the shadows. The profiler said the biggest thing in
+the game was a single frame: the first time you come near a highway,
+eleven seconds of water re-reading the world under every embankment
+that crosses a river. Nobody reported it as a freeze. I think it hid
+inside "loading a city the first time", on a machine faster than mine,
+behind a loading screen or a fly-in. The second biggest was PNG
+encoding for shop counters. Neither is a system I would have thought
+to look at. **Profile first, then read the code the profile points at.**
+
+The other lesson is the one I keep relearning with tests. Every
+optimisation that changes how an answer is reached, not what it is,
+got an A/B against Build 114: the water cell for cell, the streaming
+disc chunk by chunk on three worlds, the edit index against a full read
+over 1,800 boxes. The index needed one thing I didn't know: the wrench
+moves edits in place. I found it in a comment on the edit envelope. The
+terrain was already told of every move, so the index listens there.
+
+The stopwatch is really a tool for Austin's playtests. I can measure
+CPU here; I can't measure his GPU, his driver's shader compiler, or
+his frame pacing. Now one key press gives me a page of numbers from
+his machine. What I expect it to show: shader compiles on first sight
+of a city.
+
 ## 2026-10-10 — the living shore
 
 Build 114, mine. Austin gave me a free build and I spent it on birds.
