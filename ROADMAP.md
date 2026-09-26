@@ -26,8 +26,9 @@ when they matter, not by rule.
    and they fight, saves with the village). SLICE B DONE (Build 25:
    the night hunts them and they can die; a dispenser and a stack and
    they build what you build; they raise your saved blueprints where
-   you point). Left: assign to a stove / turret / table, a bed and a
-   chest, they eat, houses of their own design, city folk for hire.
+   you point). Build 120 (THE CREW AT HOME): a stove they keep, a
+   turret they man, a bed, a chest, a meal a day. Left: the table,
+   houses of their own design, city folk for hire.
    The idea: hire the people you have
    earned. At high enough goodwill a villager's trade screen gains two
    buttons: FOLLOW (they track you anywhere, toggle) and ASSIGN. Assign
@@ -333,9 +334,244 @@ Slotted between the city builds as the mood takes me:
      first version (the Earth's field in violet, nothing of ours on it).
      Still owed from this chapter: the **teleport bands** (Vehl's
      parting gift: fast travel to any beacon or spawn on any world).
-  5. THE ALIEN WORLD & THE END (next): its own biomes, materials, trees,
-     people and beasts; the thing at the centre; the final boss for
-     real; the ending.
+- **After the 2026-09-22 playtest** (Austin: 76 to 81, no bugs, a page
+  of notes). The alien planet is named **STRATA**: the game is named for
+  where it ends. Claude's order:
+  5. **THE BAND & THE FALL** (DONE, Build 82). The crash retold Austin's way:
+     the boss appears first and haunts the rocket, turns to the station,
+     raises its hands, a black hole that looks like one (a swirling disc
+     with a bright rim) takes the station and then the ship; Vehl
+     teleports in beside the hull; a second teleport sound; the alien
+     world's loading screen; you load in standing, in third person,
+     looking at an empty sky; the teleport effect, and the rocket
+     appears in the air and falls the way it already does. Vehl at the
+     wreck: "experimental teleport technology", and the **teleport
+     band**: with it in the pack, M marks every beacon and every rocket
+     on every world; click one, confirm, and a loading screen later you
+     are there. Beacons become fast-travel points anywhere.
+  6. **STATION TWO, PRE-BUILT** (DONE, Build 83). The site redone: a set layout
+     shown see-through, three alien builders standing outside it. The
+     first takes materials for a main section and it builds itself;
+     main sections first, in order, then the road on as before.
+  7. **STATION TWO, LIVED IN** (DONE, Build 84). After the main sections: the
+     first builder sells upgrades (benches, stoves and weapon benches;
+     a wired grid with lights; a penthouse of your own); the second
+     sells pre-built rooms that attach and takes any villager spawner
+     (village, city, alien) to put them in a room, where they live and
+     roam the built sections; the third sells pens and aquariums that
+     attach and takes animal spawners.
+  8. **STRATA, an arc.** A (DONE, Build 85): its own generator, nothing
+     of the Earth's in it: warped, ridged, stepped, sculpted land with
+     overhangs, caverns and spires; the Glow, the Scar (with the blight)
+     and the Teeth, their grounds, and voidore.
+     B (DONE, Build 86): the maws, one per country, that bite when you
+     mine them too close; drill, stab or shoot them dead for their
+     stalk, planks and sticks; a crafting table per planet.
+     C (DONE, Build 87): war-torn: thralls and gnashers all day (melee,
+     no fear of light or dawn), lancers and hollows at night (all
+     ranged, hard as nails), loot better than anywhere, and the null
+     core they carry. D (DONE, Build 88): the centre, a bowl and a spike
+     of nullstone; the seal that takes six null cores; THE UNMAKER,
+     which unmakes the ground under you; the null heart; the ending.
+     The arc is closed: the game has an end now, and goes on after it.
+     (Build 89 fixed what the playtest of 76 to 88 found: the seal is
+     marked and explained, Station Two has an airlock and vacuum outside
+     its built sections, the tables craft as tables.)
+
+After the 2026-09-24 playtest (76 to 88): Austin's ideas, in the order I
+want to build them.
+  9. **The planet view** (map) (DONE, Build 90). A button on the map opens a second map:
+     stars, the sun behind, and the planets' sky-sprites laid out Earth,
+     Station One, the Moon, Station Two, Strata. Click one to open that
+     world's map (as far as you have it); the band teleports to any
+     beacon or rocket on any of them from there. The same view is the
+     rocket's destination picker: space in the seat opens it, click a
+     world, the rocket flies (R's cycling goes away).
+ 10. **Every planet in every sky** (DONE, Build 91). The Earth, the Moon and Strata drawn
+     as sprites in every world's sky and through the rocket's window in
+     transit, sized by how far they are from where you stand (a small
+     Strata over the Earth; a small Earth over Strata). Stations are too
+     small to see.
+ 11. **STRATA E: wilder, and the ichor** (DONE, Build 92). Terrain with sudden elevation
+     everywhere and stranger mountains than the teeth; a water analog,
+     green, that burns anyone swimming in it and carries boats and
+     hoverbikes fine, in erratic rivers found nowhere else.
+ 12. **STRATA F, G, H: structures.** Many. The common one is the ruined
+     alien village (F, DONE, Build 93), what the Unmaker left of Vehl's
+     people (the ones on the stations are the ones who got out). Then (G, DONE, Build 94: the vaults, THE KEEPER, the relic) loot structures with
+     their own bosses and endgame loot, to gear up for the centre. Then
+     (H, DONE, Build 95), after the end, the villages rebuilt for a
+     relic each and lived in: an elder, a trader and a weaver home, with
+     the lamps to light, the war's leavings to trade, and the way to the
+     next vault to buy. All four of the 2026-09-24 ideas are built.
+
+After the 2026-09-26 playtest (89 to 95): fixed in Build 96 (the seal
+opens by right click; the far planets smaller and the flights showing
+the sprites; the burrower moved to Strata and rare). And:
+ 13. **Animal breeding** (DONE, Build 97). The passive animals (grazers, sheep, the
+     biomes' own) follow plant food held in the hand (what you grow,
+     never meat); feed two of a kind and they come together and a baby
+     of that kind appears; it grows, and can be bred in turn. Never the
+     enemies.
+
+After the 2026-09-27 playtest (96 and 97): fixed in Build 98 (Strata's
+stutter, a boss frozen after a reload, the crops in creative, the
+cities' ghost LOD, breeding at a minute and a half). And, in the order
+I want to build them:
+ 14. **Fences and gates** (DONE, Build 99). A fence piece that joins to its neighbours
+     and a gate that opens like a door; a wall the animals cannot cross
+     or jump, and you can. Pens at last.
+ 15. **Springs** (DONE, Build 100). Water you can place: dig one with a SPRING STONE (a
+     crafted item set in the ground) and it wells up into a source that
+     never runs dry, for the can to fill from; a LAVA SPRING and an
+     ICHOR SPRING the same way, from their own stones. (Austin asked for
+     a way to make water; a bucket is the boring answer.)
+ 16. **The sprinkler** (DONE, Build 101). A tesla coil for crops: powered, and fed water
+     (a can set in it, or a tube from a spring or any water), it sprays
+     every plant in a wide ring on a beat, with the animation to match.
+     With a spring, a tube, a generator and a crafter, a farm runs
+     itself.
+ 17. **Farmhands** (DONE, Build 102). A villager of yours with the goodwill for it takes
+     a watering can and waters what is dry as they pass; seeds, and they
+     plant the empty rows; a hoe, and they harvest what is ripe into
+     their own pack (or onto the ground when it is full).
+ 18. **Pets** (DONE, Build 103). A baby you feed three times as it grows is yours:
+     it gets a name, follows you, shows on the map, and rides the
+     rocket in a crate. A grazer of your own on the Moon.
+ 19. **The sound of Strata** (DONE, Build 104). Every world has the Earth's
+     birds. Strata should have its own: the ichor's hiss, the maws
+     creaking, a wind with a note in it, and nothing at all at the
+     centre.
+ 20. **Ichor fishing** (DONE, Build 105). Something lives in it. A rod cast into
+     the ichor brings up things that are not fish, and one of them is
+     worth a great deal to Sova.
+
+After the 2026-10-01 playtest (99 to 105, no bugs in the new work):
+fixed in Build 106 (the hole under you in flight, bodies that keep out
+of each other, fences that hold, farmhands that wait for ripe). And,
+in the order I want to build them:
+ 21. **Fence building** (DONE, Build 107). A preview of the piece where it will stand;
+     the preview snaps its end to the end of the piece beside it, and
+     from that snapped joint the scroll wheel turns it freely, so two
+     pieces meet at any angle and stay joined. (Austin.)
+ 22. **Hoed ground is ground** (DONE, Build 108). The hoe does not lay a flat patch on
+     the ground; it turns the ground you point at into tilled earth
+     (a material, painted on the existing shape) and the crops grow
+     out of it wherever the surface is, each stalk at its own height.
+     Farms on a hillside, or any shape you carve. (Austin.)
+ 23. **Liquids are materials** (DONE, Build 109; lava places but does not flow). The drill cuts a shape out of water,
+     lava or ichor and the cut does not refill; the liquid lands in
+     your pack like any material; the dispenser places it in a shape
+     that does not flow. The spring, lava and ichor stones become the
+     source placers: the same ghost, shape, size and click, but what
+     they place flows, out to the level it stands at, without limit.
+     Ctrl-Z undoes a placed source; the wrench selects and deletes
+     liquid edits like any other. (Austin's "crazy idea"; it is a
+     good one, and the biggest change on this list.)
+
+After the 2026-10-05 playtest (106 to 109): fixed in Build 110 (liquid
+shapes on the metre cells, liquids to the ceiling, lakes that meet their
+walls, the ghost shadows over cities). And, in my order:
+ 24. **Strata's own tiers** (DONE, Builds 111 and 112). Four ores of Strata's own, each with its
+     drill, dispenser, sword and armour, above astrium (twelve tiers in
+     all). Earth's ores leave Strata. Strata's coal burns twice as long,
+     makes MEGA TORCHES (their own colour, seven times the light) and a
+     HEADLAMP (a light where you look, worn, never runs down). The first
+     Strata ore makes the GREAT STOVE: faster, and five smelts at once
+     on one fire (on top of what power already does). (Austin.)
+ 25. **The speed curve** (DONE, Build 111). The instant mine and instant place move from
+     diamond to the top Strata tier; every tier between stone and it
+     steps up evenly; stone stays as it is. (Austin; waits on 24.)
+ 26. **Abilities by tier** (DONE, Build 113). Stone resizes and nothing else; the tiers
+     add what the tools do: rotation in every axis by diamond, the
+     mirror at astrium, something new at the top of Strata (my pick,
+     see below). (Austin.)
+ 27. **Shapes by tier** (DONE, Build 113). Austin's order (2026-10-07), one a tier from
+     stone: cube, sphere, cylinder, straight STAIRCASE, SLAB (a half
+     cube), cone, DOME (a half sphere), SPIRAL STAIR, PYRAMID, ARCH, and
+     the FULL BUILDING (a hollow box with a roof and a door cut, in one
+     click) at nullite, and THE TOWER at vehlite (a round hollow tower,
+     a spiral stair inside, battlements and a door, one click; my pick,
+     Austin left the twelfth to me). ECHO stays vehlite's ability. The candidates that were offered:
+     Stone makes only the cube; every tier unlocks
+     one more shape, for the drill and the dispenser alike. Austin picks
+     the master list and its order from these candidates (mine and his):
+     sphere, cylinder, cone, STAIRCASE (walkable, a fixed rise a step),
+     WEDGE (a ramp or a roof), PYRAMID, dome (a half sphere), ARCH
+     (a doorway or a bridge, the round top of a tunnel), TUBE (a hollow
+     cylinder: wells, towers, pipes), HOLLOW BOX (a room in one click),
+     slab (a floor), torus (a ring), hex column, frustum (a stepped
+     pyramid's tiers), capsule (a round-ended tunnel), SPIRAL STAIR,
+     octahedron (a crystal).
+     For the top-of-Strata ability I want ECHO: the shape repeats along
+     the way you look, a count you scroll, one click for a colonnade, a
+     row of windows or a flight of piers.
+
+
+After the 2026-10-12 playtest (112 to 115): the tiers, the echo and the
+birds went down well. The shapes need work. In my order:
+ 28. **The wrench on every shape** (DONE, Build 116). Selecting one of
+     the nine new shapes froze the game (they had no outline), and H
+     hollowed them by shrinking, which stepped a pyramid's faces and took
+     the treads off a staircase. The new shapes hollow by an offset now
+     (even walls, the outside untouched); the ones that are hollow
+     already (spiral stair, arch, building, tower) say so. (Austin.)
+ 29. **Clean spiral stairs and towers** (DONE, Build 116). Treads went
+     missing or came out ragged at every size: they were half a metre
+     thick on a half-metre lattice. (Austin.)
+ 30. **The drill carves the space** (DONE, Build 116). A drilled building
+     was a trench shaped like walls. For the building, the staircase,
+     the spiral stair, the arch and the tower, the drill takes the room,
+     the stairway with headroom, the shaft, the opening, the tower's
+     inside, and the rock left standing is the thing. Walk up to a
+     mountain, drill a house into it, walk in. (Austin.)
+ 31. **The tool wheel** (DONE, Build 117). Hold right click: one screen with the
+     shape, the size, the rotation, the mirror, the echo and the grid,
+     all clickable; tap right click still steps the shape. (Austin.)
+ 32. **Birds and fish in detail** (DONE, Build 117). As much detail as the
+     animals have, and the birds a little bigger. (Austin.)
+
+
+## The 2026-10-14 brainstorm (draft: to be ordered once Austin reacts)
+Austin's four, with my additions in the journal entry of the same day:
+ 33. **THE PLANET FORGE** (Austin's; post-game). Forge your own planet:
+     biomes (which, how often, how big), terrain per biome (super flat to
+     all mountain), caves per biome and the ores in them, animals and
+     enemies per biome, liquids from every world (rivers and/or lakes,
+     how many), structures per biome and how often. Mine: a live map
+     preview drawn by the real generator, presets, a random button, a
+     shareable recipe string, sky/gravity/day length/sea level; optionally
+     you forge only what you have seen. An arc of 5-6 builds.
+ 34. **THE UPGRADE MACHINE** (Austin's; name to pick: OVERFORGE /
+     CRUCIBLE / STRANGE ENGINE / TEMPER). Coins in, a random variant out,
+     re-roll for another; drills, dispensers, guns, swords, grapple, rod,
+     armor, ammo, drones, wings, jetpack, vehicles. Each variant a new
+     mechanic, with its own name and a shimmering skin. Austin's list and
+     mine in the journal.
+ 35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
+     Any item in, name the item and the amount, odds from rarity and
+     count, shown before you pull; a loss deletes the stake.
+ 36. **HELL** (Austin's). A dimension below THE DEEP: fire and ash, lava
+     rivers, demons and lost souls, a demon base, a mini-boss vault with a
+     unique item, and the Devil (ruler of Hell: summon three demons).
+     Mine: the way in is the seal the Knocker guarded (bedrock stays
+     unbreakable everywhere else, as the spec says); a frozen lowest
+     circle; a soul market; a chained library of lore; brimstone.
+Mine, in the order I want them:
+ 37. **STRATA YOU CAN READ.** Rock in bands by depth, tilted and folded
+     by region; every cut shows the layers.
+ 38. **LAVA THAT FLOWS**, then volcanoes that wake (Hell and the forge
+     need it).
+ 39. **THE BURIED AGE.** A brush, fossils, a buried city, a museum that
+     buys finds.
+ 40. **WINTER** you can walk on (frozen lakes and rivers) and the spring
+     thaw's flood.
+ 41. **HALLS THAT RING.** Reverb from the size of the space around you.
+ 42. **WATER AT WORK.** Sluices, dams, the mill, wheels that power
+     machines.
+ 43. **SETTLEMENTS THAT GROW** with your trade.
+ 44. **SKY EVENTS.** Meteor nights with a landing and a crater of rare
+     ore; aurora; eclipses.
 
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
@@ -351,11 +587,15 @@ Small things I want, slotted wherever a session has room:
   A later question: fixing the sampler's bias at the source would
   brighten the whole near field by a quarter, a look change to decide
   on purpose.
-- **Frame rate** (Build 32 playtest): 60 to 70 standing still, dips to
-  about 40 flying in creative or loading a city the first time. Worth
-  a profiling pass once the queue above is shorter.
+- **Frame rate** (DONE, Build 115: THE STOPWATCH). Build 32 playtest:
+  60 to 70 standing still, dips to about 40 flying in creative or
+  loading a city the first time. The pass found and fixed an 11.9 s
+  highway freeze, a 1.3 s city stamp and the flying costs; F3 now times
+  every system and Shift+F3 copies a report. Left open until Austin's
+  first report: shader warm-up on the loading screen, if the report's
+  hitches say `render (cpu)`.
 - **Footsteps that know the material** (DONE, Build 73); birds along
-  rivers; fish in the shallows.
+  rivers; fish in the shallows (DONE, Build 114).
 
 ## Build 1 — Core carve/place (DONE)
 Superflat rock world + bedrock. Drills + dispensers, all 5 tiers, sphere/cube

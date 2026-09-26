@@ -2,6 +2,1298 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 120 — THE CREW AT HOME (2026-10-13)
+
+My own build, from the crew's "left" line on the roadmap (assign to a
+stove or a turret, a bed and a chest, they eat), which has waited since
+Build 25. Four new rows on the crew's ORDERS tab. Each picks the stove,
+turret, bed or chest nearest where you look (or nearest them):
+- **STOVE: they keep it.** They stand at it and every few seconds feed
+  it: ore and meat from their pack and from their chest into its lane
+  (or the great stove's five), fuel when the fire runs low, and what it
+  made into their chest (or their pack). Twelve ore given to a crew
+  member came out as twelve ingots in the chest.
+- **TURRET: they man it.** A manned turret fires with no power, at half
+  rate (cranked by hand), and sees 34 m instead of 24.
+- **BED: theirs.** At night, unless they are out with you, they walk to
+  it and sleep. They wake mended and go back to their post in the
+  morning.
+- **CHEST: theirs.** What they dig goes into it: their pack's takings
+  when it gets heavy, or when a job is done. They eat from it, and a
+  stove they keep fills it.
+- **A meal a day** from their pack or chest (a burger first, then down
+  to a tomato). Fed, they work a fifth faster: cuts, placements,
+  building. Unfed, they work as they always did, and say they are hungry
+  once a day if you are near. Nothing is taken away for going hungry.
+- The crew screen's status line says fed or hungry, and whether they
+  have a bed and a chest. All of it is saved with them.
+
+## Build 119 — THE WATER'S FACE (2026-10-13)
+
+My own build. "Water should move" has been in my standing notes since
+the first month, and rivers already drift downstream, but the surface
+was a flat colour. Now:
+
+- **Waves.** Three sets of small waves in the light (not in the
+  geometry, so no shore ever changes), carried downstream on a river.
+- **The sky and the sun in it.** Toward a low angle the water takes the
+  sky's colour, as real water does. Where the sun would glint off a
+  wave it glitters: quarter-metre sparks that come and go, a sun path
+  in pixels rather than a sheet of white. At night there is no sun in
+  it.
+- **Foam** where the water runs shallow onto a shore, breathing slowly.
+- **Rings where things touch it**, sixteen at a time:
+  - you going in (a big one), and every few steps as you wade;
+  - an animal or a boat in the water near you;
+  - a cast landing and a fish biting;
+  - a school of fish darting;
+  - rain, on every pond and river within a dozen metres of you (a
+    storm is heavier).
+- The far skin's water carries the same waves, sky and glitter, so the
+  line where the near water meets the far is not a change of tone.
+  Ripples are near-water only.
+- Strata's ichor gets all of it in its own colours.
+
+## Build 118 — the ghost city found, and the first real perf report (2026-10-13)
+
+Playtest of 116 and 117 (2026-10-13): everything from the last report
+is fixed. The drills and the wheel work, and the birds and fish look
+right. One thing is back: the city LOD ghost (flat walls that stay and
+can be walked through), in two new worlds. And the first STOPWATCH
+report from Austin's machine (an RTX 2060, render distance 7, flying
+to a desert city and around it for fifteen seconds).
+
+- **The ghost city, found.** It was never the skin or the rings, the
+  two layers I fixed in Builds 98, 106 and 110. It was the third
+  distant layer, the stand-in boxes (farShapeSys) that show a city's
+  towers and halls from kilometres off.
+  - Those boxes are drawn for a stamped city too, and they hide only
+    where the coverage mask says the real world stands.
+  - Build 98's rule, that nothing distant draws within 24 m of you,
+    was written for the skin and the rings. The boxes never had it.
+  - The boxes also kept drawing on the real world's seam columns (mask
+    values 200 and 210, where the skin keeps drawing sunk to back the
+    join). A box is not a join: it stood over the real building.
+  - So wherever the mask had a seam or a hole (the edge of the near
+    field, a column still meshing), a flat stand-in box stood over or
+    in place of the real building, and you could walk into it.
+  - Headless, in a desert city at render distance 7, 77 points of
+    stand-in box within 60 m were drawn before; now 0.
+  - Fix: the boxes follow the same 24 m rule, and they step aside on
+    seam columns as well as covered ones.
+- **What the report said.** 70 fps average (11 ms median frame), CPU
+  12 ms and GPU 4 ms: the GPU is idle, the CPU is the limit. In the city
+  the frames ran 35 to 45 ms, made of three things again and again:
+  streaming 10 to 13 ms, creatures 7 to 8, water 5 to 12. Fixed:
+  - **Streaming, by column.** Every chunk crossing walked every level
+    of every column in the disc (about 10,000 lookups at render
+    distance 7). Columns are remembered now. A crossing walks the new
+    columns and re-asks only the chunks too far away to mesh yet.
+    Measured in the city: 7.3 ms down to 5.5 ms per crossing. Checked
+    against Build 117 over 51 streaming steps on Earth, Strata and the
+    Moon: identical.
+  - **Torches kept.** A city's street lights are torches, and every
+    crossing threw away every torch model in range and built it again.
+    Now each keeps its model while in range: 2.5 ms down to 1.5 ms.
+  - **Creatures and the props.** Half of the creatures' time went into
+    reading every solid prop in the world (a city is every door of every
+    house) for every physics probe. Props sit in 8 m columns now. A
+    probe reads the columns round it, 8 m and then 16 m out, and only a
+    probe with nothing that near reads the whole list. The answer is the
+    same as before to the last digit (checked on 4,000 probes), about 6×
+    faster at 80 props, and the gain grows with the city. A first version
+    capped the answer at 8 m, which is enough for a collision, but the
+    garrison's gunship reads the same field for its clearance and aim:
+    its hits on you halved in the b62 suite. The exact version brought
+    them back.
+  - **The dispenser** worked out a placement's cost every frame its
+    ghost moved, button or not (thousands of field samples each time).
+    Now it does so when you click.
+- **The stopwatch sees more.** 'player & tools' splits into player,
+  ghost and tool action; 'water' into stamps, fills, flow and meshes;
+  and the trees-and-decor retry has its own line. The next report says
+  which part it was.
+- **Not fixed, and why:**
+  - The report's single worst gap, 4.3 s, did not happen inside a frame:
+    CPU work never went over 262 ms. It looks like the browser pausing
+    (a window switch) or a load, not the game.
+  - Horizon rings (worst 240 ms), far shapes (179), a fort stamped (186)
+    and a city stamped (125) are single frames, once each per place.
+    They are next in line if they show up again.
+
+## Build 117 — THE TOOL WHEEL, and birds and fish in detail (2026-10-12)
+
+The other two notes from Austin's playtest of 112 to 115.
+
+- **The tool wheel.** Hold right click with a drill or a dispenser (a
+  quarter of a second) and one screen opens with everything the tool
+  does, all by the mouse:
+  - SHAPE: all twelve, each with a pixel icon. The ones your tier does
+    not have are dimmed and name the tier that brings them.
+  - SIZE: the tier's steps, or a smooth slider from diamond up, plus
+    how far out the ghost sits (the reach, V/B's job).
+  - TURN: yaw, and pitch and roll from diamond, in 15° steps, with
+    SQUARE IT UP to reset them.
+  - GRID: on or off, and the ten grid sizes.
+  - MIRROR: the plane through the ghost, TURN IT, and radial ×2 to ×10.
+  - ECHO: copies and gap.
+  - DISPENSER: build or paint.
+  Anything the tier cannot do yet says which tier brings it. A tap of
+  right click still steps to the next shape, as it always has; the step
+  now happens when the button comes up. Right click, E or Esc closes
+  the wheel.
+- **Birds as the animals are built.** Each bird is a body, a head with
+  eyes and a beak, a tail, legs, and wings in two panels with their
+  tips, coloured per part:
+  - GULL: grey back, yellow beak with its red spot, black wingtips and
+    tail band, orange legs.
+  - FINCH: rusty breast, dark cap, a pale wing bar.
+  - HERON: long neck, black plume, dagger beak, long legs it stands on.
+  Landed birds fold their wings back and finches peck. They are bigger:
+  gulls ×1.3, finches ×1.45, herons ×1.15. Still instanced, three draws
+  a kind.
+- **Fish:** a dark back, pale flanks and belly, a dorsal fin, side fins,
+  eyes and a tail fin. The tail beats, faster when they dart.
+
+## Build 116 — THE SHAPES, FIXED: the wrench, clean treads, the drill carves the space (2026-10-12)
+
+Playtest of Builds 112 to 115 (2026-10-12, Austin):
+- The tier order, the abilities and ECHO all work ("works perfect
+  already", "a really good final upgrade").
+- The birds and fish are liked. He wants them as detailed as the
+  animals, and the birds a bit bigger (Build 117).
+- Hold right click for one menu with shape, size, mirror, echo and
+  rotation (Build 117).
+- The new shapes had three problems, and this build fixes them:
+
+- **The wrench froze on every new shape.** Selecting a staircase, slab,
+  cone, dome, spiral, pyramid, arch, building or tower threw an error
+  every frame ("Cannot set properties of undefined"): the outline table
+  held only the sphere, cube and cylinder. Every shape now has its own
+  outline (its ghost, shrunk to a unit box and cached), for the primary
+  selection, the extra selections and the paste ghost.
+- **H hollowed the new shapes by shrinking them.** A shrunk pyramid
+  has different slopes, so its faces came out stepped. A shrunk
+  staircase has a different step count, so its treads were cut away.
+  The new shapes now hollow by an offset instead: a subtract of the same
+  shape moved in by the wall (`e.off`), so the walls are even and the
+  outside does not move. Checked at four points just outside a
+  pyramid: identical before and after. The spiral stair, arch, building
+  and tower are hollow already and say so. Spheres, cubes and cylinders
+  hollow as before.
+- **Clean spiral stairs and towers.** A tread was half a metre thick
+  on a half-metre lattice, so treads went missing or came out ragged
+  at every size. A tread is now 1.5 m thick under its top: the walking
+  surfaces have not moved, and underneath is a stepped helix the mesher
+  can hold. In the mesher every tread now comes out: 20 of 20 for a
+  10 m spiral, 48 of 48 at 24 m, 28 of 28 in a 16 m tower. The ghosts
+  match.
+- **The drill carves the space.** For five shapes the drill now takes
+  the space the shape encloses, and the rock left standing is the
+  shape (`e.neg`, saved):
+  - BUILDING: the room, a gabled attic under the roof, and the door
+    out through the front.
+  - STAIRCASE: the stairway with 3 m of headroom over every tread.
+  - SPIRAL STAIR: the shaft round the stair and its column.
+  - ARCH: the arched opening, through.
+  - TOWER: its hollow, open to the sky, the stair standing inside, and
+    the door carried out to the ghost's front face.
+  The ghost shows the space, with the treads that stay drawn in, and
+  the HUD says what the drill will carve. The action time, the yield
+  and the crew's drills all count the space. The sphere, cube,
+  cylinder, slab, cone, dome and pyramid are carved whole, as before.
+  The dispenser still builds the solid.
+- **The save.** Two new fields at the end of an edit's row: the drill's
+  space (`neg`) and the hollow's offset (`off`). Older saves load
+  unchanged. Build 113 and 114 drill cuts keep their old meaning, so
+  anything already dug stays as it was.
+
+## Build 115 — THE STOPWATCH: the frame-rate pass (2026-10-11)
+
+My own build, and the oldest open line of my small-things list: "frame
+rate: 60 to 70 standing still, dips to about 40 flying or loading a city
+the first time. Worth a profiling pass." I can't feel frame pacing
+headless, but I can measure where the main thread's milliseconds go, so
+I profiled the real frame loop in four places (standing at spawn,
+standing in a city, flying at 40 m/s, mining every frame) and fixed what
+the profiler found. Then I made the game able to tell us the same thing
+on Austin's machine.
+
+- **The stopwatch (F3).** The overlay now splits each frame's CPU time
+  across 35 named parts (terrain meshing, water, horizon rings,
+  creatures, roads, render and so on), shows the top six, the GPU's own
+  time where the browser will measure it (EXT_disjoint_timer_query), and
+  the worst frame of the last half second with what it spent it on.
+  **Shift+F3** copies a report of everything since the last one: where
+  you are, the settings, the GPU, frame-time p50/p95/p99, every system's
+  average and worst, and every hitch (a gap over 50 ms or work over 33
+  ms) with its three biggest parts. It goes to the clipboard and the
+  console. With F3 off each mark is one test of a boolean.
+- **An eleven-second freeze near a highway.** The first time you came
+  within 700 m of a city, the highway to it was stamped in one frame,
+  and every embankment that crossed a river asked the water to
+  re-evaluate hundreds of 8 m chunks, each cell reading every nearby
+  edit and three terrain heights. On seed 7 that frame took 11.9 s
+  headless. Three fixes:
+  - What the world stamps for itself (highways, cities, villages,
+    anything in the world-simulation part of the frame) now reaches
+    the water through a queue that is worked 3 ms a frame. The
+    player's own edits still reach it at once. The save carries the
+    queue, so nothing is lost on quitting.
+  - The water reads the terrain through the same cached local
+    generator the mesher uses: 144 heights a chunk instead of about
+    1,500.
+  - The highway goes down nearest segment first, 6 ms a frame, and its
+    signs join the props once per pass, not once each.
+  Now the whole highway costs 56 ms of CPU spread over three frames.
+  Checked against Build 114 cell by cell: the water comes out
+  identical.
+- **A city's first stamp: 1.3 s down to about 0.13 s.** A second of it
+  was encoding PNGs: every shop good on a counter turned its icon into
+  a data URL and decoded it back into a texture. The 3D icons (counters,
+  held items, dropped items) now use a texture read straight off the
+  icon's canvas.
+- **The edit list gets a spatial index.** Every chunk job, collision
+  probe and ray read the whole edit list, and a city with its highways
+  is thousands of edits (each rotated one costing three rotations per
+  read). 32 m columns now hold each edit's position in the list. A push
+  extends the index, and an undo, a splice or a wrench move rebuilds it.
+  Answers come back in list order, so CSG order is untouched. On a
+  900-edit list a query takes 3 µs instead of 250 µs. Checked against a
+  full read over 1,800 random boxes, through pushes, undos, splices and
+  moves: identical.
+- **Flying.** Crossing a chunk border cost about 53 ms (headless); now
+  it costs 14 to 19.
+  - The streaming disc is tested by arithmetic instead of building a
+    set of 6,000 keys and splitting them again.
+  - A column's water survey (a thousand heights) is asked for only
+    where it could matter.
+  - Trees and ground decor are remembered per cell. They are pure
+    functions of the cell, and the far forest asked for 5,000 of them
+    every eleven metres.
+  Checked against Build 114 on Earth, Strata and the Moon: the same
+  chunks are empty, banded and queued.
+- **The mesh dispatcher** re-scored its whole backlog for every chunk
+  it handed out, about 30 ms a frame when flying. It now sorts the
+  backlog once and reads it in order for a tenth of a second (about 5 ms).
+- **The workers shrink their own results** (normals and lighting to
+  bytes) before sending them. That is 13 ms a frame off the main thread
+  when flying, and half as much data crossing over.
+- **The water's step** reads neighbours inside a chunk straight from
+  its arrays, and skips dry air with nothing coming. Same result, cell
+  for cell.
+
+Known, and what I want the stopwatch to settle on a real machine:
+- **Shader compiles.** The first sight of a new material combination
+  (a city's shop cards, an alpha-tested shadow) compiles a program on
+  the spot. Headless that is the biggest remaining spike, and on
+  Windows (ANGLE to D3D) compiles are slow. It is my best guess for
+  "the first city dips". If the reports show `render (cpu)` hitches on
+  arrival, a warm-up pass on the loading screen is next.
+- Horizon ring tiles occasionally take 100 ms+ to merge headless.
+- GPU upload of new chunks (bufferData) is large headless, but
+  SwiftShader says nothing about a real GPU.
+
+## Build 114 — THE LIVING SHORE: birds and fish (2026-10-10)
+
+My own build, from the oldest line of my small-things list ("birds along
+rivers; fish in the shallows"). The world had animals you walk up to,
+and nothing that moved when you were not looking at it.
+
+- **Birds, by day on the Earth.** Up to three flocks within a hundred
+  metres or so, each where it belongs:
+  - GULLS over the sea and the rivers: white, gliding between wing
+    strokes, and they rest on the water.
+  - FINCHES round the trees: small, brown, quick; they come down to peck
+    at the ground.
+  - A lone HERON works a river, slow, and settles on it.
+  Flocks wander and keep to the place they came from; now and then they
+  land. Walk up to a landed flock and it goes, fast, away from you. Near
+  you they call (finches twitter, gulls cry, the heron croaks). At dusk
+  they leave; at night there are none.
+- **Fish in the shallows.** Schools of four to eight where the water is
+  knee to head deep, dark-backed as fish look from above, swimming round
+  and wandering slowly, keeping to water deep enough. A swimmer near
+  them, a step too close on the bank, or a bobber landing among them:
+  they dart off.
+- **Fishing.** A cast within six metres of a school you can see bites
+  in six tenths of the time.
+- **Winter** thins it: one flock, two schools.
+- The Moon, the station and Strata have none of these (Strata's own
+  life is its own).
+- None of it is an entity or saved: instanced boxes, a few dozen, one
+  draw each for bodies, wings and fish.
+- Fixed on the way: a stone drill's HUD said "sphere" after a world
+  saved with one; the cube fallback of Build 113 now runs for the HUD
+  and the action as well as the ghost.
+
+## Build 113 — THE TOOL THAT GROWS: twelve shapes, abilities by tier, ECHO (2026-10-09)
+
+Roadmap items 26 and 27, Austin's order.
+
+- **Twelve shapes, one a tier,** for the drill and the dispenser alike:
+  stone the cube; iron the sphere; ruby the cylinder; obsidian the
+  STAIRCASE; diamond the SLAB; selenite the CONE; lunite the DOME;
+  astrium the SPIRAL STAIR; void the PYRAMID; ichorite the ARCH;
+  nullite the BUILDING; vehlite the TOWER. Right click walks the ones
+  your tool has, in that order; pick up a lower tool and the shape falls
+  back to the cube.
+- **The shapes.** Each is an exact field in its box, built of pieces the
+  mesher keeps sharp (their normals are a fine central difference):
+  - STAIRCASE: steps of a fixed half-metre rise, as many as the size
+    needs, rising away from you.
+  - SLAB: the lower half of the box.
+  - CONE and PYRAMID: base on the box's floor, point at its top.
+  - DOME: a half sphere on the box's floor.
+  - SPIRAL STAIR: twelve wedge treads a turn round a column, half a
+    metre a tread.
+  - ARCH: a block with a round-topped opening through it.
+  - BUILDING: walls, a floor, a gabled roof, a hollow room and a door
+    facing you, one click.
+  - TOWER: a round hollow tower half as wide as it is tall, a spiral
+    stair inside, battlements, a door facing you. Build it big.
+  Stairs, arches, buildings and towers turn to face the way you look,
+  on top of any turn the tool gives them.
+- **The ghost is the shape.** The new shapes' ghosts are built at the
+  size you hold (the stair's step count depends on it), cached, on the
+  outline, the fill and the dispenser's textured preview. Tested: every
+  vertex of every exact ghost lies on its shape's surface.
+- **Abilities by tier.** Stone resizes and nothing else. Iron turns
+  (yaw) and snaps to the grid. Diamond turns in every axis. Astrium
+  mirrors. Vehlite ECHOES. The middle click walks only the scroll modes
+  your tool has; F and K say which tier brings them when refused. The
+  HUD says how many shapes and which abilities the held tool has.
+- **ECHO.** Two more scroll modes on a vehlite tool: echo count (1 to
+  16) and echo gap (0 to 4 times the shape). The shape repeats along the
+  way you look (level, or along the nearest axis with the grid on), the
+  ghost shows every copy, a mirror copies every echo, and one Ctrl-Z
+  takes the whole row back. A colonnade is one click.
+- The far skin reads the new shapes by scanning their columns.
+- Known: a spiral stair smaller than about 6 m is rough, its half-metre
+  treads being the terrain's own resolution; build it bigger.
+
+## Build 112 — STRATA'S FIRE: mega torches, the headlamp, the great stove (2026-10-08)
+
+The rest of roadmap item 24, Austin's: what Strata's coal is for.
+
+- **Mega torches.** Four from a scarcoal and a stick, anywhere. A taller
+  iron shaft with a cold green flame in a cage. Seven times a torch's
+  reach (68.6 m against 9.8 m), in its own colour: the terrain shader
+  now carries a second light, green-white, beside the torches' warm one
+  (a mega torch's reach goes to the shader negative, which is how it is
+  told apart). Nothing hunts within seven times its reach either. The
+  drill gives mega torches back as mega torches; they save as such.
+- **The headlamp.** Six scarcoal, four voidore and two crystal at a
+  crafting table. Wear it in the helmet slot: a beam from your eyes
+  wherever you look, a cone out to 48 m, and it never runs down. It is
+  a strap and a lamp on your brow, and no armour at all.
+- **The great stove.** At Strata's table, from a stove, sixteen voidore
+  and eight scarcoal. A wide hearth with five mouths and two stacks. Its
+  panel has one fire and five lanes of input and output: five different
+  things smelting at once, each twice as fast as a plain stove, and the
+  fire burns one unit a round for all five. Power still speeds it
+  (tripled, as for a stove). Shift-click sends a smeltable to the lane
+  holding its like or the first empty one; tubes feed it the same way;
+  the drill and the wrench give it back as a great stove.
+- **Scarcoal** feeds generators now too, and holds a generator's fire
+  twice as long as coal.
+
+The 12th shape (Austin left a gap): THE TOWER, at vehlite. A round
+hollow tower with a spiral stair inside, battlements and a door, in one
+click: a partner to nullite's full building. On the roadmap for the
+shapes build.
+
+## Build 111 — STRATA'S TIERS and the speed curve (2026-10-07)
+
+Roadmap items 24 (the tiers) and 25 (the speed curve), Austin's. Strata's
+fire (its coal as fuel for torches and the headlamp, the great stove) is
+the next build; the shapes and abilities by tier the one after.
+
+- **Four tiers past astrium,** twelve in all: VOID (from voidore, the ore
+  Strata already had), ICHORITE, NULLITE and VEHLITE. Each has its drill,
+  dispenser, sword, helmet, chestplate and boots, made at Strata's table
+  from its own ore. Their colours: deep green, lime, magenta, gold.
+- **Strata's ground.** Its veins now choose an ore by depth: SCARCOAL
+  (Strata's coal, an ember in it) from just under the ground to 110 m
+  down, voidore everywhere under, ichorite from 30 m down, nullite from
+  70 m, vehlite from 130 m and rare. The Earth has none of them.
+- **The Earth's ores leave Strata.** The ground never held them; the
+  loot did. A vault's diamonds are nullite now, and a hollow drops
+  ichorite instead of diamonds.
+- **The speed curve.** Stone takes as long as it always did (0.85 s for
+  the reference shape); vehlite is instant; every tier between is an
+  even step (0.077 s each). Diamond is no longer instant: it sits at
+  0.54 s. That changes a line of the Build 1 spec in CLAUDE.md ("diamond
+  dispenser is instant"), at Austin's asking; the spec text is left as
+  it was written, and this entry is the record.
+- **Sizes.** The size steps gain 20 m and 24 m: void reaches 20 m, the
+  three above it 24 m. Diamond and up stay smooth.
+- **Armour** blocks a little more a tier (34 to 40 per cent a piece,
+  capped at 60 per cent as before); swords hit harder, crew swords too.
+- **Scarcoal** burns sixteen smelts to coal's eight, in a stove or a
+  generator.
+- Creative carries all twelve tiers and the four new ores.
+
+## Build 110 — the fixes from the 2026-10-05 playtest (2026-10-06)
+
+Austin: everything else perfect, farming perfect. Four things:
+
+- **Liquid shapes did not match their ghost.** Liquid lives in metre
+  cells, and a shape takes the cells whose centres it covers, so the
+  same 2 m cube came out 8, 12 or 18 cells depending where it stood
+  (his screenshot: four rock cubes alike, four water cubes of four
+  sizes). A liquid action now snaps to the cells: the size rounds to a
+  whole metre, the centre sits so the shape's faces are cell faces, and
+  rotation is ignored. A water cube is exactly its outline, every time.
+  This covers the dispenser with water or ichor, the stones, and the
+  drill when it is cutting water from dry land. A sphere or cylinder of
+  liquid cannot be round in metre cells, so its ghost shows the cells
+  themselves, as blocks: what you see is what fills.
+- **Liquid refused to place high up.** The water grid stopped one chunk
+  short of the terrain's ceiling: past 104 m a placed shape was charged
+  for and never appeared. It reaches the ceiling now (111 m), and above
+  it a placement is refused before it is paid for.
+- **Stone water stopped short of the walls.** A wall off the metre grid
+  left the last cell rock, and the surface ended a fraction of a metre
+  before it. The surface now reaches into the rock beside it to the wall
+  itself (a bisection of the field just under the surface), and the
+  rock hides the overlap. Measured: every wall of an off-grid cut is met
+  within 7 cm. Rivers are untouched (the reach finds only rock, not the
+  sealed air over a river).
+- **The city ghost, again.** Not ghost geometry this time: ghost
+  shadows. The LOD rings cast shadows with the default depth material,
+  so where they draw nothing (over a city the real world covers) their
+  blocky duplicate of the city still threw its shadows onto the real
+  walls: the dark shapes in his screenshot. The rings' shadow pass now
+  makes the same three cuts their colour pass makes (covered columns,
+  the feature ring's hole, the near 24 m). I also checked the city
+  coverage mask in a stamped city: it is right.
+
+## Build 109 — LIQUIDS: water is a material (2026-10-04)
+
+Roadmap item 23, Austin's "crazy idea", and the biggest change on the
+list. Water and ichor are materials now, and the three stones are
+source placers.
+
+- **Two materials,** WATER and ICHOR (56 and 57), for the pack, the
+  dispenser and the ghost. Lava was a material already.
+- **The drill cuts liquid.** From dry land the drill takes exactly its
+  shape: the water in it and the rock in it, one undo for both. The
+  water lands in the pack by the metre cell, and the cut holds: no
+  liquid enters it again. It is a cell kind of its own (DRY), so a cube
+  cut out of a lake is a cube of air in the lake. From under water the
+  drill mines rock as it always did, and the hole fills; a swimmer
+  should not leave air pockets behind every cut.
+- **The dispenser places liquid.** Water or ichor from the pack goes
+  down in the shape you choose, one metre cell per unit, and it never
+  moves (a cell kind of its own, HELD): a cube of water standing in the
+  air stays a cube. It fills a can, drowns you, and holds a boat. Rock
+  placed into it displaces it.
+- **The stones place sources.** The spring stone and the ichor stone
+  are dispensers now: the ghost, right click for the shape, scroll for
+  the size (ruby steps), one click. What they lay flows by its own
+  rule: it fills every open cell connected to it at or below the top
+  of the shape, lowest first, so it pours down into every gap and rises
+  to its level. Dig your lake, drop one cube of water at the level you
+  want, and the lake fills to that level. There is no range: put one on
+  a mountain and the valley below floods to that height. The fill goes
+  on as far as the ground lets it, pausing more than 400 m from you and
+  going on when you come back. Digging a channel off a placed lake lets
+  it go on into the channel.
+- **Undo and the wrench.** Every source cell a stone makes carries its
+  stone's id, so Ctrl-Z (or the wrench's delete) takes back exactly
+  that water, however far it went, and hands the stone back. The world's
+  own water keeps its old rules: a river cut open still runs out after
+  thirty-two cells. The wrench refunds liquid edits properly: the
+  stone, the held cells, or the cut's water taken back.
+- **The lava stone** places lava in the shape you choose, as the
+  dispenser does. Lava does not flow; that would be a lava sim, and I
+  have not built one.
+- **Rules kept.** Water will not keep on Strata (it is ichor or
+  nothing), ichor nowhere else, and nothing on an airless world. The
+  terrain never sees a liquid edit: the SDF, the meshing, the far skin
+  and the LOD rings all skip them, so water is only ever water.
+- **Frames.** A fill costs a millisecond or so a tick; the water's own
+  mesh rebuild was the real cost, so it is now nearest-first under a
+  3 ms budget a frame, and a chunk with no water in it is built once
+  instead of every pass (a waste older than this build). Several fills
+  share the tick, newest first, so a flooding valley cannot starve the
+  pond you just dug.
+- Saved: the edits carry their liquid columns; the water cells carry
+  the lineage; a fill still going saves its frontier and resumes.
+- Old springs (Build 100 basins) stay as they were.
+- Known: the far skin and LOD rings do not draw placed water past the
+  near water mesh range; a flooded valley reads as land from far off
+  until you come near. The wrench's move and resize do not re-flow a
+  liquid edit.
+
+## Build 108 — HOED GROUND: the ground is the plot (2026-10-03)
+
+Roadmap item 22, Austin's. A plot was a flat bed laid on top of the
+ground. Now the hoe turns the ground.
+
+- **Two materials.** TILLED EARTH and WET TILLED EARTH (54 and 55;
+  dark turned earth in rows, and the same gone dark with water). The
+  hoe paints the ground you point at with a paint edit two metres
+  square and three metres tall, so a slope takes it, and the plot
+  record stays what it was (crop, stage, water). No new geometry: a
+  hillside is a hillside with rows on it.
+- **The crops stand on the surface.** Each of the four stands finds
+  the ground under it by a bisection of the field, so on a flank the
+  four stems sit at four heights. The drawn bed and the drawn wet
+  overlay are gone.
+- **Water darkens the earth.** Every two seconds each plot's paint is
+  swapped to the wet material while it has water and back when it
+  runs out: a change to the edit in place and a re-mesh of the chunks
+  it touches, not a new edit each time.
+- The hoe takes grass, dry grass, leaf litter, mud and peat (and
+  tilled earth again). Rock refuses.
+- **Old worlds.** Plots from before this build have no paint; on load
+  each gets its ground painted, wet or dry as it stands.
+- Known: the far skin and the LOD rings colour tilled earth from the
+  material table, which is right, but they do not follow the wet/dry
+  swap until their next rebuild; from a distance a plot may read dry
+  for a while. And a plot painted on a two-metre grid where the
+  ground drops more than a metre and a half within the square stays
+  tilled only down to the paint's reach.
+
+## Build 107 — FENCE BUILDING: the ghost and the joint (2026-10-02)
+
+Roadmap item 21, Austin's.
+
+- **The ghost.** A fence or gate in hand shows a translucent piece
+  where it will stand, through the same preview the tables and beds
+  use.
+- **The joint.** Aim within a metre and a half of the end of a rail
+  and the new piece hangs off that end, straight on from its
+  neighbour. The scroll wheel turns it about the joint, fifteen
+  degrees a notch, so two pieces meet at any angle and stay joined
+  to the millimetre (coordinates keep four places now; a chain of
+  sixteen closes on itself). The wheel's toast says "about the joint"
+  while it is one.
+- **Free.** No rail end near: the piece stands where you aim, along
+  the way you face to the nearest fifteen degrees, and the wheel turns
+  it about its middle. The metre grid and the right-angle snap of
+  Build 99 are gone; a fence at thirty degrees is a fence.
+- Rails are exact segments at any angle for the push-out of Build
+  106; a pen built at thirty degrees held a lured sheep for 900 frames
+  from three sides.
+- Old fences load as they were: their yaws are right angles and their
+  centres whole metres, which the new rules accept.
+
+## Build 106 — the fixes from the 2026-10-01 playtest (2026-10-02)
+
+Austin played 99 to 105: everything new works. Four things he saw:
+
+- **The hole under you in flight.** Build 98's near cut (the far skin
+  and the LOD rings discard within 24 m of the player, so a ghost city
+  never covers a real doorway) measured that distance on the ground
+  plane. Flying high and fast, the real chunks below are not meshed
+  yet and the skin was cut out under you: a disc of nothing that
+  followed you. The cut is a sphere now: on the ground it is the same
+  24 m; twenty-five metres up it does nothing.
+- **Bodies.** Every walking thing near you now keeps out of every
+  other: pairs that overlap (their radii, scaled by growth) are pushed
+  apart on the ground plane by half the overlap each, and two on one
+  spot are parted along a fixed angle so a crowd fans out. Vehicles,
+  drops, bosses, riders and the one in your arms sit it out. Six husks
+  are six husks; two sheep are two.
+- **Fences held nothing.** The Build 99 rule tested each step against
+  each rail as a segment crossing, strictly. A step through the joint
+  between two pieces was on neither segment, and a step that ended
+  exactly on the line then began on it. The sheep in my own sim walked
+  out at a joint in three seconds. Rails are thin walls now: after an
+  animal has moved and the ground has pushed it, every closed piece
+  near it pushes it back out to a margin on the side it came from,
+  with the rails extended a little past their ends so the joints hold.
+  And an animal held by a rail never does the stuck-at-a-wall hop
+  (that was the "jumping"). 900 frames of a lured sheep against a pen
+  from three sides: inside; the gate still lets it out.
+- **Farmhands reaped the moment a plot turned.** They were standing
+  over it from watering, and reaped in the same second it ripened, so
+  it never looked ripe. A plot now counts the seconds it has stood
+  ripe and a hand waits twenty of them. (The rule was already "ripe
+  only": stage 3, the same stage you harvest at.)
+
+## Build 105 — ICHOR FISHING: things that are not fish (2026-10-01)
+
+Roadmap item 20, mine, and the last of the list from Austin's
+2026-09-27 report. Something lives in the ichor.
+
+- **A cast into the ichor** (any rod, on Strata) floats a pale green
+  bobber and waits five to fourteen seconds. What bites is never a
+  fish: an ICHOR WORM (55%), fat and pale and not dead; a VEIL LANTERN
+  (30%), a bladder of violet light still lit; THE DROWNED CROWN (10%),
+  gold and older than the villages; and one time in twenty a NULL
+  CORE that fell in once.
+- **Sova buys them.** Four worms for 30, a lantern for 120, the crown
+  for 1500, the most Sova pays for anything, and the station's relics
+  stall is the only place that wants it.
+- **Bait.** An ichor worm in the pack goes on the hook at any cast,
+  on any world, and halves the wait. So the ichor's worms are worth
+  carrying home to the Earth's rivers.
+- The rod's tooltip says what bites here; the three have icons and
+  words; creative has them.
+- Not done, on purpose: eating any of it. The worm would have been
+  funny for a moment and then a wiki entry.
+
+## Build 104 — THE SOUND OF STRATA (2026-09-30)
+
+Roadmap item 19, mine. Every world played the Earth's surface tunes
+over the same quiet. Strata now sounds like itself.
+
+- **The ichor's hiss.** Filtered noise, up the nearer the ichor: the
+  ground is probed in two rings (five and fourteen metres) for surface
+  ichor within nine metres of your height; under it, the hiss is all
+  there is.
+- **A wind with a note in it.** Noise through a narrow band whose
+  centre wanders an eight-note phrygian scale on G, a step or two
+  every five to eleven seconds, with a faint sine an octave under it.
+  On the surface it is there; the higher you stand over the ground the
+  more of it; underground, none.
+- **The maws creak.** Every maw within twenty-four metres adds a
+  chance of a creak (a groan down, a squeak back, a dry click half
+  the time), louder the nearer the nearest, roughly one a twenty
+  seconds a maw.
+- **Nothing at the centre.** Thirty metres outside the rim the hush
+  begins, and inside it it is total: the hiss, the wind, the maws and
+  the music all fade to nothing. The bowl is the one silent place in
+  the game.
+- **Two tracks of its own.** VEIL (52 bpm, a drone under two triangle
+  voices a hair apart, phrygian) and STALK (84 bpm, whole-tone square
+  pulses that rest when they like). They hand over like the Earth's,
+  and the cave and the boss still take precedence.
+- Leaving Strata fades every voice out; nothing of it plays elsewhere.
+
+## Build 103 — PETS: one of your own (2026-09-30)
+
+Roadmap item 18, mine. Breeding (Build 97) made babies; nothing made
+them anyone's.
+
+- **Three meals.** Feed a growing baby (any plant food, the same as
+  breeding) three times before it is grown and it is yours: it gets a
+  name from a list of two dozen (Biscuit, Moss, Pebble, Juniper...),
+  never one another pet of yours already has, and it follows you.
+- **Follow and stay.** Right click a pet to make it stay; right click
+  again and it comes. Following, it keeps to your heel, trots when
+  you get ahead, and if you lose it (seventy metres, or twelve
+  seconds out of sight past fourteen) it turns up beside you. It does
+  not fear you, and it mends slowly. Food in the hand still breeds it
+  as any of its kind; the toggle is for empty hands or anything else.
+- **Never despawns.** The seventy-metre leash that reaps animals
+  leaves pets alone, staying or following. A pet that dies says so.
+- **The map** shows every pet of yours as a pink dot with its name.
+- **The crate.** Leave a world by any means (the rocket, a teleporter)
+  and every pet following within sixteen metres goes with you, and
+  comes out of the crate beside you where you land, still growing if
+  it was. Nothing of it stays in the world you left. A grazer of your
+  own on the Moon.
+- Saved on the entity row: the pet record and how many meals a baby
+  has had so far, so a half-adopted lamb keeps its count.
+
+## Build 102 — FARMHANDS: the crew works the plots (2026-09-29)
+
+Roadmap item 17, Austin's. The crew already carried what you gave
+them and did what the tool implied; the farm tools now imply things.
+
+- **The can.** A crew member with a watering can in hand or in the
+  pack waters any plot whose water has run out, as they pass while
+  following you (within fourteen metres of them) or on their rounds
+  when posted (the post's radius plus eight, sixteen at least). One
+  splash a plot, as for you.
+- **The refill.** When the can is empty and a plot is dry they walk
+  to water: a spring you made first, else any pond or river within
+  thirty metres and six metres of their height, fill, and come back.
+  No water in reach: they say so once and stay put.
+- **Seeds.** Any seed stack on them goes into empty plots, one seed a
+  plot, the crop the seed says.
+- **The hoe.** Ripe plots are reaped into their pack, harvest and two
+  seeds as for you; a full pack drops it on the plot. Ripe comes
+  first, then the nearest dry or empty plot.
+- Hand them a can, a hoe or seeds and they say so; the tool is drawn
+  in their hands (a green can, a hoe). A hand with all three and a
+  spring in the yard runs the farm on their own; with a sprinkler
+  (Build 101) they only sow and reap.
+- The farm pass gives way to a fight, a quarry, a build, and to
+  catching up with you. A posted hand that finds nothing to do
+  wanders the post as before.
+
+## Build 101 — THE SPRINKLER: the farm waters itself (2026-09-29)
+
+Roadmap item 16, Austin's, and the last piece of a farm that runs
+without you.
+
+- **The sprinkler.** Five iron, three wire and a tube at a station.
+  A pnode on the circuit like a charger: 4 W idle, 25 W spraying. It
+  holds a tank of twelve; right click it with a full can and the can
+  pours in. While it has power and water and any plot within twelve
+  metres is dry, the head spins and drops fly, and every six seconds
+  of that a burst wets every dry plot in the ring and costs one unit.
+  With every plot wet it idles and the tank holds. Right click it
+  with nothing to hear its state.
+- **The water intake.** Two iron and two tubes, no station. A strainer
+  on a pipe: stand it in water (a pond, a river, a spring) and tube it
+  to a sprinkler. Each tube beat (two seconds) moves one unit while
+  the tank is short. A spring, an intake, a tube, a sprinkler and a
+  crank you wind now and then: the farm is automatic.
+- **Tubes learnt one rule.** An intake feeds a sprinkler and nothing
+  else, and nothing but an intake feeds a sprinkler. Hoppers still
+  feed what they fed.
+- **A rainbow.** My own touch: in sunlight with no rain, a faint arc of
+  colour hangs in the spray. A sprinkler without one is a pipe.
+- **Tank and spin persist**: the tank count saves with the node; the
+  spin does not matter.
+- Known: the spray is particles, so it is a fountain of squares, not a
+  sheet; and the ring is a circle in the plan view, so a plot five
+  metres up a hill (more than five metres above the head) is out of
+  it on purpose.
+
+## Build 100 — SPRINGS: water you can make (2026-09-28)
+
+Austin wanted a way to make water for the farm; a bucket was the
+obvious answer and not the one I wanted.
+
+- **The spring stone.** Twelve rock and four mud at a table. Set it in
+  the ground where you point and water wells up: a basin three metres
+  across and a metre and a quarter deep is carved (an ordinary edit)
+  with nine sources at its floor, and the flow keeps it full forever.
+  Fill the can at it. The sources are part of the world's standing
+  water, the static truth the flow reads, so an edit beside the basin
+  or a reload never loses them; they are saved with the world and set
+  running again when it loads. Not on an airless world (it would boil
+  off), and not where water will not hold.
+- **The ichor stone.** Six scarglass and two voidore at Strata's table.
+  The same, and only on Strata, where the water is green.
+- **The lava stone.** Eight basalt and four coal. Set it in the ground
+  and a pool of lava a metre and a half across wells up (an edit), and
+  it burns. Anywhere, air or none.
+- All three are in the creative catalog under SPECIAL.
+
+## Build 99 — FENCES AND GATES (2026-09-27)
+
+Pens at last (Austin's item 14).
+
+- **The fence.** Two metres of rail on two posts, crafted four at a
+  time from two sticks and two planks at a table. It places on the
+  ground where you point, snapped to the metre across and to two
+  metres along, squared to the world (scroll turns it a quarter). The
+  passive animals cannot cross it or jump it, whatever they are doing
+  (a step across a rail is refused, and a blocked animal slides along
+  the rail instead, which is how it finds the gate); you walk through
+  it. Right-click a piece empty-handed to take it back.
+- **The gate.** A fence piece that swings open on a right click and
+  shut on another; open, the animals pass. C and right-click to take it
+  back. Four sticks and two planks.
+- Fences are saved with the world and come back on load, gates as you
+  left them. Both are in the creative catalog under SPECIAL.
+- Under it: a fence is a segment; an animal's step is a segment; a
+  crossing test on the two (with the rail ends squared so no cosine
+  residue lands on the line) is the whole barrier.
+
+## Build 98 — the playtest of 96 and 97: the stutter, the frozen boss, the ghost city (2026-09-27)
+
+Austin played the boss (it spawns; it looks right) and settled into a
+survival game. The notes, and what shipped:
+
+- **Strata's stutter.** The tree systems ask the generator for two
+  thousand cells at a time whenever you cross an eleven-metre cell, and
+  Strata's answer for a cell marched the SDF down to the real ground
+  every time: seven tenths of a second, on the main thread, every cell
+  you crossed. A cell's answer is remembered now (and forgotten when a
+  village is rebuilt). The second ask of the same cells is free.
+- **A boss frozen after a reload.** A boss was saved like any animal and
+  came back as a plain entity with no boss brain, standing where it
+  was. Bosses are never saved now; the seal and the vaults re-summon
+  theirs (the seal stays open, the vault's keeper is still there until
+  it dies).
+- **The crops in creative.** Tomatoes, wheat and lettuce are in the
+  creative catalog, for the animals.
+- **The ghost city.** The far skin and the LOD rings were drawing over
+  the real city, flat walls without doors or windows, and staying. I
+  could not make it happen headless (the cover mask read as it should
+  at every city I stood in, on every build back to 88), so the fix is a
+  rule rather than a patch: nothing of the skin or the rings draws
+  within twenty-four metres of you, ever. The real chunks within
+  forty-eight are always fully meshed, so there is nothing for them to
+  cover there. If the ghost was farther off than that, tell me where.
+- **Breeding at a minute and a half.** Growing and resting were four
+  minutes and five; both are ninety seconds.
+- On the roadmap: fences and gates, springs (water you can make), the
+  sprinkler, farmhands, and three of mine: pets, the sound of Strata,
+  and fishing the ichor.
+
+## Build 97 — BREEDING (2026-09-26)
+
+Austin's idea, and the first system since the farm about keeping
+something alive.
+
+- **The lure.** Hold plant food you grew (a tomato, wheat, a lettuce;
+  never meat) and the passive animals within nine metres come to you
+  and stop two metres off: grazers, sheep, monkeys, elk, hares, zebras.
+  Not the enemies, not a croc.
+- **Feeding.** Right-click one with the food in hand and it eats (one
+  taken from the stack, hearts over it for half a minute). It will not
+  eat twice. Feed another of its kind within four metres of it and they
+  come together: a baby of that kind appears between them, half size,
+  half health, and the parents rest five minutes before they will eat
+  again.
+- **Growing.** A baby grows to full size and health over four minutes.
+  It cannot be fed until it has. Its growing is saved with it (a new
+  field on the entity record) and comes back on load.
+- The lines say what happened each time, by the animal's name.
+
+## Build 96 — the playtest of 89 to 95: the seal opens, the far ones farther, the burrower moves (2026-09-26)
+
+Austin played 89 to 95. Strata's ground is where he wants it. The
+notes, and what shipped for them:
+
+- **The seal opens now.** It never could: a right click reached the
+  seal's code only through the villager-and-alien path, which the
+  seal is neither of. Now on Strata a right click anywhere within four
+  and a half metres of the seal opens it, whatever you are looking at
+  or holding. Creative needs no cores; survival needs six. The suite
+  clicks it the way a player does now, not through the function.
+- **The far ones smaller.** Four stops away (the Earth over Strata,
+  Strata over the Earth) is a quarter the size now, three stops a bit
+  smaller; a stop or two away unchanged. In transit the planets you are
+  not flying between are half what they were.
+- **The flights show the sprites.** Leaving and arriving, a planet is
+  the sky's own flat disc now (the Earth, the Moon, Strata), not a
+  textured ball: what you see from the ground is what you fly to. The
+  stations keep their shapes.
+- **The burrower has moved to Strata.** It stalked the Earth's caves
+  from twenty-five metres down at one tick in twenty, which felt like
+  every fifteen seconds in an early survival game. It does not come on
+  Earth at all now. Under Strata it is at home: one tick in fifty,
+  never within five minutes of the last, and not once the war is over.
+- On the roadmap: animal breeding (item 13).
+
+## Build 95 — STRATA H: the villages alive again (2026-09-25)
+
+The last of Austin's four, and the end of the STRATA arc's structures.
+
+- **The rebuilding.** After the end, Vehl's panel shows the nearest
+  ruined village and its price: one relic. Hand it over and the village
+  stands again: the generator remakes it whole (every dome closed, with
+  a door and a window; the obelisk straight and taller; the columns up
+  on their feet), the meshing workers are told which villages stand, its
+  chunks are re-meshed on the spot, and the band's light plays over the
+  plaza. The set of rebuilt villages lives in the story (it travels with
+  you and saves); the map draws a living village bright and large.
+- **The people.** Within sixty metres of a living village its three
+  come home and float at their posts as the station's cast does: an
+  elder on the plaza, a trader and a weaver before two of the houses,
+  each with a name of their own from a list of fourteen (Ashu, Veth,
+  Orra, Kelm, ...), the same name every time. Right-click them with the
+  translator.
+- **What there is to do.** The elder tells what happened here and wants
+  light: eight glowstalk, for a lunite lamp over every door (real, in
+  the edit list) and two astrium. The trader deals in what the war left
+  (voidfruit, null cores and astrium to buy; voidore, null cores and
+  voidfruit to sell). The weaver sells the way to the nearest mound you
+  have not opened for 120 coins: it goes on your map in gold.
+- Vehl has a line about it after the end.
+
+## Build 94 — STRATA G: the vaults, and THE KEEPER (2026-09-25)
+
+Where Vehl's people kept what mattered, and the gearing-up for the
+centre.
+
+- **The vaults.** A mound of duskrock fifteen metres across and eleven
+  tall on levelled ground, its skin the country's own; inside, a hall
+  eighteen metres square and five and a half high, walled, floored and
+  roofed in veilstone, with four pillars and a plinth at its middle; a
+  tunnel in from one side at ground level. One cell in three (384 m)
+  tries, with the villages' rules and never within seventy metres of a
+  village or two hundred of the centre: about one to the square
+  kilometre. The map marks the ones you have found in gold, and in
+  brown once opened.
+- **THE KEEPER.** Wakes when you stand in the hall: a golem of
+  veilstone taller than the tomb's, a crown of black shards, one green
+  eye, a null core set in its chest. 900 hp. It walks at you and slams
+  for twenty-two up close, pounds the floor under you from a distance
+  (a real hole), and, when you keep off, fires a null bolt from its
+  chest every two and a half seconds with the night's wind-up and lock
+  (the core swells; sidestep). Leave the mound and it goes home and
+  mends six a second. There is no chance of another boss on Strata
+  while it is up.
+- **The loot.** When it dies a chest comes to the plinth: a **relic**
+  (new item: a veilstone tablet with a line of their writing; Sova pays
+  400; Vehl says keep them for when there is something to rebuild),
+  four to eight astrium, two or three null cores, three to six diamond,
+  four to eight aether ingots, two hundred and fifty to four hundred
+  coins, and half the time a stack of voidore. The vault is recorded
+  dead in Strata's save; the keeper does not come back.
+- Vehl has a line about the mounds.
+
+## Build 93 — STRATA F: the ruined villages (2026-09-24)
+
+What the Unmaker left of Vehl's people, and the first of Strata's
+structures. They are the generator's, like the spires: nothing is
+stamped, nothing is saved but the record of which you have found.
+
+- **The villages.** A ring of five to nine domed huts of **veilstone**
+  (a new material: pale violet blocks in courses, the stone the colour
+  of the moss at dusk) round a paved plaza, an obelisk of scarglass
+  leaning at its middle with its top sheared off, two to four columns
+  lying where they fell, all on a terrace cut level into the land that
+  blends back into it over eighteen metres. Most domes are broken open
+  along a tilted plane, the more broken the more gone; some are stubs
+  with jagged tops; each has a door toward the plaza; one is whole.
+  Half the cells (224 m) try for one; they stand in every country but
+  never in the blight, never by the ichor, never on ground that climbs
+  more than twenty-six metres across them, never within a hundred and
+  fifty metres of the centre. About four to the square kilometre. No
+  maws grow in them.
+- **The chest.** In the whole hut, set once when you first come within
+  ninety metres: four to ten voidore, twenty to sixty coins, two to
+  four voidfruit, a null core six times in ten, an astrium one in
+  three. The line says what you found. The record goes in the save
+  (Strata's blob) and the map marks every village you have found in
+  veilstone's colour.
+- **The thralls keep to their homes.** By day, a spawn that lands in a
+  village is a pack of thralls, whatever the country.
+- Vehl has a line about them.
+
+## Build 92 — STRATA E: wilder, and the ichor (2026-09-24)
+
+Austin wanted Strata wilder, with sudden elevation everywhere, stranger
+mountains, and a water of its own that hurts. So:
+
+- **The faults.** The land is broken into blocks seventy metres across,
+  each lifted or dropped up to twenty-four metres against its
+  neighbours, the join softened over a metre and a half. Cliffs run in
+  broken lines everywhere; one column in ninety steps more than twelve
+  metres from the next, and the biggest step is near sixty. The
+  eight-metre strata are cut through them.
+- **The needles.** Where a slow ridged field peaks the land goes up
+  like a nail: ninety metres in the Glow and the Scar, a hundred and
+  fifty in the Teeth, on top of what was there. The land now reaches
+  two hundred and ten metres in a kilometre.
+- **The ichor.** Strata's water: green, and it burns. It runs in the
+  contour lines of a slow field, so its rivers wander as no water
+  would, start and end where they like, and cross the land every
+  couple of hundred metres, four to ten metres wide, two metres below
+  the land beside them and a metre and a half deep, stepping down with
+  the land (it falls where the land does, in pale green sheets). Its
+  bed and banks are black scarglass. Four columns in a hundred are
+  river. Swim in it and it burns like lava (six every four tenths of a
+  second; the magma heart drinks it, as it drinks lava); a boat or a
+  hoverbike crosses it, and the line says so the first time. Under it
+  the world goes green. The map paints it green. Nothing grows in it;
+  nothing spawns there; the centre keeps a hundred metres clear.
+- Under it: the water shaders (near and far) take an ichor uniform that
+  tints them green on Strata; Strata's generator now has a river, a
+  water height and a wet test like the Earth's, and a nominal sea four
+  hundred metres down so the water code runs.
+
+## Build 91 — EVERY SKY: the planets from everywhere (2026-09-24)
+
+- **The far ones.** The Earth, the Moon and Strata hang in every sky
+  that does not already show them large, as small discs of the same
+  sprites the map uses, sized by how many stops away they are along
+  the route (a stop away is large, four stops away is a fifth the
+  size): Strata small over the Earth, the Moon and Station One; the
+  Earth small over the site; the Earth and our Moon small over Strata.
+  Each keeps a fixed place in the sky, off the sun's arc. Where there
+  is a day they fade to a third by noon and are sharp at night; in the
+  airless skies they are always sharp. Stations are too small to see.
+- **Strata has no moon of its own.** It had ours, rising and setting;
+  it does not now. Ours hangs small beside the small Earth.
+- **In transit** the planets you are not flying between sit far off
+  along the same line, so the whole route reads from the window: from
+  Strata to the Moon, the Earth is out past the Moon.
+
+## Build 90 — THE PLANET VIEW: every map, and where the rocket goes (2026-09-24)
+
+- **The planet view.** A button on the map (PLANET VIEW) opens a second
+  map: a black sky of fixed stars, the sun high on the left, and the
+  five worlds in a line with the route dotted between them: the Earth,
+  Station One, the Moon, Station Two, Strata. Each is the same sprite
+  the sky uses (they share one drawing now), with its name and a word
+  under it: *you are here*, *mapped*, *not yet*; Station Two shows as
+  debris marked *lost* after the ambush. An arrow stands over where you
+  are. Click a world you have been to and its map opens, titled *(as
+  you left it)*: what you explored of it, its beacons and rockets, its
+  cities, bases, spires, camps, beds and cache, centred on where you
+  last stood (a ring instead of the arrow). The band's list beside the
+  map already reached every world; now the click on a beacon on
+  another world's map does too. BACK TO EARTH returns; Esc or M closes.
+- **Where the rocket goes.** SPACE in the seat no longer launches: it
+  opens the same view titled WHERE TO. Worlds the rocket can reach from
+  here wear a green ring and say *click to fly*; the others say why
+  not (*you are here*, *only the star rocket crosses*, *gone*, *too far
+  for one flight from here*). Click a reachable one and the map closes
+  and the rocket lifts. Esc stays on the pad. R's cycling is gone and
+  the seat's line says so.
+- Under it: the map draws from a context (world, generator, explored
+  cells, what stands) that is the live game for the world you are on
+  and the saved blob for any other, with the colour, river and region
+  caches kept per world. Another world's generator is built once from
+  the world's seed and kept.
+
+## Build 89 — the playtest of 76 to 88: the seal, the airlock, the air, the tables (2026-09-24)
+
+Austin played 76 through 88 and found the boss unreachable: he stood at
+the spike and nothing told him what to do. Everything else held. The
+fixes:
+
+- **The seal is found.** It stands on a dais now, twice the size, with a
+  column of the null green fourteen metres tall over it, so it reads
+  from the rim. The compass marker changes from THE CENTRE to **THE
+  SEAL · 6 NULL CORES** inside a hundred metres, and the first time you
+  come within forty a line says what to do: right-click it with six
+  null cores, how many you carry, and that creative needs none.
+- **Station Two has a way in.** An airlock: a doorway cut through the
+  hangar's pad-side wall with a door in it, a porch, and three steps
+  down to the keel you walk in on from the pad. Stamped with the hangar
+  from now on; a station built before this gets one cut on arrival
+  (once, flagged in the story). The door is the plank door every other
+  door is; a plating one is a small thing for later.
+- **Air, and the lack of it.** The site had air everywhere, which was
+  the wrong fix for "no suit needed inside". Now the site is vacuum
+  like the Moon, except inside what is built: the hangar, the ring and
+  the quarters once they stand, every room and pen, the penthouse, and
+  the shaft down to the keel. Outside, the breath drains and the line
+  says to get inside or wear the suit. The rocket's cabin is sealed as
+  before. Creative never minds.
+- **The tables craft as tables.** The Moon's table and Strata's table
+  were not in the stackable list, so crafting one fell through to the
+  gun maker and gave a blaster. They stack now, and craft as one table.
+- Austin's ideas from this playtest are on the roadmap as items 9 to 12
+  (planets in every sky, the planet-view map that is also the rocket's
+  destination picker, wilder Strata with a green water that burns, and
+  Strata's structures: the ruined villages and the loot places, and the
+  villages alive again after the end). Building them next, in my order.
+
+## Build 88 — STRATA D: the centre, and the end (2026-09-23)
+
+The arc closes. Four hundred and eighty metres from the crash, in a
+direction the seed picks, is the thing that drives the war; kill it and
+the story ends. The world does not.
+
+- **The centre.** In the generator: a bowl a hundred and forty metres
+  across cut into the land in the same eight-metre steps as everything
+  else, its floor of ash at minus thirty, and at the middle a black
+  spike forty-four metres tall, knobbed, on a plate of the same stuff:
+  **nullstone**, a new material (hardness five; drill it if you have a
+  week). No caves under it, no spires or maws within a hundred metres,
+  no blight. Vehl's panel gives the distance and what the seal takes;
+  the compass marks THE CENTRE once you have the band; seen once, the
+  band lists it (the map's ◉).
+- **The seal.** A black plate with six sockets at the foot of the spike.
+  Right-click it with **six null cores** (lancers and hollows carry
+  them) and the spike opens like an eye. Once opened it stays open: a
+  return visit needs no cores.
+- **THE UNMAKER.** A hollow the size of a house: a ring of eight black
+  shards turning about it, tendrils under it, 1500 hp. It hangs seven
+  metres over you and circles at sixteen, firing bolts on the beat
+  (twenty damage, the same half-second-plus wind-up as its night: the
+  eye brightens, the aim is taken, sidestep). Every nine seconds it
+  **dives** to your height for two, and bites for eighteen if you are
+  within three and a half metres: that is when a sword reaches it.
+  From two thirds down it **unmakes**: it marks the ground under you
+  (green sparks in a ring) and a second and a half later that ground is
+  gone, a hole three metres deep; stand in it and take fourteen and the
+  fall. It calls three hollows then. From a third down it is faster,
+  unmakes every four seconds, and calls two lancers. Leave the bowl and
+  it goes home to the spike and mends twelve a second. The things it
+  calls do not walk off at dawn.
+- **The end.** When it dies: five hundred coins, twelve astrium, six
+  diamond, and the **null heart**, a tool: left-click unmakes a sphere
+  of the world five metres across where you point, up to forty metres
+  off, its rock into your pack, anything in it thrown. The war stops
+  where it stands (every thrall, gnasher, lancer and hollow in the
+  world falls, and none spawn again); Vehl comes through the band's
+  door beside you with four new things to say; five seconds later the
+  screen: STRATA, four lines, THE END, a game by Austin and Claude, and
+  a KEEP PLAYING button (Esc works too). Everything after is sandbox.
+- Bosses no longer come by chance on Strata (the burrower could have
+  smelled you in its caverns). The boss's position check slides round
+  rock instead of climbing through it.
+
+## Build 87 — STRATA C: the war (2026-09-23)
+
+Strata is overrun, as Vehl said. The spawner has its own table there,
+and nothing of the Earth's night runs on it.
+
+- **By day, the melee things.** The **thrall**: Vehl's shape gone wrong,
+  broad and bent, bone plates strapped on, a stalk for a club, red
+  eyes; it walks straight at you and hits for fourteen (80 hp, six at a
+  time). The **gnasher**: six legs, a ridge of magenta spines, pink
+  eyes; a fast circler that bites for nine (48 hp, packs of three,
+  eight at a time). Thralls in the Scar, gnashers in the Glow, both in
+  the Teeth. They come at any hour of daylight, mind no torch, and
+  never burn or slink off at dawn, because there is no dawn they fear.
+- **By night, the ranged ones, and they are worse.** The **lancer**:
+  tall, hooded, green-eyed, a staff with a null core at its head; it
+  holds fourteen metres off, sidesteps, and fires a bolt for sixteen
+  every 1.7 s (150 hp, three at a time). The **hollow**: an eye with
+  nothing behind it, hung three metres up on a tangle of tendrils; it
+  fires for ten every 1.4 s (90 hp, pairs, four at a time). Lancers
+  everywhere, hollows over the Glow and the Teeth. The core brightens
+  for half a second before each bolt, and the aim is taken when it
+  does: a sidestep in that half second and the bolt goes where you
+  were. Stand still and most of them land (there is scatter, so not
+  quite all). Bolts
+  stop at the ground, at you or at one of yours and carve nothing (the
+  war does not eat the world or the save). At dawn they walk off and
+  are gone in ten seconds. The one mercy: nothing of the night spawns
+  within ten metres of a light, and nothing at all finds you six metres
+  under the ground.
+- **Loot better than anywhere.** A thrall: two voidore, fourteen coins,
+  an astrium one time in eight. A gnasher: a voidore, eight coins, a
+  voidfruit half the time. A lancer: a **null core**, three voidore,
+  thirty-four coins, an astrium half the time. A hollow: a null core,
+  twenty-four coins, two diamond half the time. The null core is a new
+  item: Sova pays 260 for one, Vehl wants them kept for the centre (that
+  is STRATA D's key). The drop table grew an optional odds column.
+- The four are in the menagerie (a spawner bottles them; Station Two's
+  pens can hold them). Voidore and null cores merge on drag-and-drop
+  now (voidore was missing from the stackable list).
+- Numbers to watch: three lancers and four hollows all up is roughly
+  forty-five damage a second on someone standing still in the open
+  with no armor, and close to nothing on someone who keeps moving.
+  That is the intent (move, dig in, or build a wall before dark); the
+  playtest will say whether it is fun or just death.
+
+## Build 86 — STRATA B: the maws, and a table per planet (2026-09-23)
+
+- **The maws.** Strata's answer to a tree, and not a tree: a stalk with a
+  bulb on it and a mouth in the bulb, tendrils at the foot, one per
+  cell where the dice say (densest in the Glow, thinnest in the Scar,
+  never in the blight), standing on the ground as it really is. Three
+  kinds by country: the maw (violet stalk, magenta bulb), the ashmaw
+  (black, an ember mouth), the bonemaw (pale, the biggest). Far off
+  they draw as their own shapes.
+- **They bite.** A maw has hit points (45, 55, 70 by kind, times its
+  size). A drill wears it down a hit at a time (12 plus six per tier),
+  a sword swing hits it, a shot hits it; when it falls it gives its
+  **stalk** (five plus four per size). Mine it from inside three and a
+  half metres and it snaps at you: ten damage (fourteen from a bonemaw)
+  and a shove, seven times in ten from a drill, half the time from a
+  sword. The jaws snap on every hit and every bite.
+- **Three stalks, three planks.** Glowstalk, ashstalk, bonestalk, each
+  sawn into its planks and the planks into sticks, with log ends the
+  shader paints (the log-end arrays grew from five to eight).
+- **A table per planet.** The Earth's crafting table keeps the Earth's
+  catalog and makes **the Moon's table** (four selenite, eight iron). The
+  Moon's table makes the moon tiers, the mech suit, plating and
+  **Strata's table** (six voidore, four lunite). Strata's table works
+  what Strata gives: stalks into planks, planks into sticks, and what
+  comes next. Each table has its own look; the crafting screen names
+  the table in reach and shows its catalog; creative shows all.
+
+## Build 85 — STRATA A: a world from nothing (2026-09-22)
+
+The alien planet has a name and its own ground. Nothing of the Earth's
+is in it.
+
+- **The land.** Coordinates warped by ninety metres so nothing lies
+  straight; broad relief; ridges built from folded noise ("teeth");
+  the whole laid in steps of eight metres with a soft lip at each
+  edge, so every hill is a stair of strata; a three-dimensional term
+  near the surface that pushes it in and out (pockets, lips, ledges,
+  overhangs; six hundred of seventeen hundred sampled columns have
+  solid over the heightfield); worm caverns under all of it down to
+  minus ninety; and spires standing alone, knobbed and narrowing, up
+  to seventy metres, one in two cells outside the Scar. Eighty-six
+  metres from lowest to highest in a kilometre. It is hard to cross.
+- **Three countries.** The Glow (violet moss over duskrock; the
+  spires), the Scar (low, rough ash over black scarglass; the
+  **blight**, magenta pools in its lowest ground that burn like lava),
+  the Teeth (the tallest ridges, bone ground over bone rock). Named in
+  their own voices: *the Morden teeth*, *Ostwick scar*, *the Velness
+  glow*.
+- **Materials.** Ash, bone, scarglass, corruption, and **voidore**, the
+  one ore, in veins under every ground; the drill gives the item, Sova
+  buys it, and its table is the next build. Regolith and the Moon's
+  ores stay on the Moon; the Earth's stay on Earth.
+- Old alien saves: the ground under a wreck may have moved; any rocket
+  the new ground swallowed is lifted out on load. The crater and the
+  first edits stay where they were.
+- Not yet (STRATA B, C, D): the biting plant and its wood, the tables
+  per planet, the things that live here by day and by night, the
+  loot, the centre.
+
+## Build 84 — STATION TWO, LIVED IN (2026-09-22)
+
+Once the main sections stand, the other two on the pad open up, and Kro
+sells the inside.
+
+- **Sef's rooms.** Six, three on the ring's outer face and three on the
+  quarters', 24 plating and 4 lunite each: a shell with a door cut
+  through the section's wall, a bed, a table, a light. Bring a bottled
+  villager, city person or alien (a spawner) and Sef puts them in; they
+  live there and pace the section (villagers roam the ring or the
+  quarters, aliens float at home). Talk to a resident and you get the
+  citizen's chatter.
+- **Umma's pens and tanks.** Four, on the ends of the ring and the
+  quarters: two pens and two tanks, 32 plating and 6 selenite each: a
+  shell with a barred far wall you can see through, a doorway over a
+  sill the beasts cannot climb, and a lit floor in the tanks. Any
+  bottled beast goes in a pen; the wet ones (crocs, and the leviathan
+  if you ever bottle one) go in a tank.
+- **Kro's upgrades.** The workshop (a crafting table, a stove and a
+  weapon bench in the hangar; 120 plating, 20 iron); the grid (a
+  generator with sixty-four coal, wired to six lights in the hangar's
+  ceiling and to the stove; 80 plating, 16 wire, 8 ruby); the
+  penthouse (a suite on the hangar roof with a hatch from below, a bed,
+  a table, a home beacon and a barred window on the way home; 160
+  plating, 6 astrium).
+- Residents and housed beasts live in the story (they travel with you)
+  and are remade each visit; they are not saved as entities, so they
+  never double. Faint outlines show what Sef, Umma and Kro can still add.
+
+## Build 83 — STATION TWO, PRE-BUILT (2026-09-22)
+
+Austin's way: a set layout, paid for, built whole.
+
+- **Three on the pad.** Kro the builder, Sef the roomwright, Umma the
+  beastkeeper, floating outside the drawn station when you land, in
+  Vehl's tongue until you carry the translator.
+- **Kro builds the main sections** in order for their price: the hangar
+  (64 plating, 16 iron ingots), the east ring and the west quarters (48
+  plating, 8 lunite each), the beacon spire (32 plating, 12 selenite).
+  Pay, and it stands at once, whole: a plating shell with a floor, the
+  hangar's hatch down through its floor and the keel's top, corridors
+  cut through both walls into the ring and the quarters, the spire open
+  from the hangar's roof with a lunite beacon at its top, lunite lights
+  in the roofs. The wire outlines stay for what is not built yet; the
+  objective on the current section names its price.
+- **Sef and Umma** say what they are for (rooms for your people, pens
+  and tanks for your beasts) and that Kro comes first. Their trades
+  are the next build.
+- Vehl's words and the blueprint page say to pay the builders; the
+  hand-built frames and the four-fifths rule are gone.
+
+## Build 82 — THE BAND & THE FALL (2026-09-22)
+
+Austin's retelling of the crash, and the teleport band.
+
+- **The ambush, retold.** It appears first, close, in a flash, and
+  haunts the ship: a slow circle round the hull, always facing it. Then
+  it goes to stand between you and Station Two, turns to it, and raises
+  two long arms; the view swings round with it. The black opens where
+  the station hangs: a disc of nothing with a white rim and four arcs of
+  spun light in violet, amber and blue turning at their own speeds. The
+  station spins and spirals in and is gone. Then it has the ship:
+  pulled back, spun, shaken. Vehl teleports in beside the hull with a
+  flash and the band's sound; a second teleport sound, and the white.
+- **The fall.** You load in standing on Vehl's world, in third person,
+  looking up at an empty sky. Then the teleport effect, and the ship is
+  in the sky with it, and it falls the way it did before (that part was
+  already right), and you follow it down.
+- **The teleport band.** Vehl fits it at the wreck: "experimental,
+  mine". With it in the pack the map marks every beacon (a violet ring)
+  and every rocket (its own icon) on this world, and a list beside the
+  map names every beacon and rocket on every world. Click a mark for
+  the menu's TELEPORT, or a list entry twice, and a loading screen
+  later you are there; another world needs no flight. Beacons are
+  fast-travel points anywhere now.
+- A new sound (teleport), `goTo` as the road to any world without a
+  rocket, the map's list panel.
+
 ## Build 81 — THE CROSSING: the ambush, the crash, the alien world (2026-09-22)
 
 The star rocket flies, and the first flight goes wrong the way the

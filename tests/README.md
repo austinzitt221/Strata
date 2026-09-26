@@ -19,3 +19,22 @@ Run:
 
 Every suite prints one JSON line per scenario and ends with `errors: none`
 when no page error fired. Screenshots land beside the script.
+
+## Performance tools (Build 115)
+
+    NODE_PATH=$(npm root -g) node profile.js ../strata.html spawn,city,fly,mine
+
+profiles the real frame loop with the Chrome CPU profiler in each scenario
+and prints each function's self time per frame (`CALLERS=fnName,...` adds
+the call paths to those functions; `REPORT=1` prints the game's own
+Shift+F3 stopwatch report as well). SwiftShader makes rendering and GPU
+uploads look far slower than a real GPU would: trust the JavaScript
+numbers, not the `render` ones.
+
+    NODE_PATH=$(npm root -g) node abwater.js old.html new.html
+    NODE_PATH=$(npm root -g) node abstream.js old.html new.html
+
+run the same scenario on two builds and print SAME when the water comes out
+identical cell for cell (`abwater`), or when the streaming disc marks the
+same chunks empty, banded and queued on Earth, Strata and the Moon
+(`abstream`). Use them for any change that should be faster, not different.

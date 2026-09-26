@@ -1448,6 +1448,860 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-14 — the brainstorm
+
+The roadmap ran dry and Austin brought four big ideas. My notes, so
+the next sessions start from the same place:
+
+**The planet forge (his).** Make your own planet after beating the
+game: biomes and how often and how big they come, how mountainous each
+is, caves or none, which ores, which animals and enemies, which liquids
+(rivers, lakes, how many), which structures in which biome. It is
+possible, and it is the most natural thing this codebase could grow
+into. Every one of those knobs already exists as a hard-coded choice
+in a generator. The work is turning the choices into a recipe: one
+object the generator reads, sent to the workers with the seed, saved
+with the world. The real costs:
+- the structure systems each place themselves with their own checks,
+  and those have to become table-driven;
+- Strata's biomes live in a different generator from Earth's, and have
+  to become modules either can use;
+- lava does not flow yet;
+- the generator is the hottest code in the game, so a recipe lookup has
+  to cost nothing.
+It is an arc of five or six builds, and the one thing I would add is a
+preview: the recipe drawn as a map before you commit, by the same
+generator the world uses. Also presets, a random button, and a recipe
+string you can share. Sky, gravity, day length and sea level are
+cheap extras. And the optional progression I like: you can only forge
+what you have seen.
+
+**The upgrade machine (his, a nod to Pack-a-Punch).** Random variants
+per item, re-roll for another, each changing how the thing works. The
+right shape for this game: every variant is a real mechanic, not a
+number going up. The joy of it is the name and the look: a variant
+has its own name and a shimmering skin, as a punched gun does. Names
+I offered: OVERFORGE, the CRUCIBLE, the STRANGE ENGINE, the TEMPER.
+
+**The gambling machine (his).** Any item in, anything out, odds from
+how rare and how many. I would show the odds before you pull ("1 in
+4,300,000") and keep the tiny chance real. That is the whole joke,
+and it only works if the number is honest.
+
+**Hell (his).** A red dimension with demons, lost souls, lava rivers, a
+demon base, a mini-boss vault and the Devil. One conflict: the spec
+says bedrock cannot be mined, and that is one of the few lines Build 1
+was judged on. My proposal keeps both: bedrock holds everywhere except
+one place, the seal under THE DEEP's works. That is what the Knocker
+was guarding, the open thread I did not want to fill in alone. Break
+the seal and the way down is Hell. That turns an old mystery into the
+door.
+
+**Mine.** What I want, and why:
+- **Strata you can read.** The game is named for rock layers and has
+  none: bands of sandstone, shale, granite, marble and coal seams by
+  depth, tilted and folded by region, so every cliff face and every
+  hole you carve shows the land's history. That deepens carving
+  itself, which is still the identity.
+- **The buried age.** An older civilisation under every world: a
+  brush (a very soft drill) that reveals what a hard drill would break,
+  fossils, a lost city under a desert, a museum in the city that pays
+  for finds and fills its halls with them. The story you find, found
+  by carving.
+- **Lava that flows**, which hell, volcanoes and the forge all need.
+  Then volcanoes that wake.
+- **Frozen winters**: lakes and rivers you can walk on, and the spring
+  thaw with a flood.
+- **Halls that ring**: sound that knows how big the space around you
+  is, from the field itself. A carved cathedral should sound like one.
+- **Water engineering**: sluice gates, dams, a mill that grinds, a
+  wheel that powers machines.
+- **Settlements that grow** with your trade: new houses and new stalls.
+- **Meteor nights**: a shower, one that lands, a crater with a rare
+  ore, visible from the air.
+- **An aurora** over the taiga; eclipses.
+
+The order I would want (Austin's to react to):
+1. the upgrade machine and the gambling machine, which are self-contained
+   and fun at once;
+2. strata you can read (mine);
+3. Hell through the Knocker's seal, with lava that flows built first
+   because Hell needs it;
+4. the planet forge last, as the capstone, where Hell's biomes and every
+   liquid and structure become options.
+
+## 2026-10-13, night — the crew at home
+
+Build 120. The crew had everything for a day's work and nothing for
+the evening: nowhere to sleep, nothing to eat, no place of their own.
+A stove kept, a turret manned, a bed, a chest and a meal are small
+things, but together they make a hired hand a resident.
+
+The rule I gave myself for eating: reward it, never punish its
+absence. A fed crew member works faster; a hungry one works as before
+and says so once a day. Upkeep that only takes things away is chores.
+
+And I broke my own standing note on test pads again: I built the
+floor 8 m too high, put the turret inside solid stone, and nearly
+chased a bug that was my geometry. The note is at the bottom of this
+file. I will write it into the test template itself next time.
+
+## 2026-10-13, later — the water's face
+
+My own build, and the first purely visual one since the birds. I
+wanted the sea to look back at you. The first glint I wrote was
+physically fine and looked wrong: a blown-out white sheet near the
+camera. What fixed it was the game's own grammar, not more physics:
+the sun on the water as pixel sparks that come and go. In a pixel-art
+game the right answer is often the pixel one.
+
+The ripples needed the same test trick as the tool wheel: a headless
+frame takes a second, so a ring 2.6 seconds long is gone before the
+picture is taken. I held their age for the picture. That's worth
+remembering for anything short-lived I want to see headless.
+
+## 2026-10-13 — the fourth ghost
+
+The ghost city came back a fourth time, and this time I found it by
+reading the one layer I had never suspected. Build 98's rule ("nothing
+of the skin or the rings within 24 m") named two layers, and there were
+three. The stand-in boxes for towers and halls had their own shader,
+written before the rule and never brought under it. The seam rule was
+copied from the skin, where a sunk surface backs a join. A box backs
+nothing; it just stands there.
+
+The lesson I keep not quite learning: when a fix is a rule ("nothing
+distant draws near you"), enforce it on everything distant. List the
+things a rule applies to by grepping, not from memory. Grep for every
+material built from TERRAIN_FRAG.
+
+The report from Austin's machine was worth the whole STOPWATCH build.
+A GPU at 4 ms and a CPU at 12 means everything I optimise has to be
+JavaScript. The city's steady cost was three plain loops over "every
+X": every level of every column, every torch, every door. None was
+clever work; all were plain loops. The next report will show whether I
+guessed the water right. The stopwatch splits it now.
+
+## 2026-10-12, later — the wheel
+
+Build 117. Austin asked for one menu that holds everything a tool does.
+Writing it showed me how much there is now: twelve shapes, three turns,
+ten grids, a mirror, a radial, an echo, a reach. Each was learned as a
+key or a scroll mode, and none of it could be seen at once. The wheel
+is the first place where the tool explains itself, and the locked rows
+name the tier that brings them. That makes the tiers a promise, not
+just a restriction.
+
+The right-click tap moved from button-down to button-up, the only way
+a hold can be told from a tap. My suite caught a race there that only
+happens at one frame a second: the hold timer lost to the test's
+button-up. At sixty frames it cannot happen, so I fixed the test and
+not the game, and I am writing that down in case it ever does.
+
+## 2026-10-12 — what a drill is for
+
+Austin's report on 112 to 115. The part I keep thinking about: I built
+nine shapes for two tools, and gave them the same meaning in both. But
+a dispenser adds matter and a drill removes it. A building shape means
+"a building" to the dispenser. To the drill it should mean "the inside
+of a building", because the mountain supplies the walls. I tested that
+the drill cut exactly the ghost's shape, and it did, perfectly. It was
+the wrong shape. **Test what a tool is for, not just what it does.**
+
+The freeze was a table of three outlines indexed by a shape number that
+now went to eleven. The hollow was a shrink, which is only an offset
+for the three shapes it was written for. Both were Build 5 code meeting
+Build 113 data. When I add to an enum, I should grep every table
+indexed by it.
+
+The treads were the lattice lesson again: nothing thinner than two
+voxels survives the mesher. That is now TREAD_TH, with a comment.
+
+## 2026-10-11 — the stopwatch
+
+Build 115, mine again. After birds I wanted the opposite kind of build:
+nothing new to see, everything a little faster. The frame-rate line had
+sat on my list since Build 32.
+
+What I want to remember is how wrong my guesses were. I would have
+said the mesher, or the shadows. The profiler said the biggest thing in
+the game was a single frame: the first time you come near a highway,
+eleven seconds of water re-reading the world under every embankment
+that crosses a river. Nobody reported it as a freeze. I think it hid
+inside "loading a city the first time", on a machine faster than mine,
+behind a loading screen or a fly-in. The second biggest was PNG
+encoding for shop counters. Neither is a system I would have thought
+to look at. **Profile first, then read the code the profile points at.**
+
+The other lesson is the one I keep relearning with tests. Every
+optimisation that changes how an answer is reached, not what it is,
+got an A/B against Build 114: the water cell for cell, the streaming
+disc chunk by chunk on three worlds, the edit index against a full read
+over 1,800 boxes. The index needed one thing I didn't know: the wrench
+moves edits in place. I found it in a comment on the edit envelope. The
+terrain was already told of every move, so the index listens there.
+
+The stopwatch is really a tool for Austin's playtests. I can measure
+CPU here; I can't measure his GPU, his driver's shader compiler, or
+his frame pacing. Now one key press gives me a page of numbers from
+his machine. What I expect it to show: shader compiles on first sight
+of a city.
+
+## 2026-10-10 — the living shore
+
+Build 114, mine. Austin gave me a free build and I spent it on birds.
+I had the line on my list since the first month, and after three builds
+of systems (tiers, fire, shapes) I wanted something that is only there
+to be looked at.
+
+The decisions I like: nothing here is an entity, so it cannot break a
+save or a fight, and costs four draws; each bird kind lives in its own
+place, so a flock tells you something about the ground (gulls mean open
+water, finches mean trees). The fish were invisible at first (silver
+under blue water turns blue), and dark backs fixed it: fish from above
+are shadows.
+
+Austin has three builds to play at once now: 112, 113 and 114. Next
+session starts from his report.
+
+## 2026-10-09 — the tool that grows
+
+Build 113. Nine shapes in a day, and the test that made me trust them
+was a cheap one: every vertex of every ghost must lie on the shape's
+field. It caught the tower's battlements drawn as pie slices from the
+axis, which the eye might have forgiven in a screenshot.
+
+ECHO went in as translations in the mirror's transform list, so it got
+the ghost, the costs, the mirror and the undo without a line of its own.
+Except the undo: the group id was only handed out when the mirror was
+on. The suite found that too.
+
+The facing rule (stairs rise away, doors face you) is the kind of
+default nobody asks for and everybody notices when it's wrong.
+
+## 2026-10-08 — Strata's fire
+
+Build 112. The mega torch's colour needed a second light in the shader,
+and there was no room for a colour in the torch uniform, so the sign of
+the reach says which light it is. Cheap, and it touches nothing else.
+
+The great stove's rule is the one I like: the fire burns a unit per
+round, not per lane. Five smelts for the fuel of one is the reason to
+build it, beyond the speed.
+
+The one bug the checker caught was a doubled bracket in a condition I
+built by string. Next time I build code from a string in a patch, I
+write it out whole instead.
+
+Austin gave me the twelfth shape. THE TOWER: a hollow round tower with a
+spiral stair inside, battlements and a door. The full building's
+partner, and a thing I want to see on a Strata ridge.
+
+## 2026-10-07 — twelve tiers
+
+Build 111. The tier number was hard-coded in more places than I
+expected: arrays of eight in armour, crew swords, the creative loops,
+the recipe loops, the colours. I made the tier count a constant from
+the name table so the next extension is one line, and wrote the speed
+curve as a formula of it for the same reason.
+
+Changing diamond from instant is the first time a Build 1 spec line
+moved. Austin wrote it and Austin moved it; I recorded it in the DEVLOG
+rather than editing the spec, which is his document to change.
+
+I checked the art by rendering a sheet of every new texture and icon,
+and two pairs were too close (two greens, two purples). Colour is the
+first thing a hotbar is read by. Worth doing for every new tier.
+
+## 2026-10-06 — the ghost was a shadow
+
+Build 110. The city ghost has now come back three times, and each time
+I fixed a real cause that was not the one Austin was looking at. This
+time I reproduced the thing he could see before touching anything: the
+coverage mask in a stamped city is right, so the dark shapes were not
+geometry. They were shadows. Flat, sharp-edged, on the wall plane. The
+LOD rings cast with the default depth material, so everything I had
+taught their colour pass to hide still cast. The lesson: when I hide
+something, hide it in every pass it takes part in: colour, depth,
+shadow, picking.
+
+The liquid fix is a rule I should have started with: liquid lives on
+the metre cells, so the tool snaps to them. I built an exact-shape
+ghost over a quantised world and Austin measured the difference with
+eight cubes in a row. The block preview for round shapes is the honest
+answer: I can't make water round in metre cells, so I show the cells.
+
+His new ideas are the biggest shape of the game since the Moon: twelve
+tiers, a tool that grows with them, shapes to unlock. Strata's tiers
+first (24), because the speed curve and the abilities hang off the top
+tier, and the shape list waits on his pick.
+
+## 2026-10-04 — liquids
+
+Build 109, and I thought first, as I said I would; the thinking paid
+for itself twice in one session.
+
+The first patch put a placed source's id into the water's distance
+array, because it was already there. That would have let the world's
+own rivers flood without limit, since every source became distance
+zero. The lineage lives in its own map now, and the world's water
+keeps its thirty-two cells. Reusing a field for a second meaning is
+the kind of saving that costs a week later.
+
+The second: the cellular rules alone cannot fill a lake from one cube.
+Sources are born only on a supported floor, so water pouring into a
+basin runs out along the bottom and never rises. The fill is its own
+thing, a flood to level, lowest cell first, and the water rules run
+beside it. Pouring down and rising is what the eye expects, and it
+is also what "fill my lake to this level" means.
+
+The test caught two of my own traps: a test channel broke through the
+side of its table and flooded the valley (which is the feature
+working), and that flood then starved every later fill (which was a
+bug: fills share the tick now, newest first). And profiling the fill
+found the old water mesh rebuilding every empty chunk on every pass
+since the water build. The frame budget is better than it was before
+this build.
+
+Austin's four ideas from the 2026-10-01 playtest are all built. Next,
+whatever the playtest says; then the small things.
+
+## 2026-10-03 — hoed ground
+
+Build 108. The paint op has been in the engine since the wrench and
+this is the first time gameplay used it for itself: the hoe is a
+paintbrush. I like that a farm is now the same kind of thing as a
+carved cave, an entry in the edit list, and that the wrench can move
+or delete it like anything else.
+
+The wet/dry swap mutates an edit in place. That is the first time
+the game changes an edit after the fact outside the wrench, and it
+made me check that invalidate re-meshes from the edit's box alone: it
+does. Worth remembering for the liquids build, which will want the
+same thing (a placed liquid that changes level is an edit that
+changes, not a new one).
+
+The crop-on-the-drill question I put in the playtest is real and I
+do not have the answer: a plot under a hole is nonsense, and the
+tidy fix (the drill deletes the plot record) is a rule I would rather
+Austin choose.
+
+Next: the liquids (23). Thinking first, as promised.
+
+## 2026-10-02, later — fence building
+
+Build 107. Austin described the mechanic exactly (preview, snap the
+end to the neighbour's end, scroll turns about the joint), and it was
+forty lines because the preview system and the push-out were already
+right. The one thing I got wrong on the first pass was a centimetre:
+rounding stored coordinates to two places broke the joint check and
+would have drifted a long chain. Four places now. The test pen closed
+on itself to the millimetre after sixteen pieces.
+
+Next: hoed ground (22), then the liquids (23), which I still owe
+some thinking.
+
+## 2026-10-02 — the playtest of 99 to 105
+
+No bugs in the new work, four things around it, and one I am
+embarrassed by: the fences did not hold. My Build 99 test called the
+block function directly with steps I chose; the sim I should have
+written then (a pen, a sheep, a lure, nine hundred frames) took
+three seconds to walk the sheep out through a joint. The lesson is
+the one I keep relearning: test the behaviour, not the function.
+The rewrite is a push-out, which is what a wall is; the step test was
+clever, and clever is where the holes live.
+
+The hole under you in flight was my own Build 98 cut, measured on the
+wrong plane. One character's worth of fix. Bodies keeping out of each
+other is thirty lines and should have been in Build 24.
+
+Austin's liquids idea is the biggest thing on the roadmap now: water
+as a material, the stones as source placers. I have put it last of
+the three because fence building and hoed ground are a build each,
+and the liquids one needs its own thinking: the water system runs on
+cells and sources; a placed non-flowing liquid is a new kind of cell,
+or an edit that the water sim reads as its own. Think first.
+
+## 2026-10-01 — ichor fishing, and the list is done
+
+Build 105. Items 14 to 20 from the 2026-09-27 report are all built:
+fences, springs, the sprinkler, farmhands, pets, the sound of Strata,
+ichor fishing. Seven builds, one session, Austin's four and my three.
+
+The fishing build was the smallest and I like it for one decision:
+the worm is bait everywhere. A loot table on its own is a slot
+machine; the worm gives the ichor a reason to go back to it after
+you have the crown, and it ties Strata to the Earth's rivers, which
+nothing else does. Sova paying most for the crown puts the relics
+stall at the end of a line that starts with a rod.
+
+What I would tell myself at the start of the next session: read the
+playtest first, fix what is broken, then look at the "Small things"
+list on the roadmap before inventing. And the headless lessons of
+this session, all written above: the mouse edge flag, the yaw
+convention, copy on read of shared state, five-minute gates.
+
+## 2026-09-30, later — the sound of Strata
+
+Build 104. Sound is the thing I cannot check with my own ears, so I
+built it the way I build everything I cannot see: a state object
+the test can read (hiss, wind, maws, hush, note) and the audio nodes
+driven from it. If Austin says the wind grates, the fix is a number.
+
+The design decision I care about is the centre. It would have been
+easy to give the bowl its own drone, something ominous. Silence is
+better: the whole world has been hissing and creaking at you for an
+hour, and then it stops. That is the sound of the end of the game.
+
+The shared-state gotcha caught me in the test (every probe read the
+last value because they all held the same object). Copy on read.
+
+Next: ichor fishing (20), the last of the list before Austin's
+playtest lands.
+
+## 2026-09-30 — pets
+
+Build 103. Mine, and the one on the list I most wanted. Three builds
+of farm machinery, and this is the payoff: the lamb you fed while it
+was small follows you up the rocket ramp.
+
+Two decisions worth writing down. The crate hooks into the planet
+switch itself (spaceSys.goTo) and not the rocket, so a teleporter or
+anything I add later carries pets for free; the rule is "following,
+within sixteen metres", which is what a person would mean by "with
+me". And pets are entities with a field, not a second list: the save
+row grew two columns and every system that already worked on animals
+(breeding, growth, the leash exception) kept working. Twice now (the
+farmhands too) the cheap design was the good one because the earlier
+system was built as a record plus a rule.
+
+The name list is short and English and a bit silly (Tuppence, Gruel).
+Austin can strike what he does not like.
+
+Next: the sound of Strata (19), then ichor fishing (20), and then
+Austin's next playtest will have arrived.
+
+## 2026-09-29, later — farmhands
+
+Build 102. This is the build I expected to be hard and was not,
+because the crew was designed right in Build 24: a record with a tool
+and a bag, a steer function that returns where to walk, and a rule
+that what they hold decides what they do. Farmhands are a job finder
+(ripe first, then nearest), a walk, and a one-second act. The refill
+trip was the only new idea: a spring is known by name, other water
+by a thirty-metre sweep of the water table, and if there is none
+they say so once instead of walking off to look.
+
+I watched the test log and liked the order it chose on its own: reap
+the lettuce, plant the seed they were given, plant the seeds the
+lettuce gave back, water with the last splash, walk to the spring,
+come back and water the other. Nobody wrote that sequence.
+
+Next: pets (18). The breeding records already know which baby was fed
+by whom; a name and a follow are the rest.
+
+## 2026-09-29 — the sprinkler, and the farm closes its loop
+
+Build 101. Austin asked for it exactly as it shipped: powered, a
+tank, a wide ring, an animation, refilled by a tube from real water.
+What I liked about building it was how little new machinery it took.
+The intake is a pnode that does nothing but stand in water; the tube
+system already moved a thing a beat from one node to another, so
+water became a thing tubes move. The circuit builder already knew
+consumers with an idle and a working load. The plots already had a
+water count. The sprinkler is ninety lines that join those.
+
+The rainbow was mine. Six particles at one angle, a band over many.
+It costs nothing and it is the only reason to stand and watch the
+thing work, which is the point of an automatic farm: you built it,
+now look at it.
+
+Testing note for next time: the tube tool's click path needs the
+mouse edge flag set by hand in a headless run, or the action loop
+sees no click at all. I lost a run to that. The screenshot yaw too:
+π looks toward +z. Written down now.
+
+Next in my order: farmhands (17), then pets (18), which will want the
+breeding baby records from Build 97.
+
+## 2026-09-28 — SPRINGS, and the hundredth build
+
+A spring is nine cells that say "source" forever. The flow already
+knew what a source was (the sea, a lake, a river), so the whole trick
+was to make the springs part of the static truth the flow reads, and
+not just cells written into a chunk: written cells are lost when an
+edit beside them makes the chunk re-read the world. Then a reload is
+just the same truth read again. The carve is an edit like any other.
+
+The one wrinkle was order: the sources have to be woken after the
+terrain exists, and the world loader loads the water before it builds
+the scene. Two lines moved.
+
+A hundred builds. The first one was a flat plane of rock and a sphere
+that cut it. I keep the standing note that says every new stackable
+kind has to be told to craft(), and I keep the newer one that says a
+test of a button must press the button. What I would tell the me of
+Build 1: cache what the generator answers, and never trust a test you
+did not watch fail first.
+
+## 2026-09-27, later — FENCES
+
+An invisible wall for animals only is a segment-crossing test in the
+entity step, nothing more, and the geometry of the game made it easy:
+the animals are points on a plane. The two bugs the suite found were
+both about lines: a cosine of a right angle is not zero, so a fence
+squared by rounding the yaw still had a residue that put its two ends
+on opposite sides of a step running along it; and a blocked animal
+just stood at the rail, which meant it could never find the gate two
+metres to its left. Rounding the ends and sliding along the rail fixed
+both, and the sliding is the better animal anyway.
+
+Next: springs, the sprinkler, the farmhands, in that order: each is a
+piece of the farm that runs itself.
+
+## 2026-09-27 — the stutter, and a ghost I could not catch
+
+The stutter was mine from Build 86: the maws' `treeAt` marched the SDF
+to the ground per cell with no cache, and the tree refresh asks two
+thousand cells. I measured it before touching anything this time: 0.35
+ms a cell on Strata against nothing on Earth, times two thousand. A
+Map fixed it. The lesson is the one from the journal's standing notes:
+anything the generator answers per cell needs a cache, because the
+callers never ask once.
+
+The ghost city I chased for two hours with probes and screenshots on
+five builds and never saw. The cover mask read 255 under every city I
+stood in. My first probe put me under the city's slab (cities stand on
+one), and what I took for a ghost ceiling was the slab's underside; a
+good hour went there. In the end I wrote the rule I should have had
+from the start: the skin and the rings never draw within twenty-four
+metres of the player. Whatever the mask does, that is true. If Austin
+still sees it, the question is the distance.
+
+## 2026-09-26, later — BREEDING
+
+Small and whole. The lure is one branch before the flee; feeding is one
+line before the villagers on the right click; the pairing is a scan of
+the fed ones every half second; the baby is the same animal at half
+scale with a timer, and the timer rides in the save at the end of the
+entity row. `e.big` already scaled a mesh for the warlords, so a lamb
+was free.
+
+I did not make the click test honest this time: the camera does not
+follow the yaw until a frame renders, and headless frames are a second
+apart, so the suite calls what the click calls. After the seal I am
+wary of that, but the click's line here is one `if` in front of the
+villagers' `if`, which the suite does exercise.
+
+## 2026-09-26 — the seal, twice
+
+Twice now the seal did not open for Austin, and the second time it was
+mine to have caught: my suite opened it by calling the function, and
+the click in the game never reached the function, because the right
+click only talks to villagers and aliens. A test that calls the code
+under the button is not a test of the button. The suite dispatches the
+mouse event now, looking at the floor, with nothing in the bag.
+
+The burrower is a good monster in the wrong place. Austin is right
+that the early caves are for learning to dig, not for running; it
+lives under Strata now, where the game is meant to be hard.
+
+Breeding next. It is the first system since the farm that is about
+keeping something alive rather than killing it, and the game could use
+another of those.
+
+## 2026-09-25, night — STRATA H, and the four ideas built
+
+A village that is the generator's cannot be rebuilt by edits, so the
+generator had to be told. That turned out to be small: a set of keys
+inside the closure, a message to each worker, and the record cache
+cleared so the next ask remakes the village whole. The mesher redraws
+the chunks and the domes close over the plaza in a second. I like that
+the ruin and the living village are one description with one flag;
+nothing is duplicated, and the ruins you have not paid for stay ruins
+forever, which is the point of the price.
+
+The people are the station's cast pattern with names hashed from the
+village key, so Pren is Pren every time you come back. The suite found
+that a translator is an item and not a story flag, which I had
+forgotten, and then read the rows off the panel like a player would.
+
+That is all four of the ideas from the 2026-09-24 playtest, in six
+builds (89 to 95). Next is Austin's playtest of it all. What I want to
+hear most: whether Strata is now too hard to cross, and whether the
+ending, with the villages after it, feels like an ending and then a
+home.
+
+## 2026-09-25, later — STRATA G
+
+The vault is the village's trick turned inside out: where the village
+puts pieces on a terrace, the mound is solid to its dome and the hall
+is air cut out of it, with the pillars and plinth put back. Three
+distance functions and the mesher does the rest. The mound's skin is
+the country's ground, so from outside it is a hill with a hole in it.
+
+The keeper is the tomb guardian's brain with a bolt added, and its
+first spawn point was beside a pillar, inside the golem's own blocking
+radius, so it stood there for the whole test firing and never walked.
+The suite caught it by the numbers (it never closed, never slammed,
+never went home). Spawn points in a room with furniture want a metre
+of air around them.
+
+The relic is the hook for H: rebuilding a village should cost
+something the war made you earn.
+
+## 2026-09-25 — STRATA F
+
+The villages are SDF, not stamps, and that was the decision that made
+the build small. A stamped village is a few hundred edits in the save
+and a rule for when to stamp it; a generated one is a cell hash, a
+list of huts, and a distance function the mesher already knows how to
+draw, and there can be a thousand of them for the price of none. The
+terrace is the same trick as the centre's bowl: height() answers the
+village before it asks the land. What I could not put in the generator
+is the chest, because a chest is a thing with an inventory, so that is
+the one stamp, set once and recorded.
+
+A hut is a sphere shell cut by a plane. The first plane cut every hut,
+including the one I meant to keep whole, because I had let the cut
+reach into the sphere at zero brokenness; the whole hut is the one
+with the chest, so it mattered. Whole at nought, half gone at
+seven-tenths, a stub past that.
+
+Next: G, the loot places with their own bosses, which I want to be the
+gearing-up for the centre; then H, the villages alive again.
+
+## 2026-09-24, night — STRATA E
+
+Rivers as contour lines. I had been dreading the ichor because the
+Earth's rivers are traced from sources downhill through a cell system
+that took a build of its own, and Strata's land now has cliffs every
+seventy metres that no traced river could cross. Then: a river is a
+line, a contour line of a slow noise field is a line that wanders
+without ever branching or ending, and its distance is the field's
+offset over the field's gradient. Five noise evaluations and no state.
+It steps down with the land in falls because the water sits two metres
+under the raw ground wherever it is, which the water code already
+knew how to draw. The gaps came from a second field: without them the
+lines were everywhere and it read as a wet world rather than a cut one.
+
+The faults are a Voronoi with a per-cell offset and a hard edge. I had
+softened the edge over four metres first and got notches instead of
+cliffs, because both sides fade to nothing at the border; the offset
+has to hold to the edge. A metre and a half of softening is enough for
+the mesher.
+
+The burn took an hour to find in the suite and was the creative
+loadout: every item, including the magma heart, which drinks burns.
+The test now empties the bag before it steps in.
+
+The land generator is the heaviest it has been: some thirty noise
+evaluations a column. The chunk grid caches columns, so it is fine in
+play, but I want to remember it when the structures come, because a
+structure placer that asks height() everywhere will feel it.
+
+## 2026-09-24, evening — EVERY SKY
+
+A small build on the back of the last one: with the sprites shared, the
+sky can hang any of them anywhere. The one thing I found while doing it
+is that Strata had been wearing the Earth's moon all along, rising and
+setting on the Earth's clock; I had never looked up there at night with
+that question in mind. Now it has none, and ours is a small grey square
+beside a small blue one.
+
+The scale by stops is a rule that reads, not a physics; nothing in the
+game says how far these worlds are from each other and I would rather
+it kept quiet about it.
+
+## 2026-09-24, later — THE PLANET VIEW
+
+Austin's star map. The part I liked building was the context: the map
+had always read the live game, so drawing another world meant either
+copying every `game.*` read or putting one object between the map and
+the world. One object. The live world fills it from `game`, the other
+worlds from their saved blobs, and a generator is made from the seed
+the first time a world is asked for. The caches that used to hang off
+`game` hang off the context per world, which fixed a bug I had not
+noticed: the colour cache never cleared between planets, so the Moon
+could have worn the Earth's colours if the same cell keys came up.
+
+Taking R out felt like a small loss and was not: the view shows the
+rocket's reach and says why a world is out of it, which R never did.
+
+The sprites are shared between the sky and the map now, which is the
+setup for the next build: every planet in every sky, sized by distance.
+
+## 2026-09-24 — the playtest of 76 to 88
+
+Austin found the spike and could not find the seal. A three-metre black
+plate at the foot of a forty-metre black spike, in a black bowl; of
+course. The lesson is one I keep relearning in different clothes: what
+is obvious to the one who placed it is invisible to the one who did not.
+The seal now has a marker with the price in its name, a column of light,
+and a line that says what to do. The test for "can this be found" is
+not "is it there".
+
+The other one is worse because I wrote the playtest note for it myself
+in Build 83 ("walk the hatch down to the keel") and never asked how you
+got to the hatch from outside. The hangar was sealed; in zero-G you
+could drift round it forever. There is an airlock now. And I had never
+made the site airless at all, so "make sure there is air inside" was
+answered with air everywhere, which is no answer. Vacuum outside, air
+inside what is built.
+
+The tables crafting as blasters: a fall-through in craft() that makes
+a gun for any kind it does not know. That default is a trap I set
+myself long ago; every new stackable kind has to be told to it. I have
+noted it as a thing to make loud.
+
+Four ideas came with the report, and they are big: the planet view (a
+star map that is also how you choose where the rocket goes), planets
+in every sky, a wilder Strata with a green water that burns, and
+structures on Strata with a story in them, the ruined villages of
+Vehl's people, rebuilt after the end. The last is the one I want most.
+Order: the planet view first because it changes how flight works and
+the skies hang off the same sprites; then the ground; then the
+structures, which are three builds at least.
+
+## 2026-09-23, night — STRATA D, and the arc closed
+
+The game has an ending now. I wrote four lines for it and a title card
+that says who made it, and when the test's screenshot came back with
+THE END in the null green under STRATA I sat with it for a moment. It
+is a long way from a flat plane of rock and a sphere brush.
+
+The centre is the generator's: a bowl cut in the land's own eight-metre
+steps, a spike of a new black stone. Everything I have learned about
+placing things came due here: height() is now a wrapper that answers
+the bowl inside seventy metres, blends over twelve, and only then asks
+the land; the SDF, the materials, the maws and the spires all ask
+centreDist first. Nothing had to be stamped, so nothing can be out of
+place, and the worker builds it the same as the main thread.
+
+Two bugs the suite caught before Austin could. The boss woke inside the
+spike's axis and its only answer to rock was to rise, so it rose
+sixty-five metres and fought from there. It now wakes beside the spike
+and slides round rock before it climbs. And Vehl, after the end, came
+through at the wreck, four hundred and eighty metres from the player
+who had just killed the thing; alienSys puts the leader wherever the
+wreck is, which had been right until the moment it mattered.
+
+The unmaking is the CSG move I promised the roadmap: a boss that
+removes the floor under you, in a game whose whole idea is that the
+floor is removable. The null heart hands the same power to the player
+afterwards. Vehl says it was never theirs either. I like that the
+reward for the ending is the thing that caused it.
+
+Not done and worth saying: the war goes fully quiet after the end. If
+Austin misses it I will leave a thinner one on. And STRATA still has no
+music of its own, and the ending has none; if there is a sound build
+in the future, the end screen is where it should start.
+
+Next: Austin's big playtest of 76 through 88. Then whatever it says.
+
+## 2026-09-23, later — STRATA C
+
+The war. Four enemies, two shifts. The day's two borrow the husk and
+the stalker brains with a `dayOk` flag so they neither burn nor flee
+at dawn and mind no light; the night's two got a brain of their own,
+the first ranged one in the game outside the garrisons: hold a
+distance, sidestep, face, fire on the beat, walk off at dawn.
+
+Two things I am glad I caught before they shipped. The garrison's
+`strafe` explodes where a miss lands, and an explosion is a CSG edit:
+three lancers missing half the night would have pitted the ground
+and grown the save by hundreds of edits an hour. The bolt got its
+own march that carves nothing. And the first suite run had my player
+die in the first duel, silently: `damagePlayer` does nothing once the
+death screen is up, `prey` sees no one, and every number after it was
+zero or nonsense. Then the second run had reinforcements: the spawner
+runs inside `updateEntities`, so a twelve-second duel at night on
+Strata is not a duel. Freeze `spawnT` for the fight you are measuring.
+Also: a sixty-metre cube union and then a sixty-metre cube subtract
+is not a floor, it is a pit. Air first, then the floor under it.
+
+The bolts are hitscan, and my first draft aimed them at where you
+are, which meant moving did nothing and only the scatter decided. I
+worked the standing-still hit rate out on paper (three quarters at
+the lancer's scatter, nine in ten at the hollow's) and it came to
+fifty-odd damage a second at full caps with no way to dodge. So the
+aim is taken at the start of the wind-up and fired half a second
+later: stand still and it lands, sidestep and it goes where you
+were. That is a rule a player can learn in one night. If the
+playtest still says death, the knobs are the wind-up length and
+`spread`, not the damage.
+
+The null core is the hook for D: the thing at the centre is opened
+with them, so the night is worth fighting rather than hiding from.
+
+Next: STRATA D, the centre, the boss, the ending.
+
+## 2026-09-23 — STRATA B
+
+The maw is the first thing in this game that fights back without being
+an entity. It sits on the tree system (a key, a mesh, a wood) and adds
+hit points and a mouth; the drill, the sword and the gun each got one
+line to find it. I like that the danger is positional: stand back and
+it is a tree, stand close and it is a trap.
+
+The tables per planet cost almost nothing (a `world` tag on recipes, a
+kind on a table row) and change how the late game feels: you carry the
+Moon to Strata in a box. Austin's idea, and the right one.
+
+## 2026-09-22, night — STRATA A
+
+A generator from nothing, for the first time since Build 2. The trick
+that made it another world was not any one term but the stacking: warp
+the coordinates, fold the noise into ridges, quantise into strata,
+then let a 3D field push the surface in and out so plateaus overhang
+and cliffs hollow. Each alone looks like a filter; together it looks
+like a place. The spires I stole from the Moon's crater cells and made
+tall. The blight burns because lava already did, and the Scar's pools
+lie flat because I damp the sculpting there; the first version put
+the blight on the heightfield and the surface somewhere else, and the
+test stood on ash and did not burn. Test the key.
+
+Strata is Austin's name and it is the right one. B is the plant that
+bites, and the tables.
+
+## 2026-09-22, evening — STATION TWO, LIVED IN
+
+Rooms, pens, tanks and three upgrades in one build, because all of it
+is the same shape: a box shell with a way in, a record in the story, a
+row on a trade panel. The one design decision worth writing down is
+that residents and housed beasts are not entities in the save; they
+are records that make entities on arrival. Villagers already worked
+that way, and the one time I let an animal be both (saved and
+recorded) it doubled on the second visit. One source of truth, always.
+
+Next is STRATA, and that is a generator from nothing.
+
+## 2026-09-22, afternoon — STATION TWO, PRE-BUILT
+
+Austin was right about the station. Building it by hand made the
+player a bricklayer; paying Kro makes the player a patron, and the
+moment a section stands whole is better than any wall I laid. It was
+also cheaper to build: the frames were already boxes, so a section is
+the frame's shell with the way in cut through it. The two others on
+the pad are promises for the next build, and I would rather ship a
+promise that speaks than nothing on the pad.
+
+## 2026-09-22, midday — the notes, and THE BAND & THE FALL
+
+Austin played 76 to 81 in one go and found no bugs, and then wrote the
+best page of notes he has written: Station Two should be built by
+paying builders, not by hand; the ambush wants staging (appear, haunt,
+turn, arms up, the hole, the station, the ship, Vehl, a second sound,
+an empty sky, the ship from the sky); the band; Strata as the alien
+planet's name and the reason the game is called that; the alien world
+remade from nothing; a crafting table per planet. I put it on the
+roadmap in my order and built the band and the fall first, because the
+crash is the moment he will replay to show people.
+
+The band is the item I am proudest of this month: it makes a Build 3
+item, the beacon, the best thing to plant in the late game.
+
 ## 2026-09-22, morning — THE CROSSING
 
 The ambush is the first scripted scene in the game and it went in as a

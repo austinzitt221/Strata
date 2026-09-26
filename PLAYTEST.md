@@ -5,6 +5,381 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 120 — THE CREW AT HOME
+- [ ] Give a crew member ore and coal, set them on a stove and give them
+      a chest. Come back later: ingots in the chest?
+- [ ] Put one on a turret with the power off, then on. Does it earn its
+      place at a wall?
+- [ ] Give them a bed; stay up past dark. Do they go, and come back to
+      work in the morning?
+- [ ] Bread in their chest: do you notice the fed crew working faster?
+      Is "hungry" once a day the right amount of nagging, or too much?
+
+## Build 119 — THE WATER'S FACE
+- [ ] A lake in the afternoon, facing the sun: does the glitter look
+      like sunlight on water, or too much? Then with your back to the
+      sun: does the water hold the sky?
+- [ ] Wade in, swim, cast a line, stand by a river in the rain. Do the
+      rings read? Too strong, too faint?
+- [ ] Fly across a big lake: any line where the near water meets the
+      far?
+- [ ] Any frame cost you can feel looking out over the sea (the report
+      will say: 'render (cpu)' and the gpu line)?
+
+## Build 118 — the ghost city
+- [ ] Fly to a city you have never seen and walk around in it. Any flat
+      grey box standing in for a building, anywhere, near or far?
+- [ ] The same run as last time, if you can: F3, fly to a new city,
+      fly round it 15 s, Shift+F3. I want to compare the two reports
+      line for line. The 'water' and 'player & tools' lines are split
+      into their parts now.
+
+## Build 117 — THE TOOL WHEEL
+- [ ] Hold right click with a drill, then a dispenser. Is a quarter
+      second the right hold? Does a quick tap still step the shape
+      without the wheel flashing up?
+- [ ] Set everything from the wheel once: shape, size, turn, grid,
+      mirror, echo. Is anything missing that you reach for a key for?
+- [ ] Birds and fish up close: do they match the animals now? Are the
+      birds big enough?
+
+## Build 116 — THE SHAPES, FIXED
+- [ ] Walk up to a mountain with the nullite drill on the building and
+      carve one in. Walk through the door. Is the room the size you
+      expected from the ghost, and does the attic read as a roof?
+- [ ] The drill on the staircase into a slope, the spiral stair into
+      the ground, the arch through a wall, the tower into a hill. Can you
+      walk every one?
+- [ ] Place spiral stairs and towers at several sizes. Is every tread
+      there and clean now?
+- [ ] Select each new shape with the wrench: no freeze? Hollow a
+      pyramid, a cone, a dome, a staircase: are the outsides untouched?
+
+## Build 115 — THE STOPWATCH
+- [ ] Press F3 and play normally for a minute: walk, fly fast in
+      creative, mine, drive to a city you have never visited. Then press
+      Shift+F3 and paste the report into your notes. Nothing else I ask
+      for this build matters as much as this: it is the first time I
+      will see numbers from your machine.
+- [ ] Is flying over new ground smoother than before? Does the first
+      trip to a new city still dip, and if it does, do the hitches in
+      the report say `render (cpu)`?
+- [ ] Stand beside a highway where it crosses a river, in a new world:
+      does the water meet the embankment within a second or two?
+- [ ] Anything that looks wrong that did not before: a missing chunk,
+      a tree or a tuft in the wrong place, a shop counter's goods, a
+      hole that won't mesh after a wrench move.
+
+## Build 114 — THE LIVING SHORE
+- [ ] Walk a coast and a river by day. Do the birds read as birds, and
+      as three kinds? Walk up to a landed flock.
+- [ ] Wade into the shallows: can you see the fish from the bank, and do
+      they scatter?
+- [ ] Fish over a school, then away from one: does it feel faster?
+- [ ] Any frame cost you can feel near the water?
+
+## Build 113 — THE TOOL THAT GROWS
+- [ ] Right click through each tier's shapes. Does every ghost match
+      what lands, drill and dispenser?
+- [ ] Walk up a staircase and a spiral stair (build the spiral 8 m or
+      more). Are the steps the right height to walk?
+- [ ] Place a building and a tower: do the doors face you? Go inside,
+      climb the tower.
+- [ ] A vehlite tool, echo ×6, gap 1: a colonnade of cylinders. Then
+      with the mirror on. Then Ctrl-Z.
+- [ ] Stone to diamond: does losing the turn and the grid on the low
+      tiers feel like progress, or like punishment?
+
+## Build 112 — STRATA'S FIRE
+- [ ] Light a camp at night with mega torches. Is seven times too much,
+      and is the green light the right colour for them?
+- [ ] Wear the headlamp down a cave and across the surface at night.
+      Is the cone the right width?
+- [ ] Build a great stove, fill all five lanes, fuel it once. Tube a
+      hopper into it. Is it worth the voidore?
+
+## Build 111 — STRATA'S TIERS
+- [ ] On Strata, dig down: scarcoal and voidore near the top, ichorite
+      past 30 m, nullite past 70 m, vehlite past 130 m. Are they too
+      rare, or too common?
+- [ ] Make each tier at Strata's table. Does the vehlite drill feel
+      instant, and diamond feel slower than it used to? Is the curve
+      between them even to the hand, not just on paper?
+- [ ] Do the four colours read apart in the hotbar?
+
+## Build 110 — the fixes
+- [ ] Place water cubes beside rock cubes with the same shape. Do they
+      match the outline now? Try a water sphere: do the blocks in the
+      ghost come out exactly?
+- [ ] Build water at the top of a tall tower (up to the build ceiling).
+- [ ] Fill a cut with a stone: does the water meet the walls?
+- [ ] The city by night where the dark shapes were: gone?
+- [ ] Drill water from the shore: the cut snaps to the metre. Does that
+      feel right, or does it fight you?
+
+## Build 109 — LIQUIDS
+- [ ] From the shore, drill a cube out of the sea. Does it hold? Is
+      the water in your pack? Dive in and look at the cube of air from
+      inside the sea.
+- [ ] Put that water back with the dispenser as a shape in the air: a
+      floating cube, a wall of water. Swim in it. Build a waterfall that
+      does not fall.
+- [ ] Dig a lake, then drop one spring stone at the level you want.
+      Does it fill to that level, into every corner? Dig a channel off
+      it and watch it go.
+- [ ] Put a spring stone on a hilltop, watch the valley, then Ctrl-Z.
+      Does it all drain, and is the stone back?
+- [ ] Does the game hold its frame rate while a big fill runs?
+- [ ] Lava does not flow yet. Do you want it to?
+
+## Build 108 — HOED GROUND
+- [ ] Hoe a hillside and plant it. Do the crops sit on the ground at
+      every height? Does the earth go dark when you water it and light
+      when it dries?
+- [ ] Load a world with an old farm: are the plots there, tilled, and
+      still growing?
+- [ ] Mine a plot with the drill, or place over it: what should happen
+      to the crop? (Right now the record stays and the crop floats
+      or is buried; tell me what you would want.)
+- [ ] Try the hoe on mud and on peat, and on rock.
+
+## Build 107 — FENCE BUILDING
+- [ ] Build a pen with the ghost: does it join where you expect, and
+      does the wheel turn it the way you want at the corners? Is
+      fifteen degrees a notch right?
+- [ ] Build one at an odd angle on a slope, then lure a sheep at every
+      side. Held?
+- [ ] Is anything worse now that the pieces no longer snap to the
+      metre?
+
+## Build 106 — the fixes
+- [ ] Fly high and fast: is the disc under you gone?
+- [ ] Walk into a crowd: husks at night, a flock you are luring, your
+      two crew following. Nobody inside anybody?
+- [ ] The pen again: lure a sheep at the rails from every side and at
+      the corners. Any way out but the gate?
+- [ ] A farmhand with a hoe by a ripening plot: do you see it ripe
+      before it is taken?
+
+## Build 105 — ICHOR FISHING
+- [ ] Cast into an ichor river. Is the wait right? Fish until you have
+      one of each: does the crown feel like a find when it comes?
+- [ ] Take the crown to Sova on the station. Is 1500 the right number
+      for it? Would you rather it did something?
+- [ ] Bring worms home and fish the Earth with them. Is the halved wait
+      worth the trip?
+
+## Build 104 — THE SOUND OF STRATA
+- [ ] Land on Strata with the sound up. Walk to an ichor river, dive
+      in, climb out, climb a spire. Is the hiss readable as the ichor?
+      Is the wind's note pleasant or grating after ten minutes?
+- [ ] Stand among the maws: do the creaks feel like them?
+- [ ] Walk into the centre: does the silence land? Does the music
+      come back on the way out?
+- [ ] The two tracks: too much, too little, or right?
+
+## Build 103 — PETS
+- [ ] Breed two sheep, feed the lamb three times while it is small. Do
+      you get a name and a follower? Does it keep up on foot, and in a
+      car (it should reappear when you stop)?
+- [ ] Tell it to stay, walk a few hundred metres, come back: still
+      there? Look for it on the map.
+- [ ] Take it in the rocket to the Moon. Does it come out of the
+      crate beside you? Is a sheep on the Moon as good as I think it is?
+- [ ] Any name you would add to the list, or one you would strike?
+
+## Build 102 — FARMHANDS
+- [ ] Give a crew member a can, a hoe and some seeds, post them at
+      the farm ("stay" or "roam" among the plots). Walk away for a few
+      minutes: planted, watered, reaped?
+- [ ] Take the spring away (or post them at a farm with no water
+      near). Do they say the can is dry, once, and stop?
+- [ ] Bring a following hand with a can past a dry plot: do they stop
+      to water it and catch up after?
+- [ ] Open their pack after a harvest: is the crop there, and the
+      seeds? Was anything dropped on the plot with a full pack?
+
+## Build 101 — THE SPRINKLER
+- [ ] Craft a sprinkler and an intake. Set the sprinkler among the
+      plots, wire it to a crank or a generator, pour a can in. Does it
+      spray at once when a plot is dry, and stop when they are all wet?
+- [ ] Stand an intake in a spring (or the river), tube it to the
+      sprinkler, and leave for a while. Does the tank stay up? Quit and
+      reload: still fed?
+- [ ] Is twelve metres a good ring, and six seconds a good beat? Is
+      the spray readable from across the farm, and does the rainbow
+      show at noon?
+- [ ] Try to tube a hopper into the sprinkler, or the intake into a
+      chest: the messages should say what goes where.
+
+## Build 100 — SPRINGS
+- [ ] Craft a spring stone, set it by the farm, fill the can at it a
+      few times. Dig beside it, build over it, quit and reload: still
+      full?
+- [ ] A lava stone somewhere safe. Then somewhere not.
+- [ ] Is twelve rock and four mud the right price for infinite water?
+
+## Build 99 — FENCES AND GATES
+- [ ] Craft fences, build a pen round two sheep, breed them in it. Do
+      the pieces snap the way you expect? Is the quarter-turn on scroll
+      enough?
+- [ ] Open the gate with food in hand and lead them out; shut it behind
+      them. Take a piece back.
+- [ ] Try to get a sheep over a fence with a slope, a jump, a shove.
+
+## Build 98 — the fixes
+- [ ] Strata: walk and fly. Is the stutter gone?
+- [ ] A city, up close: no ghost walls now? If you still see one, how
+      far is it, and did you come to the city from another world?
+- [ ] Quit mid-fight with the Unmaker; load; the seal is open and one
+      Unmaker comes.
+- [ ] Breed sheep: a lamb grows in a minute and a half.
+
+## Build 97 — BREEDING
+- [ ] Grow tomatoes. Walk up to two sheep with one in hand: do they
+      come? Feed both. A lamb. Wait four minutes. Breed the lamb.
+- [ ] Try it with meat in hand (nothing should happen), with a croc
+      (nothing), with a lamb (refused).
+- [ ] Quit and reload with a lamb half grown: still a lamb, still
+      growing?
+
+## Build 96 — the fixes
+- [ ] The seal: stand by it, right click. It opens. Then the fight, and
+      the ending: the notes from Build 88 all still stand.
+- [ ] The far planets: small enough now? Fly Earth to the Moon and look
+      back: the flat Earth, the flat Strata far off.
+- [ ] Cave on Earth in survival: no burrower. Cave on Strata: one,
+      eventually.
+
+## Build 95 — STRATA H
+- [ ] After the end: bring Vehl a relic, watch the nearest village
+      stand up. Walk it. Talk to the three. Light the lamps. Buy the way
+      to a mound from the weaver and go and open it.
+- [ ] Is one relic per village the right price? Is the village worth
+      coming back to once it is lit?
+- [ ] Old saves that already ended: Vehl's row should be there. Is it?
+
+## Build 94 — STRATA G
+- [ ] Find a mound (rarer than the villages; the map marks it gold once
+      you have been near). Go in. Fight the keeper in the hall: is the
+      hall big enough to fight in? Do the pillars help or get in the
+      way? Is the bolt-from-the-chest readable?
+- [ ] Open the chest. Is it worth a keeper? Sell a relic to Sova, or
+      keep it; Vehl says keep it.
+
+## Build 93 — STRATA F
+- [ ] Find a village (they are everywhere; the map marks the ones you
+      have found). Walk the plaza, look in the huts, open the chest.
+      Does it read as a place people lived? As a place the war went
+      through?
+- [ ] Thralls by day in a village: too many, or right?
+
+## Build 92 — STRATA E
+- [ ] Walk a kilometre of Strata. Wild enough now? Too wild to cross?
+      (The band and a beacon are the answer if it is.)
+- [ ] Find the ichor. Step in. Then bring a boat (or a hoverbike) and
+      cross it; follow a river to where it ends. Does green water read
+      as water? Does it read as danger before it burns you?
+- [ ] Old Strata saves: the ground moved under everything. Is your
+      wreck, your beacons, anything you built, where it should be? (The
+      rocket is lifted out of new ground on load; nothing else is.)
+
+## Build 91 — EVERY SKY
+- [ ] Find Strata in the Earth's night sky (a small violet disc, high,
+      off the sun's arc). Then the Earth from Strata, with our Moon by
+      it. Big enough? Too big?
+- [ ] Fly Strata to the Moon and look for the Earth past it.
+
+## Build 90 — THE PLANET VIEW
+- [ ] M, then PLANET VIEW. Click the Moon from Earth, Earth from Strata.
+      Is the map of a world you are not on useful? Teleport from it.
+- [ ] Sit in a rocket, press SPACE, pick a world. Try one you cannot
+      reach: does the reason make sense? Esc: does the rocket stay put?
+- [ ] Anything you miss from R? (I took it out.)
+
+## Build 89 — the fixes
+- [ ] Go back to the centre. Is the seal obvious now? Open it (creative
+      needs no cores) and fight the thing: the notes from Build 88 still
+      stand.
+- [ ] Station Two: walk in from the pad through the airlock. Take the
+      suit off inside; step outside without it. Does the line make sense?
+- [ ] Craft the Moon's table and Strata's table from the creative menu.
+      Tables, not blasters.
+
+## Build 88 — STRATA D
+- [ ] Talk to Vehl, follow THE CENTRE marker across Strata (it is 480 m
+      and the land is what it is). Is the walk an adventure or a chore?
+      Would you rather carry a beacon out and band back?
+- [ ] Stand on the rim. Then on the floor. Does the bowl and the spike
+      read as the thing that drives the war?
+- [ ] Open the seal with six cores. The fight: can you dodge the bolts?
+      Does the dive give a sword a chance? Does the unmaking (the ring
+      of sparks) read in time to move? Is the hole fair?
+- [ ] Die to it, come back, and open the seal again (no cores this
+      time). Does it mend if you leave, as it should?
+- [ ] Kill it. Read the screen. Is that the ending you wanted? Talk to
+      Vehl after. Try the null heart on a cliff.
+- [ ] After: is Strata quiet at night? Is quiet good, or do you miss the
+      war? (I can leave a thinner war on after the end if you do.)
+
+## Build 87 — STRATA C
+- [ ] Spend a day on Strata in survival. Thralls and gnashers: can you
+      fight them with what you brought (the astrium sword, a gun, the
+      mech)? Can you outrun them? Is the day a war or a nuisance?
+- [ ] Spend a night. Lancers and hollows: does the wind-up read (the
+      green core brightens)? Can you dodge by moving? Is a wall or a
+      hole enough? Is it hard in the right way, or just death?
+- [ ] Kill a lancer. Sell the null core to Sova, or keep it. Is the
+      loot worth the night?
+- [ ] Bottle a gnasher with a spawner and put it in a pen at Station
+      Two. Does it stay put?
+
+## Build 86 — STRATA B
+- [ ] Mine a maw from close in survival. Then from range. Then kill one
+      with a sword and one with a gun. Is the bite fair? Is the stalk
+      worth it?
+- [ ] Make the Moon's table on Earth, Strata's table on the Moon. Does
+      the split make sense, or does it just make you carry tables?
+- [ ] Saw stalks on Strata's table; build with the three planks. Which
+      one would you build a house from?
+
+## Build 85 — STRATA A
+- [ ] Walk the Teeth, the Glow and the Scar. Does the land read as
+      another world? Is it hard to cross in the right way, or the wrong
+      way (stuck, or bored)?
+- [ ] Climb a spire; look under a ledge; find a cavern. Any holes in the
+      mesh, any seam you can see through?
+- [ ] Step in the blight. Mine voidore. Sell it to Sova.
+- [ ] Say the name out loud in the HUD. STRATA. Does it land?
+
+## Build 84 — STATION TWO, LIVED IN
+- [ ] Bottle a villager on Earth, fly them to the site, buy a room from
+      Sef and put them in. Then visit them. Do they feel at home, or
+      lost in zero-G?
+- [ ] A grazer in a pen, a croc in a tank. Can they get out? Can you
+      get in and out over the sill?
+- [ ] Kro's three: the workshop, the grid (refuel the generator with
+      coal), the penthouse. Sleep in the penthouse; look out the window.
+- [ ] Prices for all of it: too cheap for the late game, or right?
+
+## Build 83 — STATION TWO, PRE-BUILT
+- [ ] Land at the site with the translator. Talk to Kro, pay for the
+      hangar, watch it stand. Is the price right for that moment? Is the
+      moment good?
+- [ ] Walk the hatch down to the keel and the corridors out to the ring
+      and the quarters, in zero-G. Anything you can get stuck in?
+- [ ] Sef and Umma: does what they say make you want the next build?
+
+## Build 82 — THE BAND & THE FALL
+- [ ] The crossing again (a new world, or a world where you have not
+      crossed yet). Does it read as you described it: it appears, it
+      haunts, it turns, it raises its arms, the hole, the station, the
+      ship, Vehl, the second sound, the sky, the ship falling?
+- [ ] Does the black hole look like one?
+- [ ] Plant beacons on three worlds and bounce between them with M. Is
+      the list beside the map enough, or do you want a world picker on
+      the map itself?
+
 ## Build 81 — THE CROSSING
 - [ ] Fly the star rocket from the site. Did you turn to look when the
       view swung back? Did the station going into the hole land? Was
