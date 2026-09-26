@@ -2,6 +2,81 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 121 — the ghost city, for good; the crew's chest; the 250 ms frame (2026-10-14)
+
+Playtest of 118-120 (2026-10-14). The water's face: no notes, Austin
+loves it. The crew at home works (stove, bed, meals) except the chest.
+The city ghost is back, and in his perf report. The report itself: 54
+fps, CPU-bound as before, two 230 ms "horizon rings" frames ten seconds
+apart, and a run of 15-36 ms water frames.
+
+- **The ghost city, found for good.** His screenshot showed dark
+  diagonal streaks on the walls and solid black roofs: z-fighting. The
+  stand-in tower is exactly the real tower's width, and its roof slab
+  sits just over the real roof. So Build 118's cuts were not cutting,
+  and the reason was not in the cuts at all:
+  - Every world load builds a new scene: a new terrain material and a
+    new coverage mask texture. The stand-ins' material was built once
+    per page (`if (this.mat) return`) and kept.
+  - From the second world opened in a session on, the stand-ins read the
+    last world's mask, frozen where you left it, and a player position
+    that never moved again. The 24 m cut and the mask cut hid nothing.
+  - That is why it came and went "in some worlds", and why no test ever
+    saw it: every test opens one world per page.
+  - Fix: the material is rebuilt whenever the scene's terrain material
+    or mask changes. The set-piece box cache (keyed by grid cell, so a
+    second world could reuse the first world's village boxes) is also
+    cleared on load.
+  - New test (b121ghost): open a world, save and quit, open a second one,
+    fly to a city, and render only the stand-ins inside the loaded disc.
+    Before: 7,157 pixels drawn over the real city, none of the three
+    uniforms live. After: 0.
+- **The crew's chest.** New ingots did go into the chest. But he set
+  the stove first, so the ingots smelted before the chest existed were
+  already in the crew member's bag, and only the dig pack was ever
+  emptied into a chest. To him the chest did nothing. Now a crew member
+  at a stove puts everything stove-made from their bag into the chest,
+  whenever they have one.
+  - Assigning a stove, turret, bed or chest now throws a burst of sparks
+    on the one they picked ("nearest where you look" could pick a
+    village chest behind a wall with no sign of it).
+  - The status line says how far the chest is from their post.
+- **The 250 ms frame.** Headless runs a frame a second, so it never
+  showed. `fastfly.js` stubs the renderer out, and the JS then runs 5,000
+  frames in 90 s like his machine. The hitch showed up straight away:
+  - The ring's column scan (`scanCols`) has a 2.5 ms budget, checked at
+    the bottom of its loop. The feature ring drops nearly every column
+    (plain ground, no sky island) with a `continue` that went round
+    without asking the time: thousands of columns in one frame. It now
+    checks first, and a dropped column no longer reads the heights it
+    never uses.
+  - Worst ring frame 316 ms -> 22 ms; the ring average 2.1 -> 1.2 ms.
+- **The water drain.**
+  - The same bug a second time: the stamp queue's dry jobs left by
+    `continue` past their budget, one 159 ms frame.
+  - A wet stamp (a highway or city block whose box touches one river
+    chunk) re-made every dry chunk in the box, 145 a job on average.
+    Now only the wet ones are made. A dry one is read with its edits
+    when the flow looks into it, and made only when water actually
+    arrives, so a cut that lets water in still does. Your own edits
+    still make every chunk, as before.
+  - Big footprints check their water tables across frames instead of in
+    one (a first visit was 52 ms).
+  - Fast flight: chunks made 3,350 -> 141, water stamps 0.62 -> 0.16 ms,
+    worst 154 -> 11 ms, flow 0.20 -> 0.02 ms. CPU 9.6 -> 8.1 ms a frame,
+    worst 326 -> 106 ms (a city's first stamp, a known one-off).
+  - Checked (b121trench): a stamp cutting a trench from a high lake 20 m
+    into dry ground puts water at the far end exactly as the old code
+    did. A lazy chunk whose edits let the world's water in is made on
+    the spot, so it is drawn.
+  - b115's city check now finds 219 water jobs still queued at headless's
+    frame a second, where the old code had 0. The old code emptied the
+    queue in one frame, and that was the hitch. At real frame rate it
+    empties within seconds (fast flight: peak 221, 0 at the end).
+- **Tests.** New: b121ghost, b121crew, b121trench, and `fastfly.js` (see
+  tests/README). Also run: b100, b109, b110, b115 against Build 120
+  side by side (same results, bar timing and the queue above), b118, b120.
+
 ## Build 120 — THE CREW AT HOME (2026-10-13)
 
 My own build, from the crew's "left" line on the roadmap (assign to a

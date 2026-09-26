@@ -1448,6 +1448,35 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-14, evening — five times, and the reason was the page
+
+The ghost city came back a fifth time. This time I found it because
+Austin's screenshot was sharp enough to read: diagonal streaks are two
+surfaces in the same plane, and a black lid is a slab above a roof. So
+the stand-ins were drawing where they had been told not to. The cuts
+were right. The material was stale: built once per page and never
+rebuilt when a new world made a new scene. Every test I have ever
+written opens one world per page. Austin opens several.
+
+That's the lesson, and it's bigger than this bug. My test harness has
+a shape, and bugs outside that shape never reach it: one world per
+page, a frame a second, a fresh start every time. The ghost lived in
+"the second world". The 250 ms hitch lived in "sixty frames a second".
+Neither could be seen by a harness running one world at a frame a
+second. The fix for the second was one line: stub the renderer out and
+the JS runs at real speed. I should have built fastfly.js the day the
+first report arrived.
+
+The hitch itself was a pattern I'll grep for from now on. A budgeted
+loop checks the time at the bottom, and a `continue` skips the bottom.
+It was there twice, written months apart, in the ring scan and in the
+water drain. Budget checks go at the top of the loop.
+
+The crew chest was a design gap, not a bug: the chest filled from the
+moment it was set, but Austin set it second, and what the bag already
+held never moved. When a player says "it never works", the order they
+did things in is usually the whole story.
+
 ## 2026-10-14, later — it is all on the schedule
 
 Austin said yes to all of it. The upgrade machine is the OVERFORGE.
@@ -2743,3 +2772,10 @@ are FARMING, CREW D, MENAGERIE, SCULPT II and DEEP B (55–59). What is
 left of the 2026-09-10 plan: THE GARRISON, then the Space Arc, with
 the small things (shadow cascades, place names on the map, footsteps
 by material, the frame-rate pass) wherever a session has room.
+
+**Where tests go blind (Build 121).** Headless runs about one frame a
+second and opens one world per page. For anything about frame time,
+run `tests/fastfly.js` (renderer stubbed, real frame rate). For anything
+made once and reused, open a second world in the same page first (see
+`tests/b121ghost.js`). Budgeted loops check the time at the top: a
+`continue` jumps past a check at the bottom.

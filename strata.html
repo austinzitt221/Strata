@@ -6867,7 +6867,7 @@ const waterSys = {
   accT: 0, maintT: 0, MAX_ACTIVE: 48, MESH_MS: 3,
   idx(i, j, k){ return (j * 8 + k) * 8 + i; },
   keyOf(gx, gy, gz){ return CK(Math.floor(gx / 8), Math.floor(gy / 8), Math.floor(gz / 8)); },
-  reset(){ this.matQ = []; this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set(); this.lin = new Map(); this.floods = []; this.parkT = 0; this.empty = new Set();
+  reset(){ this.matQ = []; this.lazy = new Set(); this.lazyA = new Map(); this.cells = new Map(); this.dist = new Map(); this.stat = new Map(); this.active = new Set(); this.dirtyMesh = new Set(); this.lin = new Map(); this.floods = []; this.parkT = 0; this.empty = new Set();
     for (const m of this.meshes.values()){ game.scene.remove(m); m.geometry.dispose(); }
     this.meshes = new Map(); },
   // what an untouched cell holds: rock, still water, or air
@@ -6898,6 +6898,25 @@ const waterSys = {
     }
     if (g.floodedAt && g.floodedAt(x, gy, z)) return W_SRC;
     return 0;
+  },
+  // Build 121: a lazy chunk's levels with its edits, read but not made live: the
+  // flow sees the cut, and only water actually arriving makes it cells
+  lazyArr(key){
+    let a = this.lazyA.get(key);
+    if (a) return a;
+    const [cx, cy, cz] = key.split(',').map(Number);
+    const le = nearEdits([cx * 8 - 1, cy * 8 - 1.5, cz * 8 - 1, cx * 8 + 9, cy * 8 + 8.5, cz * 8 + 9]);
+    if (!le.length) return this.statArr(key);
+    const Lg = this.localGen(cx, cz);
+    a = new Uint8Array(512);
+    for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) for (let i = 0; i < 8; i++)
+      a[this.idx(i, j, k)] = this.editedLevel(cx * 8 + i, cy * 8 + j, cz * 8 + k, le, Lg);
+    // the edit let the world's own water into it (a cut below a lake's top): it is
+    // wet after all, so it is made now, as every wet chunk is, and drawn
+    for (let q = 0; q < 512; q++) if ((a[q] >= 1 && a[q] <= 8) || a[q] === W_HELD) return this.materialize(key, true);
+    if (this.lazyA.size > 4000) this.lazyA.clear();
+    this.lazyA.set(key, a);
+    return a;
   },
   statArr(key){
     let a = this.stat.get(key);
@@ -6934,12 +6953,15 @@ const waterSys = {
   // A highway laid across a river used to materialize hundreds of chunks
   // of water in the frame that stamped it: an eleven-second freeze the
   // first time you came near a city.
-  defer: false, matQ: [], MAT_MS: 3,
+  defer: false, matQ: [], lazy: new Set(), lazyA: new Map(), MAT_MS: 3,
   drainMat(ms){
     const t0 = performance.now();
     while (this.matQ.length){
+      // Build 121: first, as in scanCols -- a dry job left by `continue` and never
+      // asked the time, so one frame could drain a hundred of them (a 159 ms frame)
+      if (ms != null && performance.now() - t0 > ms) return;
       const J = this.matQ[0];
-      if (!J.keys){ J.keys = this.editKeys(J.B) || []; if (!J.keys.length){ this.matQ.shift(); continue; } }
+      if (!J.keys){ const k = this.editKeys(J.B, J, ms != null ? t0 + ms : null); if (k === undefined) return; J.keys = k || []; if (!J.keys.length){ this.matQ.shift(); continue; } }
       // is any of it wet? (asked a chunk at a time, inside the budget too)
       J.w = J.w || 0;
       while (J.wet === null){
@@ -6950,7 +6972,14 @@ const waterSys = {
       }
       if (!J.wet){ this.matQ.shift(); continue; }
       while (J.i < J.keys.length){
-        this.materialize(J.keys[J.i++], true);
+        const key = J.keys[J.i++];
+        // Build 121: only the chunks that hold water, now. A highway slab or a city
+        // block whose box touched one river chunk re-made every dry chunk in the box
+        // too (145 a job on average, the "water · stamps" cost in Austin's report).
+        // A dry one goes on the lazy list, and lv() makes it, edits and all, the
+        // first time the flow looks into it -- so a cut that lets water in still does
+        if (this.cells.has(key) || this.hasWater(key)) this.materialize(key, true);
+        else { this.lazy.add(key); this.lazyA.delete(key); }    // made with its edits the moment water arrives
         if (ms != null && performance.now() - t0 > ms) return;
       }
       this.matQ.shift();
@@ -6989,7 +7018,7 @@ const waterSys = {
     const d = new Uint8Array(512);
     for (let q = 0; q < 512; q++) d[q] = a[q] === W_SRC ? (oldD && oldD[q] < 255 ? oldD[q] : 0) : (oldD && this.isW(a[q]) ? oldD[q] : 255);
     this.dist.set(key, d);
-    this.cells.set(key, a);
+    this.cells.set(key, a); this.lazy.delete(key); this.lazyA.delete(key);
     this.active.add(key); this.dirtyMesh.add(key);
     const ch = game.terrain.chunks.get(key);
     if (ch && ch.water){ game.scene.remove(ch.water); ch.water.geometry.dispose(); ch.water = null; }
@@ -7007,7 +7036,7 @@ const waterSys = {
   lv(gx, gy, gz){
     const cx = Math.floor(gx / 8), cy = Math.floor(gy / 8), cz = Math.floor(gz / 8);
     const key = CK(cx, cy, cz);
-    const a = this.cells.get(key) || this.statArr(key);
+    const a = this.cells.get(key) || (this.lazy.has(key) ? this.lazyArr(key) : this.statArr(key));
     return a[this.idx(gx - cx * 8, gy - cy * 8, gz - cz * 8)];
   },
   isW(v){ return v >= 1 && v <= 8; },
@@ -7160,15 +7189,24 @@ const waterSys = {
   },
   // the water chunks an edit's box can change, or null when it cannot be a
   // water event (a city slab; dry land above every water table)
-  editKeys(B){
+  // Build 121: with a deadline and a job (J), the footprint scan is resumable:
+  // undefined means "out of time, ask again next frame" (a 400-column box of
+  // first-time water tables was a 52 ms frame)
+  editKeys(B, J, deadline){
     const g = game.gen;
     const c0x = Math.floor((B[0] - 1) / 8), c1x = Math.floor((B[3] + 1) / 8);
     const c0y = Math.max(CORE.CY_MIN, Math.floor((B[1] - 1.5) / 8)), c1y = Math.min(CORE.CY_MAX - 1, Math.floor((B[4] + 1.5) / 8));
     const c0z = Math.floor((B[2] - 1) / 8), c1z = Math.floor((B[5] + 1) / 8);
     if ((c1x - c0x + 1) * (c1y - c0y + 1) * (c1z - c0z + 1) > 400) return null;   // a city slab: not a water event
     // dry land, above every water table under this footprint (the sea, or a river)
-    let top = g.seaLevel;
-    for (let cz = c0z; cz <= c1z; cz++) for (let cx = c0x; cx <= c1x; cx++){ const W = game.terrain.waterInfo(cx, cz); if (W.maxWy != null && W.maxWy > top) top = W.maxWy; }
+    let top = J && J.top != null ? J.top : g.seaLevel;
+    const n = (c1x - c0x + 1) * (c1z - c0z + 1);
+    // a box that reaches below the sea cannot be ruled out by the tables: skip them
+    for (let c = J && J.col ? J.col : 0; c < n && B[1] > top + 1 && B[1] > -6; c++){
+      const W = game.terrain.waterInfo(c0x + c % (c1x - c0x + 1), c0z + Math.floor(c / (c1x - c0x + 1)));
+      if (W.maxWy != null && W.maxWy > top) top = W.maxWy;
+      if (J && deadline != null && performance.now() > deadline && c + 1 < n){ J.col = c + 1; J.top = top; return undefined; }
+    }
     let anyCells = false;
     for (let cy = c0y; cy <= c1y && !anyCells; cy++) for (let cz = c0z; cz <= c1z && !anyCells; cz++) for (let cx = c0x; cx <= c1x; cx++) if (this.cells.has(CK(cx, cy, cz))){ anyCells = true; break; }
     if (B[1] > top + 1 && B[1] > -6 && !anyCells) return null;   // Build 109: placed water lives above any water table
@@ -16966,7 +17004,7 @@ const crewSys = {
     const M = this.matOf(C), ar = this.armorRed(C);
     const over = Object.keys(C.pack).some(k => C.pack[k] > 0);
     $('tradesub').innerHTML = '<b>' + (MODE[C.mode] || C.mode) + '</b> · hp ' + Math.max(0, Math.round(e.hp)) + (ar ? ' · armor ' + Math.round(ar * 100) + '%' : '') +
-      (this.fed(C) ? ' · fed today' : ' · hungry') + (this.bedOk(C) ? ' · has a bed' : '') + (this.chestOf(C) ? ' · has a chest' : '') +
+      (this.fed(C) ? ' · fed today' : ' · hungry') + (this.bedOk(C) ? ' · has a bed' : '') + (this.chestOf(C) ? ' · has a chest ' + (() => { const K = this.chestOf(C), P = this.postRef(C); return P ? Math.round(Math.hypot(K.x - P.x, K.z - P.z)) + ' m from their ' + C.post.kind : Math.round(Math.hypot(K.x - e.x, K.z - e.z)) + ' m off'; })() : '') +
       ' · in hand: <b>' + this.toolText(C.tool) + '</b> · material: <b>' + this.matText(M) + '</b>' + (over ? ' · overflow: ' + this.packText(C) : '');
     document.querySelectorAll('#trademain .slot, #tradehot .slot, #crewhand .slot, #crewpack .slot').forEach(paintSlot);
     const list = $('tradelist');
@@ -17025,6 +17063,7 @@ const crewSys = {
   // without power, cranked by hand, and farther with it). A bed they sleep in
   // at night and wake mended. A chest their digging goes into. And a meal a
   // day from their pack or chest: fed, they work a fifth faster.
+  MADE: new Set(Object.values(CORE.SMELTS)),                   // what a stove makes
   FOOD: ['burger', 'spaghetti', 'salad', 'bread', 'cookedmeat', 'cookedfish', 'tomato', 'lettuce', 'nightcap'],
   fed(C){ return C.fedDay === (game.day || 0); },
   pace(C){ return this.fed(C) ? 0.8 : 1; },
@@ -17055,6 +17094,9 @@ const crewSys = {
       if (!k){ this.say(e, 'none'); AudioSys.sfx('deny'); return; }
       C.chest = k.id;
     }
+    // Build 121: show which one -- "nearest where you look" can pick a chest you did not mean
+    const mark = what === 'bed' ? C.bed : what === 'chest' ? this.chestOf(C) : this.postRef(C);
+    if (mark){ const q = Array.isArray(mark) ? mark : [mark.x, mark.y, mark.z]; Particles.burst(q[0], q[1] + 1.0, q[2], 0.5, [0xffe07a, 0xc9a0ff], 14, 1.2); }
     this.say(e, what);
     AudioSys.sfx('select');
     this.refresh(); markSave();
@@ -17124,6 +17166,15 @@ const crewSys = {
       let left = K ? this.put(K.inv, o.kind, 0, o.count) : o.count;
       if (left > 0) left = this.put(C.bag, o.kind, 0, left);
       if (left !== o.count){ n++; if (left <= 0){ if (i >= 0) st.gout[i] = null; else st.out = null; } else o.count = left; }
+    }
+    // Build 121: and what they made before they had a chest (or while it was
+    // full) comes out of their bag into it too (Playtest: the chest was set
+    // after the stove, and the ingots already in the bag never moved)
+    if (K) for (let i = 0; i < C.bag.length; i++){
+      const it = C.bag[i];
+      if (!it || !(it.count > 0) || !this.MADE.has(it.kind)) continue;
+      const left = this.put(K.inv, it.kind, 0, it.count);
+      if (left !== it.count){ n++; if (left <= 0) C.bag[i] = null; else it.count = left; }
     }
     if (n){ markSave(); if (game.ui === 'stove') refreshStoveUI(true); }
   },
@@ -35598,7 +35649,7 @@ function startWorldData(id, data){
   if (!game.expedition && game.planet === 'earth') expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
   else if (game.expedition && !game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
   if (game.expedition && game.expedition.hall && !game.expedition.hall2) deepSys.lay2(game.expedition, CORE.mulberry32((game.seed ^ 0xbeef) >>> 0));   // a world from before the second
-  farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
+  farShapeSys._pieces = null; farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
     game.pos.y += 0.5;
@@ -37845,7 +37896,14 @@ const farShapeSys = {
   },
   // ---- one mesh of boxes with the terrain's own attributes ----
   ensureMat(){
-    if (this.mat) return;
+    // Build 121: every world load builds a new scene -- a new terrain material and
+    // a new coverage mask. The stand-ins' material was made once per page, so
+    // from the second world on it read the last world's frozen mask and a stale
+    // player position, and its cuts cut nothing: the ghost city, in some worlds
+    // and never in a test (which opens one world per page). Rebuilt with the scene.
+    if (this.mat && this.matFor === game.terrainMat && this.maskFor === farTerrain.maskTex) return;
+    if (this.mat) this.mat.dispose();
+    this.matFor = game.terrainMat; this.maskFor = farTerrain.maskTex;
     const tu = game.terrainMat.uniforms;
     const u = Object.assign({}, tu, { uMask: { value: farTerrain.maskTex }, uMaskOrigin: farTerrain.uMaskOrigin, uMaskSpan: { value: farTerrain.maskN * CORE.CHUNK_M } });
     const frag = TERRAIN_FRAG
@@ -37860,6 +37918,7 @@ const farShapeSys = {
         '  if (distance(vPos, uPlayerPos) < 24.0) discard;\n' +
         '    if (mi.x > 0.0 && mi.x < 1.0 && mi.y > 0.0 && mi.y < 1.0){ float r = texture2D(uMask, mi).r; if ((r > 0.47 && r < 0.75) || r > 0.76) discard; } }\n');
     this.mat = new THREE.ShaderMaterial({ uniforms: u, vertexShader: TERRAIN_VERT, fragmentShader: frag });
+    if (this.mesh) this.mesh.material = this.mat;
   },
   build(){
     this.ensureMat();
@@ -37911,6 +37970,7 @@ const farShapeSys = {
   update(){
     if (!game.running || !game.gen || !game.gen.cityAt || !game.terrainMat || game.opts.safe) return;
     if (this.mesh && this.mesh.parent !== game.scene){ game.scene.add(this.mesh); }
+    this.ensureMat();
     if (this.dirty || Math.hypot(game.pos.x - this.cx, game.pos.z - this.cz) > 400) this.build();
   },
 };
@@ -38675,18 +38735,16 @@ const lodTerrain = {
       const cyLo = Math.floor(CORE.CY_MIN * CORE.CHUNK_M / m);
       const cyHi = Math.floor((CORE.CY_MAX * CORE.CHUNK_M + CORE.CHUNK_M - 1) / m);
       while (q.length){
+        // Build 121: the budget is checked first. At the bottom, every column the
+        // feature ring drops (plain ground, no island: nearly all of them) went
+        // round by `continue` without it -- thousands in one frame, the 250 ms
+        // "horizon rings" hitch in both of Austin's reports
+        if (performance.now() - t0 > budgetMs) return;
         const [cx, cz] = q.pop();
         const ck = cx + ',' + cz;
         const pend = ring.cols.get(ck);
         if (!pend) continue;                       // dropped while queued
         const wx0 = cx * m, wz0 = cz * m;
-        const hr = gen.heightRange(wx0, wz0, wx0 + m, wz0 + m);
-        let lo = hr[0] - 12, hi = hr[1] + 6;
-        if (ring.feat && gen.skyNear){
-          // the island's span only, never the ground below it
-          const S = gen.skyNear(wx0 + m / 2, wz0 + m / 2) || gen.skyNear(wx0, wz0) || gen.skyNear(wx0 + m, wz0 + m) || gen.skyNear(wx0 + m, wz0) || gen.skyNear(wx0, wz0 + m);
-          if (S) lo = S.bottom - 6;
-        }
         if (ring.feat){
           // only columns where something rises over (or dives under) the
           // heightfield: a sky island, a landmark spire, a ruin. Plain
@@ -38708,6 +38766,14 @@ const lodTerrain = {
           }
           if (!isF){ ring.cols.delete(ck); continue; }
         }
+        // (the heights only for a column that is kept)
+        const hr = gen.heightRange(wx0, wz0, wx0 + m, wz0 + m);
+        let lo = hr[0] - 12, hi = hr[1] + 6;
+        if (ring.feat && gen.skyNear){
+          // the island's span only, never the ground below it
+          const S = gen.skyNear(wx0 + m / 2, wz0 + m / 2) || gen.skyNear(wx0, wz0) || gen.skyNear(wx0 + m, wz0 + m) || gen.skyNear(wx0 + m, wz0) || gen.skyNear(wx0, wz0 + m);
+          if (S) lo = S.bottom - 6;
+        }
         // distant builds and stamped cities stretch the band
         if (!ring.feat)
         for (let ez = Math.floor((wz0 - 4) / 32); ez <= Math.floor((wz0 + m + 4) / 32); ez++)
@@ -38726,7 +38792,6 @@ const lodTerrain = {
           } else if (ring.dirty.has(kk)) pend.add(kk);
         }
         pend.delete('*');
-        if (performance.now() - t0 > budgetMs) return;
       }
     }
   },

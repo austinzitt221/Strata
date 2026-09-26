@@ -38,3 +38,12 @@ run the same scenario on two builds and print SAME when the water comes out
 identical cell for cell (`abwater`), or when the streaming disc marks the
 same chunks empty, banded and queued on Earth, Strata and the Moon
 (`abstream`). Use them for any change that should be faster, not different.
+
+    NODE_PATH=$(npm root -g) node fastfly.js [seed] [seconds] [lake]
+
+runs the real frame loop at full speed with the renderer stubbed out, so
+headless plays through thousands of frames as a real machine would instead
+of one a second, flying to the nearest city and round its blocks (or to the
+nearest lake), and prints the game's own Shift+F3 report plus each horizon
+ring step and the water queue. Build 121 found the 250 ms ring hitch and the
+159 ms water drain this way; neither shows at headless's usual frame rate.

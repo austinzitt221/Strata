@@ -5,6 +5,19 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 121 — the ghost city, the crew's chest, the 250 ms frame
+- [ ] Open one world, save and quit, open another and fly to a city
+      (this was the ghost's recipe). Any black streaks on the walls,
+      black roofs, or flat boxes anywhere in a city you are inside?
+- [ ] A crew member already keeping a stove, with ingots in their bag:
+      give them a chest. Do the ingots move into it within a few
+      seconds? Do you see the sparks on the chest they picked?
+- [ ] The same perf run again (F3, fly to the nearest city and round
+      every building, Shift+F3). I expect no 'horizon rings' line over
+      about 30 ms, and a lot less 'water · stamps'.
+- [ ] Cut a trench from a lake or river into dry ground, near a city
+      or a highway if you can. Does the water still run in?
+
 ## Build 120 — THE CREW AT HOME
 - [ ] Give a crew member ore and coal, set them on a stove and give them
       a chest. Come back later: ingots in the chest?
