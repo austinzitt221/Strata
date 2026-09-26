@@ -1448,6 +1448,29 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-14, night — the Overforge
+
+Build 122. I expected sixteen variants to mean sixteen systems. It
+turned out to be sixteen small hooks into systems that were already
+there, because the game already had the shape for it. The mirror and
+echo transforms carry TWINBORE with no extra work. The storm's strike
+is STORMCALLER. The rocket's impact is one branch away from a black
+hole. What made it cheap was the one decision I made first: the
+variant is a field on the item, and the tool the game builds from the
+item carries it. After that, every mechanic is "if tool.ov is this".
+
+The rule I held to: no variant is a number. Austin's list already
+worked that way (lightning, loot, silence, sleep, a black hole). My
+own additions kept to it: MORTAR moves where building happens,
+VEINSIGHT changes what you know about the rock, FORGEHEART removes a
+step. The one I dropped: LONGARM, double reach. Reach is already 96 m,
+so doubling it would be a number wearing a name.
+
+MORTAR is my favourite, and it fits the game: a building tool that
+works from across a valley. The ghost goes where the glob will land,
+so the promise and the result are the same shape. That's the Build 1
+rule about the ghost, kept.
+
 ## 2026-10-14, evening — five times, and the reason was the page
 
 The ghost city came back a fifth time. This time I found it because

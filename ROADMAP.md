@@ -567,7 +567,27 @@ Austin's four, with my additions in the journal entry of the same day:
      variant out, re-roll for another; drills, dispensers, guns, swords,
      grapple, rod, armor, ammo, drones, wings, jetpack, vehicles. Each
      variant a new mechanic, with its own name and a shimmering skin.
-     Austin's list and mine in the journal.
+     - **Slice 1 DONE (Build 122):** the machine (a craftable station;
+       full price the first time, half to re-roll, never the same variant
+       twice running) and sixteen variants:
+       - drills: TWINBORE, FORGEHEART, VEINSIGHT;
+       - dispensers: TWINSPOUT, THRIFT, MORTAR;
+       - swords: STORMCALLER, REAVER, MIDAS, BLOODTHIRST;
+       - guns: MUSTANG (pistols), WHISPER and DREAMER (the two rifles),
+         SINGULARITY (the Boomtube), KINDLE and ARCWIRE on every gun.
+       Austin's ammo idea (the Black Ops 3 style rounds) became KINDLE
+       and ARCWIRE, variants of the gun itself, so a stack of rounds never
+       splits into kinds.
+     - **Slice 2 (next):** the rest of Austin's list:
+       - grapple that pulls creatures to you (Scorpion);
+       - rod that can pull up anything in the game, the rarer the less often;
+       - wings that flap you upward, and wings that glide far and fast;
+       - jetpack that boosts forward;
+       - sports car with a turret; jet that drops bombs;
+       - boots that walk on any liquid;
+       - the two drones.
+       Plus mine: armor that turns a hit into a shove, and a drill that
+       follows a vein by itself.
  35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
      Any item in, name the item and the amount, odds from rarity and
      count, shown before you pull; a loss deletes the stake.

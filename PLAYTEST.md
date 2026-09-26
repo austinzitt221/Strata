@@ -5,6 +5,21 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 122 — THE OVERFORGE
+- [ ] Craft the Overforge (12 iron ingots, 6 ruby ingots, 2 diamonds,
+      40 obsidian) and forge a few things. Are the prices right for
+      where you are in the game? Too cheap, too dear?
+- [ ] Does the moment feel good: the names turning over, the landing,
+      the shimmer on the slot and the glow in your hand? Want more
+      ceremony (a sound, a light, a wait)?
+- [ ] Try every variant you land. I most want to hear about MORTAR
+      (building on a far hill), STORMCALLER, SINGULARITY into a pack,
+      and WHISPER on a garrison.
+- [ ] Any variant that feels like a number instead of a new way to
+      play? Any that is too strong?
+- [ ] For slice 2 (grapple, rod, wings, jetpack, boots, vehicles,
+      drones): any you want first?
+
 ## Build 121 — the ghost city, the crew's chest, the 250 ms frame
 - [ ] Open one world, save and quit, open another and fly to a city
       (this was the ghost's recipe). Any black streaks on the walls,

@@ -2,6 +2,75 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 122 — THE OVERFORGE (2026-10-14)
+
+The first build from the brainstorm list: roadmap item 34, slice 1.
+Austin's Pack-a-Punch idea, his name for it.
+- **The machine.** A station you craft:
+  - Recipe: 12 iron ingots, 6 ruby ingots, 2 diamonds, 40 obsidian. It
+    is in the creative catalog too.
+  - Right click it and put in a drill, a dispenser, a sword or a gun.
+    The screen lists every variant that item could become.
+  - OVERFORGE costs 250 coins + 120 a tier (a gun: its shop price, at
+    least 300). Re-forging costs half. A re-forge never lands on the
+    variant you already have.
+  - The names turn over and slow down before they land. The item is
+    already changed when you pay, so closing the screen early loses
+    nothing.
+- **The look.**
+  - A variant's slot has a violet edge and a sheen crossing it.
+  - Its name leads the label ("Stormcaller (obsidian sword)"), the
+    tooltip and the HUD.
+  - In your hand, the tool glows through slowly shifting violets.
+- **Sixteen variants.** Each one changes how the thing works, not a
+  number:
+  - **TWINBORE / TWINSPOUT** (Austin's): the drill cuts, or the dispenser
+    lays, a second copy one shape over to your right, grid-aligned when
+    snap is on. It is one more copy in the mirror/echo system, so it
+    previews, undoes as one action, and combines with mirror and echo.
+  - **FORGEHEART:** ore leaves the rock as ingots (iron, ruby, aether).
+    Undo takes the ingots back.
+  - **VEINSIGHT:** every cut sends a pulse outward. Ore within 14 m
+    lights up through the walls, ring by ring, for about nine seconds.
+    The scan runs 1.5 ms a frame.
+  - **THRIFT:** every shape costs half the material.
+  - **MORTAR:** the dispenser lobs a glob of the material in an arc to
+    whatever surface you aim at, up to 400 m. The shape builds where it
+    lands. The ghost sits at the landing spot, so the preview is honest.
+  - **STORMCALLER** (Austin's): each swing calls a bolt down where you
+    look, up to 40 m (once every 0.9 s): a jagged strike, a flash,
+    thunder, damage in 3.5 m.
+  - **REAVER** (Austin's): what it kills drops twice the loot.
+  - **MIDAS** (Austin's): kills pay coin, more the fiercer the creature,
+    five times for a boss.
+  - **BLOODTHIRST:** each hit heals you a third of what it dealt.
+  - **MUSTANG** (Austin's, the sidearm and the Magnus): the rounds burst
+    where they land.
+  - **WHISPER** (Austin's, the two rifles): silent. No gunshot, nothing
+    the deep can hear. A garrison soldier it kills raises no siren; one
+    it only wounds notices, alone.
+  - **DREAMER** (Austin's, the two rifles): tranquilliser darts. No
+    damage; anything short of a boss lies down asleep for two minutes,
+    or until it is hurt.
+  - **SINGULARITY** (Austin's, the Boomtube): the rocket opens a small
+    black hole instead of a crater. For four seconds it drags everything
+    alive within 11 m to its centre and crushes it. Bosses are not
+    pulled, but they take the damage.
+  - **KINDLE** and **ARCWIRE** (every gun): Austin's Black Ops 3 ammo
+    idea, as variants of the gun, so rounds stay one stack. Kindle sets
+    a target burning. Arcwire throws lightning from the target to up to
+    three more within 7 m and stuns all of them (on automatic guns,
+    about one hit in five).
+- **Where it lives in the code.** One table (`OV`) and one system
+  (`ovSys`). Every tool the game builds carries the item's `ov`
+  (`activeTool` and `activeToolOf` stamp it), and each system asks
+  `tool.ov`. Items save as they are, so a variant saves with nothing
+  new in the format.
+- **Next (slice 2):** the grapple, rod, wings, jetpack, boots, the car
+  and jet, and the drones (Austin's list), then the gambling machine.
+- Test: b122test (the machine and every variant, through the real
+  tool paths).
+
 ## Build 121 — the ghost city, for good; the crew's chest; the 250 ms frame (2026-10-14)
 
 Playtest of 118-120 (2026-10-14). The water's face: no notes, Austin

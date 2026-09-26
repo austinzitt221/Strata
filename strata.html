@@ -103,6 +103,11 @@ body.pad{cursor:none;}
 .slot .bar{position:absolute; left:5px; right:5px; bottom:4px; height:5px; background:#15131c; border:1px solid #000; pointer-events:none;}
 .slot .bar i{display:block; height:100%; background:#4fe07a;}
 .slot.sel{border-color:#fff; box-shadow:0 0 0 2px var(--accent);}
+/* THE OVERFORGE (Build 122): a variant shimmers, a sheen crossing it and its edge turning through violet */
+.slot.ov{border-color:#c070ff; animation:ovedge 3s linear infinite;}
+.slot.ov::after{content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(115deg, transparent 30%, rgba(228,184,255,.55) 45%, rgba(159,216,255,.35) 52%, transparent 66%); background-size:300% 100%; animation:ovsheen 2.4s linear infinite; mix-blend-mode:screen;}
+@keyframes ovsheen{from{background-position:120% 0;} to{background-position:-120% 0;}}
+@keyframes ovedge{0%{box-shadow:0 0 6px 1px #c070ff;} 50%{box-shadow:0 0 8px 2px #9fd8ff;} 100%{box-shadow:0 0 6px 1px #c070ff;}}
 
 /* ---------- inventory ---------- */
 #invscreen .panel{min-width:unset;}
@@ -591,6 +596,25 @@ body.pad{cursor:none;}
       <div class="invlabel">HOTBAR</div>
       <div class="invgrid" id="stovehot"></div>
       <div class="sub" style="margin-top:8px;">drag or shift-click to move &nbsp;·&nbsp; E to close</div>
+    </div>
+  </div>
+</div>
+
+<div id="oforgescreen" class="screen hidden dim">
+  <div class="mstack">
+    <div class="panel" style="min-width:560px;">
+      <h2 id="oftitle">THE OVERFORGE</h2>
+      <div class="invgrid" style="grid-template-columns:52px 1fr; align-items:center; gap:12px;" id="ofrow"></div>
+      <div class="sub" id="ofstatus" style="margin:6px 0 8px;">put in a drill, a dispenser, a sword or a gun</div>
+      <div id="ofpool" style="font-size:12px; line-height:1.55; margin-bottom:8px;"></div>
+      <div><button class="btn" id="btnOforge">OVERFORGE</button></div>
+    </div>
+    <div class="panel" style="min-width:560px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="ofmain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="ofhot"></div>
+      <div class="sub" style="margin-top:8px;">click to pick up · click to put down · shift-click moves &nbsp;·&nbsp; E to close</div>
     </div>
   </div>
 </div>
@@ -4326,7 +4350,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'megatorch', 'greatstove', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'ichorworm', 'veillamp', 'ichorcrown', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
@@ -4565,6 +4589,8 @@ const RECIPES = [];
   RECIPES.push({ kind: 'crafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { mat: MAT.PLANKS, n: 8 }, { item: 'rubyingot', n: 2 }] });
   // the de-crafter: no power, runs every recipe backwards
   RECIPES.push({ kind: 'decrafter', yields: 1, station: true, costs: [{ item: 'ironingot', n: 6 }, { mat: MAT.PLANKS, n: 8 }] });
+  // THE OVERFORGE (Build 122): put a tool in, pay coin, get a variant out
+  RECIPES.push({ kind: 'oforge', yields: 1, station: true, costs: [{ item: 'ironingot', n: 12 }, { item: 'rubyingot', n: 6 }, { item: 'diamond', n: 2 }, { mat: MAT.OBSIDIAN, n: 40 }] });
   // stored power: three cells, escalating cost, and the bench that fills them
   RECIPES.push({ kind: 'battery', tier: 0, station: true, costs: [{ item: 'ironingot', n: 4 }, { item: 'coal', n: 2 }] });
   RECIPES.push({ kind: 'battery', tier: 1, station: true, costs: [{ item: 'ironingot', n: 8 }, { item: 'rubyingot', n: 2 }, { item: 'coal', n: 4 }] });
@@ -8954,6 +8980,7 @@ function updateViewmodel(dt){
   const it = selectedItem();
   const tool = activeTool();
   const kind = tool ? tool.kind : (it ? it.kind : null);
+  ovSys.vmTick(v, tool, dt);                                                     // Build 122: a variant shimmers in the hand
   v.drill.visible = kind === 'drill';
   v.disp.visible = kind === 'disp';
   v.gun.visible = kind === 'gun';
@@ -11229,6 +11256,21 @@ const pnodeSys = {
       face.position.set(0, 0.55, -0.54);
       g.add(body, top, gear, face);
       g.userData.orb = gear;
+    } else if (t === 'oforge'){
+      // THE OVERFORGE (Build 122): a black anvil-block, a violet fire in its
+      // throat, four prongs and a crystal turning over them
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 1.1), M.dark); base.position.y = 0.25;
+      const waist = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.45, 0.7), M.steel); waist.position.y = 0.72;
+      const anvil = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.28, 0.9), M.dark); anvil.position.y = 1.08;
+      const glowM = new THREE.MeshBasicMaterial({ color: 0xc070ff });
+      const throat = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.26, 0.06), glowM); throat.position.set(0, 0.3, -0.56);
+      g.add(base, waist, anvil, throat);
+      for (const [px, pz] of [[-0.6, -0.34], [0.6, -0.34], [-0.6, 0.34], [0.6, 0.34]]){
+        const pr = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), M.steel); pr.position.set(px, 1.46, pz); pr.rotation.z = px < 0 ? 0.25 : -0.25; g.add(pr);
+      }
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.2), glowM); gem.position.y = 1.72;
+      g.add(gem);
+      g.userData.orb = gem;
     } else if (t === 'station'){
       // a ticket kiosk: a booth under a little roof, the city's name on the board
       const booth = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.2), M.wood); booth.position.y = 0.65;
@@ -13411,7 +13453,7 @@ function itemModel(it){
   else if (K === 'rope') g.add(ropeSys.model(0.8));
   else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
   else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
-            'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable', 'cannon', 'windsock'].includes(K)){
+            'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable', 'cannon', 'windsock'].includes(K)){
     g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
   } else if (K === 'helm'){
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
@@ -13796,6 +13838,7 @@ function rebuildSolidProps(){
 }
 
 function addStackItem(kind, n){
+  if (ovSys.lootMul > 1) n *= ovSys.lootMul;                                    // Build 122: REAVER
   for (const s of game.slots) if (s && s.kind === kind){ s.count += n; return true; }
   for (let i = 0; i < 40; i++) if (!game.slots[i]){ game.slots[i] = { kind, count: n }; return true; }
   return false;
@@ -15068,7 +15111,19 @@ function spawnEntity(type, x, y, z){
   if (netSys.guest){ e.tmp = netSys.tmpSeq++; e.local = true; netSys.spawnLater(e); }
   return e;
 }
+// Build 122: REAVER doubles what a kill pays; MIDAS pays coin on top
 function killEntity(e, byPlayer){
+  const ov = byPlayer ? ovSys.killer : null;
+  if (ov === 'reaver') ovSys.lootMul = 2;
+  try { killEntity0(e, byPlayer); } finally { ovSys.lootMul = 1; }
+  if (ov === 'midas' && !VEH[e.type] && e.type !== 'villager' && e.type !== 'drop'){
+    const def = ENT_DEF[e.type] || {}, hp = (def.hp || 20) * (e.bossType ? 5 : 1);
+    const n = Math.max(3, Math.round(4 + hp / 4) * (crewSys.hostile(e) ? 1 : 0.5) | 0);
+    addStackItem('coin', n); toast('MIDAS · +' + n + ' coins');
+    Particles.burst(e.x, e.y + 0.8, e.z, 0.5, [0xffd76a, 0xfff0a0], 14, 2);
+  }
+}
+function killEntity0(e, byPlayer){
   if (e.pet){ toast(e.pet.name + ' is dead.'); }                                          // PETS (Build 103)
   if (e.type === 'soldier') baseSys.onDeath(e, byPlayer);
   if (e.bossType && byPlayer && ENT_DEF[e.bossType]){ econSys.note(ENT_DEF[e.bossType].boss + ' IS SLAIN', ['deed', 'boss'], null, true); econSys.move('arms', 0.03); }
@@ -15312,6 +15367,7 @@ function hurtEntity(e, dmg, kx, kz, quiet){
   e.hp -= dmg;
   e.flash = 0.15;
   e.fleeT = 6;
+  if (e.ovSleep > 0 && dmg > 0){ e.ovSleep = 0; if (e.mesh) e.mesh.rotation.z = 0; }   // Build 122: a DREAMER's sleeper wakes when hurt
   if (e.type === 'soldier' || (VEH[e.type] && e.crewed)) baseSys.onHit(e);
   e.vx += kx; e.vz += kz; e.vy = Math.max(e.vy, 2.5);
   AudioSys.sfx('hit');
@@ -19603,7 +19659,7 @@ const mirrorSys = {
   // the same way.
   xforms(){
     const base = toolCan('mirror') ? this.mirrorXforms() : [];
-    return this.echoXforms(base);
+    return ovSys.twinXforms(this.echoXforms(base));        // Build 122: TWINBORE / TWINSPOUT
   },
   // ECHO (Build 113): the shape again, n times along the way you look, with a gap; every mirror copy echoes too
   echoDir(){
@@ -21357,6 +21413,7 @@ const baseSys = {
   onHit(e){
     const rec = game.bases && game.bases[e.bkey];
     if (!rec || rec.taken || e.friendly) return;
+    if (ovSys.quiet){ if (e.hp > 0) e.alert = true; return; }                  // Build 122: WHISPER -- the one it hit knows, nobody else
     e.alert = true;
     this.raise(rec, e.type === 'tank' ? 'a tank was hit' : e.type === 'heli' ? 'the gunship was hit' : 'a soldier was hit');
   },
@@ -21614,7 +21671,7 @@ const baseSys = {
     if (!rec) return;
     if (e.commander){ rec.commanderDead = true; }
     else if (!e.friendly) rec.men = Math.max(0, (rec.men == null ? this.ROSTER : rec.men) - 1);
-    if (!e.friendly && !rec.taken && rec.alarm <= 0) this.raise(rec, 'shots in the yard');
+    if (!e.friendly && !rec.taken && rec.alarm <= 0 && !ovSys.quiet) this.raise(rec, 'shots in the yard');
     markSave();
   },
   take(rec){
@@ -25692,6 +25749,8 @@ function updateEntities(dt, now){
       if (e.burnT > 0.4){ e.burnT = 0; e.hp -= 5; e.flash = 0.1; }
       if (e.hp <= 0){ killEntity(e, false); continue; }
     }
+    // THE OVERFORGE (Build 122): stunned, asleep, or in a black hole's grip
+    if ((e.ovStun > 0 || e.ovSleep > 0 || e.ovPull) && ovSys.hold(e, dt)){ e.flash = Math.max(0, (e.flash || 0) - dt); continue; }
     // steering
     e.tt -= dt; e.flash = Math.max(0, e.flash - dt); e.fleeT = Math.max(0, e.fleeT - dt); e.atkT = Math.max(0, e.atkT - dt);
     let sx = 0, sz = 0, sp = def.speed, petSt = null;
@@ -26116,8 +26175,13 @@ function fireHitscan(G){
   game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + (G.kick || 0.01));
   const hx = o.x + dir.x * bestT, hy = o.y + dir.y * bestT, hz = o.z + dir.z * bestT;
   if (G.laser) beamFX.add(o.x + dir.x * 0.8, o.y + dir.y * 0.8 - 0.15, o.z + dir.z * 0.8, hx, hy, hz, 0x7fe7ff);
-  if (best){
-    hurtEntity(best, G.dmg, (best.x - game.pos.x) * 0.6, (best.z - game.pos.z) * 0.6);
+  const ov = ovSys.cur && ovSys.cur.ov;
+  ovSys.onShot(G, best, hx, hy, hz, !best && bestT < R - 0.5);                  // Build 122: the gun variants
+  if (best && ov === 'dreamer'){
+    ovSys.sleep(best);                                                          // a dart: no harm done
+  } else if (best){
+    ovSys.quiet = ov === 'whisper';
+    try { hurtEntity(best, G.dmg, (best.x - game.pos.x) * 0.6, (best.z - game.pos.z) * 0.6); } finally { ovSys.quiet = false; }
     Particles.burst(best.x, best.y + 0.6, best.z, 0.3, [0xff5544], 8, 2);
   } else if (treeSys.visible && treeSys.visible.size && (() => { const mk = treeSys.onRay(bestT); return mk && treeSys.isMaw(mk) ? (treeSys.hitMaw(mk, G.dmg), true) : false; })()){
     // a maw shot (Build 86)
@@ -26275,7 +26339,10 @@ function updateProjectiles(dt){
     }
     Particles.burst(p.x, p.y, p.z, 0.06, [0xffdd66], 1, 0.3);   // exhaust
     if (done || p.t <= 0){
+      if (p.ov === 'sing'){ ovSys.vortex(p.x, p.y, p.z); ps.splice(i, 1); continue; }   // Build 122: SINGULARITY
       explode(p.x, p.y, p.z, p.r, p.dmg);
+      if (p.ov === 'kindle') for (const en of game.entities) if (Math.hypot(en.x - p.x, en.y - p.y, en.z - p.z) < p.r + 1.5) ovSys.ignite(en, 5);
+      if (p.ov === 'arc'){ let src = null, bd = p.r + 2; for (const en of game.entities){ const d = Math.hypot(en.x - p.x, en.y - p.y, en.z - p.z); if (d < bd && ovSys.canHold(en)){ bd = d; src = en; } } if (src) ovSys.arc(src, p.dmg * 0.4); }
       if (p.lava){
         // the payload settles into the blast cup as a real molten pool
         applyEdit(CORE.makeEdit(1, 0, +p.x.toFixed(1), +(p.y - 1.0).toFixed(1), +p.z.toFixed(1), 2.1, CORE.MAT.LAVA, 0));
@@ -27192,6 +27259,7 @@ function bindInput(){
         }
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'decrafter'){ openDecrafter(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'oforge'){ ovSys.open(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'chest' && pn.locked && pn.lockKind === 'tkey'){
           if (CORE.countItem(game.slots, 'tkey') >= 1){
@@ -28843,7 +28911,402 @@ function selectedItem(){ return game.slots[game.hotSel] || null; }
 // What the player is wielding right now. Holding a material stack while a
 // dispenser sits in the dispenser slot auto-equips that dispenser loaded
 // with the held material.
+// ---------- THE OVERFORGE (Build 122) ----------
+// Put a drill, a dispenser, a sword or a gun in, pay coin, and it comes out
+// a variant: a new name, a shimmer, and a new way of working. Which one is
+// random; pay half again to try for another. A variant is one field on the
+// item (it.ov) and every system asks the held tool for it (tool.ov).
+const OV = {
+  // drills
+  twin:    { name: 'TWINBORE',    fam: 'drill', desc: 'cuts the shape twice, side by side' },
+  forge:   { name: 'FORGEHEART',  fam: 'drill', desc: 'ore comes out smelted: iron, ruby and aether leave the rock as ingots' },
+  dowse:   { name: 'VEINSIGHT',   fam: 'drill', desc: 'every cut sends a pulse through the rock: ore within 14 m glows through the walls' },
+  // dispensers
+  twinD:   { name: 'TWINSPOUT',   fam: 'disp',  desc: 'lays the shape twice, side by side' },
+  thrift:  { name: 'THRIFT',      fam: 'disp',  desc: 'every shape costs half the material' },
+  mortar:  { name: 'MORTAR',      fam: 'disp',  desc: 'lobs the material: the shape builds where it lands, on anything you can see' },
+  // swords
+  storm:   { name: 'STORMCALLER', fam: 'sword', desc: 'a swing calls lightning down where you look, up to 40 m off' },
+  reaver:  { name: 'REAVER',      fam: 'sword', desc: 'what it kills drops twice the loot' },
+  midas:   { name: 'MIDAS',       fam: 'sword', desc: 'what it kills pays in coin, the fiercer the more' },
+  blood:   { name: 'BLOODTHIRST', fam: 'sword', desc: 'every hit heals you a third of what it deals' },
+  // guns
+  mustang: { name: 'MUSTANG',     fam: 'fw', guns: ['sidearm', 'magnus'], desc: 'the rounds burst where they land' },
+  whisper: { name: 'WHISPER',     fam: 'fw', guns: ['marksman', 'longeye'], desc: 'silent: nothing hears it, and a garrison never hears the shot that drops one of its own' },
+  dreamer: { name: 'DREAMER',     fam: 'fw', guns: ['marksman', 'longeye'], desc: 'tranquilliser rounds: no harm done, and anything short of a boss sleeps for two minutes' },
+  sing:    { name: 'SINGULARITY', fam: 'fw', guns: ['boomtube'], desc: 'fires a small black hole: for four seconds it drags in everything alive and crushes it (bosses hold their ground)' },
+  kindle:  { name: 'KINDLE',      fam: 'fw', desc: 'what it hits catches fire' },
+  arc:     { name: 'ARCWIRE',     fam: 'fw', desc: 'a hit throws lightning to up to three more nearby and stuns them all' },
+};
+const ovSys = {
+  killer: null, lootMul: 1, quiet: false, cur: null, landing: false,
+  can(it){ return !!it && (it.kind === 'drill' || it.kind === 'disp' || it.kind === 'sword' || it.kind === 'fw'); },
+  pool(it){
+    if (!this.can(it)) return [];
+    const gid = it.kind === 'fw' ? (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).id : null;
+    return Object.keys(OV).filter(k => OV[k].fam === it.kind && (!OV[k].guns || OV[k].guns.includes(gid)));
+  },
+  // the first forge at full price, every roll after at half (a nod to the machine this is a nod to)
+  cost(it){
+    const base = it.kind === 'fw' ? Math.max(300, (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).price) : 250 + (it.tier | 0) * 120;
+    return it.ov ? Math.round(base / 2) : base;
+  },
+  name(it){ return it && it.ov && OV[it.ov] ? OV[it.ov].name : null; },
+  // the tool-shaped view of an item carries its variant (a dispenser loaded
+  // by holding a material is the one in the dispenser slot)
+  stamp(t, it){
+    const src = t.kind === 'disp' && it && it.kind === 'mat' ? game.dispSlot : it;
+    if (src && src.ov && OV[src.ov]) t.ov = src.ov; else delete t.ov;
+  },
+  held(){ const t = activeTool(); return t && t.ov || null; },
+  // ---- the machine ----
+  open(pn){
+    game.activeOforge = pn;
+    if (!pn.inv) pn.inv = [null];
+    game.ui = 'oforge';
+    const row = $('ofrow'), main = $('ofmain'), hot = $('ofhot');
+    row.innerHTML = ''; main.innerHTML = ''; hot.innerHTML = '';
+    row.appendChild(slotEl('ofin'));
+    const nm = document.createElement('div'); nm.id = 'ofname'; nm.style.cssText = 'font-size:18px; letter-spacing:2px; color:#e4b8ff;'; row.appendChild(nm);
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    $('btnOforge').onclick = () => this.roll();
+    this.refresh();
+    show('oforgescreen'); document.exitPointerLock();
+  },
+  refresh(){
+    const pn = game.activeOforge;
+    if (!pn || game.ui !== 'oforge') return;
+    document.querySelectorAll('#oforgescreen .slot').forEach(paintSlot);
+    const it = pn.inv[0], btn = $('btnOforge'), nm = $('ofname'), pool = $('ofpool');
+    if (this.spinT > 0) return;                      // the names are still turning over
+    if (!it){
+      $('ofstatus').textContent = 'put in a drill, a dispenser, a sword or a gun';
+      nm.textContent = ''; pool.innerHTML = ''; btn.textContent = 'OVERFORGE'; btn.disabled = true;
+      return;
+    }
+    const P = this.pool(it), c = this.cost(it), have = CORE.countItem(game.slots, 'coin');
+    nm.textContent = it.ov ? OV[it.ov].name : itemLabel(it);
+    $('ofstatus').textContent = it.ov ? OV[it.ov].desc : 'what it might become:';
+    pool.innerHTML = P.map(k => '<div style="color:' + (k === it.ov ? '#e4b8ff' : '#9a98a8') + ';">' + (k === it.ov ? '◆ ' : '◇ ') + '<b>' + OV[k].name + '</b> — ' + OV[k].desc + '</div>').join('');
+    btn.textContent = (it.ov ? 'RE-FORGE' : 'OVERFORGE') + ' · ' + c + ' coins' + (have < c ? ' (you have ' + have + ')' : '');
+    btn.disabled = !P.length || (have < c && game.mode !== 'creative');
+  },
+  roll(){
+    const pn = game.activeOforge, it = pn && pn.inv[0];
+    if (!it || this.spinT > 0) return;
+    const P = this.pool(it);
+    if (!P.length){ toast('nothing to forge it into'); return; }
+    const c = this.cost(it);
+    if (game.mode !== 'creative'){
+      if (CORE.countItem(game.slots, 'coin') < c){ toast('the Overforge wants ' + c + ' coins'); AudioSys.sfx('deny'); return; }
+      CORE.consumeItem(game.slots, 'coin', c);
+    }
+    // never the same one twice running, when there is a choice
+    const choice = P.length > 1 ? P.filter(k => k !== it.ov) : P;
+    it.ov = choice[(Math.random() * choice.length) | 0];
+    markSave(); refreshHotbar(); refreshToolHUD();
+    // the show: the names turn over, slowing, and land (the item is already changed)
+    const nm = $('ofname'), seq = [];
+    for (let i = 0; i < 9; i++) seq.push(P[(Math.random() * P.length) | 0]);
+    seq.push(it.ov);
+    this.spinT = 1;
+    let i = 0;
+    const step = () => {
+      if (game.ui !== 'oforge'){ this.spinT = 0; return; }
+      nm.textContent = OV[seq[i]].name;
+      AudioSys.tone({ freq: 300 + i * 45, dur: 0.06, gain: 0.12, type: 'square' });
+      i++;
+      if (i < seq.length) setTimeout(step, 40 + i * i * 6);
+      else { this.spinT = 0; AudioSys.tone({ freq: 880, dur: 0.5, gain: 0.2, type: 'sine' }); AudioSys.sfx('craft'); toast(itemLabel(it) + ' — ' + OV[it.ov].desc, 1); this.refresh(); }
+    };
+    step();
+    const g = pn; Particles.burst(g.x, g.y + 1.7, g.z, 0.6, [0xc070ff, 0xe4b8ff, 0xffffff], 30, 2.4);
+    econSys.move && econSys.move('arms', 0.002);
+  },
+  // ---- TWINBORE / TWINSPOUT: every copy of the action again, one shape over, to your right ----
+  twinXforms(X){
+    const ov = this.held();
+    if (ov !== 'twin' && ov !== 'twinD') return X;
+    let rx = Math.cos(game.yaw), rz = -Math.sin(game.yaw);
+    if (game.snapOn && toolCan('snap')){ if (Math.abs(rx) >= Math.abs(rz)){ rx = Math.sign(rx); rz = 0; } else { rz = Math.sign(rz); rx = 0; } }
+    const off = e => { const w = Math.abs(rx) * (e.sx || e.size) + Math.abs(rz) * (e.sz || e.size); return [+(rx * w).toFixed(3), +(rz * w).toFixed(3)]; };
+    const off0 = game.ghostEff || CORE.effSize(game.tool.size, 11);
+    const all = [{ e: e => e, h: h => h }, ...X], out = X.slice();
+    for (const b of all) out.push({
+      e: e => { const m = Object.assign({}, b.e(e)); const [ox, oz] = off(m); m.x = +(m.x + ox).toFixed(3); m.z = +(m.z + oz).toFixed(3); return m; },
+      h: h => { const m = Object.assign({}, b.h(h)); m.x += rx * off0; m.z += rz * off0; return m; },
+    });
+    return out;
+  },
+  // ---- FORGEHEART: what the ore becomes ----
+  smelted(kind){ return CORE.SMELTS[kind] && /ore$/.test(kind) ? CORE.SMELTS[kind] : null; },
+  // ---- VEINSIGHT: a pulse outward from the cut, a few rings a frame ----
+  dowseQ: null, marks: null, markT: 0,
+  dowse(p){
+    const R = 14, st = 1.5, pts = [];
+    for (let dz = -R; dz <= R; dz += st) for (let dy = -R; dy <= R; dy += st) for (let dx = -R; dx <= R; dx += st){
+      const d = Math.hypot(dx, dy, dz); if (d > R) continue;
+      pts.push([p.x + dx, p.y + dy, p.z + dz, d]);
+    }
+    pts.sort((a, b) => b[3] - a[3]);                 // nearest at the end: popped first
+    this.dowseQ = { pts, le: nearEdits([p.x - R - 1, p.y - R - 1, p.z - R - 1, p.x + R + 1, p.y + R + 1, p.z + R + 1]), n: 0 };
+    this.ensureMarks(); this.marks.count = 0; this.markT = 9;
+    AudioSys.tone({ freq: 140, dur: 0.9, gain: 0.18, type: 'sine' });
+  },
+  ensureMarks(){
+    if (this.marks) return;
+    const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthTest: false, depthWrite: false });
+    this.marks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), m, 700);
+    this.marks.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(700 * 3), 3);
+    this.marks.count = 0; this.marks.renderOrder = 999; this.marks.frustumCulled = false; this.marks.userData.noShadow = true;
+    game.scene.add(this.marks);
+  },
+  dowseStep(){
+    const Q = this.dowseQ; if (!Q) return;
+    const t0 = performance.now(), M = this.marks, mtx = new THREE.Matrix4(), col = new THREE.Color();
+    while (Q.pts.length && performance.now() - t0 < 1.5){
+      const [x, y, z] = Q.pts.pop();
+      if (CORE.evalSDF(x, y, z, Q.le, game.gen) > 0) continue;
+      const m = CORE.materialAt(x, y, z, Q.le, game.gen);
+      if (!CORE.ORE_ITEM[m] || M.count >= 700) continue;
+      mtx.makeTranslation(x, y, z); M.setMatrixAt(M.count, mtx);
+      col.setHex(MAT_COLOR[m] || 0xffffff); M.setColorAt(M.count, col); M.count++;
+      M.instanceMatrix.needsUpdate = true; M.instanceColor.needsUpdate = true;
+    }
+    if (!Q.pts.length){ this.dowseQ = null; if (!M.count) toast('Veinsight: no ore within 14 m'); }
+  },
+  // ---- MORTAR: where the glob will land (the surface along your aim, up to 400 m) ----
+  mortarTarget(eff){
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const o = game.camera.position, cb = game.camBack || 0;
+    let t = 0.6 + cb, hit = -1, le = null, lb = -1;
+    for (let i = 0; i < 400 && t < 400 + cb; i++){
+      const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
+      const seg = Math.floor(t / 24);
+      if (seg !== lb){ lb = seg; const a = t, b = t + 30; le = nearEdits([Math.min(o.x + dir.x * a, o.x + dir.x * b) - 2, Math.min(o.y + dir.y * a, o.y + dir.y * b) - 2, Math.min(o.z + dir.z * a, o.z + dir.z * b) - 2, Math.max(o.x + dir.x * a, o.x + dir.x * b) + 2, Math.max(o.y + dir.y * a, o.y + dir.y * b) + 2, Math.max(o.z + dir.z * a, o.z + dir.z * b) + 2]); }
+      const d = sdfWorld(x, y, z, le);
+      if (d < 0.05){ hit = t; break; }
+      t += Math.max(0.08, d * 0.8);
+    }
+    if (hit < 0) return null;
+    const back = hit - eff * 0.5;
+    let p = { x: o.x + dir.x * back, y: o.y + dir.y * back, z: o.z + dir.z * back };
+    if (game.snapOn && toolCan('snap')){
+      const [cx, cy, cz] = CORE.snapPlace(o.x + dir.x * hit, o.y + dir.y * hit, o.z + dir.z * hit, eff, CORE.GRID_SIZES[game.gridIdx], editRot(game.tool.shape), brushRX(), brushRZ());
+      p = { x: cx, y: cy, z: cz };
+    }
+    return p;
+  },
+  globs: [],
+  lob(e, mat, group){
+    const o = game.camera.position, dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const x0 = o.x + dir.x * 0.9, y0 = o.y + dir.y * 0.9 - 0.2, z0 = o.z + dir.z * 0.9;
+    const d = Math.hypot(e.x - x0, e.y - y0, e.z - z0), tf = Math.max(0.35, Math.min(3.2, d / 32)), G = 14;
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(Math.min(1.2, 0.25 + e.size * 0.08), 10, 8), new THREE.MeshBasicMaterial({ color: MAT_COLOR[mat] || 0xaaaaaa }));
+    mesh.position.set(x0, y0, z0); game.scene.add(mesh);
+    this.globs.push({ e, mat, group, x0, y0, z0, vx: (e.x - x0) / tf, vy: (e.y - y0) / tf + 0.5 * G * tf, vz: (e.z - z0) / tf, G, t: 0, tf, mesh });
+    AudioSys.tone({ freq: 90, dur: 0.25, gain: 0.3, type: 'sine' }); AudioSys.sfx('place');
+  },
+  land(g){
+    game.scene.remove(g.mesh); g.mesh.geometry.dispose(); g.mesh.material.dispose();
+    const e = g.e, cost = CORE.placeCost(game.edits, e, game.gen);
+    if (cost === 0) return;
+    if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, g.mat, cost)){ toast('the glob lands short: need ' + cost + ' ' + CORE.MAT_NAME[g.mat]); return; }
+    applyEdit(e);
+    game.undoStack.push({ edit: e, type: 'place', mat: g.mat, cost: game.mode === 'creative' ? 0 : cost, group: g.group });
+    if (game.undoStack.length > 64) game.undoStack.shift();
+    Particles.burst(e.x, e.y, e.z, e.size * 0.5, [MAT_COLOR[g.mat]], Math.min(40, 10 + cost / 6), 2.2);
+    AudioSys.sfx('place', Math.hypot(e.x - game.pos.x, e.y - game.pos.y, e.z - game.pos.z) / 20);
+    refreshHotbar(); refreshToolHUD();
+  },
+  // ---- STORMCALLER ----
+  storm(tool){
+    const now = performance.now();
+    if (now - (this.stormT || 0) < 900) return false;
+    const dir = new THREE.Vector3(); game.camera.getWorldDirection(dir);
+    const o = game.camera.position;
+    let T = null;
+    const ent = entityOnRay(40);
+    if (ent) T = [ent.x, ent.y, ent.z];
+    else {
+      const le = nearEdits([Math.min(o.x, o.x + dir.x * 40) - 1, Math.min(o.y, o.y + dir.y * 40) - 1, Math.min(o.z, o.z + dir.z * 40) - 1, Math.max(o.x, o.x + dir.x * 40) + 1, Math.max(o.y, o.y + dir.y * 40) + 1, Math.max(o.z, o.z + dir.z * 40) + 1]);
+      for (let t = 0.5, i = 0; t < 40 && i < 200; i++){ const d = sdfWorld(o.x + dir.x * t, o.y + dir.y * t, o.z + dir.z * t, le); if (d < 0.05){ T = [o.x + dir.x * t, o.y + dir.y * t, o.z + dir.z * t]; break; } t += Math.max(0.08, d * 0.8); }
+    }
+    if (!T) return false;
+    this.stormT = now;
+    this.bolt(T[0], T[1], T[2]);
+    const dmg = 26 + (tool.tier | 0) * 5;
+    this.killer = tool.ov;
+    for (const en of [...game.entities]){
+      if (en.type === 'villager' || en.crew || en.pet || en.type === 'drop' || VEH[en.type] && !en.crewed) continue;
+      const dd = Math.hypot(en.x - T[0], en.y - T[1], en.z - T[2]);
+      if (dd < 3.5) hurtEntity(en, dmg * (1 - dd / 5), (en.x - T[0]) * 2, (en.z - T[2]) * 2);
+    }
+    this.killer = null;
+    if (Math.hypot(game.pos.x - T[0], game.pos.z - T[2]) < 2) damagePlayer(12, (game.pos.x - T[0]) * 3, (game.pos.z - T[2]) * 3);
+    return true;
+  },
+  bolt(x, y, z){
+    let px = x + (Math.random() - 0.5) * 3, py = y + 42, pz = z + (Math.random() - 0.5) * 3;
+    for (let k = 1; k <= 9; k++){
+      const f = k / 9, nx = k === 9 ? x : x + (Math.random() - 0.5) * 3 * (1 - f), ny = y + 42 * (1 - f), nz = k === 9 ? z : z + (Math.random() - 0.5) * 3 * (1 - f);
+      beamFX.add(px, py, pz, nx, ny, nz, k % 2 ? 0xffffff : 0xd8c8ff);
+      px = nx; py = ny; pz = nz;
+    }
+    weatherSys.flashT = Math.max(weatherSys.flashT, 0.07);
+    weatherSys.thunder.push(0.05 + Math.hypot(x - game.pos.x, z - game.pos.z) / 340);
+    Particles.burst(x, y + 0.5, z, 1.0, [0xffffff, 0xd8e8ff, 0xc070ff], 26, 5);
+    Embers.burst(x, y + 0.3, z, 0.6, [0xffb347, 0xffdd66], 8, 2.5);
+    deepSys.loud(20);
+  },
+  // ---- the guns ----
+  onShot(G, best, hx, hy, hz, wall){
+    const ov = this.cur && this.cur.ov;
+    if (!ov) return;
+    if (ov === 'mustang' && (best || wall)) this.burst(hx, hy, hz, 3.2, Math.max(22, G.dmg * 1.4));
+    if (!best) return;
+    if (ov === 'kindle') this.ignite(best, 4);
+    if (ov === 'arc' && (!G.auto || Math.random() < 0.22)) this.arc(best, G.dmg * 0.6);
+  },
+  burst(x, y, z, r, dmg){
+    for (const en of [...game.entities]){
+      if (en.type === 'villager' || en.crew || en.pet || en.type === 'drop') continue;
+      const d = Math.hypot(en.x - x, en.y + 0.6 - y, en.z - z);
+      if (d < r) hurtEntity(en, dmg * (1 - 0.6 * d / r), (en.x - x) * 3, (en.z - z) * 3);
+    }
+    Particles.burst(x, y, z, r * 0.5, [0xffb347, 0xff7a30, 0xfff0a0], 18, 3.5);
+    AudioSys.sfx('boom', Math.hypot(x - game.pos.x, y - game.pos.y, z - game.pos.z) + 6);
+  },
+  canHold(e){ return !(e.type === 'villager' || e.crew || e.pet || e.type === 'drop' || e.bossType || VEH[e.type]); },
+  ignite(e, secs){
+    if (e.type === 'villager' || e.crew || e.pet || e.type === 'drop' || VEH[e.type]) return;
+    e.ovFire = Math.max(e.ovFire || 0, secs);
+  },
+  arc(src, dmg){
+    const hit = [src], near = [];
+    for (const en of game.entities){
+      if (en === src || !this.canHold(en)) continue;
+      const d = Math.hypot(en.x - src.x, en.y - src.y, en.z - src.z);
+      if (d < 7) near.push([d, en]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    let prev = src;
+    for (const [, en] of near.slice(0, 3)){
+      beamFX.add(prev.x, prev.y + 0.8, prev.z, en.x, en.y + 0.8, en.z, 0xb8a0ff);
+      hurtEntity(en, dmg, 0, 0); hit.push(en); prev = en;
+    }
+    for (const en of hit) if (this.canHold(en)) en.ovStun = Math.max(en.ovStun || 0, 1.6);
+    Particles.burst(src.x, src.y + 0.8, src.z, 0.5, [0xb8a0ff, 0xffffff], 12, 2.5);
+    AudioSys.burst({ dur: 0.12, freq: 2600, gain: 0.1 });
+  },
+  sleep(e){
+    if (!this.canHold(e)){ e.flash = 0.15; if (e.bossType) toast('the dart does nothing to it'); return; }
+    e.ovSleep = 120; e.fleeT = 0; e.flash = 0.15;
+    Particles.burst(e.x, e.y + 1.2, e.z, 0.3, [0xcfd8ff, 0xffffff], 8, 0.8);
+    AudioSys.sfx('toggle');
+  },
+  vortices: [],
+  vortex(x, y, z){
+    const grp = new THREE.Group();
+    grp.add(new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 12), new THREE.MeshBasicMaterial({ color: 0x050008 })));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.12, 6, 32), new THREE.MeshBasicMaterial({ color: 0xc070ff, transparent: true, opacity: 0.85 }));
+    ring.rotation.x = Math.PI / 2; grp.add(ring);
+    grp.position.set(x, y + 0.8, z); grp.userData.noShadow = true;
+    game.scene.add(grp);
+    this.vortices.push({ x, y: y + 0.8, z, t: 4, grp, ring });
+    AudioSys.tone({ freq: 55, dur: 4, gain: 0.35, type: 'sawtooth' });
+    deepSys.loud(25);
+  },
+  // held still: stunned, asleep, or in a black hole's grip (bosses never are)
+  hold(e, dt){
+    if (!e.mesh){ e.mesh = entMesh(e.type, e); game.scene.add(e.mesh); }
+    e.vx = 0; e.vz = 0;
+    if (e.ovSleep > 0 && !e.ovPull){
+      e.mesh.rotation.z = Math.PI / 2 * 0.9;
+      if (Math.random() < dt * 0.5) Particles.burst(e.x, e.y + 1.0, e.z, 0.15, [0xcfd8ff], 1, 0.3);
+    } else e.mesh.rotation.z = 0;
+    e.mesh.position.set(e.x, e.y, e.z);
+    return true;
+  },
+  tick(dt){
+    // fire, stuns, sleep
+    for (const e of [...game.entities]){
+      if (e.ovStun > 0) e.ovStun = Math.max(0, e.ovStun - dt);
+      if (e.ovSleep > 0){ e.ovSleep = Math.max(0, e.ovSleep - dt); if (!e.ovSleep && e.mesh) e.mesh.rotation.z = 0; }
+      if (e.ovFire > 0){
+        e.ovFire -= dt; e.ovFireAcc = (e.ovFireAcc || 0) + dt;
+        if (Math.random() < dt * 8) Particles.burst(e.x, e.y + 0.9, e.z, 0.3, [0xff8830, 0xffb347, 0x442211], 2, 1.4);
+        if (e.ovFireAcc >= 0.5){
+          e.ovFireAcc = 0; e.hp -= 5; e.flash = 0.1;
+          if (e.hp <= 0){ killEntity(e, true); continue; }
+        }
+      }
+    }
+    // the black holes
+    for (let i = this.vortices.length - 1; i >= 0; i--){
+      const V = this.vortices[i];
+      V.t -= dt; V.ring.rotation.z += dt * 6; V.ring.scale.setScalar(1 + Math.sin(V.t * 9) * 0.1);
+      if (Math.random() < dt * 30){ const a = Math.random() * 6.28, r = 3 + Math.random() * 5; Particles.burst(V.x + Math.cos(a) * r, V.y + (Math.random() - 0.5) * 3, V.z + Math.sin(a) * r, 0.1, [0xc070ff, 0x3a1060], 1, 0.4); }
+      for (const en of [...game.entities]){
+        if (en.type === 'villager' || en.crew || en.pet || en.type === 'drop' || VEH[en.type]) continue;
+        const dx = V.x - en.x, dy = V.y - 0.8 - en.y, dz = V.z - en.z, d = Math.hypot(dx, dy, dz);
+        if (d > 11) { if (en.ovPull === V) en.ovPull = null; continue; }
+        if (!en.bossType && V.t > 0){
+          en.ovPull = V;
+          const s = Math.min(d, 9 * dt) / (d || 1);
+          en.x += dx * s; en.y += dy * s; en.z += dz * s;
+        }
+        if (d < (en.bossType ? 5 : 2.5) && V.t > 0){
+          en.ovCrush = (en.ovCrush || 0) + dt;
+          if (en.ovCrush > 0.25){ en.ovCrush = 0; hurtEntity(en, en.bossType ? 12 : 9, 0, 0); }
+        }
+      }
+      if (V.t <= 0){
+        for (const en of game.entities) if (en.ovPull === V) en.ovPull = null;
+        Particles.burst(V.x, V.y, V.z, 1.2, [0xc070ff, 0xffffff, 0x3a1060], 30, 4);
+        game.scene.remove(V.grp); V.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+        this.vortices.splice(i, 1);
+      }
+    }
+    // the mortar's globs
+    for (let i = this.globs.length - 1; i >= 0; i--){
+      const g = this.globs[i];
+      g.t += dt;
+      const t = Math.min(g.t, g.tf);
+      g.mesh.position.set(g.x0 + g.vx * t, g.y0 + g.vy * t - 0.5 * g.G * t * t, g.z0 + g.vz * t);
+      if (g.t >= g.tf){ this.globs.splice(i, 1); this.land(g); }
+    }
+    // Veinsight
+    this.dowseStep();
+    if (this.marks && this.marks.count){
+      this.markT -= dt;
+      this.marks.material.opacity = Math.max(0, Math.min(0.85, this.markT / 3)) * (0.75 + 0.25 * Math.sin(performance.now() / 160));
+      if (this.markT <= 0) this.marks.count = 0;
+    }
+  },
+  // ---- the look: the held tool shimmers ----
+  vmTick(v, tool, dt){
+    const ov = tool && tool.ov, grp = !tool ? null : tool.kind === 'drill' ? v.drill : tool.kind === 'disp' ? v.disp : tool.kind === 'sword' ? v.sword : tool.kind === 'fw' ? v.fws[tool.g | 0] : null;
+    const key = ov && grp ? grp.uuid : null;
+    if (this.vmKey && this.vmKey !== key){ this.vmGrp.traverse(o => { if (o.isMesh && o.material && o.material.userData.em0 != null) o.material.emissive.setHex(o.material.userData.em0); }); this.vmKey = null; }
+    if (!key) return;
+    this.vmKey = key; this.vmGrp = grp;
+    const h = (performance.now() / 4000) % 1, k = 0.18 + 0.1 * Math.sin(performance.now() / 300);
+    grp.traverse(o => {
+      if (!o.isMesh || !o.material || !o.material.emissive) return;
+      if (o.material.userData.em0 == null) o.material.userData.em0 = o.material.emissive.getHex();
+      o.material.emissive.setHSL(0.72 + h * 0.2, 0.9, k);
+    });
+  },
+};
+// THE OVERFORGE (Build 122): whatever the tool, it carries its variant
 function activeTool(){
+  const t = activeTool0(), it = selectedItem();
+  if (t) ovSys.stamp(t, it);
+  return t;
+}
+function activeTool0(){
   const it = selectedItem();
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
@@ -28868,7 +29331,7 @@ function activeTool(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -28985,6 +29448,7 @@ function updateGhost(){
   ensureShape(tool);                                                            // Build 113: a tier's shapes
   let eff = CORE.effSize(game.tool.size, tool.tier);
   let p = ghostPlacement(eff);
+  if (tool.ov === 'mortar' && tool.kind === 'disp' && !tool.spring && !isLiquidMat(tool.mat)){ const q = ovSys.mortarTarget(eff); if (q) p = q; }   // Build 122: where the glob lands
   // LIQUIDS (Build 110): on the metre cells
   game.ghostLiq = !brushSys.get() && liquidMode(tool, p, eff);
   if (game.ghostLiq){ const sn = liqSnap(p, eff); p = sn.p; eff = sn.eff; }
@@ -29096,7 +29560,7 @@ const wrenchProps = {
       const D = { staple: [0.05, 0.22, 0.12, 0.22], lever: [0.2, 0.32, 0.3, 0.28], crank: [0.5, 0.34, 0.55, 0.34],
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
-                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
+                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], oforge: [0.72, 0.62, 0.78, 0.5], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
                   cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5], station: [1.3, 1.5, 1.35, 1.2],
                   claymore: [0.22, 0.32, 0.24, 0.16], spikes: [0.25, 1.05, 0.3, 0.55], bell: [0.9, 0.35, 0.95, 0.35], tent: [0.8, 1.3, 0.85, 1.0], trench: [0.2, 1.55, 0.25, 0.6], flamejet: [0.45, 0.4, 0.5, 0.4],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
@@ -30671,11 +31135,13 @@ function doMine(tool, p, shape, eff, group, mir){
   if (units > 0) deepSys.loud(deepSys.NOISE.cut[tool.tier | 0] || 3);     // the deep hears every cut
   if (units === 0) return;                        // nothing but air — no edit
   applyEdit(e);
-  game.undoStack.push({ edit: e, type: 'mine', gained: got, group });
+  const smelt = tool.ov === 'forge';                                          // Build 122: FORGEHEART
+  game.undoStack.push({ edit: e, type: 'mine', gained: got, group, smelt });
   if (game.undoStack.length > 64) game.undoStack.shift();
+  if (tool.ov === 'dowse' && !mir) ovSys.dowse(p);                             // Build 122: VEINSIGHT
   const parts = [];
   for (const m in got){
-    const oreKind = CORE.ORE_ITEM[+m];
+    const oreKind = (smelt && ovSys.smelted(CORE.ORE_ITEM[+m])) || CORE.ORE_ITEM[+m];
     const added = oreKind ? addStackItem(oreKind, got[m]) : CORE.addMat(game.slots, +m, got[m]);
     const name = oreKind ? itemLabel({ kind: oreKind }) : CORE.MAT_NAME[m];
     if (added) parts.push('+' + got[m] + ' ' + name);
@@ -30752,8 +31218,13 @@ function doPlace(tool, p, shape, eff, group, mir){
   const paint = false;   // dispenser paint moved to the wrench
   let e = applyToolRot(CORE.makeEdit(1, shape, p.x, p.y, p.z, eff, tool.mat, editRot(shape)));
   if (mir){ e = mir.e(e); p = { x: e.x, y: e.y, z: e.z }; }
-  const cost = paint ? CORE.paintCost(game.edits, e, game.gen)
-                     : CORE.placeCost(game.edits, e, game.gen);
+  if (tool.ov === 'mortar' && !ovSys.landing){                                 // Build 122: MORTAR -- it flies there first
+    if (CORE.placeCost(game.edits, e, game.gen) === 0) return;
+    ovSys.lob(e, tool.mat, group); return;
+  }
+  const cost0 = paint ? CORE.paintCost(game.edits, e, game.gen)
+                      : CORE.placeCost(game.edits, e, game.gen);
+  const cost = tool.ov === 'thrift' && cost0 > 1 ? Math.ceil(cost0 / 2) : cost0;   // Build 122: THRIFT
   if (cost === 0) return;
   if (game.mode !== 'creative' && !CORE.consumeMat(game.slots, tool.mat, cost)){
     toast('need ' + cost + ' ' + CORE.MAT_NAME[tool.mat] + ' — have ' + CORE.countMat(game.slots, tool.mat));
@@ -30831,7 +31302,7 @@ function undoOne(){
   if (rec){
     if (rec.type === 'mine'){
       for (const m in rec.gained){
-        const oreKind = CORE.ORE_ITEM[+m];
+        const oreKind = (rec.smelt && ovSys.smelted(CORE.ORE_ITEM[+m])) || CORE.ORE_ITEM[+m];
         if (oreKind){
           const have = CORE.countItem(game.slots, oreKind);
           CORE.consumeItem(game.slots, oreKind, Math.min(have, rec.gained[m]));
@@ -31088,8 +31559,12 @@ function tryAction(dt, now){
       AudioSys.burst({ dur: 0.08, freq: 1400, gain: 0.08 });
       const ent = entityOnRay(3.6);
       const sdm = (10 + tool.tier * 4) * (CORE.countItem(game.slots, 'wfist') > 0 ? 2 : 1);
-      if (ent) hurtEntity(ent, sdm, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
+      if (tool.ov === 'storm') ovSys.storm(tool);                                  // Build 122: STORMCALLER
+      ovSys.killer = tool.ov || null;
+      if (ent){ const hp0 = ent.hp; hurtEntity(ent, sdm, (ent.x - game.pos.x) * 2, (ent.z - game.pos.z) * 2);
+                if (tool.ov === 'blood' && ent.hp < hp0){ game.hp = Math.min(100, game.hp + (hp0 - Math.max(0, ent.hp)) / 3); Particles.burst(ent.x, ent.y + 0.9, ent.z, 0.3, [0xd02040, 0xff5070], 6, 1.2); } }
       else { const mk = treeSys.onRay(3.4); if (mk && treeSys.isMaw(mk)){ treeSys.hitMaw(mk, sdm); treeSys.bite(mk, 0.45); } }
+      ovSys.killer = null;
     }
     return;
   }
@@ -31253,13 +31728,15 @@ function tryAction(dt, now){
       (game.projectiles = game.projectiles || []).push({
         x: o.x + dir.x, y: o.y + dir.y, z: o.z + dir.z,
         vx: dir.x * 34, vy: dir.y * 34, vz: dir.z * 34,
-        t: 5, dmg: G.dmg, r: 3.4 });
+        t: 5, dmg: G.dmg, r: 3.4, ov: tool.ov || null });
       game.pitch = Math.min(Math.PI / 2 - 0.01, game.pitch + G.kick);
       return;
     }
-    AudioSys.sfx(G.laser ? 'laser' : 'shot', Math.min(1, (G.kick || 0.03) * 10));
-    deepSys.loud(G.laser ? 5 : deepSys.NOISE.shot);
+    if (tool.ov === 'whisper') AudioSys.burst({ dur: 0.05, freq: 900, gain: 0.05 });   // Build 122: WHISPER -- a cough, heard by nothing
+    else { AudioSys.sfx(G.laser ? 'laser' : 'shot', Math.min(1, (G.kick || 0.03) * 10)); deepSys.loud(G.laser ? 5 : deepSys.NOISE.shot); }
+    ovSys.cur = tool;
     fireHitscan(G);
+    ovSys.cur = null;
     return;
   }
   // explosives: set the charge on any surface, then RUN. TNT is a crater;
@@ -31770,7 +32247,7 @@ function itemIconURL(it, asCanvas){
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter', 'decrafter', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
+       'crafter', 'decrafter', 'oforge', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
        'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'megatorch', 'greatstove', 'headlamp', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (asCanvas && iconCanvases.has(key)) return iconCanvases.get(key);
   if (!asCanvas && iconCache.has(key)) return iconCache.get(key);
@@ -32380,6 +32857,14 @@ function itemIconURL(it, asCanvas){
     c.fillStyle = '#3c3a44'; c.fillRect(4, 7, 8, 5);
     c.fillStyle = '#f0a040'; c.fillRect(5, 8, 2, 3); c.fillRect(9, 8, 2, 3); c.fillRect(7, 9, 2, 1);
     c.fillStyle = '#ffd76a'; c.fillRect(3, 5, 2, 1);
+  } else if (it.kind === 'oforge'){
+    // the anvil-block, the violet throat, the crystal over it
+    c.fillStyle = '#26242e'; c.fillRect(2, 10, 12, 5);
+    c.fillStyle = '#5b5964'; c.fillRect(5, 8, 6, 2);
+    c.fillStyle = '#26242e'; c.fillRect(1, 6, 14, 2);
+    c.fillStyle = '#c070ff'; c.fillRect(5, 12, 6, 2);
+    c.fillStyle = '#e4b8ff'; c.fillRect(7, 1, 2, 4); c.fillRect(6, 2, 4, 2);
+    c.fillStyle = '#8fb8e8'; c.fillRect(3, 4, 1, 2); c.fillRect(12, 4, 1, 2);
   } else if (it.kind === 'charger'){
     c.fillStyle = '#3c3a44'; c.fillRect(2, 5, 12, 9);
     c.fillStyle = '#5b5964'; c.fillRect(2, 5, 12, 2);
@@ -32649,6 +33134,11 @@ function itemIconURL(it, asCanvas){
   return url;
 }
 function itemLabel(it){
+  const b = itemLabel0(it);
+  if (!it || !it.ov || !OV[it.ov]) return b;
+  const n = OV[it.ov].name; return n[0] + n.slice(1).toLowerCase() + ' (' + b + ')';   // Build 122
+}
+function itemLabel0(it){
   if (!it) return '';
   if (it.kind === 'mat') return CORE.MAT_NAME[it.mat];
   if (it.kind === 'gun') return 'blaster';
@@ -32747,6 +33237,7 @@ function itemLabel(it){
   if (it.kind === 'gen2') return 'generator mk2';
   if (it.kind === 'crafter') return 'auto-crafter';
   if (it.kind === 'decrafter') return 'de-crafter';
+  if (it.kind === 'oforge') return 'the Overforge';
   if (it.kind === 'charger') return 'battery charger';
   if (it.kind === 'battery') return CORE.BATTERY_NAME[it.tier | 0] + ' battery';
   if (it.kind === 'chest') return 'chest';
@@ -32848,6 +33339,7 @@ function slotItem(key){
   if (key === 'afeet') return game.armor.feet;
   if (key === 'gfuel') return game.activeCont && game.activeCont.fuel;
   if (key === 'dcin') return game.activeDecraft && game.activeDecraft.inv && game.activeDecraft.inv[0];
+  if (key === 'ofin') return game.activeOforge && game.activeOforge.inv && game.activeOforge.inv[0];
   if (key === 'vbat') return game.driving && game.driving.bat;
   if (typeof key === 'string' && /^c\d+$/.test(key))
     return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
@@ -32857,7 +33349,7 @@ function slotItem(key){
 // a crew member's slots: kh their hands, kah/kac/kaf their armor, k0..k7 their pack
 const CREW_KEY = /^k(h|ah|ac|af|\d)$/;
 function isPseudoKey(k){
-  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k) || CREW_KEY.test(String(k));
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'ofin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k) || CREW_KEY.test(String(k));
 }
 function slotKeyOf(el){
   const k = el.dataset.slot;
@@ -32891,6 +33383,7 @@ function paintSlot(el){
   if (url){ img.src = url; img.style.display = 'block'; } else { img.style.display = 'none'; }
   cnt.textContent = (it && it.count != null) ? fmtCount(it.count) : '';
   paintChargeBar(el, it);
+  el.classList.toggle('ov', !!(it && it.ov));                                  // Build 122
   el.classList.toggle('sel', i === game.hotSel && el.parentElement.id === 'hotbar');
 }
 function buildHotbar(){
@@ -33039,7 +33532,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spike
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings', 'headlamp'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery', 'sprinkler', 'intake'];
-const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'stove', 'greatstove', 'megatorch', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'oforge', 'stove', 'greatstove', 'megatorch', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -33113,7 +33606,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'gate', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -33551,6 +34044,7 @@ function uiMove(from, to){
     : k === 'afeet' ? game.armor.feet
     : k === 'gfuel' ? (pc && pc.fuel)
     : k === 'dcin' ? (game.activeDecraft && game.activeDecraft.inv[0])
+    : k === 'ofin' ? (game.activeOforge && game.activeOforge.inv[0])
     : k === 'vbat' ? (game.driving && game.driving.bat)
     : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
     : CREW_KEY.test(String(k)) ? (game.activeCrew ? crewSys.slotGet(k) : null)
@@ -33567,6 +34061,7 @@ function uiMove(from, to){
     else if (k === 'afeet') game.armor.feet = v;
     else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
     else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
+    else if (k === 'ofin'){ if (game.activeOforge) game.activeOforge.inv[0] = v; }
     else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
     else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
     else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
@@ -33574,7 +34069,7 @@ function uiMove(from, to){
   };
   const A = get(from), B = get(to);
   if (!A) return 'none';
-  if (CREW_KEY.test(String(to))){ const why = slotRefuses(to, A); if (why){ toast(why); return 'none'; } }
+  if (CREW_KEY.test(String(to)) || to === 'ofin'){ const why = slotRefuses(to, A); if (why){ toast(why); return 'none'; } }
   if (to === 'disp' && A.kind !== 'disp'){ toast('only a dispenser fits in the dispenser slot'); return 'none'; }
   if (from === 'disp' && B && B.kind !== 'disp'){ toast('that slot is taken'); return 'none'; }
   if (to === 'sout' || /^go[0-4]$/.test(String(to))){ toast('the output slot only gives'); return 'none'; }
@@ -33644,6 +34139,7 @@ function quickMove(key, n){
       else if (/^g[io][0-4]$/.test(key)) (key[1] === 'i' ? game.activeStove.gin : game.activeStove.gout)[+key[2]] = null;
       else if (key === 'disp') game.dispSlot = null;
       else if (key === 'dcin') game.activeDecraft.inv[0] = null;
+      else if (key === 'ofin') game.activeOforge.inv[0] = null;
       else if (key === 'vbat') game.driving.bat = null;
       else if (CREW_KEY.test(String(key))) crewSys.slotSet(key, null);
       done = true;
@@ -33654,6 +34150,11 @@ function quickMove(key, n){
     if (done) game.slots[key] = null; else toast(crewSys.nameOf(game.activeCrew) + ' cannot carry any more');
   } else if (game.ui === 'inv' && game.driving && it.kind === 'battery' && !game.driving.bat){
     game.driving.bat = it; game.slots[key] = null; done = true;   // shift-click a battery into the car
+  } else if (game.ui === 'oforge' && game.activeOforge){
+    const pn = game.activeOforge;
+    if (!ovSys.can(it)) toast('the Overforge takes a drill, a dispenser, a sword or a gun');
+    else if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
+    else toast('the Overforge holds one thing at a time');
   } else if (game.ui === 'decraft' && game.activeDecraft){
     const pn = game.activeDecraft;
     if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
@@ -33724,6 +34225,7 @@ function refreshAllUI(){
   refreshHotbar(); refreshToolHUD();
   if (game.ui === 'stove') refreshStoveUI(true);
   else if (game.ui === 'decraft') refreshDecraftUI();
+  else if (game.ui === 'oforge') ovSys.refresh();
   else if (game.ui === 'cont') refreshContUI();
   else if (game.ui === 'crafter') refreshCrafterUI();
   else if (game.ui === 'trade') tradeSys.refresh();
@@ -33739,7 +34241,7 @@ function refreshAllUI(){
 // (or lifts one, if the cursor is empty). Shift-click still quick-moves
 // (shift-right-click quick-moves half). Click outside every panel while
 // holding and it drops on the ground.
-const INV_UIS = ['inv', 'stove', 'cont', 'crafter', 'craft', 'trade', 'decraft'];
+const INV_UIS = ['inv', 'stove', 'cont', 'crafter', 'craft', 'trade', 'decraft', 'oforge'];
 function slotSet(k, v){
   const st = game.activeStove, pc = game.activeCont;
   if (k === 'disp') game.dispSlot = v;
@@ -33753,6 +34255,7 @@ function slotSet(k, v){
   else if (k === 'afeet') game.armor.feet = v;
   else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
   else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
+  else if (k === 'ofin'){ if (game.activeOforge) game.activeOforge.inv[0] = v; }
   else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
   else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
   else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
@@ -33760,6 +34263,7 @@ function slotSet(k, v){
 }
 // why an item may not go into a slot (null = fine)
 function slotRefuses(to, A){
+  if (to === 'ofin' && !ovSys.can(A)) return 'the Overforge takes a drill, a dispenser, a sword or a gun';
   if (to === 'disp' && A.kind !== 'disp') return 'only a dispenser fits in the dispenser slot';
   if (to === 'sout') return 'the output slot only gives';
   if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
@@ -33940,6 +34444,11 @@ function toast(msg){
 // what an item is and does — the bottom-left panel's text, also the
 // tooltip under the cursor in every inventory
 function itemInfoHTML(it, tool){
+  const h = itemInfoHTML0(it, tool), src = tool && tool.ov ? tool : it;      // Build 122: a variant says what it does first
+  const ov = src && src.ov && OV[src.ov];
+  return ov ? '<div class="t1" style="color:#e4b8ff;">◆ ' + ov.name + '</div><div class="t2" style="color:#d8c8f0;">' + ov.desc + '</div>' + h : h;
+}
+function itemInfoHTML0(it, tool){
   let html = '';
   if (!it){
     html = '<div class="t1">fists ' + (game.fistsUp ? 'up' : 'down') + '</div>' +
@@ -34197,6 +34706,7 @@ function itemInfoHTML(it, tool){
                   gen2: '~100W · right click to open, coal burns long and hot',
                   crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
                   decrafter: 'no power needed · right click to take things apart into what made them',
+                  oforge: 'right click · put in a drill, dispenser, sword or gun, pay coin, and it comes out changed · pay again to try for another',
                   chest: 'storage — right click to open · tubes can pipe into it',
                   pad: 'wire it up · stand on it in a jetpack, or park a car on it — it charges · 20W',
                   charger: 'wire it up, right click, slot batteries — they fill from the grid · 40W' }[it.kind];
@@ -34545,6 +35055,11 @@ function wireItemTips(){
 }
 // the tool-shaped view of any item (what activeTool() makes of the held one)
 function activeToolOf(it){
+  const t = activeToolOf0(it);
+  if (t) ovSys.stamp(t, it);
+  return t;
+}
+function activeToolOf0(it){
   if (!it) return null;
   if (it.kind === 'drill') return { kind: 'drill', tier: it.tier };
   // the trowel is a drill that blends: ruby-tier speed and sizes, soft edges
@@ -35168,8 +35683,9 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('endscreen'); hide('wheelscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
+  hide('endscreen'); hide('wheelscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('oforgescreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
   game.activeDecraft = null;
+  game.activeOforge = null;
   game.activeWtab = null;
   game.activeTrade = null;
   game.activeCrew = null;
@@ -35649,6 +36165,7 @@ function startWorldData(id, data){
   if (!game.expedition && game.planet === 'earth') expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
   else if (game.expedition && !game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
   if (game.expedition && game.expedition.hall && !game.expedition.hall2) deepSys.lay2(game.expedition, CORE.mulberry32((game.seed ^ 0xbeef) >>> 0));   // a world from before the second
+  ovSys.vortices = []; ovSys.globs = []; ovSys.marks = null; ovSys.dowseQ = null; ovSys.vmKey = null;   // Build 122: the last world's effects
   farShapeSys._pieces = null; farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
@@ -39647,6 +40164,7 @@ function frameBody(now){
   Smoke.update(dt);
   beamFX.update(dt);
   updateProjectiles(dt);
+  ovSys.tick(dt);                                                                // Build 122
   chargeSys.update(dt);
   palisadeSys.tick(dt);
   perfSys.m('particles & shots');
@@ -39843,7 +40361,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { ovSys, OV, rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
