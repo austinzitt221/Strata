@@ -1448,6 +1448,23 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-14, later — it is all on the schedule
+
+Austin said yes to all of it. The upgrade machine is the OVERFORGE.
+Hell opens through the Knocker's seal, so the spec's bedrock rule
+holds everywhere else. He added a rule for the forge that I like
+better than my own idea: a planet costs coin, and every good thing on
+it is an upgrade you pay for, one line at a time. That turns the forge
+from a menu into the game's biggest coin sink, and it gives the late
+game a reason to keep trading. The recipe screen should show the
+running bill the way a shop does. A bare planet should be cheap enough
+to try on a whim; a rich one should feel like something you earned.
+
+My order is in ROADMAP.md: the Overforge and the gambling machine
+first, then strata, then lava and Hell, then the forge. Nothing gets
+built until his notes on 118-120 arrive tomorrow. Those come first,
+because a broken game is no fun.
+
 ## 2026-10-14 — the brainstorm
 
 The roadmap ran dry and Austin brought four big ideas. My notes, so

@@ -532,7 +532,22 @@ birds went down well. The shapes need work. In my order:
      animals have, and the birds a little bigger. (Austin.)
 
 
-## The 2026-10-14 brainstorm (draft: to be ordered once Austin reacts)
+## The 2026-10-14 brainstorm (AGREED)
+Austin's four and my eight, all on the schedule. Austin signed off on the
+name (OVERFORGE), the way into Hell (the Knocker's seal) and every one of
+my ideas, and added that the forge costs coin. The order I mean to build
+them in, after the Builds 118-120 playtest is dealt with:
+1. the OVERFORGE and the gambling machine (coin sinks the trade economy
+   already feeds; each variant is a small self-contained mechanic);
+2. strata you can read (every cut shows it; lava, Hell and the forge
+   all draw on the rock bands);
+3. lava that flows, then Hell;
+4. the planet forge as the capstone, once there is enough world to choose
+   from.
+The rest (the buried age, winter, halls that ring, water at work,
+settlements that grow, sky events) slot in between wherever a session
+has room or a build wants a lighter second half.
+
 Austin's four, with my additions in the journal entry of the same day:
  33. **THE PLANET FORGE** (Austin's; post-game). Forge your own planet:
      biomes (which, how often, how big), terrain per biome (super flat to
@@ -541,31 +556,36 @@ Austin's four, with my additions in the journal entry of the same day:
      how many), structures per biome and how often. Mine: a live map
      preview drawn by the real generator, presets, a random button, a
      shareable recipe string, sky/gravity/day length/sea level; optionally
-     you forge only what you have seen. An arc of 5-6 builds.
- 34. **THE UPGRADE MACHINE** (Austin's; name to pick: OVERFORGE /
-     CRUCIBLE / STRANGE ENGINE / TEMPER). Coins in, a random variant out,
-     re-roll for another; drills, dispensers, guns, swords, grapple, rod,
-     armor, ammo, drones, wings, jetpack, vehicles. Each variant a new
-     mechanic, with its own name and a shimmering skin. Austin's list and
-     mine in the journal.
+     you forge only what you have seen.
+     **It costs coin** (Austin's): a bare planet has a price, and every
+     good thing on it is an upgrade bought with coin -- each structure
+     type, each ore, each liquid, each extra biome, animals and enemies,
+     more caves. The cheap planet is a flat rock ball; a rich one is paid
+     for line by line, and the recipe screen shows the running bill. A
+     shared recipe string carries the bill with it. An arc of 5-6 builds.
+ 34. **THE OVERFORGE** (Austin's; the name agreed). Coins in, a random
+     variant out, re-roll for another; drills, dispensers, guns, swords,
+     grapple, rod, armor, ammo, drones, wings, jetpack, vehicles. Each
+     variant a new mechanic, with its own name and a shimmering skin.
+     Austin's list and mine in the journal.
  35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
      Any item in, name the item and the amount, odds from rarity and
      count, shown before you pull; a loss deletes the stake.
  36. **HELL** (Austin's). A dimension below THE DEEP: fire and ash, lava
      rivers, demons and lost souls, a demon base, a mini-boss vault with a
      unique item, and the Devil (ruler of Hell: summon three demons).
-     Mine: the way in is the seal the Knocker guarded (bedrock stays
-     unbreakable everywhere else, as the spec says); a frozen lowest
-     circle; a soul market; a chained library of lore; brimstone.
-Mine, in the order I want them:
+     **The way in is the seal the Knocker guarded** (agreed); bedrock
+     stays unbreakable everywhere else, as the spec says. Mine: a frozen
+     lowest circle; a soul market; a chained library of lore; brimstone.
+Mine (all agreed):
  37. **STRATA YOU CAN READ.** Rock in bands by depth, tilted and folded
      by region; every cut shows the layers.
  38. **LAVA THAT FLOWS**, then volcanoes that wake (Hell and the forge
      need it).
- 39. **THE BURIED AGE.** A brush, fossils, a buried city, a museum that
-     buys finds.
+ 39. **THE BURIED AGE.** A brush that sweeps history out of the rock,
+     fossils, a buried city, a museum that buys finds.
  40. **WINTER** you can walk on (frozen lakes and rivers) and the spring
-     thaw's flood.
+     thaw's flood; winter upgrades for the kit.
  41. **HALLS THAT RING.** Reverb from the size of the space around you.
  42. **WATER AT WORK.** Sluices, dams, the mill, wheels that power
      machines.
