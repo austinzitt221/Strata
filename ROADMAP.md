@@ -531,6 +531,48 @@ birds went down well. The shapes need work. In my order:
  32. **Birds and fish in detail** (DONE, Build 117). As much detail as the
      animals have, and the birds a little bigger. (Austin.)
 
+
+## The 2026-10-14 brainstorm (draft: to be ordered once Austin reacts)
+Austin's four, with my additions in the journal entry of the same day:
+ 33. **THE PLANET FORGE** (Austin's; post-game). Forge your own planet:
+     biomes (which, how often, how big), terrain per biome (super flat to
+     all mountain), caves per biome and the ores in them, animals and
+     enemies per biome, liquids from every world (rivers and/or lakes,
+     how many), structures per biome and how often. Mine: a live map
+     preview drawn by the real generator, presets, a random button, a
+     shareable recipe string, sky/gravity/day length/sea level; optionally
+     you forge only what you have seen. An arc of 5-6 builds.
+ 34. **THE UPGRADE MACHINE** (Austin's; name to pick: OVERFORGE /
+     CRUCIBLE / STRANGE ENGINE / TEMPER). Coins in, a random variant out,
+     re-roll for another; drills, dispensers, guns, swords, grapple, rod,
+     armor, ammo, drones, wings, jetpack, vehicles. Each variant a new
+     mechanic, with its own name and a shimmering skin. Austin's list and
+     mine in the journal.
+ 35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
+     Any item in, name the item and the amount, odds from rarity and
+     count, shown before you pull; a loss deletes the stake.
+ 36. **HELL** (Austin's). A dimension below THE DEEP: fire and ash, lava
+     rivers, demons and lost souls, a demon base, a mini-boss vault with a
+     unique item, and the Devil (ruler of Hell: summon three demons).
+     Mine: the way in is the seal the Knocker guarded (bedrock stays
+     unbreakable everywhere else, as the spec says); a frozen lowest
+     circle; a soul market; a chained library of lore; brimstone.
+Mine, in the order I want them:
+ 37. **STRATA YOU CAN READ.** Rock in bands by depth, tilted and folded
+     by region; every cut shows the layers.
+ 38. **LAVA THAT FLOWS**, then volcanoes that wake (Hell and the forge
+     need it).
+ 39. **THE BURIED AGE.** A brush, fossils, a buried city, a museum that
+     buys finds.
+ 40. **WINTER** you can walk on (frozen lakes and rivers) and the spring
+     thaw's flood.
+ 41. **HALLS THAT RING.** Reverb from the size of the space around you.
+ 42. **WATER AT WORK.** Sluices, dams, the mill, wheels that power
+     machines.
+ 43. **SETTLEMENTS THAT GROW** with your trade.
+ 44. **SKY EVENTS.** Meteor nights with a landing and a crater of rare
+     ore; aurora; eclipses.
+
 Small things I want, slotted wherever a session has room:
 - **Hearths** (DONE) — warm window light in village houses after dark,
   chimney smoke at dusk.

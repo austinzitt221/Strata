@@ -1448,6 +1448,88 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-14 — the brainstorm
+
+The roadmap ran dry and Austin brought four big ideas. My notes, so
+the next sessions start from the same place:
+
+**The planet forge (his).** Make your own planet after beating the
+game: biomes and how often and how big they come, how mountainous each
+is, caves or none, which ores, which animals and enemies, which liquids
+(rivers, lakes, how many), which structures in which biome. It is
+possible, and it is the most natural thing this codebase could grow
+into. Every one of those knobs already exists as a hard-coded choice
+in a generator. The work is turning the choices into a recipe: one
+object the generator reads, sent to the workers with the seed, saved
+with the world. The real costs:
+- the structure systems each place themselves with their own checks,
+  and those have to become table-driven;
+- Strata's biomes live in a different generator from Earth's, and have
+  to become modules either can use;
+- lava does not flow yet;
+- the generator is the hottest code in the game, so a recipe lookup has
+  to cost nothing.
+It is an arc of five or six builds, and the one thing I would add is a
+preview: the recipe drawn as a map before you commit, by the same
+generator the world uses. Also presets, a random button, and a recipe
+string you can share. Sky, gravity, day length and sea level are
+cheap extras. And the optional progression I like: you can only forge
+what you have seen.
+
+**The upgrade machine (his, a nod to Pack-a-Punch).** Random variants
+per item, re-roll for another, each changing how the thing works. The
+right shape for this game: every variant is a real mechanic, not a
+number going up. The joy of it is the name and the look: a variant
+has its own name and a shimmering skin, as a punched gun does. Names
+I offered: OVERFORGE, the CRUCIBLE, the STRANGE ENGINE, the TEMPER.
+
+**The gambling machine (his).** Any item in, anything out, odds from
+how rare and how many. I would show the odds before you pull ("1 in
+4,300,000") and keep the tiny chance real. That is the whole joke,
+and it only works if the number is honest.
+
+**Hell (his).** A red dimension with demons, lost souls, lava rivers, a
+demon base, a mini-boss vault and the Devil. One conflict: the spec
+says bedrock cannot be mined, and that is one of the few lines Build 1
+was judged on. My proposal keeps both: bedrock holds everywhere except
+one place, the seal under THE DEEP's works. That is what the Knocker
+was guarding, the open thread I did not want to fill in alone. Break
+the seal and the way down is Hell. That turns an old mystery into the
+door.
+
+**Mine.** What I want, and why:
+- **Strata you can read.** The game is named for rock layers and has
+  none: bands of sandstone, shale, granite, marble and coal seams by
+  depth, tilted and folded by region, so every cliff face and every
+  hole you carve shows the land's history. That deepens carving
+  itself, which is still the identity.
+- **The buried age.** An older civilisation under every world: a
+  brush (a very soft drill) that reveals what a hard drill would break,
+  fossils, a lost city under a desert, a museum in the city that pays
+  for finds and fills its halls with them. The story you find, found
+  by carving.
+- **Lava that flows**, which hell, volcanoes and the forge all need.
+  Then volcanoes that wake.
+- **Frozen winters**: lakes and rivers you can walk on, and the spring
+  thaw with a flood.
+- **Halls that ring**: sound that knows how big the space around you
+  is, from the field itself. A carved cathedral should sound like one.
+- **Water engineering**: sluice gates, dams, a mill that grinds, a
+  wheel that powers machines.
+- **Settlements that grow** with your trade: new houses and new stalls.
+- **Meteor nights**: a shower, one that lands, a crater with a rare
+  ore, visible from the air.
+- **An aurora** over the taiga; eclipses.
+
+The order I would want (Austin's to react to):
+1. the upgrade machine and the gambling machine, which are self-contained
+   and fun at once;
+2. strata you can read (mine);
+3. Hell through the Knocker's seal, with lava that flows built first
+   because Hell needs it;
+4. the planet forge last, as the capstone, where Hell's biomes and every
+   liquid and structure become options.
+
 ## 2026-10-13, night — the crew at home
 
 Build 120. The crew had everything for a day's work and nothing for
