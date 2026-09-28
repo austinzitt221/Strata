@@ -578,7 +578,7 @@ Austin's four, with my additions in the journal entry of the same day:
        Austin's ammo idea (the Black Ops 3 style rounds) became KINDLE
        and ARCWIRE, variants of the gun itself, so a stack of rounds never
        splits into kinds.
-     - **Slice 2 (next):** the rest of Austin's list:
+     - **Slice 2 DONE (Build 123):** the rest of Austin's list:
        - grapple that pulls creatures to you (Scorpion);
        - rod that can pull up anything in the game, the rarer the less often;
        - wings that flap you upward, and wings that glide far and fast;
@@ -586,8 +586,9 @@ Austin's four, with my additions in the journal entry of the same day:
        - sports car with a turret; jet that drops bombs;
        - boots that walk on any liquid;
        - the two drones.
-       Plus mine: armor that turns a hit into a shove, and a drill that
-       follows a vein by itself.
+       Seventeen variants in all (see the DEVLOG), plus WORTH, a value for
+       every item. Still open, mine: armor that turns a hit into a shove,
+       and a drill that follows a vein by itself.
  35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
      Any item in, name the item and the amount, odds from rarity and
      count, shown before you pull; a loss deletes the stake.

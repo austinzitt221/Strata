@@ -2,6 +2,65 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 123 — THE OVERFORGE, slice 2 (2026-10-15)
+
+Playtest of 121 and 122: "perfect from what I can see, everything
+works." On to the next batch: the rest of Austin's Overforge list,
+then the gambling machine, then strata. The Overforge now takes
+grapples, rods, wings, jetpacks, boots, both drones, and the sports car
+and jet kits. Seventeen new variants:
+- **Grapple.**
+  - **SCORPION** (Austin's): hook a creature within 34 m and haul it to
+    your feet, stunned. A boss is too heavy: the line hauls you to it.
+  - **PENDULUM** (mine): the line is a rope, not a winch. It holds its
+    length and you swing; SPACE reels in, C lets out.
+- **Rod.**
+  - **GRAB-BAG** (Austin's): about one bite in three is anything in the
+    game, the rarer the less often. Odds go as 1 / worth^0.9: 96% of pulls
+    are worth under 20 coins, about 1 in 550 is worth 500 or more.
+  - **EMBERLINE** (mine): cast onto lava. Obsidian, scarcoal, lava
+    stones, and 3% of the time a magma heart.
+- **Wings.**
+  - **SKYLARK** (Austin's): tap SPACE in the air to beat your wings and
+    climb, ten beats per flight (22 m), rested on landing.
+  - **ALBATROSS** (Austin's): diving builds speed (to 48 m/s) and pulling
+    up spends it on height. Measured: 29 m/s against plain wings' 12 on
+    the same dive, then 7 m of climb.
+- **Jetpack.**
+  - **AFTERBURNER** (Austin's): SHIFT while thrusting boosts you the way
+    you look, 30 m/s, at three times the fuel.
+  - **HOVERPACK** (mine): SPACE holds you exactly level on a quarter of
+    the fuel; SHIFT + SPACE climbs. For building high.
+- **Boots.**
+  - **WATERWALKER** (Austin's): water and ichor hold you like stone, and
+    your steps ring the water. Crouch to sink.
+  - **SPRINGHEEL** (mine): twice the jump height, and no fall hurts you.
+- **Sports car.**
+  - **GUNNER** (Austin's): a bonnet gun, LEFT CLICK fires where you
+    look. It never hits your own car.
+  - **NITRO** (mine): SHIFT gives two thirds again the top speed for 3 s
+    (27 to 45), then it refills.
+- **Jet.** **BOMBARDIER** (Austin's): R drops a stick of four bombs for
+  one rocket.
+- **Camera drone.**
+  - **SPOTTER**: everything alive within 70 m of the drone stays marked
+    for 30 s after it lands, through walls: red if hostile, green if not,
+    gold for a boss.
+  - **STRIKER**: the drone carries a gun.
+- **Teleport drone.**
+  - **FARLIGHT**: 300 m of range at twice the speed.
+  - **HOMEWARD**: after a blink, right click within 90 s takes you back.
+- **The variant rides with the vehicle.** Deploying a kit, folding it
+  back, wrecking it, a crew member's convoy and the save (a new column
+  on the entity row) all keep it.
+- **WORTH.** A value for every item in the game:
+  - A price for raw things and loot.
+  - Anything crafted is worth its recipe's inputs and a tenth again.
+  - A gun is worth its shop price.
+  The Grab-Bag reads it now, and the gambling machine will.
+- Tests: b123test (every new variant through the real player, vehicle
+  and drone code), b122 and b119 re-run.
+
 ## Build 122 — THE OVERFORGE (2026-10-14)
 
 The first build from the brainstorm list: roadmap item 34, slice 1.

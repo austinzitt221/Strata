@@ -5,6 +5,18 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 123 — THE OVERFORGE, slice 2
+- [ ] SCORPION on a pack of stalkers, and on a boss (it should haul YOU).
+- [ ] PENDULUM: swing under a bridge or across a canyon. Does the rope
+      feel like a rope? Are SPACE (in) and C (out) right?
+- [ ] ALBATROSS off a mountain: how far can you get on one fall?
+      SKYLARK: are ten beats enough, or too many?
+- [ ] WATERWALKER across a lake and down a river. Does crouch-to-sink
+      feel natural?
+- [ ] GRAB-BAG for a while: what did you pull up? Does the rare stuff
+      feel rare?
+- [ ] GUNNER and NITRO on the highway; BOMBARDIER on a garrison.
+
 ## Build 122 — THE OVERFORGE
 - [ ] Craft the Overforge (12 iron ingots, 6 ruby ingots, 2 diamonds,
       40 obsidian) and forge a few things. Are the prices right for

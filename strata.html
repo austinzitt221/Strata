@@ -605,7 +605,7 @@ body.pad{cursor:none;}
     <div class="panel" style="min-width:560px;">
       <h2 id="oftitle">THE OVERFORGE</h2>
       <div class="invgrid" style="grid-template-columns:52px 1fr; align-items:center; gap:12px;" id="ofrow"></div>
-      <div class="sub" id="ofstatus" style="margin:6px 0 8px;">put in a drill, a dispenser, a sword or a gun</div>
+      <div class="sub" id="ofstatus" style="margin:6px 0 8px;">put in a tool, a weapon, gear or a vehicle kit</div>
       <div id="ofpool" style="font-size:12px; line-height:1.55; margin-bottom:8px;"></div>
       <div><button class="btn" id="btnOforge">OVERFORGE</button></div>
     </div>
@@ -15155,6 +15155,7 @@ function killEntity0(e, byPlayer){
   if (VEH[e.type]){
     if (game.driving === e){ game.driving = null; game.chase = null; AudioSys.setHum(false, 0, 0); }
     const kit = { kind: e.type, charge: Math.round((e.charge || 0) / 2), bat: e.bat || null, wrecked: 1 };
+    if (e.ov) kit.ov = e.ov;
     const i2 = game.slots.findIndex(sl => !sl);
     if (i2 >= 0){
       game.slots[i2] = kit;
@@ -26128,6 +26129,7 @@ function entityOnRay(maxDist){
   const o = game.camera.position;
   let best = null, bestT = maxDist;
   for (const e of game.entities){
+    if (e === game.driving) continue;
     const def = ENT_DEF[e.type];
     const vx = e.x - o.x, vy = e.y + def.h * 0.6 - o.y, vz = e.z - o.z;
     const t = vx * dir.x + vy * dir.y + vz * dir.z;
@@ -26165,6 +26167,7 @@ function fireHitscan(G){
   // nearest entity in front of the wall
   let best = null, bestT = tWall;
   for (const e of game.entities){
+    if (e === game.driving || e.type === 'drop') continue;                      // Build 123: the bonnet gun, fired over your own car
     const def = ENT_DEF[e.type];
     const vx = e.x - o.x, vy = e.y + def.h * 0.6 - o.y, vz = e.z - o.z;
     const t = vx * dir.x + vy * dir.y + vz * dir.z;
@@ -26316,7 +26319,7 @@ function updateProjectiles(dt){
     let done = false;
     for (let k = 0; k < steps && !done; k++){
       const h = dt / steps;
-      if (!p.beam) p.vy -= 3.5 * h;
+      if (!p.beam) p.vy -= (p.g || 3.5) * h;                                        // Build 123: a bomb falls like one
       p.x += p.vx * h; p.y += p.vy * h; p.z += p.vz * h;
       const eds = nearEdits([p.x - 1, p.y - 1, p.z - 1, p.x + 1, p.y + 1, p.z + 1]);
       if (CORE.evalSDF(p.x, p.y, p.z, eds, game.gen) < 0.12) done = true;
@@ -27380,6 +27383,7 @@ function bindInput(){
           const i2 = game.slots.findIndex(sl => !sl);
           if (i2 < 0){ toast('no pack space for the kit'); return; }
           game.slots[i2] = { kind: vent.type, charge: Math.round(vent.charge || 0), bat: vent.bat || null };
+          if (vent.ov) game.slots[i2].ov = vent.ov;
           if (vent.mesh) game.scene.remove(vent.mesh);
           game.entities.splice(game.entities.indexOf(vent), 1);
           refreshHotbar(); markSave();
@@ -27399,6 +27403,7 @@ function bindInput(){
         }
       }
       const selDrone = selectedItem();
+      if (selDrone && selDrone.kind === 'tdrone' && selDrone.ov === 'homeward' && game.homeward && performance.now() - game.homeward.t < 90000){ ovSys.goHome(); return; }   // Build 123
       if (selDrone && (selDrone.kind === 'drone' || selDrone.kind === 'tdrone')){
         if ((selDrone.charge || 0) < 5) toast('drone battery too low — charge it near a powered grid with spare watts');
         else enterPhoto(selDrone);
@@ -28019,9 +28024,11 @@ function driveCar(dt){
   e.onRoad = roadSys.onRoad(e.x, e.y, e.z);
   const cruise = e.onRoad ? 1.35 : 1;
   const beached = V.water && !afloat ? 0.2 : 1;
-  const top = dead ? 0 : V.top * cruise * beached, rev = dead ? 0 : V.rev * beached;
+  const boost = e.ov === 'nitro' ? ovSys.nitro(e, dt, canMove && (k['ShiftLeft'] || k['ShiftRight']) && thr > 0 && !dead) : 1;   // Build 123: NITRO
+  const top = dead ? 0 : V.top * cruise * beached * boost, rev = dead ? 0 : V.rev * beached;
   const target = thr > 0 ? top : thr < 0 ? -rev : 0;
-  const accel = airborne ? 0 : (thr !== 0 ? V.accel : V.brake);
+  const accel = airborne ? 0 : (thr !== 0 ? V.accel * (boost > 1 ? 1.8 : 1) : V.brake);
+  if (e.ov === 'turret' && canMove && game.mouseL) ovSys.carGun(e, dt);                                                           // Build 123: GUNNER
   e.speed += Math.max(-accel * dt, Math.min(accel * dt, target - e.speed));
   if (!airborne && Math.abs(e.speed) > 0.3)
     e.heading -= steer * dt * V.steer * Math.sign(e.speed) * Math.min(1, 0.35 + Math.abs(e.speed) / 6);
@@ -28559,10 +28566,13 @@ function driveJet(e, V, dt){
     e.misT = 1.6;
     if (CORE.countItem(game.slots, 'rockets') > 0){
       CORE.consumeItem(game.slots, 'rockets', 1);
+      if (e.ov === 'bomber'){ ovSys.bombs(e, fx, fy, fz); refreshHotbar(); }                // Build 123: BOMBARDIER
+      else {
       const o = { x: e.x + fx * 2, y: e.y + 0.9 + fy * 2, z: e.z + fz * 2 };
       baseSys.shell(o, { x: o.x + fx * 220, y: o.y + fy * 220, z: o.z + fz * 220 }, 2.2, 60, true);
       e.missiles = (e.missiles || 0) + 1;
       refreshHotbar();
+      }
     } else toast('no rockets in the pack — the missiles are rockets');
   }
   AudioSys.setHum(e.speed > 0.5, 1, Math.min(1, e.speed / V.top));
@@ -28684,6 +28694,7 @@ function updatePlayer(dt){
   }
   game.onIce = false;
   if (seasonSys.winter) seasonSys.ice();
+  if (!game.onIce && ovSys.feet() === 'wwalk') ovSys.waterWalk(canMove && k['KeyC']);   // Build 123: WATERWALKER
   // camera-relative on the horizontal plane (yaw only — never world axes)
   const sin = Math.sin(game.yaw), cos = Math.cos(game.yaw);
   let mx = (-sin * fwd + cos * str);
@@ -28725,15 +28736,24 @@ function updatePlayer(dt){
   } else if (!zeroG()){
     let sp = PLAYER.walk * (sprint ? PLAYER.sprintMul : 1) * (game.crouch ? PLAYER.crouchMul : 1) * farmSys.mul('speed');
     // snappy ground control, mild air control
-    const a = game.grounded ? 22 : game.gliding ? 0.4 : 6;
+    const bp = game.armor && game.armor.back;
+    const burning = !!(bp && bp.kind === 'jetpack' && bp.ov === 'afterburn' && sprint && canMove && k['Space'] && !game.grounded && (bp.fuel || 0) > 0);   // Build 123
+    const swinging = !!(game.grapple && game.grapple.L != null);                 // Build 123: PENDULUM -- the rope swings you, the air barely touches you
+    const a = game.grounded ? 22 : game.gliding ? 0.4 : burning ? 0 : swinging ? 0.6 : 6;
     game.vel.x += (mx * sp - game.vel.x) * Math.min(1, a * dt);
     game.vel.z += (mz * sp - game.vel.z) * Math.min(1, a * dt);
     game.vel.y -= gravityNow() * dt;
     // worn jetpack: hold space in the air to thrust (survival's short flight)
     const jp = game.armor && game.armor.back;
     if (jp && jp.kind === 'jetpack' && canMove && k['Space'] && !game.grounded && (jp.fuel || 0) > 0){
-      game.vel.y = Math.min(6.5, game.vel.y + 60 * dt);
-      jp.fuel = Math.max(0, jp.fuel - 0.9 * dt);
+      // Build 123: HOVERPACK holds you level (SHIFT climbs); AFTERBURNER drives you the way you look
+      const hov = jp.ov === 'hover' && !sprint, burn = jp.ov === 'afterburn' && sprint;
+      if (hov){ game.vel.y += gravityNow() * dt; game.vel.y *= 1 - Math.min(1, 8 * dt); }
+      else game.vel.y = Math.min(6.5, game.vel.y + 60 * dt);
+      if (burn){ const bx = -Math.sin(game.yaw) * Math.cos(game.pitch), bz = -Math.cos(game.yaw) * Math.cos(game.pitch); game.vel.x += bx * 40 * dt; game.vel.z += bz * 40 * dt; game.vel.y = Math.min(9, game.vel.y + Math.sin(game.pitch) * 30 * dt);
+                 const hs = Math.hypot(game.vel.x, game.vel.z); if (hs > 30){ game.vel.x *= 30 / hs; game.vel.z *= 30 / hs; }
+                 if (Math.random() < 0.8) Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.25, [0x9fd8ff, 0xffffff, 0xffb347], 2, 2); }
+      jp.fuel = Math.max(0, jp.fuel - 0.9 * dt * (hov ? 0.25 : burn ? 3 : 1));
       game.jetOn = true;
       if (Math.random() < 0.5)
         Particles.burst(game.pos.x, game.pos.y + 0.9, game.pos.z, 0.15, [0xffb347, 0xff8830], 1, 1.2);
@@ -28742,7 +28762,18 @@ function updatePlayer(dt){
     // to a drift and you ride forward wherever you look. No fuel, no limit,
     // and a landing that gentle never hurts.
     const wg = game.armor && game.armor.back;
-    if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
+    // Build 123: SKYLARK beats its wings on a tap of SPACE; ALBATROSS trades height for speed and back
+    const spaceTap = canMove && k['Space'] && !game.spaceWas;
+    if (game.grounded) game.flaps = 0;
+    if (wg && wg.kind === 'wings' && wg.ov === 'skylark' && spaceTap && !game.grounded && (game.flaps || 0) < 10){
+      game.flaps = (game.flaps || 0) + 1; game.vel.y = Math.max(game.vel.y, 10.5);
+      Particles.burst(game.pos.x, game.pos.y + 1.2, game.pos.z, 0.6, [0xf4f2f8, 0xd8d0c0], 5, 1.4);
+      AudioSys.burst({ dur: 0.14, freq: 260, gain: 0.12 });
+    }
+    if (wg && wg.kind === 'wings' && wg.ov === 'albatross' && canMove && k['Space'] && !game.grounded && (game.vel.y < -1.2 || game.gliding) && !game.jetOn){
+      ovSys.albatross(dt, fwd);
+      game.gliding = true;
+    } else if (wg && wg.kind === 'wings' && canMove && k['Space'] && !game.grounded && game.vel.y < -1.2 && !game.jetOn){
       // the same slow fall; hold W to drive forward at half again a sprint
       // and cross the map on one glide
       game.vel.y += (-2.4 - game.vel.y) * Math.min(1, 7 * dt);
@@ -28752,7 +28783,8 @@ function updatePlayer(dt){
       game.vel.z += (gfz * gsp - game.vel.z) * Math.min(1, 5 * dt);
       game.gliding = true;
     } else game.gliding = false;
-    if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump * farmSys.mul('jump'); game.grounded = false; }
+    if (canMove && k['Space'] && game.grounded && !game.onElev){ game.vel.y = PLAYER.jump * farmSys.mul('jump') * (ovSys.feet() === 'spring' ? 1.45 : 1); game.grounded = false; }   // Build 123: SPRINGHEEL
+    if (!game.gliding) game.glideV = 0;
     if (game.vel.y < -40) game.vel.y = -40;
   }
   if (zeroG() && !game.fly && !game.swim){
@@ -28782,10 +28814,28 @@ function updatePlayer(dt){
   const vyBefore = game.vel.y;
   if (game.grapple && !game.fly){
     const gp = game.grapple;
+    if (gp.haul){ const en = gp.haul; if (!game.entities.includes(en)) game.grapple = null; else { gp.x = en.x; gp.y = en.y + 0.8; gp.z = en.z; } }
+  }
+  if (game.grapple && !game.fly){
+    const gp = game.grapple;
     const dx = gp.x - game.pos.x, dy = gp.y - (game.pos.y + h * 0.6), dz = gp.z - game.pos.z;
     const d = Math.hypot(dx, dy, dz);
     const tl = activeTool();
-    if (d < 1.6 || !tl || tl.kind !== 'grapple'){
+    if (!tl || tl.kind !== 'grapple'){
+      game.grapple = null;
+    } else if (gp.haul && !gp.haul.bossType){
+      ovSys.haul(gp, dt);                                                        // Build 123: SCORPION -- it comes to you
+    } else if (gp.L != null){
+      // Build 123: PENDULUM -- a rope, not a winch: it only stops you going farther
+      if (canMove && k['Space']) gp.L = Math.max(2, gp.L - 7 * dt);
+      if (canMove && k['KeyC']) gp.L = Math.min(34, gp.L + 7 * dt);
+      if (d > gp.L){
+        const ux = dx / d, uy = dy / d, uz = dz / d, vr = game.vel.x * ux + game.vel.y * uy + game.vel.z * uz;
+        if (vr < 0){ game.vel.x -= ux * vr; game.vel.y -= uy * vr; game.vel.z -= uz * vr; }
+        const pull = (d - gp.L) * 14 * dt;
+        game.vel.x += ux * pull; game.vel.y += uy * pull; game.vel.z += uz * pull;
+      }
+    } else if (d < 1.6){
       game.grapple = null;
     } else {
       const sp2 = 16;
@@ -28836,7 +28886,7 @@ function updatePlayer(dt){
 
   // fall damage: compare impact speed on the grounded transition (water
   // breaks the fall)
-  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival' && !game.swim){
+  if (!game.fly && game.grounded && !wasGrounded && game.mode === 'survival' && !game.swim && ovSys.feet() !== 'spring'){
     const impact = -vyBefore;
     // a cannon shot lands softer than a fall (the pad's charge pushes back), once
     const soft = game.softLand ? 0.35 : 1;
@@ -28892,6 +28942,7 @@ function updatePlayer(dt){
     game.camBack = 0;
   }
   game.camera.rotation.set(game.pitch, game.yaw, 0);
+  game.spaceWas = !!game.keys['Space'];                                          // Build 123: a tap, told from a hold
 
   // footsteps
   const spd = Math.hypot(game.vel.x, game.vel.z);
@@ -28937,10 +28988,88 @@ const OV = {
   sing:    { name: 'SINGULARITY', fam: 'fw', guns: ['boomtube'], desc: 'fires a small black hole: for four seconds it drags in everything alive and crushes it (bosses hold their ground)' },
   kindle:  { name: 'KINDLE',      fam: 'fw', desc: 'what it hits catches fire' },
   arc:     { name: 'ARCWIRE',     fam: 'fw', desc: 'a hit throws lightning to up to three more nearby and stuns them all' },
+  // ---- slice 2 (Build 123) ----
+  scorpion:  { name: 'SCORPION',    fam: 'grapple', desc: 'hook a creature and haul it to your feet (a boss is too heavy: it hauls you instead)' },
+  swing:     { name: 'PENDULUM',    fam: 'grapple', desc: 'the line holds its length and you swing on it · SPACE reels in, C lets out' },
+  grab:      { name: 'GRAB-BAG',    fam: 'rod',     desc: 'a bite can be anything in the game, the rarer the less often' },
+  ember:     { name: 'EMBERLINE',   fam: 'rod',     desc: 'cast onto lava: obsidian, scarcoal, lava stones, and once in a long while a magma heart' },
+  skylark:   { name: 'SKYLARK',     fam: 'wings',   desc: 'tap SPACE in the air to flap and climb · ten beats, then land to rest them' },
+  albatross: { name: 'ALBATROSS',   fam: 'wings',   desc: 'dive to build speed, pull up to spend it on height: cross the map on one fall' },
+  afterburn: { name: 'AFTERBURNER', fam: 'jetpack', desc: 'hold SHIFT while you thrust: a hard boost the way you look (thirsty)' },
+  hover:     { name: 'HOVERPACK',   fam: 'jetpack', desc: 'SPACE holds you level where you are on a quarter of the fuel · SHIFT + SPACE climbs' },
+  wwalk:     { name: 'WATERWALKER', fam: 'boots',   desc: 'water and ichor hold you like stone · crouch to sink' },
+  spring:    { name: 'SPRINGHEEL',  fam: 'boots',   desc: 'jump twice as high, and no fall hurts you' },
+  turret:    { name: 'GUNNER',      fam: 'sportscar', desc: 'a turret on the bonnet: LEFT CLICK fires where you look' },
+  nitro:     { name: 'NITRO',       fam: 'sportscar', desc: 'SHIFT burns nitro: two thirds again the top speed for three seconds, then it refills' },
+  bomber:    { name: 'BOMBARDIER',  fam: 'jet',     desc: 'R drops a stick of four bombs instead of a missile (still one rocket)' },
+  spotter:   { name: 'SPOTTER',     fam: 'drone',   desc: 'everything alive the drone sees stays marked through the walls for thirty seconds after it lands' },
+  striker:   { name: 'STRIKER',     fam: 'drone',   desc: 'the drone carries a gun: LEFT CLICK fires where it looks' },
+  farlight:  { name: 'FARLIGHT',    fam: 'tdrone',  desc: 'three hundred metres of range, and twice the speed' },
+  homeward:  { name: 'HOMEWARD',    fam: 'tdrone',  desc: 'after a blink, RIGHT CLICK within ninety seconds takes you back where you left' },
+};
+// ---------- WORTH (Build 123): what anything is worth, in coin ----------
+// Raw things and loot have a price; anything crafted is worth what went into
+// it and a tenth again. The Grab-Bag rod's odds and the gambling machine's
+// read it.
+const worthSys = {
+  BASE: {
+    coin: 1, coal: 2, ironore: 3, rubyore: 8, diamond: 40, aetherore: 18, ironingot: 5, rubyingot: 12, aetheringot: 28, cookedmeat: 3, cookedfish: 4, bread: 4, peat: 1, meat: 2, fish: 3, fang: 4, huskmeat: 2,
+    wispcore: 12, feather: 8, amber: 10, cocoa: 3, tomato: 2, wheat: 1, lettuce: 2, tomatoseed: 1, wheatseed: 1, lettuceseed: 1,
+    tuft: 0.5, flower: 0.5, shrub: 0.5, coral: 2, kelp: 1, ichorworm: 3, veillamp: 60, ichorcrown: 900, voidfruit: 20,
+    tkey: 60, vkey: 120, bkey: 200, lunite: 20, selenite: 25, astrium: 60, voidore: 45, scarcoal: 6, ichorite: 15, nullite: 50,
+    vehlite: 80, nullcore: 150, relic: 300, khammer: 900, nullheart: 1400, wfist: 700, mheart: 800, sigil: 500, aseal: 1000,
+    tcore: 450, tankpart: 250, gunpart: 300, jetpart: 350, jetfuel: 40, rounds: 0.6, cells: 1, rockets: 12,
+    car: 600, sportscar: 1200, bike: 500, boat: 150, motorboat: 700, tank: 3000, jet: 4000, plane: 1800, hover: 1400, heli: 3500,
+    rocket: 5000, rocket2: 8000, mech: 2500, translator: 400, band: 350, headlamp: 60, spawner: 400, grabber: 300,
+    springstone: 30, lavastone: 30, ichorstone: 60, page: 20, survey: 40, paper: 1, ticket: 10, deed: 800,
+  },
+  MAT: { 1: 0.05, 7: 0.05, 8: 0.05, 12: 0.03, 20: 0.04, 29: 0.05, 30: 0.06, 31: 0.04, 33: 0.05, 34: 0.08,
+         5: 0.6, 9: 0.5, 10: 0.2, 15: 0.15, 16: 1, 17: 1, 19: 0.3, 21: 0.2, 23: 0.2, 25: 0.2, 27: 0.2 },
+  memo: new Map(),
+  key(it){ return it.kind + (it.kind === 'mat' ? ':' + it.mat : it.kind === 'fw' ? ':' + it.g : it.tier != null ? ':' + it.tier : ''); },
+  // one unit of it
+  of(it){
+    if (!it) return 0;
+    const k = this.key(it);
+    if (this.memo.has(k)) return this.memo.get(k);
+    this.memo.set(k, 30);                                    // a cycle reads as the fallback
+    let v = null;
+    if (it.kind === 'mat'){
+      const ore = CORE.ORE_ITEM[it.mat];
+      v = ore ? this.of({ kind: ore }) : this.MAT[it.mat];
+    } else if (it.kind === 'fw') v = (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).price;
+    else if (this.BASE[it.kind] != null) v = this.BASE[it.kind];
+    if (v == null){
+      const r = CORE.RECIPES.find(R => R.kind === (it.kind === 'mat' ? 'matout' : it.kind) && (it.kind !== 'mat' || R.matOut === it.mat) && (R.tier == null || R.tier === it.tier));
+      if (r){ let sum = 0; for (const c of r.costs) sum += c.n * (c.item ? this.of({ kind: c.item }) : this.of({ kind: 'mat', mat: c.mat })); v = sum * 1.1 / (r.yields || 1); }
+    }
+    if (v == null) v = it.kind === 'mat' ? 0.1 : 30;
+    this.memo.set(k, v);
+    return v;
+  },
+  // everything that could come out of the Grab-Bag, one at a time
+  pool(){
+    if (this._pool) return this._pool;
+    const out = [];
+    for (const it of catalogEntries()){
+      if (it.kind === 'coin' || it.kind === 'spawner' || it.kind === 'grabber' || (it.kind === 'mat' && it.mat === CORE.MAT.BEDROCK)) continue;
+      const one = Object.assign({}, it); if (one.count != null) one.count = one.kind === 'mat' ? 24 : 1;
+      const w = this.of(one) * (one.kind === 'mat' ? 24 : 1);
+      out.push({ it: one, w: 1 / Math.pow(Math.max(0.5, w), 0.9), worth: w });
+    }
+    return this._pool = out;
+  },
+  roll(){
+    const P = this.pool(); let t = 0; for (const e of P) t += e.w;
+    let r = Math.random() * t;
+    for (const e of P){ r -= e.w; if (r <= 0) return e; }
+    return P[P.length - 1];
+  },
 };
 const ovSys = {
   killer: null, lootMul: 1, quiet: false, cur: null, landing: false,
-  can(it){ return !!it && (it.kind === 'drill' || it.kind === 'disp' || it.kind === 'sword' || it.kind === 'fw'); },
+  KINDS: ['drill', 'disp', 'sword', 'fw', 'grapple', 'rod', 'wings', 'jetpack', 'boots', 'sportscar', 'jet', 'drone', 'tdrone'],
+  can(it){ return !!it && this.KINDS.includes(it.kind) && !it.wrecked; },
   pool(it){
     if (!this.can(it)) return [];
     const gid = it.kind === 'fw' ? (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).id : null;
@@ -28948,7 +29077,8 @@ const ovSys = {
   },
   // the first forge at full price, every roll after at half (a nod to the machine this is a nod to)
   cost(it){
-    const base = it.kind === 'fw' ? Math.max(300, (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).price) : 250 + (it.tier | 0) * 120;
+    const K = { grapple: 400, rod: 300, wings: 900, jetpack: 700, sportscar: 1200, jet: 2000, drone: 500, tdrone: 800 };
+    const base = it.kind === 'fw' ? Math.max(300, (CORE.GUNS[it.g | 0] || CORE.GUNS[0]).price) : K[it.kind] || 250 + (it.tier | 0) * 120;
     return it.ov ? Math.round(base / 2) : base;
   },
   name(it){ return it && it.ov && OV[it.ov] ? OV[it.ov].name : null; },
@@ -28981,7 +29111,7 @@ const ovSys = {
     const it = pn.inv[0], btn = $('btnOforge'), nm = $('ofname'), pool = $('ofpool');
     if (this.spinT > 0) return;                      // the names are still turning over
     if (!it){
-      $('ofstatus').textContent = 'put in a drill, a dispenser, a sword or a gun';
+      $('ofstatus').textContent = 'a drill, dispenser, sword or gun · a grapple or a rod · wings, a jetpack or boots · a drone · the sports car or the jet';
       nm.textContent = ''; pool.innerHTML = ''; btn.textContent = 'OVERFORGE'; btn.disabled = true;
       return;
     }
@@ -29017,7 +29147,7 @@ const ovSys = {
       nm.textContent = OV[seq[i]].name;
       AudioSys.tone({ freq: 300 + i * 45, dur: 0.06, gain: 0.12, type: 'square' });
       i++;
-      if (i < seq.length) setTimeout(step, 40 + i * i * 6);
+      if (i < seq.length) setTimeout(step, 30 + i * i * 3);   // about a second, slowing to a stop
       else { this.spinT = 0; AudioSys.tone({ freq: 880, dur: 0.5, gain: 0.2, type: 'sine' }); AudioSys.sfx('craft'); toast(itemLabel(it) + ' — ' + OV[it.ov].desc, 1); this.refresh(); }
     };
     step();
@@ -29277,6 +29407,7 @@ const ovSys = {
       g.mesh.position.set(g.x0 + g.vx * t, g.y0 + g.vy * t - 0.5 * g.G * t * t, g.z0 + g.vz * t);
       if (g.t >= g.tf){ this.globs.splice(i, 1); this.land(g); }
     }
+    this.spotTick();                                                          // Build 123: SPOTTER's marks
     // Veinsight
     this.dowseStep();
     if (this.marks && this.marks.count){
@@ -29285,9 +29416,152 @@ const ovSys = {
       if (this.markT <= 0) this.marks.count = 0;
     }
   },
+  // ======== slice 2 (Build 123) ========
+  // ---- SCORPION ----
+  canHaul(e){ return !(e.type === 'villager' || e.crew || e.pet || e.type === 'drop' || VEH[e.type]); },
+  haul(gp, dt){
+    const en = gp.haul, tx = game.pos.x - Math.sin(game.yaw) * 1.2, tz = game.pos.z - Math.cos(game.yaw) * 1.2;
+    const dx = tx - en.x, dy = game.pos.y - en.y, dz = tz - en.z, d = Math.hypot(dx, dy, dz);
+    en.ovStun = Math.max(en.ovStun || 0, 0.25);                  // held on the line: it does not walk
+    if (d < 1.2){ game.grapple = null; en.ovStun = 1.5; Particles.burst(en.x, en.y + 0.8, en.z, 0.4, [0x9a7444, 0xffffff], 8, 1.5); return; }
+    const s = Math.min(d, 20 * dt) / d;
+    en.x += dx * s; en.y += dy * s; en.z += dz * s;
+    if (en.mesh) en.mesh.position.set(en.x, en.y, en.z);
+  },
+  // ---- GRAB-BAG and EMBERLINE ----
+  grabCatch(F){
+    const E = worthSys.roll(), it = Object.assign({}, E.it);
+    if (!giveItem(it, 1)) dropItem(it, { x: game.pos.x, y: game.pos.y + 1, z: game.pos.z });
+    const rare = E.worth >= 200;
+    toast('GRAB-BAG · out of the water: ' + (it.count > 1 ? it.count + ' × ' : '') + itemLabel(it) + (rare ? ' — worth ' + Math.round(E.worth) + ' coins!' : ''), rare ? 1 : 0);
+    AudioSys.sfx('craft'); if (rare) AudioSys.tone({ freq: 880, dur: 0.6, gain: 0.2, type: 'sine' });
+    Particles.burst(F.x, F.y + 0.2, F.z, 0.5, rare ? [0xffd76a, 0xffffff, 0xc070ff] : [0xdfeeff, 0xffffff], rare ? 24 : 10, 1.6);
+  },
+  emberCatch(F){
+    const r = Math.random(), M = CORE.MAT;
+    const it = r < 0.03 ? { kind: 'mheart', count: 1 } : r < 0.15 ? { kind: 'lavastone', count: 1 } : r < 0.45 ? { kind: 'scarcoal', count: 3 } : { kind: 'mat', mat: M.OBSIDIAN, count: 24 };
+    const ok = it.kind === 'mat' ? CORE.addMat(game.slots, it.mat, it.count) : giveItem(it, 1);
+    if (!ok) dropItem(it, { x: game.pos.x, y: game.pos.y + 1, z: game.pos.z });
+    toast('EMBERLINE · out of the lava: ' + (it.count > 1 ? it.count + ' ' : '') + itemLabel(it) + (it.kind === 'mheart' ? ' — A MAGMA HEART' : ''), it.kind === 'mheart' ? 1 : 0);
+    AudioSys.sfx('craft');
+    Particles.burst(F.x, F.y + 0.2, F.z, 0.5, [0xff7a30, 0xffb347, 0x442211], 16, 2.2);
+    Embers.burst(F.x, F.y + 0.2, F.z, 0.4, [0xffb347, 0xffdd66], 8, 2);
+  },
+  // ---- what you wear ----
+  feet(){ const b = game.armor && game.armor.feet; return b && b.ov || null; },
+  waterWalk(sink){
+    if (game.fly || game.driving || sink) return;
+    const wt = waterTopAt(game.pos.x, game.pos.z, game.pos.y + 0.6);
+    if (wt == null || game.pos.y < wt - 0.7 || game.pos.y > wt + 0.35) return;
+    game.pos.y = Math.max(game.pos.y, wt + 0.02);
+    if (game.vel.y < 0) game.vel.y = 0;
+    game.grounded = true; game.swim = false;
+    if (Math.hypot(game.vel.x, game.vel.z) > 1 && Math.random() < 0.3) rippleSys.add(game.pos.x, game.pos.z, 0.5);
+  },
+  // ALBATROSS: speed is height turned sideways
+  albatross(dt, fwd){
+    const p = game.pitch, fx = -Math.sin(game.yaw), fz = -Math.cos(game.yaw);
+    let v = game.glideV || Math.max(8, Math.hypot(game.vel.x, game.vel.z));
+    if (p < -0.05) v += -p * 26 * dt;                              // a dive builds it
+    v -= (0.04 * v + (fwd < 0 ? 6 : 0)) * dt;                      // the air takes a little; S brakes
+    v = Math.max(6, Math.min(48, v));
+    let vy = -2.0 + Math.min(0, p) * v * 0.9;                     // diving: down the way you look
+    if (p > 0.08 && v > 10){ vy = Math.sin(p) * v * 0.85; v -= p * 14 * dt; }   // pulling up: speed becomes height
+    game.glideV = v;
+    game.vel.x += (fx * v - game.vel.x) * Math.min(1, 4 * dt);
+    game.vel.z += (fz * v - game.vel.z) * Math.min(1, 4 * dt);
+    game.vel.y += (vy - game.vel.y) * Math.min(1, 5 * dt);
+    if (v > 30 && Math.random() < dt * 10) Particles.burst(game.pos.x - fx * 1.2, game.pos.y + 1.3, game.pos.z - fz * 1.2, 0.3, [0xffffff, 0xdfeeff], 1, 0.6);
+  },
+  // ---- the sports car ----
+  nitro(e, dt, on){
+    if (e.nitroT == null) e.nitroT = 3;
+    if (on && e.nitroT > 0){
+      e.nitroT = Math.max(0, e.nitroT - dt);
+      if (Math.random() < dt * 30){ const fx = -Math.sin(e.heading), fz = -Math.cos(e.heading); Particles.burst(e.x - fx * 2.2, e.y + 0.5, e.z - fz * 2.2, 0.2, [0x9fd8ff, 0xffffff, 0x5a8cff], 2, 1.5); }
+      return 1.67;
+    }
+    e.nitroT = Math.min(3, e.nitroT + dt * 0.5);
+    return 1;
+  },
+  CAR_GUN: { dmg: 10, spread: 0.02, range: 70, kick: 0, auto: 1, laser: 1 },
+  carGun(e, dt){
+    e.gunT = (e.gunT || 0) - dt;
+    if (e.gunT > 0) return;
+    e.gunT = 0.09;
+    const c0 = this.cur; this.cur = null;
+    fireHitscan(this.CAR_GUN);
+    this.cur = c0;
+    AudioSys.sfx('laser', 0.3); deepSys.loud(deepSys.NOISE.shot);
+  },
+  // ---- the jet: a stick of four ----
+  bombs(e, fx, fy, fz){
+    const sp = Math.max(8, e.speed || 0) * 0.9;
+    for (let i = 0; i < 4; i++){
+      (game.projectiles = game.projectiles || []).push({
+        x: e.x - fx * (1 + i * 2.2), y: e.y - 1.4, z: e.z - fz * (1 + i * 2.2),
+        vx: fx * sp, vy: Math.min(0, fy * sp) - 1 - i * 0.6, vz: fz * sp,
+        t: 14, dmg: 70, r: 3.6, g: 20, src: e });
+    }
+    toast('bombs away'); AudioSys.tone({ freq: 220, dur: 0.5, gain: 0.2, type: 'triangle' });
+  },
+  // ---- the drones ----
+  droneTick(ph, dt){
+    const ov = ph.drone.ov, now = performance.now();
+    if (ov === 'spotter'){
+      ph.spotT = (ph.spotT || 0) - dt;
+      if (ph.spotT <= 0){
+        ph.spotT = 0.4;
+        for (const e of game.entities){
+          if (e.type === 'drop' || VEH[e.type] || e.type === 'alien') continue;
+          if (Math.hypot(e.x - ph.pos.x, e.y - ph.pos.y, e.z - ph.pos.z) < 70) e.ovSpot = now + 30000;
+        }
+      }
+    } else if (ov === 'striker' && game.mouseL){
+      ph.gunT = (ph.gunT || 0) - dt;
+      if (ph.gunT <= 0 && ph.drone.charge > 2){
+        ph.gunT = 0.28; ph.drone.charge -= 0.6;
+        game.camera.position.copy(ph.pos); game.camera.rotation.set(ph.pitch, ph.yaw, 0); game.camera.updateMatrixWorld();
+        const p0 = game.pitch; fireHitscan(this.DRONE_GUN); game.pitch = p0;
+        AudioSys.sfx('laser', 0.4);
+      }
+    }
+  },
+  DRONE_GUN: { dmg: 14, spread: 0.006, range: 60, kick: 0, laser: 1 },
+  goHome(){
+    const H = game.homeward; game.homeward = null;
+    Particles.burst(game.pos.x, game.pos.y + 1, game.pos.z, 1.2, [0xb9a7ff, 0x8fe6dc, 0xeef2ff], 20, 4);
+    game.pos.set(H.x, H.y, H.z); game.vel.set(0, 0, 0);
+    Particles.burst(H.x, H.y + 1, H.z, 1.4, [0xb9a7ff, 0x8fe6dc, 0xeef2ff], 26, 5);
+    AudioSys.sfx('laser'); toast('HOMEWARD — back where you left'); markSave();
+  },
+  // marks over the spotted: a small diamond each, through walls
+  spotMarks: null,
+  spotTick(){
+    const now = performance.now();
+    let n = 0;
+    for (const e of game.entities) if (e.ovSpot > now) n++;
+    if (!n){ if (this.spotMarks) this.spotMarks.count = 0; return; }
+    if (!this.spotMarks){
+      const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
+      this.spotMarks = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.28), m, 128);
+      this.spotMarks.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(128 * 3), 3);
+      this.spotMarks.renderOrder = 999; this.spotMarks.frustumCulled = false; this.spotMarks.userData.noShadow = true;
+      game.scene.add(this.spotMarks);
+    }
+    const M = this.spotMarks, mtx = new THREE.Matrix4(), col = new THREE.Color(), bob = Math.sin(now / 250) * 0.12;
+    let i = 0;
+    for (const e of game.entities){
+      if (!(e.ovSpot > now) || i >= 128) continue;
+      const def = ENT_DEF[e.type] || { h: 1 };
+      mtx.makeTranslation(e.x, e.y + def.h + 0.7 + bob, e.z); M.setMatrixAt(i, mtx);
+      col.setHex(crewSys.hostile(e) ? 0xff5050 : e.bossType ? 0xffd040 : 0x7dff9b); M.setColorAt(i, col); i++;
+    }
+    M.count = i; M.instanceMatrix.needsUpdate = true; M.instanceColor.needsUpdate = true;
+  },
   // ---- the look: the held tool shimmers ----
   vmTick(v, tool, dt){
-    const ov = tool && tool.ov, grp = !tool ? null : tool.kind === 'drill' ? v.drill : tool.kind === 'disp' ? v.disp : tool.kind === 'sword' ? v.sword : tool.kind === 'fw' ? v.fws[tool.g | 0] : null;
+    const ov = tool && tool.ov, grp = !tool ? null : tool.kind === 'drill' ? v.drill : tool.kind === 'disp' ? v.disp : tool.kind === 'sword' ? v.sword : tool.kind === 'fw' ? v.fws[tool.g | 0] : tool.kind === 'grapple' ? v.grapple : tool.kind === 'rod' ? v.rod : null;
     const key = ov && grp ? grp.uuid : null;
     if (this.vmKey && this.vmKey !== key){ this.vmGrp.traverse(o => { if (o.isMesh && o.material && o.material.userData.em0 != null) o.material.emissive.setHex(o.material.userData.em0); }); this.vmKey = null; }
     if (!key) return;
@@ -31594,7 +31868,11 @@ function tryAction(dt, now){
       for (let t = 1.5; t < 14; t += 0.4){
         const x = o.x + dir.x * t, y = o.y + dir.y * t, z = o.z + dir.z * t;
         if (inWater(x, y, z)){ const wt = waterTopAt(x, z, y); hit = [x, wt != null ? wt : y, z]; break; }
-        if (sdfWorld(x, y, z, nearEdits([x - 1, y - 1, z - 1, x + 1, y + 1, z + 1])) < 0) break;
+        const le1 = nearEdits([x - 1, y - 1, z - 1, x + 1, y + 1, z + 1]);
+        if (sdfWorld(x, y, z, le1) < 0){
+          if (tool.ov === 'ember' && CORE.materialAt(x, y, z, le1, game.gen) === CORE.MAT.LAVA) hit = [x, y + 0.1, z];   // Build 123: EMBERLINE
+          break;
+        }
       }
       if (!hit){ toast('cast it onto water'); return; }
       // ICHOR FISHING (Build 105): a worm out of the ichor on the hook halves the wait, anywhere
@@ -31609,10 +31887,15 @@ function tryAction(dt, now){
       bob.position.set(hit[0], hit[1], hit[2]);
       game.scene.add(bob);
       const school = !ichor && shoreSys.near(hit[0], hit[2], 6);                   // Build 114: fish you can see bite sooner
-      game.fishing = { x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (ichor ? 5 + Math.random() * 9 : (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1)) * (bait ? 0.5 : 1) * (school ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
+      const lavaCast = tool.ov === 'ember' && !inWater(hit[0], hit[1] - 0.2, hit[2]);
+      game.fishing = { lava: lavaCast, x: hit[0], y: hit[1], z: hit[2], t: 0, bite: (ichor ? 5 + Math.random() * 9 : (3 + Math.random() * 7) * (seasonSys.summer ? 0.6 : 1)) * (bait ? 0.5 : 1) * (school ? 0.6 : 1), bit: false, bitT: 0, mesh: bob,
                        px: game.pos.x, pz: game.pos.z, ichor, bait: !!bait };
       toast(ichor ? 'cast into the ichor — something down there is looking at it' : 'cast — watch the bobber, click when it bites' + (bait ? ' · the worm is on the hook' : ''));
       AudioSys.sfx('toggle');
+    } else if (F.bit && F.lava){
+      ovSys.emberCatch(F); endFishing(); refreshHotbar(); refreshToolHUD();
+    } else if (F.bit && tool.ov === 'grab' && !F.ichor && Math.random() < 0.35){
+      ovSys.grabCatch(F); endFishing(); refreshHotbar(); refreshToolHUD();
     } else if (F.bit && F.ichor){
       // ICHOR FISHING (Build 105): things that are not fish
       const roll = Math.random();
@@ -31878,6 +32161,7 @@ function tryAction(dt, now){
       const e = spawnEntity(tool.item.kind, px, wt0 != null ? wt0 - VEH[tool.item.kind].draft : game.pos.y + 0.6, pz);
       e.charge = tool.item.charge || 0;
       e.bat = tool.item.bat || null;
+      if (tool.item.ov) e.ov = tool.item.ov;                                       // Build 123: the variant rides in the vehicle
       e.heading = game.yaw;
       game.slots[game.hotSel] = null;
       refreshHotbar(); refreshToolHUD();
@@ -31964,9 +32248,18 @@ function tryAction(dt, now){
     AudioSys.setHum(false, 0, 0);
     if (edge){
       if (game.grapple){ game.grapple = null; toast('released'); return; }
+      if (tool.ov === 'scorpion'){                                                  // Build 123: SCORPION
+        const en = entityOnRay(34);
+        if (en && ovSys.canHaul(en)){
+          game.grapple = { x: en.x, y: en.y + 0.8, z: en.z, n: [0, 1, 0], haul: en };
+          toast(en.bossType ? 'it is too heavy — it hauls YOU' : 'GET OVER HERE'); AudioSys.sfx('place'); AudioSys.tone({ freq: 180, dur: 0.3, gain: 0.25, type: 'sawtooth' });
+          return;
+        }
+      }
       const hit = grappleCast();
       if (!hit){ toast('nothing to hook within 34m'); AudioSys.sfx('deny'); return; }
       game.grapple = hit;
+      if (tool.ov === 'swing') hit.L = Math.hypot(hit.x - game.pos.x, hit.y - (game.pos.y + playerHeight() * 0.6), hit.z - game.pos.z);   // Build 123: PENDULUM
       AudioSys.sfx('place');
       toast('grappled — left click again to release');
     }
@@ -34152,7 +34445,7 @@ function quickMove(key, n){
     game.driving.bat = it; game.slots[key] = null; done = true;   // shift-click a battery into the car
   } else if (game.ui === 'oforge' && game.activeOforge){
     const pn = game.activeOforge;
-    if (!ovSys.can(it)) toast('the Overforge takes a drill, a dispenser, a sword or a gun');
+    if (!ovSys.can(it)) toast('the Overforge takes tools, weapons, gear, drones and the sports car or the jet');
     else if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
     else toast('the Overforge holds one thing at a time');
   } else if (game.ui === 'decraft' && game.activeDecraft){
@@ -34263,7 +34556,7 @@ function slotSet(k, v){
 }
 // why an item may not go into a slot (null = fine)
 function slotRefuses(to, A){
-  if (to === 'ofin' && !ovSys.can(A)) return 'the Overforge takes a drill, a dispenser, a sword or a gun';
+  if (to === 'ofin' && !ovSys.can(A)) return 'the Overforge takes tools, weapons, gear, drones and the sports car or the jet';
   if (to === 'disp' && A.kind !== 'disp') return 'only a dispenser fits in the dispenser slot';
   if (to === 'sout') return 'the output slot only gives';
   if (to === 'sin' && !CORE.SMELTS[A.kind]) return 'the stove can smelt ore and cook meat';
@@ -34706,7 +34999,7 @@ function itemInfoHTML0(it, tool){
                   gen2: '~100W · right click to open, coal burns long and hot',
                   crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
                   decrafter: 'no power needed · right click to take things apart into what made them',
-                  oforge: 'right click · put in a drill, dispenser, sword or gun, pay coin, and it comes out changed · pay again to try for another',
+                  oforge: 'right click · put in a tool, weapon, gear, drone or vehicle kit, pay coin, and it comes out changed · pay again to try for another',
                   chest: 'storage — right click to open · tubes can pipe into it',
                   pad: 'wire it up · stand on it in a jetpack, or park a car on it — it charges · 20W',
                   charger: 'wire it up, right click, slot batteries — they fill from the grid · 40W' }[it.kind];
@@ -36021,7 +36314,8 @@ function buildSaveData(){
                  e.crewed && e.bkey ? e.bkey : 0,
                  e.wrecked ? 1 : 0,
                  e.grow > 0 ? Math.round(e.grow) : 0,
-                 e.pet || 0, e.fedBaby || 0]),                // PETS (Build 103): whose it is, and how far a baby is from being someone's    // a garrison's tank keeps its crew and its base; a baby its growing (Build 97)
+                 e.pet || 0, e.fedBaby || 0,
+                 VEH[e.type] && e.ov ? e.ov : 0]),                  // Build 123: a vehicle's Overforge variant                // PETS (Build 103): whose it is, and how far a baby is from being someone's    // a garrison's tank keeps its crew and its base; a baby its growing (Build 97)
     deathCache: game.deathCache ? { x: game.deathCache.x, y: game.deathCache.y, z: game.deathCache.z,
                                     slots: game.deathCache.slots, dispSlot: game.deathCache.dispSlot } : null,
   };
@@ -36141,6 +36435,7 @@ function startWorldData(id, data){
     if (r[10] > 0){ e.grow = r[10]; e.big = 0.45 + 0.55 * (1 - e.grow / breedSys.GROW); }
     if (r[11]) e.pet = r[11];
     if (r[12]) e.fedBaby = r[12];
+    if (r[13]) e.ov = r[13];
     return e;
   }).filter(e => e.type !== 'drop' || e.item);
   game.driving = null;
@@ -36165,7 +36460,7 @@ function startWorldData(id, data){
   if (!game.expedition && game.planet === 'earth') expeditionSys.create(sp0.x, sp0.z);      // someone was here before you
   else if (game.expedition && !game.expedition.hall) deepSys.lay(game.expedition, CORE.mulberry32((game.seed ^ 0xdeed) >>> 0));   // a world from before the hall
   if (game.expedition && game.expedition.hall && !game.expedition.hall2) deepSys.lay2(game.expedition, CORE.mulberry32((game.seed ^ 0xbeef) >>> 0));   // a world from before the second
-  ovSys.vortices = []; ovSys.globs = []; ovSys.marks = null; ovSys.dowseQ = null; ovSys.vmKey = null;   // Build 122: the last world's effects
+  ovSys.vortices = []; ovSys.globs = []; ovSys.marks = null; ovSys.dowseQ = null; ovSys.vmKey = null; ovSys.spotMarks = null; game.homeward = null;   // Build 122: the last world's effects
   farShapeSys._pieces = null; farShapeSys.tagRange(0); farShapeSys.dirty = true; farShapeSys.cx = 1e9;    // towers and highways leave the skin for their true shapes
   // terrain gen changed under an old save? lift the player out of the ground
   for (let i = 0; i < 80 && CORE.evalSDF(game.pos.x, game.pos.y + 0.9, game.pos.z, game.edits, game.gen) < 0; i++){
@@ -39635,10 +39930,10 @@ function enterPhoto(drone){
   if (game.ui !== 'none') return;
   game.photo = {
     pos: game.camera.position.clone(),
-    yaw: game.yaw, pitch: game.pitch, speed: drone ? 8 : 10,
+    yaw: game.yaw, pitch: game.pitch, speed: drone ? (drone.ov === 'farlight' ? 16 : 8) : 10,
     drone: drone || null,
     tele: !!(drone && drone.kind === 'tdrone'),
-    range: drone && drone.kind === 'tdrone' ? 90 : 45,
+    range: drone && drone.kind === 'tdrone' ? (drone.ov === 'farlight' ? 300 : 90) : 45,   // Build 123: FARLIGHT
     home: drone ? { x: game.camera.position.x, y: game.camera.position.y, z: game.camera.position.z } : null,
   };
   document.body.classList.add('photo');
@@ -39661,6 +39956,7 @@ function exitPhoto(){
   if (game.photo && game.photo.tele && game.photo.drone){
     // THE BLINK: you step out of your own body and into the drone's spot
     const p = game.photo.pos;
+    if (game.photo.drone.ov === 'homeward') game.homeward = { x: game.pos.x, y: game.pos.y, z: game.pos.z, t: performance.now() };   // Build 123: HOMEWARD
     let ty = p.y;
     const box = [p.x - 2, p.y - 3, p.z - 2, p.x + 2, p.y + 4, p.z + 2];
     const led = nearEdits(box);
@@ -39709,6 +40005,7 @@ function updatePhoto(dt){
       ph.pos.set(H.x + dx * s, H.y + dy * s, H.z + dz * s);
     }
     ph.drone.charge = Math.max(0, ph.drone.charge - dt * 1.1);
+    if (ph.drone.ov) ovSys.droneTick(ph, dt);                                     // Build 123: SPOTTER, STRIKER
     if (ph.drone.charge <= 0){ exitPhoto(); toast('drone battery dead'); return; }
     if (ph.drone.charge < 15 && !ph.warned){ ph.warned = true; toast('drone battery low'); }
   }
@@ -40361,7 +40658,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { ovSys, OV, rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { ovSys, OV, worthSys, updatePhoto, rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,
