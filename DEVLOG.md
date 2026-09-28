@@ -2,6 +2,40 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 125 — STRATA YOU CAN READ (2026-10-15)
+
+My own idea from the brainstorm (roadmap item 37). The game is named
+for rock layers and had none. Now it does.
+- **Five new stones:** sandstone, shale, limestone, granite and red rock.
+  Each has a grain you can read across a face:
+  - sandstone: cross-bedding;
+  - shale: thin leaves;
+  - limestone: a fossil shell or two;
+  - granite: crystals;
+  - red rock: the badlands' stripes.
+  You mine them, carry them and build with them like any other rock.
+- **The rock is laid in beds.**
+  - A bed is a band of a "layer coordinate": the height, tilted by
+    region (up to 15%, so the stripes climb across a big cliff) and
+    gently folded.
+  - Which stone a bed is depends on its number and its depth:
+    sandstone and limestone near the top, shale lower, granite below
+    −45, basalt under −76 as before.
+  - A thin coal seam every 40 m down, below −8.
+  - Plain rock is still about a third of what is underground, so
+    recipes that want rock still get it.
+- **Where you see them.**
+  - Every cut, quarry, cave wall and cliff.
+  - The bare rock of the high slopes shows its beds on the surface.
+  - The badlands lie flat and painted: red, cream and white bands all
+    the way up each mesa, visible from far off in the skin too.
+- Measured: meshing the same 40 chunks costs the same as before
+  (152 ms against 167, noise). Underground mix over 6,000 samples:
+  rock 34%, granite 20%, sandstone 14%, shale 14%, limestone 10%,
+  red rock 6%, coal 2.5%.
+- Test: b125test (the mix, a column, a bed mined, a carved cut, a
+  badlands mesa).
+
 ## Build 124 — THE LONG SHOT (2026-10-15)
 
 Austin's gambling machine, roadmap item 35.

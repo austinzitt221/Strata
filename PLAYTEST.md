@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 125 — STRATA YOU CAN READ
+- [ ] Dig a big quarry, or find a cliff. Do the layers read? Too busy,
+      too subtle, too regular?
+- [ ] Visit a badlands mesa. Painted desert, or a bit much?
+- [ ] Build something out of the new stones. Which one would you
+      actually use? Do any textures look wrong up close?
+- [ ] Coal seams: welcome, or too much coal?
+
 ## Build 124 — THE LONG SHOT
 - [ ] Buy it from the pit boss (the croupier) in a casino and set it up.
 - [ ] Try the plank for a thousand diamonds, just to read the odds.

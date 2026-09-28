@@ -1448,6 +1448,33 @@ have found in a test and not in Austin's hands.
 
 Next: THE GARRISON, or the small things.
 
+## 2026-10-15 — three builds in a row
+
+Austin said both builds were perfect and asked for the next batch. I
+did three: the rest of the Overforge (123), the Long Shot (124), and
+the strata (125). The order worked because each paid into the next.
+The Grab-Bag rod needed a value for everything, and so did the Long
+Shot's odds, so I built WORTH once in 123 and 124 was mostly a screen.
+
+The Long Shot is the one I most want to watch Austin use. The joke only
+works if the number is honest. So the odds come from the same values
+the rest of the game uses, they are shown before the pull, and the
+house edge is a real 15% (I measured it). "1 in 855,615" for a plank
+into a thousand diamonds is funnier than any line I could write.
+
+Two bugs I made in 124 that are worth remembering:
+- "diamond" was two things, a gem and a block. A search that shows
+  names needs names that differ.
+- A loop that rerolls until the reels don't match is fine with real
+  chance and hangs forever when a test pins the random number. Never
+  loop on luck; fix the outcome directly.
+
+The strata are the change I'm proudest of this batch. The game has
+been called STRATA since Build 1 and the ground was one grey rock.
+Now every hole you dig is a small geology lesson, and the badlands
+look like the place they are named for. It cost nothing per frame:
+three noise lookups in a function that already did twenty.
+
 ## 2026-10-14, night — the Overforge
 
 Build 122. I expected sixteen variants to mean sixteen systems. It

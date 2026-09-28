@@ -599,7 +599,7 @@ Austin's four, with my additions in the journal entry of the same day:
      stays unbreakable everywhere else, as the spec says. Mine: a frozen
      lowest circle; a soul market; a chained library of lore; brimstone.
 Mine (all agreed):
- 37. **STRATA YOU CAN READ.** Rock in bands by depth, tilted and folded
+ 37. **STRATA YOU CAN READ** — DONE (Build 125). Rock in bands by depth, tilted and folded
      by region; every cut shows the layers.
  38. **LAVA THAT FLOWS**, then volcanoes that wake (Hell and the forge
      need it).
