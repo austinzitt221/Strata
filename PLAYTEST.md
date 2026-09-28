@@ -5,6 +5,15 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 124 — THE LONG SHOT
+- [ ] Buy it from the pit boss (the croupier) in a casino and set it up.
+- [ ] Try the plank for a thousand diamonds, just to read the odds.
+      Is "1 in 855,615" the right kind of scary?
+- [ ] Do the values look right? (Search anything: each row shows what
+      it is worth.) Anything obviously too cheap or too dear?
+- [ ] Is 2500 coins the right price? Should it pay out fewer coins than
+      it takes on average (15% now), or be kinder?
+
 ## Build 123 — THE OVERFORGE, slice 2
 - [ ] SCORPION on a pack of stalkers, and on a boss (it should haul YOU).
 - [ ] PENDULUM: swing under a bridge or across a canyon. Does the rope

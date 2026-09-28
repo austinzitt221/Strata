@@ -600,6 +600,34 @@ body.pad{cursor:none;}
   </div>
 </div>
 
+<div id="lsscreen" class="screen hidden dim">
+  <div class="mstack">
+    <div class="panel" style="min-width:600px; max-width:760px;">
+      <h2>THE LONG SHOT</h2>
+      <div style="display:grid; grid-template-columns:52px 1fr; gap:12px; align-items:center;">
+        <div id="lsrow"></div>
+        <div id="lsreels" style="font-family:monospace; font-size:34px; letter-spacing:14px; color:#ffd25a; text-shadow:0 0 8px #d94a63;">7 7 7</div>
+      </div>
+      <div class="sub" id="lsstake" style="margin:6px 0;">stake anything</div>
+      <div style="display:flex; gap:8px; align-items:center; margin:6px 0;">
+        <input id="lsfind" type="text" placeholder="what do you want?" style="flex:1; background:#14121e; color:#eee; border:1px solid #555; padding:4px 6px; font-family:inherit;">
+        <span class="sub">how many</span>
+        <input id="lsamt" type="number" min="1" value="1" style="width:90px; background:#14121e; color:#eee; border:1px solid #555; padding:4px 6px; font-family:inherit;">
+      </div>
+      <div id="lslist" style="max-height:132px; overflow-y:auto; font-size:12px; line-height:1.5; margin-bottom:6px;"></div>
+      <div id="lsodds" style="font-size:16px; margin:6px 0; color:#ffd25a;"></div>
+      <div><button class="btn" id="btnPull">PULL</button></div>
+    </div>
+    <div class="panel" style="min-width:600px;">
+      <div class="invlabel">INVENTORY</div>
+      <div class="invgrid" id="lsmain"></div>
+      <div class="invlabel">HOTBAR</div>
+      <div class="invgrid" id="lshot"></div>
+      <div class="sub" style="margin-top:8px;">click to pick up · click to put down · shift-click moves &nbsp;·&nbsp; E to close</div>
+    </div>
+  </div>
+</div>
+
 <div id="oforgescreen" class="screen hidden dim">
   <div class="mstack">
     <div class="panel" style="min-width:560px;">
@@ -4350,7 +4378,7 @@ function makeSticks(count){ return { kind:'stick', count }; }
 const STACKABLE_KINDS = ['torch', 'door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'stick', 'beacon', 'wool', 'bed', 'rope',
   'coin', 'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'rail', 'deed',
   'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
+  'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'longshot', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
   'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'megatorch', 'greatstove', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'nullcore', 'relic',
   'diamond', 'bulb', 'stove', 'tuft', 'flower', 'shrub', 'coral', 'kelp', 'fish', 'cookedfish', 'ichorworm', 'veillamp', 'ichorcrown', 'aetherore', 'aetheringot', 'cannon', 'windsock', 'hangar', 'airstrip',
   'tomatoseed', 'wheatseed', 'lettuceseed', 'tomato', 'wheat', 'lettuce', 'flour', 'bread', 'burger', 'spaghetti', 'salad', 'nightcap'];
@@ -11271,6 +11299,18 @@ const pnodeSys = {
       const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.2), glowM); gem.position.y = 1.72;
       g.add(gem);
       g.userData.orb = gem;
+    } else if (t === 'longshot'){
+      // THE LONG SHOT (Build 124): a one-armed bandit, red and gold, three reels and a lever
+      const red = new THREE.MeshBasicMaterial({ color: 0x8a1c2c }), gold = new THREE.MeshBasicMaterial({ color: 0xffd25a });
+      const cab = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.7, 0.8), red); cab.position.y = 0.85;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.34, 0.86), gold); top.position.y = 1.86;
+      const glass = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.34, 0.04), new THREE.MeshBasicMaterial({ color: 0xf4f0e6 })); glass.position.set(0, 1.3, -0.41);
+      g.add(cab, top, glass);
+      for (let i = -1; i <= 1; i++){ const sv = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.02), new THREE.MeshBasicMaterial({ color: [0xd94a63, 0x2a1a2e, 0xffb000][i + 1] })); sv.position.set(i * 0.25, 1.3, -0.44); g.add(sv); }
+      const tray = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.2), gold); tray.position.set(0, 0.45, -0.46); g.add(tray);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.7, 0.06), M.steel); arm.position.set(0.58, 1.35, 0); g.add(arm);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xd02030 })); knob.position.set(0.58, 1.72, 0); g.add(knob);
+      g.userData.knob = knob;
     } else if (t === 'station'){
       // a ticket kiosk: a booth under a little roof, the city's name on the board
       const booth = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 1.2), M.wood); booth.position.y = 0.65;
@@ -13453,7 +13493,7 @@ function itemModel(it){
   else if (K === 'rope') g.add(ropeSys.model(0.8));
   else if (K === 'tuft' || K === 'flower' || K === 'shrub') g.add(decorSys.model(K));
   else if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla',
-            'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable', 'cannon', 'windsock'].includes(K)){
+            'gen2', 'crafter', 'decrafter', 'oforge', 'longshot', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wire', 'tube', 'wtable', 'cannon', 'windsock'].includes(K)){
     g.add(pnodeSys.model(K === 'wire' || K === 'tube' ? 'staple' : K));
   } else if (K === 'helm'){
     const m = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), basic(tierC(it.tier)));
@@ -23196,7 +23236,7 @@ const casinoSys = {
     if (netSys.guest){ toast('the tables deal with the host'); return; }
     if (game.ui !== 'none') return;
     game.ui = 'casino'; this.pn = pn; this.game = pn.game || 'blackjack'; this.hand = null; this.last = '';
-    $('casinotitle').textContent = this.game === 'blackjack' ? 'BLACKJACK' : this.game === 'dice' ? 'THE DICE' : 'THE WHEEL';
+    $('casinotitle').textContent = this.game === 'blackjack' ? 'BLACKJACK' : this.game === 'dice' ? 'THE DICE' : this.game === 'boss' ? 'THE PIT BOSS' : 'THE WHEEL';
     this.render();
     show('casinoscreen'); document.exitPointerLock(); AudioSys.sfx('toggle');
   },
@@ -23215,6 +23255,19 @@ const casinoSys = {
   render(){
     const T = $('casinotable'), B = $('casinobtns'), S = $('casinobet'), coins = this.coins();
     B.innerHTML = ''; S.innerHTML = '';
+    if (this.game === 'boss'){
+      // Build 124: THE LONG SHOT, for your own floor
+      $('casinosub').textContent = 'coins ' + coins;
+      T.textContent = (this.last || '"The tables have odds. This has ANY odds. Put a plank in, ask for a thousand diamonds, and it will tell you to your face what your chances are. Then it takes the plank."') +
+        '\n\nTHE LONG SHOT · ' + lsSys.PRICE + ' coins';
+      this.btn(B, 'BUY THE LONG SHOT · ' + lsSys.PRICE + 'c', coins >= lsSys.PRICE, () => {
+        CORE.consumeItem(game.slots, 'coin', lsSys.PRICE); refreshHotbar();
+        if (!giveItem({ kind: 'longshot', count: 1 }, 1)) dropItem({ kind: 'longshot', count: 1 }, { x: game.pos.x, y: game.pos.y + 1, z: game.pos.z });
+        this.last = '"Mind the lever. It is heavier than it looks, and so is losing."';
+        AudioSys.sfx('craft'); markSave();
+      });
+      return;
+    }
     $('casinosub').textContent = 'coins ' + coins + ' · ' + (this.game === 'blackjack' ? 'the dealer stands on 17 · a natural pays 3 to 2' : this.game === 'dice' ? 'HIGH 8–12 and LOW 2–6 pay even · SEVEN pays 4 to 1' : this.SPIN + ' coins a spin · sixteen segments · one is the car');
     if (this.game !== 'wheel'){
       S.appendChild(Object.assign(document.createElement('span'), { className: 'sub', textContent: 'bet:' }));
@@ -26109,7 +26162,7 @@ function talkTo(vent){
   if (vent.role === 'banker'){ bankSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'chart'){ chartSys.open((game.cities || {})[vent.ckey]); return; }
   if (vent.role === 'steward'){ trackSys.open((game.cities || {})[vent.ckey]); return; }
-  if (vent.role === 'croupier'){ toast(['the wheel pays the car about once in sixty spins', 'the dealer stands on seventeen', 'seven pays four to one on the dice', 'the house takes its cut in OLD TOWN shares'][(Math.random() * 4) | 0]); return; }
+  if (vent.role === 'croupier'){ casinoSys.open({ game: 'boss' }); return; }   // Build 124: the pit boss sells the Long Shot
   if (vent.role === 'floor'){
     toast(['buy low, sell high, stranger', 'OLD TOWN pays its dividend whatever the price does', 'the Herald knows tomorrow — seven times in ten', 'a siege knocks every company in the city'][(Math.random() * 4) | 0]);
     return;
@@ -27263,6 +27316,7 @@ function bindInput(){
         if (pn.t === 'crafter'){ openCrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'decrafter'){ openDecrafter(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'oforge'){ ovSys.open(pn); AudioSys.sfx('toggle'); return; }
+        if (pn.t === 'longshot'){ lsSys.open(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'wtable'){ openWeaponTable(pn); AudioSys.sfx('toggle'); return; }
         if (pn.t === 'chest' && pn.locked && pn.lockKind === 'tkey'){
           if (CORE.countItem(game.slots, 'tkey') >= 1){
@@ -29007,6 +29061,133 @@ const OV = {
   farlight:  { name: 'FARLIGHT',    fam: 'tdrone',  desc: 'three hundred metres of range, and twice the speed' },
   homeward:  { name: 'HOMEWARD',    fam: 'tdrone',  desc: 'after a blink, RIGHT CLICK within ninety seconds takes you back where you left' },
 };
+// ---------- THE LONG SHOT (Build 124) ----------
+// Austin's gambling machine, sold by the casino's pit boss. Anything in,
+// anything out, in any amount. The odds come from what the stake is worth
+// against what you ask for (WORTH), with the house keeping fifteen in a
+// hundred; they are shown before you pull, down to one in billions, and
+// they are never quite zero. A losing pull deletes the stake.
+const lsSys = {
+  HOUSE: 0.85, CAP: 0.9, FLOOR: 1e-12, PRICE: 2500, MAXTOOLS: 10,
+  target: null, amt: 1, find: '', spinning: false,
+  targets(){
+    if (this._t) return this._t;
+    const out = [];
+    for (const it of catalogEntries()){
+      if (it.kind === 'spawner' || it.kind === 'grabber' || it.kind === 'longshot' || (it.kind === 'mat' && it.mat === CORE.MAT.BEDROCK)) continue;
+      const one = Object.assign({}, it); if (one.count != null) one.count = 1;
+      out.push({ it: one, name: itemLabel(one) + (one.kind === 'mat' ? ' (block)' : ''), worth: worthSys.of(one) });   // a diamond and a diamond block are not the same ask
+    }
+    out.sort((a, b) => a.name.localeCompare(b.name));
+    return this._t = out;
+  },
+  stackable(it){ return it.kind === 'mat' || (it.count != null && CORE.STACKABLE_KINDS.includes(it.kind)); },
+  value(it, n){ return worthSys.of(it) * (n == null ? (it.count != null ? it.count : 1) : n); },
+  odds(stake, target, amt){
+    if (!stake || !target || !(amt > 0)) return 0;
+    return Math.max(this.FLOOR, Math.min(this.CAP, this.HOUSE * this.value(stake) / this.value(target, amt)));
+  },
+  fmt(p){
+    const n = 1 / p;
+    const one = n >= 1e9 ? (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + ' billion' : n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + ' million' : Math.round(n).toLocaleString('en-US');
+    return p >= 0.01 ? (p * 100).toFixed(p >= 0.1 ? 0 : 1) + '% · about 1 in ' + (n < 10 ? n.toFixed(1) : Math.round(n)) : '1 in ' + one;
+  },
+  open(pn){
+    game.activeLong = pn;
+    if (!pn.inv) pn.inv = [null];
+    game.ui = 'longshot';
+    const row = $('lsrow'), main = $('lsmain'), hot = $('lshot');
+    row.innerHTML = ''; main.innerHTML = ''; hot.innerHTML = '';
+    row.appendChild(slotEl('lsin'));
+    for (let i = 10; i < 40; i++) main.appendChild(slotEl(i));
+    for (let i = 0; i < 10; i++) hot.appendChild(slotEl(i, String((i + 1) % 10)));
+    const F = $('lsfind'), A = $('lsamt');
+    F.value = this.find; A.value = this.amt;
+    F.oninput = () => { this.find = F.value; this.refresh(); };
+    A.oninput = () => { this.amt = Math.max(1, Math.min(9999999, Math.floor(+A.value || 1))); this.refresh(true); };
+    for (const el of [F, A]) el.onkeydown = ev => { ev.stopPropagation(); if (ev.key === 'Escape') closeOverlay(); };
+    $('btnPull').onclick = () => this.pull();
+    this.refresh();
+    show('lsscreen'); document.exitPointerLock();
+  },
+  refresh(keepList){
+    const pn = game.activeLong;
+    if (!pn || game.ui !== 'longshot') return;
+    document.querySelectorAll('#lsscreen .slot').forEach(paintSlot);
+    const st = pn.inv[0], T = this.target;
+    if (T && !this.stackable(T.it) && this.amt > this.MAXTOOLS){ this.amt = this.MAXTOOLS; $('lsamt').value = this.amt; }
+    $('lsstake').textContent = st ? 'staking ' + (st.count != null ? st.count + ' × ' : '') + itemLabel(st) + ' · worth about ' + Math.round(this.value(st)).toLocaleString('en-US') + ' coins' : 'stake anything: put it in the slot';
+    if (!keepList){
+      const q = this.find.trim().toLowerCase(), L = $('lslist');
+      L.innerHTML = '';
+      const hits = this.targets().filter(t => !q || t.name.toLowerCase().includes(q)).slice(0, 60);
+      for (const t of hits){
+        const r = document.createElement('div');
+        const sel = T && T.name === t.name;
+        r.style.cssText = 'cursor:pointer; padding:1px 4px; ' + (sel ? 'background:#3a2040; color:#ffd25a;' : 'color:#c8c4d4;');
+        r.textContent = (sel ? '◆ ' : '') + t.name + '  ·  ' + (t.worth < 1 ? t.worth.toFixed(2) : Math.round(t.worth).toLocaleString('en-US')) + 'c each';
+        r.onclick = () => { this.target = t; this.refresh(); };
+        L.appendChild(r);
+      }
+      if (!hits.length) L.textContent = 'nothing by that name';
+    }
+    const p = this.odds(st, T && T.it, this.amt), btn = $('btnPull');
+    $('lsodds').textContent = !st ? 'put a stake in' : !T ? 'pick what you want' :
+      'ask for ' + this.amt.toLocaleString('en-US') + ' × ' + T.name + ' (' + Math.round(this.value(T.it, this.amt)).toLocaleString('en-US') + 'c) · the odds: ' + this.fmt(p);
+    btn.disabled = !st || !T || this.spinning;
+  },
+  pull(){
+    const pn = game.activeLong, st = pn && pn.inv[0], T = this.target;
+    if (!st || !T || this.spinning) return;
+    const p = this.odds(st, T.it, this.amt), amt = this.amt;
+    const won = Math.random() < p;
+    pn.inv[0] = null;                                           // win or lose, the stake goes in
+    this.last = { won, p, T, amt, stake: st };
+    markSave();
+    if (won) this.pay(T.it, amt);                               // paid now; the reels only tell you
+    this.spin(won);
+    const kn = pn.mesh || null;
+    Particles.burst(pn.x, pn.y + 1.6, pn.z, 0.4, won ? [0xffd25a, 0xffffff] : [0x8a1c2c, 0x2a1a2e], won ? 30 : 6, won ? 3 : 1);
+    this.refresh(true);
+  },
+  pay(it, amt){
+    const drop = (x) => dropItem(x, { x: game.pos.x, y: game.pos.y + 1, z: game.pos.z });
+    if (it.kind === 'mat'){ if (!CORE.addMat(game.slots, it.mat, amt)) drop({ kind: 'mat', mat: it.mat, count: amt }); }
+    else if (this.stackable(it)){ if (!CORE.addItemN(game.slots, it.kind, amt)) drop(Object.assign({}, it, { count: amt })); }
+    else for (let i = 0; i < Math.min(amt, this.MAXTOOLS); i++){ const one = Object.assign({}, it); delete one.count; if (!giveItem(one, 1)) drop(one); }
+    refreshHotbar(); refreshToolHUD();
+  },
+  SYM: ['7', '$', '♦', '♣', '★', '♥', 'X'],
+  spin(won){
+    this.spinning = true;
+    const R = $('lsreels'), S = this.SYM, L = this.last;
+    const land = won ? ['7', '7', '7'] : (() => { const a = [0, 1, 2].map(() => S[(Math.random() * S.length) | 0]); if (a[0] === a[1] && a[1] === a[2]) a[2] = S[(S.indexOf(a[2]) + 1) % S.length]; return a; })();   // a loss never lines up
+    let i = 0;
+    const step = () => {
+      if (game.ui !== 'longshot'){ this.spinning = false; this.after(L); return; }
+      const stop = i > 12 ? 3 : i > 9 ? 2 : i > 6 ? 1 : 0;
+      R.textContent = [0, 1, 2].map(k => k < stop ? land[k] : S[(Math.random() * S.length) | 0]).join(' ');
+      AudioSys.tone({ freq: 200 + (i % 3) * 60, dur: 0.04, gain: 0.08, type: 'square' });
+      i++;
+      if (stop < 3) setTimeout(step, 55 + i * 4);
+      else { this.spinning = false; this.after(L); this.refresh(true); }
+    };
+    step();
+  },
+  after(L){
+    if (L.shown) return; L.shown = true;
+    const worth = Math.round(this.value(L.T.it, L.amt));
+    if (L.won){
+      toast('THE LONG SHOT PAYS — ' + L.amt.toLocaleString('en-US') + ' × ' + L.T.name + ' (odds were ' + this.fmt(L.p) + ')', 1);
+      AudioSys.tone({ freq: 660, dur: 0.18, gain: 0.25, type: 'square' }); setTimeout(() => AudioSys.tone({ freq: 990, dur: 0.5, gain: 0.25, type: 'square' }), 180);
+      AudioSys.sfx('craft');
+      if (L.p < 0.01 && worth >= 1000) econSys.note('A STRANGER BEATS THE LONG SHOT: ' + this.fmt(L.p).toUpperCase() + ' FOR ' + worth.toLocaleString('en-US') + ' COINS OF ' + L.T.name.toUpperCase(), ['deed'], null, true);
+    } else {
+      toast('the Long Shot keeps your ' + (L.stake.count > 1 ? L.stake.count + ' × ' : '') + itemLabel(L.stake) + ' · the odds were ' + this.fmt(L.p));
+      AudioSys.tone({ freq: 140, dur: 0.4, gain: 0.2, type: 'sawtooth' });
+    }
+  },
+};
 // ---------- WORTH (Build 123): what anything is worth, in coin ----------
 // Raw things and loot have a price; anything crafted is worth what went into
 // it and a tenth again. The Grab-Bag rod's odds and the gambling machine's
@@ -29021,7 +29202,7 @@ const worthSys = {
     tcore: 450, tankpart: 250, gunpart: 300, jetpart: 350, jetfuel: 40, rounds: 0.6, cells: 1, rockets: 12,
     car: 600, sportscar: 1200, bike: 500, boat: 150, motorboat: 700, tank: 3000, jet: 4000, plane: 1800, hover: 1400, heli: 3500,
     rocket: 5000, rocket2: 8000, mech: 2500, translator: 400, band: 350, headlamp: 60, spawner: 400, grabber: 300,
-    springstone: 30, lavastone: 30, ichorstone: 60, page: 20, survey: 40, paper: 1, ticket: 10, deed: 800,
+    longshot: 2500, oforge: 1400, springstone: 30, lavastone: 30, ichorstone: 60, page: 20, survey: 40, paper: 1, ticket: 10, deed: 800,
   },
   MAT: { 1: 0.05, 7: 0.05, 8: 0.05, 12: 0.03, 20: 0.04, 29: 0.05, 30: 0.06, 31: 0.04, 33: 0.05, 34: 0.08,
          5: 0.6, 9: 0.5, 10: 0.2, 15: 0.15, 16: 1, 17: 1, 19: 0.3, 21: 0.2, 23: 0.2, 25: 0.2, 27: 0.2 },
@@ -29605,7 +29786,7 @@ function activeTool0(){
   if (it.kind === 'rope') return { kind: 'rope', tier: 0, item: it };
   if (it.kind === 'wire') return { kind: 'wire', tier: 0, item: it };
   if (it.kind === 'hangar' || it.kind === 'airstrip') return { kind: 'airfield', what: it.kind, tier: 0, item: it };
-  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake'].includes(it.kind))
+  if (['lever', 'crank', 'wheel', 'gen', 'meter', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'longshot', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'wtable', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake'].includes(it.kind))
     return { kind: 'pnode', ptype: it.kind, tier: 0, item: it };
   if (it.kind === 'tube') return { kind: 'tube', tier: 0, item: it };
   if (it.kind === 'drone') return { kind: 'drone', tier: 0, item: it };
@@ -29834,7 +30015,7 @@ const wrenchProps = {
       const D = { staple: [0.05, 0.22, 0.12, 0.22], lever: [0.2, 0.32, 0.3, 0.28], crank: [0.5, 0.34, 0.55, 0.34],
                   wheel: [0.8, 0.45, 0.9, 0.5], gen: [0.4, 0.52, 0.45, 0.4], gen2: [0.5, 0.66, 0.52, 0.48],
                   meter: [0.75, 0.34, 0.8, 0.3], elev: [0.15, 0.88, 0.22, 0.88], acrank: [0.8, 0.55, 0.85, 0.55],
-                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], oforge: [0.72, 0.62, 0.78, 0.5], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
+                  tesla: [1.0, 0.42, 1.08, 0.42], hopper: [0.6, 0.52, 0.62, 0.52], crafter: [0.5, 0.56, 0.55, 0.56], decrafter: [0.5, 0.56, 0.55, 0.56], oforge: [0.72, 0.62, 0.78, 0.5], longshot: [0.55, 0.95, 0.6, 0.45], charger: [0.5, 0.6, 0.55, 0.6], repair: [0.6, 0.85, 0.65, 0.45],
                   cannon: [0.9, 0.7, 1.0, 1.2], windsock: [1.6, 0.9, 1.7, 0.4], turret: [0.7, 0.5, 0.8, 0.5], station: [1.3, 1.5, 1.35, 1.2],
                   claymore: [0.22, 0.32, 0.24, 0.16], spikes: [0.25, 1.05, 0.3, 0.55], bell: [0.9, 0.35, 0.95, 0.35], tent: [0.8, 1.3, 0.85, 1.0], trench: [0.2, 1.55, 0.25, 0.6], flamejet: [0.45, 0.4, 0.5, 0.4],
                   chest: [0.4, 0.52, 0.42, 0.4], astand: [0.85, 0.4, 0.9, 0.4],
@@ -32540,7 +32721,7 @@ function itemIconURL(it, asCanvas){
        'coal', 'ironore', 'rubyore', 'ironingot', 'rubyingot', 'diamond', 'bulb', 'stove',
        'tuft', 'flower', 'shrub', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen',
        'meter', 'drone', 'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2',
-       'crafter', 'decrafter', 'oforge', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
+       'crafter', 'decrafter', 'oforge', 'longshot', 'charger', 'chest', 'astand', 'pad', 'jetpack', 'grapple', 'ped', 'sign',
        'rounds', 'cells', 'rockets', 'wtable', 'tnt', 'mcharge', 'vkey', 'bkey', 'tankpart', 'gunpart', 'jetpart', 'jetfuel', 'tcore', 'wfist', 'mheart', 'sigil', 'aseal', 'car', 'rail', 'deed', 'tdrone', 'sportscar', 'tank', 'bike', 'repair', 'boat', 'motorboat', 'rod', 'khammer', 'cookedfish', 'coral', 'kelp', 'lscale', 'plane', 'hover', 'heli', 'jet', 'rocket', 'spacesuit', 'mech', 'lunite', 'selenite', 'astrium', 'translator', 'voidfruit', 'rocket2', 'band', 'voidore', 'scarcoal', 'ichorite', 'nullite', 'vehlite', 'megatorch', 'greatstove', 'headlamp', 'nullcore', 'nullheart', 'relic', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'mtable', 'atable', 'cannon', 'windsock', 'hangar', 'airstrip', 'aetherore', 'aetheringot', 'fang', 'huskmeat', 'wispcore', 'peat', 'amber', 'cocoa', 'feather', 'tkey', 'wings', 'idol', 'turret', 'mender', 'gate', 'claymore', 'spikes', 'bell', 'tent', 'page', 'survey', 'trench', 'flamejet', 'sprinkler', 'intake', 'ichorworm', 'veillamp', 'ichorcrown', 'ticket'].includes(it.kind) ? it.kind : it.kind === 'fish' ? 'fish' + it.fish : it.kind + it.tier) + (it.wrecked ? '#w' : '');
   if (asCanvas && iconCanvases.has(key)) return iconCanvases.get(key);
   if (!asCanvas && iconCache.has(key)) return iconCache.get(key);
@@ -33150,6 +33331,13 @@ function itemIconURL(it, asCanvas){
     c.fillStyle = '#3c3a44'; c.fillRect(4, 7, 8, 5);
     c.fillStyle = '#f0a040'; c.fillRect(5, 8, 2, 3); c.fillRect(9, 8, 2, 3); c.fillRect(7, 9, 2, 1);
     c.fillStyle = '#ffd76a'; c.fillRect(3, 5, 2, 1);
+  } else if (it.kind === 'longshot'){
+    // the bandit: a red cabinet, a gold crown, three reels, the lever
+    c.fillStyle = '#8a1c2c'; c.fillRect(3, 3, 9, 12);
+    c.fillStyle = '#ffd25a'; c.fillRect(2, 1, 11, 2); c.fillRect(4, 12, 7, 1);
+    c.fillStyle = '#f4f0e6'; c.fillRect(4, 6, 7, 3);
+    c.fillStyle = '#d94a63'; c.fillRect(4, 7, 1, 1); c.fillStyle = '#2a1a2e'; c.fillRect(7, 7, 1, 1); c.fillStyle = '#ffb000'; c.fillRect(10, 7, 1, 1);
+    c.fillStyle = '#9fa3b0'; c.fillRect(13, 5, 1, 5); c.fillStyle = '#d02030'; c.fillRect(13, 3, 2, 2);
   } else if (it.kind === 'oforge'){
     // the anvil-block, the violet throat, the crystal over it
     c.fillStyle = '#26242e'; c.fillRect(2, 10, 12, 5);
@@ -33531,6 +33719,7 @@ function itemLabel0(it){
   if (it.kind === 'crafter') return 'auto-crafter';
   if (it.kind === 'decrafter') return 'de-crafter';
   if (it.kind === 'oforge') return 'the Overforge';
+  if (it.kind === 'longshot') return 'the Long Shot';
   if (it.kind === 'charger') return 'battery charger';
   if (it.kind === 'battery') return CORE.BATTERY_NAME[it.tier | 0] + ' battery';
   if (it.kind === 'chest') return 'chest';
@@ -33633,6 +33822,7 @@ function slotItem(key){
   if (key === 'gfuel') return game.activeCont && game.activeCont.fuel;
   if (key === 'dcin') return game.activeDecraft && game.activeDecraft.inv && game.activeDecraft.inv[0];
   if (key === 'ofin') return game.activeOforge && game.activeOforge.inv && game.activeOforge.inv[0];
+  if (key === 'lsin') return game.activeLong && game.activeLong.inv && game.activeLong.inv[0];
   if (key === 'vbat') return game.driving && game.driving.bat;
   if (typeof key === 'string' && /^c\d+$/.test(key))
     return game.activeCont && game.activeCont.inv && game.activeCont.inv[+key.slice(1)];
@@ -33642,7 +33832,7 @@ function slotItem(key){
 // a crew member's slots: kh their hands, kah/kac/kaf their armor, k0..k7 their pack
 const CREW_KEY = /^k(h|ah|ac|af|\d)$/;
 function isPseudoKey(k){
-  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'ofin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k) || CREW_KEY.test(String(k));
+  return ['disp', 'sin', 'sfuel', 'sout', 'gfuel', 'dcin', 'ofin', 'lsin', 'vbat', 'ahead', 'achest', 'afeet', 'aback'].includes(k) || /^c\d+$/.test(k) || CREW_KEY.test(String(k));
 }
 function slotKeyOf(el){
   const k = el.dataset.slot;
@@ -33825,7 +34015,7 @@ const CAT_WEAPONS  = ['sword', 'gun', 'fw', 'tnt', 'mcharge', 'claymore', 'spike
 const CAT_CLOTHING = ['helm', 'plate', 'boots', 'jetpack', 'divehelm', 'spacesuit', 'mech', 'wings', 'headlamp'];
 const CAT_POWER    = ['turret', 'bulb', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter', 'tube',
                       'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'pad', 'charger', 'battery', 'sprinkler', 'intake'];
-const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'oforge', 'stove', 'greatstove', 'megatorch', 'bed', 'beacon', 'chest', 'astand',
+const CAT_SPECIAL  = ['door', 'gate', 'fence', 'fencegate', 'springstone', 'lavastone', 'ichorstone', 'table', 'mtable', 'atable', 'decrafter', 'oforge', 'longshot', 'stove', 'greatstove', 'megatorch', 'bed', 'beacon', 'chest', 'astand',
                       'sign', 'rope', 'ped', 'torch', 'board', 'wtable', 'sigil', 'deed', 'tent', 'page', 'survey'];
 const ITEM_CATS = [
   { id: 'mat',      label: 'MATERIAL',    kinds: null,          icon: () => ({ kind: 'mat', mat: CORE.MAT.ROCK, count: 1 }) },
@@ -33899,7 +34089,7 @@ function catalogEntries(){
   out.push(CORE.makeWrench());
   for (const k of ['torch', 'bulb', 'stick', 'wool', 'door', 'gate', 'table', 'stove', 'bed',
                    'beacon', 'rope', 'wire', 'lever', 'crank', 'wheel', 'gen', 'meter',
-                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
+                   'tube', 'hopper', 'elev', 'acrank', 'tesla', 'gen2', 'crafter', 'decrafter', 'oforge', 'longshot', 'charger', 'repair', 'chest', 'astand', 'pad', 'ped', 'sign', 'cannon', 'windsock', 'turret', 'claymore', 'spikes', 'bell', 'tent', 'trench', 'flamejet', 'sprinkler', 'intake',
                    'meat', 'cookedmeat', 'coal', 'ironore', 'rubyore',
                    'ironingot', 'rubyingot', 'diamond', 'tuft', 'flower', 'shrub'])
     out.push({ kind: k, count: 10 });
@@ -34338,6 +34528,7 @@ function uiMove(from, to){
     : k === 'gfuel' ? (pc && pc.fuel)
     : k === 'dcin' ? (game.activeDecraft && game.activeDecraft.inv[0])
     : k === 'ofin' ? (game.activeOforge && game.activeOforge.inv[0])
+    : k === 'lsin' ? (game.activeLong && game.activeLong.inv[0])
     : k === 'vbat' ? (game.driving && game.driving.bat)
     : (typeof k === 'string' && /^c\d+$/.test(k)) ? (pc && pc.inv && pc.inv[+k.slice(1)])
     : CREW_KEY.test(String(k)) ? (game.activeCrew ? crewSys.slotGet(k) : null)
@@ -34355,6 +34546,7 @@ function uiMove(from, to){
     else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
     else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
     else if (k === 'ofin'){ if (game.activeOforge) game.activeOforge.inv[0] = v; }
+    else if (k === 'lsin'){ if (game.activeLong) game.activeLong.inv[0] = v; }
     else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
     else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
     else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
@@ -34433,6 +34625,7 @@ function quickMove(key, n){
       else if (key === 'disp') game.dispSlot = null;
       else if (key === 'dcin') game.activeDecraft.inv[0] = null;
       else if (key === 'ofin') game.activeOforge.inv[0] = null;
+      else if (key === 'lsin') game.activeLong.inv[0] = null;
       else if (key === 'vbat') game.driving.bat = null;
       else if (CREW_KEY.test(String(key))) crewSys.slotSet(key, null);
       done = true;
@@ -34443,6 +34636,11 @@ function quickMove(key, n){
     if (done) game.slots[key] = null; else toast(crewSys.nameOf(game.activeCrew) + ' cannot carry any more');
   } else if (game.ui === 'inv' && game.driving && it.kind === 'battery' && !game.driving.bat){
     game.driving.bat = it; game.slots[key] = null; done = true;   // shift-click a battery into the car
+  } else if (game.ui === 'longshot' && game.activeLong){
+    const pn = game.activeLong;
+    if (!pn.inv[0]){ pn.inv[0] = it; game.slots[key] = null; done = true; }
+    else if (CORE.stackableWith(it, pn.inv[0])){ pn.inv[0].count += it.count; game.slots[key] = null; done = true; }
+    else toast('the Long Shot takes one stake at a time');
   } else if (game.ui === 'oforge' && game.activeOforge){
     const pn = game.activeOforge;
     if (!ovSys.can(it)) toast('the Overforge takes tools, weapons, gear, drones and the sports car or the jet');
@@ -34519,6 +34717,7 @@ function refreshAllUI(){
   if (game.ui === 'stove') refreshStoveUI(true);
   else if (game.ui === 'decraft') refreshDecraftUI();
   else if (game.ui === 'oforge') ovSys.refresh();
+  else if (game.ui === 'longshot') lsSys.refresh();
   else if (game.ui === 'cont') refreshContUI();
   else if (game.ui === 'crafter') refreshCrafterUI();
   else if (game.ui === 'trade') tradeSys.refresh();
@@ -34534,7 +34733,7 @@ function refreshAllUI(){
 // (or lifts one, if the cursor is empty). Shift-click still quick-moves
 // (shift-right-click quick-moves half). Click outside every panel while
 // holding and it drops on the ground.
-const INV_UIS = ['inv', 'stove', 'cont', 'crafter', 'craft', 'trade', 'decraft', 'oforge'];
+const INV_UIS = ['inv', 'stove', 'cont', 'crafter', 'craft', 'trade', 'decraft', 'oforge', 'longshot'];
 function slotSet(k, v){
   const st = game.activeStove, pc = game.activeCont;
   if (k === 'disp') game.dispSlot = v;
@@ -34549,6 +34748,7 @@ function slotSet(k, v){
   else if (k === 'gfuel'){ if (pc) pc.fuel = v; }
   else if (k === 'dcin'){ if (game.activeDecraft) game.activeDecraft.inv[0] = v; }
   else if (k === 'ofin'){ if (game.activeOforge) game.activeOforge.inv[0] = v; }
+  else if (k === 'lsin'){ if (game.activeLong) game.activeLong.inv[0] = v; }
   else if (k === 'vbat'){ if (game.driving) game.driving.bat = v; }
   else if (typeof k === 'string' && /^c\d+$/.test(k)){ if (pc && pc.inv) pc.inv[+k.slice(1)] = v; }
   else if (CREW_KEY.test(String(k))){ if (game.activeCrew) crewSys.slotSet(k, v); }
@@ -34999,6 +35199,7 @@ function itemInfoHTML0(it, tool){
                   gen2: '~100W · right click to open, coal burns long and hot',
                   crafter: 'wire + feed it, right click to pick a recipe · crafts while powered',
                   decrafter: 'no power needed · right click to take things apart into what made them',
+                  longshot: 'right click · put anything in, name what you want and how many: the odds are shown before you pull, and a losing pull keeps your stake',
                   oforge: 'right click · put in a tool, weapon, gear, drone or vehicle kit, pay coin, and it comes out changed · pay again to try for another',
                   chest: 'storage — right click to open · tubes can pipe into it',
                   pad: 'wire it up · stand on it in a jetpack, or park a car on it — it charges · 20W',
@@ -35976,9 +36177,10 @@ function wireMapInput(){
 }
 function closeOverlay(){
   invCursor.putBack();                        // never lose what your cursor held
-  hide('endscreen'); hide('wheelscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('oforgescreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
+  hide('endscreen'); hide('wheelscreen'); hide('invscreen'); hide('craftscreen'); hide('stovescreen'); hide('bluescreen'); hide('mapscreen'); hide('crafterscreen'); hide('contscreen'); hide('tradescreen'); hide('boardscreen'); hide('pagescreen'); hide('wtabscreen'); hide('decraftscreen'); hide('oforgescreen'); hide('lsscreen'); hide('stationscreen'); hide('exchangescreen'); hide('phonescreen'); hide('pitscreen'); hide('bankscreen'); hide('casinoscreen'); hide('racescreen'); hide('chartscreen');
   game.activeDecraft = null;
   game.activeOforge = null;
+  game.activeLong = null;
   game.activeWtab = null;
   game.activeTrade = null;
   game.activeCrew = null;
@@ -40658,7 +40860,7 @@ window.__THREE = THREE;
 window.__forceVM = () => updateViewmodel(0.016);
 window.__tileCanvas = tileCanvas;
 window.__closeOverlay = closeOverlay;
-window.__api = { ovSys, OV, worthSys, updatePhoto, rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
+window.__api = { lsSys, ovSys, OV, worthSys, updatePhoto, rippleSys, propSDF, toolWheel, perfSys, iconCanvases, shoreSys, shapeGhost, toolCan, toolShapes, scrollModesFor, editRot, doMineM, doPlaceM, mirrorSys, openStove, tileCanvas, actionPlan, liqSnap, liqEdit, liqCellsOf, liqVox, LIQ_TOP, updateGhost, lodTerrain, petSys, springSys, fenceSys, breedSys, villageLifeSys, vaultSys, ruinSys, planetMap, planetSprite, centreSys, endSys, warSys, spaceSys, moonBaseSys, stationOneSys, siteSys, alienSys, teleportSys, nearTableKind, talkTo, tradeSys, spawnEntity, gravityNow, MOON_G, skySys, armorRed, playerBody, pnodeSys, bedSys, baseSys, bossSys, brushSys, menagerieSys, MENAGERIE_TYPES, catalogEntries, entityOnRay, farmSys, FARM_CROPS, FARM_MEALS, mailSys, MAIL_HOLD, chartSys, CHART_COL, contractSys, JOB_DEF, trackSys, RACE_CLASSES, casinoSys, WHEEL, shopSys, SHOP_DEF, bankSys, pitSys, monumentSys, PIT_TIERS, phoneSys, econSys, COMPANIES, godRays, shadowSys, applyViewport, resetGraphics, gfxInfo, openPause, netSys, buildSaveData, startWorldData, markSave, enterCar, exitCar, driveCar, killEntity, quitToTitle, padSys, isLocked, invCursor, lineSys, stationSys, fallsSys, millSys, riverNameOf, itemIconURL, ledgerSys, saveNow, startWorld, openMap, closeOverlay, mapMenu, mapView, mapToWorld, mapToScreen, drawMap, wireMapInput, buildMissionsUI, activeTool, doMine, doPlace, undoEdit, pickMaterial, refreshHotbar, refreshToolHUD, buildArm, wrenchSys, applyEdit,
   updateEntities, trySpawnEntities, killEntity, entMesh, nearestLightDist, explode, ENT_DEF, spireSys, objectiveSys, zigSys, weatherSys, seasonSys, collapseSys, WEATHER, cityLightSys, siegeSys, stationSys, blueprintMarket, loadBlueprints, closeOverlay, hearthSys, Smoke, doSmoothFill, itemInfoHTML, activeToolOf, boreSys, groundMatNear, trowelSys, updateGhost, latheSys, mirrorSys, doMineM, doPlaceM, crewSys, villageSys, tradeSys, palisadeSys, breachSys, deepSys, mapCellColor, expeditionSys, riverNameAt, tryAction,
   spawnEntity, hurtEntity, damagePlayer, respawn, addStackItem, selectedItem, AudioSys, explode, regionNameOf, regionNameAt, REGION_WORDS, driveHeli, driveJet, updatePlayer, collidePlayer, sphereContact, loadSys, groundReadyAt, holdForGround, farShapeSys, villageSys, raidBaseSys, zigSys, citySys, treeSys, ENT_DEF, VEH, nearestLightDist, tradeSys, torchSys, tryEat, updateDayNight,
   treeSys, doorSys, tableSys, decorSys, nearTable, sdfWorld, nearEdits, capsuleFree, surfaceHit, placePreview,

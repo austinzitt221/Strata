@@ -2,6 +2,41 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 124 — THE LONG SHOT (2026-10-15)
+
+Austin's gambling machine, roadmap item 35.
+- **The pit boss sells it.** Talking to the casino's croupier used to
+  get you a line about the odds. Now they sell THE LONG SHOT for 2500
+  coins: a red-and-gold one-armed bandit you place anywhere.
+- **Anything in, anything out.**
+  - Put any stack in the slot.
+  - Search for what you want: any of the 282 things in the game, with
+    what each is worth. A block is listed apart from its item, so
+    "diamond" and "diamond (block)" are different asks.
+  - Say how many. Tools, weapons and kits are capped at ten a pull.
+- **The odds, shown before you pull, from WORTH.** Chance = 85% of the
+  stake's value divided by the value asked for, capped at 90% and never
+  quite zero. The house keeps fifteen in a hundred on average (measured
+  over 200,000 pulls: 0.849 back per coin). Some real numbers:
+  - a plank for a thousand diamonds: 1 in 855,615;
+  - a coal for a null heart: 1 in 824;
+  - one rock for ten million diamonds: 1 in 9.4 billion.
+- **The pull.**
+  - The stake always goes in. A losing pull deletes it, as Austin
+    asked.
+  - The reels spin and stop left to right: 7-7-7 on a win, never lined
+    up on a loss.
+  - A win is paid the moment you pull, so closing the screen loses
+    nothing.
+  - A win against long odds (under 1%, for 1,000 coins' worth or more)
+    makes the Herald.
+- Fixed before it shipped: the losing reels were drawn in a loop that
+  re-rolled until they did not match. Chance would always end it, but
+  it hung the page when a test pinned the random numbers. A loss is now
+  drawn once and nudged off a match.
+- Test: b124test (the sale, the odds, the search, a rigged win and a
+  rigged loss, the tool cap, the save).
+
 ## Build 123 — THE OVERFORGE, slice 2 (2026-10-15)
 
 Playtest of 121 and 122: "perfect from what I can see, everything

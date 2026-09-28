@@ -589,7 +589,7 @@ Austin's four, with my additions in the journal entry of the same day:
        Seventeen variants in all (see the DEVLOG), plus WORTH, a value for
        every item. Still open, mine: armor that turns a hit into a shove,
        and a drill that follows a vein by itself.
- 35. **THE GAMBLING MACHINE** (Austin's; sold by the casino's pit boss).
+ 35. **THE GAMBLING MACHINE** — DONE (Build 124: THE LONG SHOT). (Austin's; sold by the casino's pit boss).
      Any item in, name the item and the amount, odds from rarity and
      count, shown before you pull; a loss deletes the stake.
  36. **HELL** (Austin's). A dimension below THE DEEP: fire and ash, lava
