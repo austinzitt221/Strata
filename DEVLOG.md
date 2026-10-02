@@ -2,6 +2,30 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 127 — stone by biome (2026-10-16)
+
+Austin: the strata were too busy. We agreed on stone by biome.
+- **Each biome sits on its own stone**, about 93% of what you dig there:
+  - granite under the ranges, glacier, taiga and tundra;
+  - sandstone under the dunes;
+  - limestone under the jungle;
+  - shale under the swamp;
+  - basalt under the volcanic fields;
+  - plain rock under the plains, hills, islands and savanna.
+  What you dig tells you where you are, and a stone you want for a build
+  is a place to go. Where two biomes meet, the stone changes at the
+  border like a fault.
+- **Granite everywhere below about −45** (except under the volcanoes),
+  basalt below −76 as before. Digging deep changes the stone anywhere.
+- **One thick bed.** In about half the land, a single 6 m bed of a
+  second stone runs through every 90 m down, tilted with the region. A
+  big cliff shows one clean stripe, not twenty.
+- **The badlands keep their painted bands** (Austin: they make them
+  unique).
+- The thin coal seams are gone; coal still comes in its ore veins.
+- Every stone works in every stone recipe (Build 126), so none of this
+  makes rock scarce.
+
 ## Build 126 — one recipe, any kind (2026-10-16)
 
 Austin's crafting cleanup. Every wood had its own stick recipe, and

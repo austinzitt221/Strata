@@ -1,4 +1,4 @@
-// Build 125: STRATA YOU CAN READ -- the rock in beds, tilted and folded; every cut shows them
+// Builds 125/127: STRATA -- each biome on its own stone, deep granite, one thick bed; the badlands striped
 const { chromium } = require('playwright');
 const FILE = process.argv[2] || '/home/user/Strata/strata.html';
 (async () => {
@@ -34,6 +34,18 @@ const FILE = process.argv[2] || '/home/user/Strata/strata.html';
     return cnt;
   });
   console.log('1. the ground :', JSON.stringify(r1));
+  const r1b = await page.evaluate(() => {
+    const g = window.__game, C = window.__CORE, N = C.MAT_NAME, A = ['plains','hills','ranges','mesa','dunes','swamp','glacier','volcanic','islands','jungle','taiga','tundra','savanna'], by = {};
+    for (let i = 0; i < 30000; i++){
+      const x = g.pos.x + (Math.random() - 0.5) * 9000, z = g.pos.z + (Math.random() - 0.5) * 9000, a = g.gen.archAt(x, z), h = g.gen.height(x, z), y = h - 3 - Math.random() * 30;
+      if (y < -40) continue;
+      const m = C.materialAt(x, y, z, [], g.gen); if (C.ORE_ITEM[m] || m === C.MAT.GLOWSHROOM || m === C.MAT.CRYSTAL || m === C.MAT.LAVA) continue;
+      const k = A[a]; by[k] = by[k] || {}; by[k][N[m]] = (by[k][N[m]] || 0) + 1;
+    }
+    const out = {}; for (const k in by){ const t = Object.values(by[k]).reduce((s, v) => s + v, 0); out[k] = Object.entries(by[k]).sort((p, q) => q[1] - p[1]).slice(0, 3).map(([n, v]) => n + ' ' + Math.round(v / t * 100) + '%').join(', '); }
+    return out;
+  });
+  console.log('1b. by biome  :', JSON.stringify(r1b));
   // 2. a column, top to bottom: the beds as you would drill them
   const r2 = await page.evaluate(() => {
     const g = window.__game, C = window.__CORE, N = C.MAT_NAME, x = g.pos.x + 13, z = g.pos.z - 7, out = [];

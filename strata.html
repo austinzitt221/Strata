@@ -2005,30 +2005,33 @@ function makeEarthGen(seed){
     if (y < -76 - noise2(sD, x * 0.05, z * 0.05) * 8) return MAT.BASALT;
     return strataMat(x, y, z, archAt(x, z));
   }
-  // STRATA YOU CAN READ (Build 125): the rock is laid down in beds. A bed is
-  // a band of the "layer coordinate" -- the height, tilted a little by region
-  // (up to 15%) and gently folded -- so a cliff or a cut shows stripes that
-  // climb and bend across it. Which rock a bed is comes from its number and
-  // the depth: sandstone and limestone near the top, shale lower, granite
-  // deep; a coal seam every forty metres down. The badlands lie flat and red.
-  const DECK_TOP = [MAT.ROCK, MAT.SANDSTONE, MAT.ROCK, MAT.LIMESTONE, MAT.SHALE, MAT.SANDSTONE, MAT.ROCK, MAT.LIMESTONE];
-  const DECK_MID = [MAT.ROCK, MAT.SHALE, MAT.LIMESTONE, MAT.ROCK, MAT.SHALE, MAT.GRANITE, MAT.ROCK, MAT.SANDSTONE];
-  const DECK_LOW = [MAT.GRANITE, MAT.ROCK, MAT.GRANITE, MAT.SHALE, MAT.ROCK, MAT.GRANITE, MAT.GRANITE, MAT.ROCK];
+  // STRATA (Build 125, made biome-true in Build 127): each biome sits on its
+  // own stone, so what you dig tells you where you are -- granite under the
+  // ranges and the cold, sandstone under the dunes, limestone under the
+  // jungle, shale under the swamp, basalt under the volcanoes, plain rock
+  // under the plains. Granite everywhere below about -45. In about half the
+  // land, one thick bed (6 m) of a second stone runs through, tilted with
+  // the region, every 90 m down: a cliff shows one clean stripe, not twenty.
+  // The badlands keep their painted bands.
+  const STONE_OF = [MAT.ROCK, MAT.ROCK, MAT.GRANITE, MAT.REDROCK, MAT.SANDSTONE, MAT.SHALE, MAT.GRANITE, MAT.BASALT, MAT.ROCK, MAT.LIMESTONE, MAT.GRANITE, MAT.GRANITE, MAT.ROCK];
+  const BED_OF   = [MAT.LIMESTONE, MAT.SANDSTONE, MAT.SHALE, MAT.SANDSTONE, MAT.REDROCK, MAT.LIMESTONE, MAT.SHALE, MAT.GRANITE, MAT.LIMESTONE, MAT.SANDSTONE, MAT.SHALE, MAT.SHALE, MAT.SANDSTONE];
   const DECK_RED = [MAT.REDROCK, MAT.REDROCK, MAT.SANDSTONE, MAT.REDROCK, MAT.LIMESTONE, MAT.REDROCK, MAT.SANDSTONE, MAT.REDROCK, MAT.ROCK];
   function strataLayer(x, y, z){
     const tx = noise2(sSt, x * 0.0016, z * 0.0016), tz = noise2(sSt2, x * 0.0016 + 31.7, z * 0.0016 - 17.3);
     return y + (x * tx + z * tz) * 0.15 + noise2(sStF, x * 0.006 + 5.1, z * 0.006 - 9.4) * 5;
   }
   function strataMat(x, y, z, a){
-    if (a === 3){
+    if (a === 3 && y > -45){
       const k = Math.floor((y + noise2(sStF, x * 0.01, z * 0.01) * 1.2) / 2.2);
       return DECK_RED[((k % DECK_RED.length) + DECK_RED.length) % DECK_RED.length];
     }
-    const s = strataLayer(x, y, z);
-    if (y < -8){ const f = ((s % 41) + 41) % 41; if (f < 1.1) return MAT.COAL; }   // a seam
-    const k = Math.floor((s + 1.4 * Math.sin(s * 0.37)) / 3.4);
-    const deck = y >= -12 ? DECK_TOP : y >= -45 ? DECK_MID : DECK_LOW;
-    return deck[(Math.imul(k ^ (seed & 0xffff), 0x27d4eb2d) >>> 13) % deck.length];
+    if (a !== 7 && y < -45 + noise2(sStF, x * 0.03 + 11.3, z * 0.03 - 4.7) * 4) return MAT.GRANITE;
+    const main = STONE_OF[a] != null ? STONE_OF[a] : MAT.ROCK;
+    if (noise2(sSt2, x * 0.002 - 7.1, z * 0.002 + 3.3) > 0.05){
+      const f = ((strataLayer(x, y, z) % 90) + 90) % 90;
+      if (f < 6){ const bed = BED_OF[a] != null ? BED_OF[a] : MAT.LIMESTONE; if (bed !== main) return bed; }
+    }
+    return main;
   }
   const hrCache = new Map();
   function heightRange(x0, z0, x1, z1){

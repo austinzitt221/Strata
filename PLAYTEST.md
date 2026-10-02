@@ -5,6 +5,14 @@ plays through it in one go and reports back. Ticks and notes go in the
 playtest report, not here. Builds 21-29 were played on 2026-09-07 and
 their lists are retired; what came of them is Build 30.
 
+## Build 127 — stone by biome (and Build 126, any-kind recipes)
+- [ ] Dig in a few biomes: desert, jungle, mountains, swamp. Does each
+      feel like its own place underground?
+- [ ] Find a big cliff or dig a deep quarry: one clean stripe now. Right
+      amount, or should the bed be rarer, thicker, gone?
+- [ ] Craft a stove from granite, sticks from jungle planks: one recipe
+      each, and it takes whatever you have.
+
 ## Build 125 — STRATA YOU CAN READ
 - [ ] Dig a big quarry, or find a cliff. Do the layers read? Too busy,
       too subtle, too regular?
