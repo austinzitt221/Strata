@@ -2,6 +2,26 @@
 
 Append decisions, known issues, and playtest feedback here. Newest first.
 
+## Build 126 — one recipe, any kind (2026-10-16)
+
+Austin's crafting cleanup. Every wood had its own stick recipe, and
+every recipe that wanted rock or planks took only plain rock and oak
+planks. Now:
+- **One recipe, any kind.** A recipe that asks for planks takes any
+  planks (all five of Earth's and Strata's three). One that asks for
+  rock takes any stone: rock and the five strata (sandstone, shale,
+  limestone, granite, red rock). One that asks for wood takes any log.
+  One stick recipe, one stove, one chest, one stone brick.
+- **Sawing a log is the exception.** It still makes that wood's own
+  planks, so each wood keeps its colour.
+- **Paying.** It pays from the material the recipe names first (plain
+  rock, oak planks), then whichever of the rest you hold most of. The
+  list shows "stone (any)" with everything you hold counted together.
+- Basalt stays its own thing: the airstrip asks for basalt by name.
+- Also: CLAUDE.md now lets me curse and joke in replies (Austin's
+  request).
+- Test: b126test.
+
 ## Build 125 — STRATA YOU CAN READ (2026-10-15)
 
 My own idea from the brainstorm (roadmap item 37). The game is named

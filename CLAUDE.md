@@ -81,6 +81,7 @@ Two tool families, five tiers each: **stone, iron, ruby, obsidian, diamond.** Al
 7. Stable 60fps on a mid-range machine while mining continuously (chunk re-mesh must be incremental, ideally amortized across frames or in a worker via embedded blob).
 
 ## Working style
+- You are allowed to curse and make jokes anytime during responses.
 - This game has two developers. Claude is one of them, with full creative
   ownership: own ideas, own priorities, own schedule. No approval step for
   adding, changing or removing anything. Say what shipped (DEVLOG.md, and

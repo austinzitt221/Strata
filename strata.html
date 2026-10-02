@@ -4604,20 +4604,15 @@ const RECIPES = [];
   RECIPES.push({ kind: 'matout', matOut: MAT.PLANKS, yields: 4, costs: [{ mat: MAT.WOOD, n: 1 }] });
   // STATION TWO (Build 80): plating, for the build (and for anything else)
   RECIPES.push({ kind: 'matout', matOut: MAT.PLATING, yields: 8, costs: [{ item: 'ironingot', n: 2 }, { item: 'lunite', n: 1 }], world: 'moon' });
-  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });
-  // BIOMES A: every wood saws into its own planks, every planks into sticks
+  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.PLANKS, n: 2 }] });   // any planks (see MAT_GROUPS below)
+  // BIOMES A: every wood saws into its own planks
   RECIPES.push({ kind: 'matout', matOut: MAT.JPLANKS, yields: 4, costs: [{ mat: MAT.JWOOD, n: 1 }] });
   RECIPES.push({ kind: 'matout', matOut: MAT.MPLANKS, yields: 4, costs: [{ mat: MAT.MWOOD, n: 1 }] });
-  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.JPLANKS, n: 2 }] });
-  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.MPLANKS, n: 2 }] });
   RECIPES.push({ kind: 'matout', matOut: MAT.SPLANKS, yields: 4, costs: [{ mat: MAT.SWOOD, n: 1 }] });
   RECIPES.push({ kind: 'matout', matOut: MAT.APLANKS, yields: 4, costs: [{ mat: MAT.AWOOD, n: 1 }] });
-  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.SPLANKS, n: 2 }] });
-  RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: MAT.APLANKS, n: 2 }] });
   // STRATA B (Build 86): the maws' stalks saw into planks, and planks into sticks, at Strata's own table
   for (const [st, pl] of [[MAT.GLOWSTALK, MAT.GLOWPLANK], [MAT.ASHSTALK, MAT.ASHPLANK], [MAT.BONESTALK, MAT.BONEPLANK]]){
     RECIPES.push({ kind: 'matout', matOut: pl, yields: 4, costs: [{ mat: st, n: 1 }], world: 'alien' });
-    RECIPES.push({ kind: 'stick', yields: 4, costs: [{ mat: pl, n: 2 }], world: 'alien' });
   }
   // a table per planet: the Moon's is made at the Earth's, Strata's at the Moon's
   RECIPES.push({ kind: 'mtable', yields: 1, station: true, costs: [{ item: 'selenite', n: 4 }, { item: 'ironingot', n: 8 }] });
@@ -4791,14 +4786,42 @@ RECIPES.push({ kind: 'mcharge', yields: 3, station: true, costs: [{ item: 'wispc
   RECIPES.push({ kind: 'bed', yields: 1, station: true,
     costs: [{ mat: MAT.PLANKS, n: 6 }, { item: 'wool', n: 3 }] });
 }
+// Build 126: one recipe, any kind. A recipe that asks for planks takes any
+// planks, one that asks for rock takes any stone (the strata included), one
+// that asks for wood takes any log -- except sawing a log, which makes that
+// wood's own planks. A cost names its group (c.any); the primary material
+// (c.mat) is what an uncraft gives back and what the list shows.
+const MAT_GROUPS = {
+  planks: [MAT.PLANKS, MAT.JPLANKS, MAT.MPLANKS, MAT.SPLANKS, MAT.APLANKS, MAT.GLOWPLANK, MAT.ASHPLANK, MAT.BONEPLANK],
+  stone:  [MAT.ROCK, MAT.SANDSTONE, MAT.SHALE, MAT.LIMESTONE, MAT.GRANITE, MAT.REDROCK],
+  wood:   LOG_MATS,
+};
+const GROUP_NAME = { planks: 'planks (any)', stone: 'stone (any)', wood: 'wood (any)' };
+for (const r of RECIPES) for (const c of r.costs){
+  if (c.item) continue;
+  if (c.mat === MAT.PLANKS) c.any = 'planks';
+  else if (c.mat === MAT.ROCK) c.any = 'stone';
+  else if (c.mat === MAT.WOOD && r.kind !== 'matout') c.any = 'wood';
+}
+function costHave(slots, c){
+  if (c.item) return countItem(slots, c.item);
+  if (!c.any) return countMat(slots, c.mat);
+  let n = 0; for (const m of MAT_GROUPS[c.any]) n += countMat(slots, m); return n;
+}
+function costName(c){ return c.item ? c.item : c.any ? GROUP_NAME[c.any] : MAT_NAME[c.mat]; }
+// pay a group from the named material first, then whichever of the rest you hold most of
+function payCost(slots, c){
+  if (c.item){ consumeItem(slots, c.item, c.n); return; }
+  if (!c.any){ consumeMat(slots, c.mat, c.n); return; }
+  let left = c.n;
+  const order = MAT_GROUPS[c.any].slice().sort((a, b) => (b === c.mat) - (a === c.mat) || countMat(slots, b) - countMat(slots, a));
+  for (const m of order){ if (left <= 0) break; const k = Math.min(left, countMat(slots, m)); if (k > 0){ consumeMat(slots, m, k); left -= k; } }
+}
 function canCraft(slots, r){
-  return r.costs.every(c => (c.item ? countItem(slots, c.item) : countMat(slots, c.mat)) >= c.n);
+  return r.costs.every(c => costHave(slots, c) >= c.n);
 }
 function payCosts(slots, r){
-  for (const c of r.costs){
-    if (c.item) consumeItem(slots, c.item, c.n);
-    else consumeMat(slots, c.mat, c.n);
-  }
+  for (const c of r.costs) payCost(slots, c);
 }
 // batteries: capacity by tier, in the same units a car tank / jetpack /
 // drone holds (100 = one full tank)
@@ -4854,7 +4877,7 @@ function uncraft(slots, it, n){
 function craftableCount(slots, r){
   let n = Infinity;
   for (const c of r.costs){
-    const have = c.item ? countItem(slots, c.item) : countMat(slots, c.mat);
+    const have = costHave(slots, c);
     n = Math.min(n, Math.floor(have / c.n));
   }
   return n === Infinity ? 100000 : n;
@@ -5316,7 +5339,7 @@ function hashSeed(str){
 
 return {
   VOX, N, CHUNK_M, SURFACE_Y, BEDROCK_Y, CY_MIN, CY_MAX, CAVE_CELL,
-  MAT, NMAT, MAT_NAME, LOG_MATS, sampleShape, TIERS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
+  MAT, NMAT, MAT_NAME, LOG_MATS, MAT_GROUPS, costHave, costName, payCost, sampleShape, TIERS, PLANKS_OF, TIER_NAME, STEPS, tierMin, tierMax, tierCap,
   SIZE_MIN, SIZE_MAX, MIN_THICK, TIER_TIME, GRID_SIZES,
   sdSphere, sdCube, sdCylinder, shapeSDF, SHAPE_NAME, SHAPE_UNLOCK, shapesFor, STEP_RISE, stairN, archDims, buildingDims, towerDims, makeEdit, editAABB, aabbOverlap, cullEdits, editMoved, editProfile, NEG_SHAPES, stairAirDims, buildingAttic, TREAD_TH, treadSpan, heightGrid, skinGrid, dropGroundTris, smin, applyOp, editK,
   evalSDF, materialAt, gradSDF, snapVal, snapVec, meshChunk,
@@ -34449,7 +34472,7 @@ function refreshCrafterUI(){
     cost.className = 'ccost' + (CORE.canCraft(n.inv, r) ? ' ok' : '');
     cost.textContent = r.costs.map(c => c.item
       ? c.n + ' ' + c.item + ' (' + CORE.countItem(n.inv, c.item) + ')'
-      : c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(n.inv, c.mat) + ')').join(' + ');
+      : c.n + ' ' + CORE.costName(c) + ' (' + CORE.costHave(n.inv, c) + ')').join(' + ');
     row.appendChild(cost);
     row.addEventListener('click', () => {
       n.recipe = n.recipe === idx ? null : idx;
@@ -34505,7 +34528,7 @@ function refreshDecraftUI(){
   $('decraftstatus').textContent = !it ? 'put in anything a recipe made — get the recipe back'
     : !r ? itemLabel(it) + ' was never crafted — nothing to take apart'
     : 'each ' + (r.yields > 1 ? r.yields + ' ' : '') + itemLabel(it) + ' gives back ' +
-      r.costs.map(c => c.n + ' ' + (c.item ? c.item : CORE.MAT_NAME[c.mat])).join(' + ');
+      r.costs.map(c => c.n + ' ' + CORE.costName(c)).join(' + ');
 }
 function doUncraft(n){
   const pn = game.activeDecraft;
@@ -35732,7 +35755,7 @@ function buildCraftUI(){
     cost.className = 'ccost' + (creative || CORE.canCraft(game.slots, r) ? ' ok' : '');
     cost.textContent = creative ? 'free' : r.costs.map(c => c.item
       ? c.n + ' ' + c.item + (c.n > 1 ? 's' : '') + ' (' + CORE.countItem(game.slots, c.item) + ')'
-      : c.n + ' ' + CORE.MAT_NAME[c.mat] + ' (' + CORE.countMat(game.slots, c.mat) + ')').join(' + ');
+      : c.n + ' ' + CORE.costName(c) + ' (' + CORE.costHave(game.slots, c) + ')').join(' + ');
     row.appendChild(cost);
     const btn = document.createElement('button'); btn.className = 'btn small'; btn.textContent = 'CRAFT';
     btn.addEventListener('click', () => {
