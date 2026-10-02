@@ -19,3 +19,31 @@ Run:
 
 Every suite prints one JSON line per scenario and ends with `errors: none`
 when no page error fired. Screenshots land beside the script.
+
+## Performance tools (Build 115)
+
+    NODE_PATH=$(npm root -g) node profile.js ../strata.html spawn,city,fly,mine
+
+profiles the real frame loop with the Chrome CPU profiler in each scenario
+and prints each function's self time per frame (`CALLERS=fnName,...` adds
+the call paths to those functions; `REPORT=1` prints the game's own
+Shift+F3 stopwatch report as well). SwiftShader makes rendering and GPU
+uploads look far slower than a real GPU would: trust the JavaScript
+numbers, not the `render` ones.
+
+    NODE_PATH=$(npm root -g) node abwater.js old.html new.html
+    NODE_PATH=$(npm root -g) node abstream.js old.html new.html
+
+run the same scenario on two builds and print SAME when the water comes out
+identical cell for cell (`abwater`), or when the streaming disc marks the
+same chunks empty, banded and queued on Earth, Strata and the Moon
+(`abstream`). Use them for any change that should be faster, not different.
+
+    NODE_PATH=$(npm root -g) node fastfly.js [seed] [seconds] [lake]
+
+runs the real frame loop at full speed with the renderer stubbed out, so
+headless plays through thousands of frames as a real machine would instead
+of one a second, flying to the nearest city and round its blocks (or to the
+nearest lake), and prints the game's own Shift+F3 report plus each horizon
+ring step and the water queue. Build 121 found the 250 ms ring hitch and the
+159 ms water drain this way; neither shows at headless's usual frame rate.

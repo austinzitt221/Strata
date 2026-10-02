@@ -23,24 +23,18 @@ const { chromium } = require('playwright');
     return { keel: +S.sdf(0, 0, 0).toFixed(1), padTop: S.height(0, -53), padSolid: +S.sdf(0, -1, -53).toFixed(1), space: S.sdf(50, 50, 50), frames: S.frames.length, hr: S.heightRange(-4, -4, 4, 4), plating: plating && plating.costs.map(c => (c.item || c.mat) + 'x' + c.n).join('+') + '=' + plating.yields, moonNoWord: r0, moonWord: r1 };
   });
   console.log('1. the site  :', JSON.stringify(r1));
-  // 2. to the site; the frames; build the hangar by hand
+  // 2. to the site; the frames drawn; Kro builds the hangar for its price (creative pays nothing)
   await fly('moon'); await fly('site');
   const r2 = await page.evaluate(() => {
     const g = window.__game, api = window.__api, C = window.__CORE;
     const r = g.driving; const landed = r && [+r.x.toFixed(1), +r.y.toFixed(1), +r.z.toFixed(1)];
     api.exitCar(); g.fly = true;
     const wires = api.siteSys.group ? api.siteSys.group.children.length : -1;
-    const F = g.gen.frames[0];
-    const p0 = api.siteSys.progress(F);
     const out0 = []; api.siteSys.objectives(out0);
-    // fill the hangar: a box of plating, hollowed
-    const EB = (op, x, y, z, w, h, d, m) => { const e = C.makeEdit(op, 1, x, y, z, w, m || 0, 0); e.sy = h; e.sz = d; api.applyEdit(e); };
-    EB(1, F.x, F.y, F.z, F.w, F.h, F.d, C.MAT.PLATING); EB(0, F.x, F.y, F.z, F.w - 2.4, F.h - 2.4, F.d - 2.4, 0);
-    const p1 = api.siteSys.progress(F);
-    api.siteSys.tick(2);
+    api.siteSys.build(0);
     const wires1 = api.siteSys.group ? api.siteSys.group.children.length : -1;
     const out1 = []; api.siteSys.objectives(out1);
-    return { planet: g.planet, landed, wires, p0: +p0.toFixed(2), obj0: out0.map(o => o.label), p1: +p1.toFixed(2), stage: api.siteSys.stage(), wires1, obj1: out1.map(o => o.label), moonUp: api.skySys.moon.visible, alienUp: api.skySys.alien.visible, hud: document.getElementById('navpos').textContent };
+    return { planet: g.planet, landed, wires, obj0: out0.map(o => o.label), stage: api.siteSys.stage(), wires1, obj1: out1.map(o => o.label), moonUp: api.skySys.moon.visible, alienUp: api.skySys.alien.visible, hud: document.getElementById('navpos').textContent };
   });
   console.log('2. the build :', JSON.stringify(r2));
   await settle(5);
@@ -48,9 +42,8 @@ const { chromium } = require('playwright');
   await settle(5); await page.screenshot({ path: __dirname + '/b80_site.png' });
   // 3. the other three; the station stands; Vehl gives the ship for eight astrium
   const r3 = await page.evaluate(() => {
-    const g = window.__game, api = window.__api, C = window.__CORE;
-    const EB = (op, x, y, z, w, h, d, m) => { const e = C.makeEdit(op, 1, x, y, z, w, m || 0, 0); e.sy = h; e.sz = d; api.applyEdit(e); };
-    for (let i = 1; i < g.gen.frames.length; i++){ const F = g.gen.frames[i]; EB(1, F.x, F.y, F.z, F.w, F.h, F.d, C.MAT.PLATING); EB(0, F.x, F.y, F.z, F.w - 2.4, F.h - 2.4, F.d - 2.4, 0); api.siteSys.tick(2); }
+    const g = window.__game, api = window.__api;
+    for (let i = 1; i < g.gen.frames.length; i++) api.siteSys.build(i);
     const D = api.buildSaveData();
     return { stage: api.siteSys.stage(), built: g.story.built, wires: api.siteSys.group ? api.siteSys.group.children.length : -1, savedSite: D.story.site, savedBuilt: D.story.built };
   });
